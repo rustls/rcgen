@@ -1,6 +1,6 @@
 # rcgen
 
-Simple Rust tool to generate X.509 certificates.
+Simple Rust library to generate X.509 certificates.
 
 ### License
 [license]: #license
