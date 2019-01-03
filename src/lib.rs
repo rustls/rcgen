@@ -36,6 +36,7 @@ pub struct CertificateParams {
 	pub alg :SignatureAlgorithm,
 	pub not_before :NaiveDateTime,
 	pub not_after :NaiveDateTime,
+	pub serial_number :Option<u64>,
 }
 
 impl Certificate {
@@ -82,7 +83,8 @@ impl Certificate {
 				writer.write_u8(3);
 			});
 			// Write serialNumber
-			writer.next().write_u64(42);
+			let serial = self.params.serial_number.unwrap_or(42);
+			writer.next().write_u64(serial);
 			// Write signature
 			writer.next().write_sequence(|writer| {
 				writer.next().write_oid(&self.params.alg.oid());

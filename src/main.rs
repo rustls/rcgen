@@ -11,6 +11,7 @@ fn main() {
 		alg : PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
 		not_before,
 		not_after,
+		serial_number : None,
 	};
 	let cert = Certificate::from_params(params);
 	println!("{}", cert.serialize_pem());
