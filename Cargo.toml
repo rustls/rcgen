@@ -1,0 +1,14 @@
+[package]
+name = "rkgen"
+version = "0.1.0"
+authors = ["est31 <MTest31@outlook.com>"]
+description = "Rust X.509 key generator"
+license = "MIT/Apache-2.0"
+
+[dependencies]
+#yasna = "0.1"
+yasna = { path = "../yasna.rs" }
+ring = "0.14.0-alpha4"
+untrusted = "0.6"
+pem = "0.5"
+chrono = "0.4.6"
