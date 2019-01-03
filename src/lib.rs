@@ -17,6 +17,7 @@ use chrono::NaiveDateTime;
 pub struct Certificate {
 	params :CertificateParams,
 	key_pair :EcdsaKeyPair,
+	key_pair_serialized :Vec<u8>,
 }
 
 // https://tools.ietf.org/html/rfc5280#section-4.1.1
@@ -44,12 +45,14 @@ impl Certificate {
 		let system_random = SystemRandom::new();
 		// TODO is this the right algorithm?
 		let key_pair_doc = EcdsaKeyPair::generate_pkcs8(&KALG, &system_random).unwrap();
+		let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 		let key_pair = EcdsaKeyPair::from_pkcs8(&KALG, Input::from(&&key_pair_doc.as_ref())).unwrap();
 
 		Certificate {
 			params,
 			key_pair,
+			key_pair_serialized,
 		}
 	}
 	fn write_name(&self, writer :DERWriter) {
@@ -146,6 +149,10 @@ impl Certificate {
 			contents : self.serialize_der(),
 		};
 		pem::encode(&p)
+	}
+	/// Serializes the private key in PKCS#8 format
+	pub fn serialize_private_key(&self) -> Vec<u8> {
+		self.key_pair_serialized.clone()
 	}
 }
 
