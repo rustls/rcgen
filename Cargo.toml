@@ -3,6 +3,8 @@ name = "rkgen"
 version = "0.1.0"
 authors = ["est31 <MTest31@outlook.com>"]
 description = "Rust X.509 key generator"
+repository = "https://github.com/est31/rkgen"
+documentation = "https://docs.rs/rkgen"
 license = "MIT/Apache-2.0"
 
 [dependencies]
