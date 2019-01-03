@@ -178,7 +178,7 @@ impl Certificate {
 	pub fn serialize_private_key_der(&self) -> Vec<u8> {
 		self.key_pair_serialized.clone()
 	}
-	/// Serializes the private key in PKCS#8 format
+	/// Serializes the private key in PEM format
 	pub fn serialize_private_key_pem(&self) -> String {
 		let p = Pem {
 			tag : "PRIVATE KEY".to_string(),
