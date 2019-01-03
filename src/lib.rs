@@ -151,8 +151,16 @@ impl Certificate {
 		pem::encode(&p)
 	}
 	/// Serializes the private key in PKCS#8 format
-	pub fn serialize_private_key(&self) -> Vec<u8> {
+	pub fn serialize_private_key_der(&self) -> Vec<u8> {
 		self.key_pair_serialized.clone()
+	}
+	/// Serializes the private key in PKCS#8 format
+	pub fn serialize_private_key_pem(&self) -> String {
+		let p = Pem {
+			tag : "PRIVATE KEY".to_string(),
+			contents : self.serialize_private_key_der(),
+		};
+		pem::encode(&p)
 	}
 }
 

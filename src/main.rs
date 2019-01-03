@@ -15,4 +15,5 @@ fn main() {
 	};
 	let cert = Certificate::from_params(params);
 	println!("{}", cert.serialize_pem());
+	println!("{}", cert.serialize_private_key_pem());
 }
