@@ -1,10 +1,10 @@
 [package]
-name = "rkgen"
+name = "rcgen"
 version = "0.0.1"
 authors = ["est31 <MTest31@outlook.com>"]
-description = "Rust X.509 key generator"
-repository = "https://github.com/est31/rkgen"
-documentation = "https://docs.rs/rkgen"
+description = "Rust X.509 certificate generator"
+repository = "https://github.com/est31/rcgen"
+documentation = "https://docs.rs/rcgen"
 license = "MIT/Apache-2.0"
 
 [dependencies]
