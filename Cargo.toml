@@ -8,7 +8,8 @@ documentation = "https://docs.rs/rcgen"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-yasna = "0.1"
+#yasna = "0.1"
+yasna = { git = "https://github.com/est31/yasna.rs", rev = "a3fe7ffe95f5076e0cc367fd4ded931583f9ccd8" }
 #yasna = { path = "../yasna.rs" }
 ring = "0.14.0-alpha4"
 untrusted = "0.6"

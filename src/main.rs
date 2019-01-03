@@ -1,6 +1,4 @@
-fn main() {}
-
-/*extern crate yasna;
+extern crate yasna;
 extern crate ring;
 extern crate pem;
 extern crate untrusted;
@@ -173,4 +171,3 @@ impl SignatureAlgorithm {
 		ObjectIdentifier::from_slice(self.oid_components)
 	}
 }
-*/
