@@ -12,6 +12,7 @@ fn main() {
 		not_before,
 		not_after,
 		serial_number : None,
+		subject_alt_names : vec!["crabs.crabs".to_string()],
 	};
 	let cert = Certificate::from_params(params);
 	println!("{}", cert.serialize_pem());

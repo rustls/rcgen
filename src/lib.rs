@@ -33,11 +33,16 @@ const OID_COMMON_NAME :&[u64] = &[2, 5, 4, 3];
 const OID_EC_PUBLIC_KEY :&[u64] = &[1, 2, 840, 10045, 2, 1];
 const OID_EC_SECP_256_R1 :&[u64] = &[1, 2, 840, 10045, 3, 1, 7];
 
+// https://tools.ietf.org/html/rfc5280#appendix-A.2
+// https://tools.ietf.org/html/rfc5280#section-4.2.1.6
+const OID_SUBJECT_ALT_NAME :&[u64] = &[2, 5, 29, 17];
+
 pub struct CertificateParams {
 	pub alg :SignatureAlgorithm,
 	pub not_before :NaiveDateTime,
 	pub not_after :NaiveDateTime,
 	pub serial_number :Option<u64>,
+	pub subject_alt_names :Vec<String>,
 }
 
 impl Certificate {
@@ -115,7 +120,26 @@ impl Certificate {
 				let public_key = &self.key_pair.public_key().as_ref();
 				writer.next().write_bit_string(0, public_key);
 			});
-			// TODO write extensions
+			// write extensions
+			writer.next().write_tagged(Tag::context(3), |writer| {
+				writer.write_sequence(|writer| {
+					// Write subject_alt_names
+					writer.next().write_sequence(|writer| {
+						let oid = ObjectIdentifier::from_slice(OID_SUBJECT_ALT_NAME);
+						writer.next().write_oid(&oid);
+						let bytes = yasna::construct_der(|writer| {
+							writer.write_sequence(|writer|{
+								for san in self.params.subject_alt_names.iter() {
+									writer.next().write_tagged(Tag::context(2), |writer| {
+										writer.write_utf8_string(san);
+									});
+								}
+							});
+						});
+						writer.next().write_bytes(&bytes);
+					});
+				});
+			});
 		})
 	}
 	/// Serializes the certificate to the binary DER format
