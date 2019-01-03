@@ -7,6 +7,14 @@ repository = "https://github.com/est31/rcgen"
 documentation = "https://docs.rs/rcgen"
 license = "MIT/Apache-2.0"
 
+[lib]
+name = "rcgen"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rcgen"
+path = "src/main.rs"
+
 [dependencies]
 #yasna = "0.1"
 yasna = { git = "https://github.com/est31/yasna.rs", rev = "a3fe7ffe95f5076e0cc367fd4ded931583f9ccd8" }
