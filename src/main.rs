@@ -1,8 +1,17 @@
 extern crate rcgen;
+extern crate chrono;
 
-use rcgen::{Certificate, PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION};
+use chrono::NaiveDate;
+use rcgen::{Certificate, CertificateParams, PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION};
 
 fn main() {
-	let cert = Certificate::from_alg(PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION);
+	let not_before = NaiveDate::from_ymd(2000, 01, 01).and_hms_milli(0, 0, 0, 0);
+	let not_after = NaiveDate::from_ymd(2020, 01, 01).and_hms_milli(0, 0, 0, 0);
+	let params = CertificateParams {
+		alg : PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
+		not_before,
+		not_after,
+	};
+	let cert = Certificate::from_params(params);
 	println!("{}", cert.serialize_pem());
 }

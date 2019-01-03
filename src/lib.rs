@@ -12,10 +12,10 @@ use ring::rand::SystemRandom;
 use untrusted::Input;
 use ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING as KALG;
 use yasna::DERWriter;
-use chrono::NaiveDate;
+use chrono::NaiveDateTime;
 
 pub struct Certificate {
-	alg :SignatureAlgorithm,
+	params :CertificateParams,
 	key_pair :EcdsaKeyPair,
 }
 
@@ -32,8 +32,14 @@ const OID_COMMON_NAME :&[u64] = &[2, 5, 4, 3];
 const OID_EC_PUBLIC_KEY :&[u64] = &[1, 2, 840, 10045, 2, 1];
 const OID_EC_SECP_256_R1 :&[u64] = &[1, 2, 840, 10045, 3, 1, 7];
 
+pub struct CertificateParams {
+	pub alg :SignatureAlgorithm,
+	pub not_before :NaiveDateTime,
+	pub not_after :NaiveDateTime,
+}
+
 impl Certificate {
-	pub fn from_alg(alg :SignatureAlgorithm) -> Self {
+	pub fn from_params(params :CertificateParams) -> Self {
 		let system_random = SystemRandom::new();
 		// TODO is this the right algorithm?
 		let key_pair_doc = EcdsaKeyPair::generate_pkcs8(&KALG, &system_random).unwrap();
@@ -41,7 +47,7 @@ impl Certificate {
 		let key_pair = EcdsaKeyPair::from_pkcs8(&KALG, Input::from(&&key_pair_doc.as_ref())).unwrap();
 
 		Certificate {
-			alg,
+			params,
 			key_pair,
 		}
 	}
@@ -79,7 +85,7 @@ impl Certificate {
 			writer.next().write_u64(42);
 			// Write signature
 			writer.next().write_sequence(|writer| {
-				writer.next().write_oid(&self.alg.oid());
+				writer.next().write_oid(&self.params.alg.oid());
 				writer.next().write_null();
 			});
 			// Write issuer
@@ -87,11 +93,9 @@ impl Certificate {
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
-				let not_before = NaiveDate::from_ymd(2000, 01, 01).and_hms_milli(0, 0, 0, 0);
-				writer.next().write_generalized_time(&not_before);
+				writer.next().write_generalized_time(&self.params.not_before);
 				// Not after
-				let not_after = NaiveDate::from_ymd(2020, 01, 01).and_hms_milli(0, 0, 0, 0);
-				writer.next().write_generalized_time(&not_after);
+				writer.next().write_generalized_time(&self.params.not_after);
 			});
 			// Write subject
 			self.write_name(writer.next());
@@ -109,7 +113,7 @@ impl Certificate {
 			// TODO write extensions
 		})
 	}
-	/// Serialize the certificate to the binary DER format
+	/// Serializes the certificate to the binary DER format
 	pub fn serialize_der(&self) -> Vec<u8> {
 		yasna::construct_der(|writer| {
 			writer.write_sequence(|writer| {
@@ -119,7 +123,7 @@ impl Certificate {
 
 				// Write signatureAlgorithm
 				writer.next().write_sequence(|writer| {
-					writer.next().write_oid(&self.alg.oid());
+					writer.next().write_oid(&self.params.alg.oid());
 				});
 
 				// Write signature
@@ -133,7 +137,7 @@ impl Certificate {
 			})
 		})
 	}
-	/// Serialize the certificate to the ASCII PEM format
+	/// Serializes the certificate to the ASCII PEM format
 	pub fn serialize_pem(&self) -> String {
 		let p = Pem {
 			tag : "CERTIFICATE".to_string(),
