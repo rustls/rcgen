@@ -129,7 +129,7 @@ impl Certificate {
 						let bytes = yasna::construct_der(|writer| {
 							writer.write_sequence(|writer|{
 								for san in self.params.subject_alt_names.iter() {
-									writer.next().write_tagged(Tag::context(2), |writer| {
+									writer.next().write_tagged_implicit(Tag::context(2), |writer| {
 										writer.write_utf8_string(san);
 									});
 								}
