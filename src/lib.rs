@@ -88,7 +88,7 @@ impl Certificate {
 		writer.write_sequence(|writer| {
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
-				writer.write_u8(3);
+				writer.write_u8(2);
 			});
 			// Write serialNumber
 			let serial = self.params.serial_number.unwrap_or(42);
