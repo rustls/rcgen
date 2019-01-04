@@ -7,12 +7,11 @@ Simple Rust library to generate X.509 certificates.
 It's still a bit early on, but you can already do this:
 
 ```
-cargo run > test.crt
-openssl x509 -in test.crt -text -noout
+cargo run > test.pem
+openssl x509 -in test.pem -text -noout
 ```
 
 For debugging, you can paste the contents of test.crt into [this](https://lapo.it/asn1js/) very helpful service.
-Obviously don't do that with your secret keys :p.
 
 ### License
 [license]: #license
