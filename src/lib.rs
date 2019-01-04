@@ -1,3 +1,8 @@
+/*!
+Rust X.509 certificate generation utility
+
+This crate provides a way to generate self signed X.509 certificates.
+*/
 extern crate yasna;
 extern crate ring;
 extern crate pem;
