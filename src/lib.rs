@@ -25,8 +25,11 @@ pub struct Certificate {
 // Example certs usable as reference:
 // Uses ECDSA: https://crt.sh/?asn1=607203242
 
+/// id-at-countryName in RFC 5820
 const OID_COUNTRY_NAME :&[u64] = &[2, 5, 4, 6];
+/// id-at-organizationName in RFC 5820
 const OID_ORG_NAME :&[u64] = &[2, 5, 4, 10];
+/// id-at-commonName in RFC 5820
 const OID_COMMON_NAME :&[u64] = &[2, 5, 4, 3];
 
 // https://tools.ietf.org/html/rfc5480#section-2.1.1
