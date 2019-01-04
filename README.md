@@ -2,7 +2,7 @@
 
 Simple Rust library to generate X.509 certificates.
 
-## Trying it out
+## Trying it out with openssl
 
 You can do this:
 
@@ -13,6 +13,18 @@ openssl x509 -in certs/cert.pem -text -noout
 
 For debugging, pasting the PEM formatted text
 to [this](https://lapo.it/asn1js/) service is very useful.
+
+## Trying it out with quinn
+
+You can use rcgen together with the [quinn](https://github.com/djc/quinn) crate.
+The whole set of commands is:
+```
+cargo run
+cd ../quinn
+cargo run --example server -- --cert ../rcgen/certs/cert.pem --key ../rcgen/certs/key.pem ./
+cargo run --example client -- --ca ../rcgen/certs/cert.der https://localhost:4433/README.md
+
+```
 
 ### License
 [license]: #license
