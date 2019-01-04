@@ -13,6 +13,7 @@ use untrusted::Input;
 use ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING as KALG;
 use yasna::DERWriter;
 use chrono::NaiveDateTime;
+use std::collections::HashMap;
 
 pub struct Certificate {
 	params :CertificateParams,
@@ -40,18 +41,55 @@ const OID_EC_SECP_256_R1 :&[u64] = &[1, 2, 840, 10045, 3, 1, 7];
 // https://tools.ietf.org/html/rfc5280#section-4.2.1.6
 const OID_SUBJECT_ALT_NAME :&[u64] = &[2, 5, 29, 17];
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum DnType {
+	CountryName,
+	OrganizationName,
+	CommonName,
+	#[doc(hidden)]
+	_Nonexhaustive,
+}
+
+impl DnType {
+	fn to_oid(&self) -> ObjectIdentifier {
+		let sl = match self {
+			DnType::CountryName => OID_COUNTRY_NAME,
+			DnType::OrganizationName => OID_ORG_NAME,
+			DnType::CommonName => OID_COMMON_NAME,
+			DnType::_Nonexhaustive => unimplemented!(),
+		};
+		ObjectIdentifier::from_slice(sl)
+	}
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct DistinguishedName {
+	entries :HashMap<DnType, String>,
+}
+
+impl DistinguishedName {
+	pub fn new() -> Self {
+		Self {
+			entries : HashMap::new(),
+		}
+	}
+	pub fn push(&mut self, ty :DnType, s :impl Into<String>) {
+		self.entries.insert(ty, s.into());
+	}
+}
+
 pub struct CertificateParams {
 	pub alg :SignatureAlgorithm,
 	pub not_before :NaiveDateTime,
 	pub not_after :NaiveDateTime,
 	pub serial_number :Option<u64>,
 	pub subject_alt_names :Vec<String>,
+	pub distinguished_name :DistinguishedName,
 }
 
 impl Certificate {
 	pub fn from_params(params :CertificateParams) -> Self {
 		let system_random = SystemRandom::new();
-		// TODO is this the right algorithm?
 		let key_pair_doc = EcdsaKeyPair::generate_pkcs8(&KALG, &system_random).unwrap();
 		let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
@@ -66,24 +104,12 @@ impl Certificate {
 	fn write_name(&self, writer :DERWriter) {
 		writer.write_sequence(|writer| {
 			writer.next().write_set(|writer| {
-				// Country name
-				writer.next().write_sequence(|writer| {
-					let oid = ObjectIdentifier::from_slice(OID_COUNTRY_NAME);
-					writer.next().write_oid(&oid);
-					writer.next().write_utf8_string("US");
-				});
-				// Organization name
-				writer.next().write_sequence(|writer| {
-					let oid = ObjectIdentifier::from_slice(OID_ORG_NAME);
-					writer.next().write_oid(&oid);
-					writer.next().write_utf8_string("Crab widgits pty ltd");
-				});
-				// Common name
-				writer.next().write_sequence(|writer| {
-					let oid = ObjectIdentifier::from_slice(OID_COMMON_NAME);
-					writer.next().write_oid(&oid);
-					writer.next().write_utf8_string("Mastery master crab cert");
-				});
+				for (ty, content) in self.params.distinguished_name.entries.iter() {
+					writer.next().write_sequence(|writer| {
+						writer.next().write_oid(&ty.to_oid());
+						writer.next().write_utf8_string(content);
+					});
+				}
 			});
 		});
 	}
