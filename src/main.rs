@@ -3,8 +3,10 @@ extern crate chrono;
 
 use chrono::NaiveDate;
 use rcgen::{Certificate, CertificateParams, PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION};
+use std::fs;
+use std::io::Result;
 
-fn main() {
+fn main() -> Result<()> {
 	let not_before = NaiveDate::from_ymd(2000, 01, 01).and_hms_milli(0, 0, 0, 0);
 	let not_after = NaiveDate::from_ymd(2020, 01, 01).and_hms_milli(0, 0, 0, 0);
 	let params = CertificateParams {
@@ -17,4 +19,10 @@ fn main() {
 	let cert = Certificate::from_params(params);
 	println!("{}", cert.serialize_pem());
 	println!("{}", cert.serialize_private_key_pem());
+	std::fs::create_dir_all("certs/")?;
+	fs::write("certs/cert.pem", &cert.serialize_pem().as_bytes())?;
+	fs::write("certs/cert.der", &cert.serialize_der())?;
+	fs::write("certs/key.pem", &cert.serialize_private_key_pem().as_bytes())?;
+	fs::write("certs/key.pem", &cert.serialize_private_key_der())?;
+	Ok(())
 }
