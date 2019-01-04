@@ -23,6 +23,6 @@ fn main() -> Result<()> {
 	fs::write("certs/cert.pem", &cert.serialize_pem().as_bytes())?;
 	fs::write("certs/cert.der", &cert.serialize_der())?;
 	fs::write("certs/key.pem", &cert.serialize_private_key_pem().as_bytes())?;
-	fs::write("certs/key.pem", &cert.serialize_private_key_der())?;
+	fs::write("certs/key.der", &cert.serialize_private_key_der())?;
 	Ok(())
 }
