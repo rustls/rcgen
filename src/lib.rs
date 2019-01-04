@@ -96,7 +96,6 @@ impl Certificate {
 			// Write signature
 			writer.next().write_sequence(|writer| {
 				writer.next().write_oid(&self.params.alg.oid());
-				writer.next().write_null();
 			});
 			// Write issuer
 			self.write_name(writer.next());
