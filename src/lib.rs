@@ -180,8 +180,11 @@ impl Certificate {
 		yasna::construct_der(|writer| {
 			writer.write_sequence(|writer| {
 
+				let tbs_cert_list_serialized = yasna::construct_der(|writer| {
+					self.write_cert(writer);
+				});
 				// Write tbsCertList
-				self.write_cert(writer.next());
+				writer.next().write_der(&tbs_cert_list_serialized);
 
 				// Write signatureAlgorithm
 				writer.next().write_sequence(|writer| {
@@ -189,9 +192,6 @@ impl Certificate {
 				});
 
 				// Write signature
-				let tbs_cert_list_serialized = yasna::construct_der(|writer| {
-					self.write_cert(writer);
-				});
 				let cl_input = Input::from(&tbs_cert_list_serialized);
 				let system_random = SystemRandom::new();
 				let signature = self.key_pair.sign(&system_random, cl_input).unwrap();

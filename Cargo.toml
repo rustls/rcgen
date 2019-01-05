@@ -17,7 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 #yasna = "0.1"
-yasna = { git = "https://github.com/est31/yasna.rs", rev = "a3fe7ffe95f5076e0cc367fd4ded931583f9ccd8" }
+yasna = { git = "https://github.com/est31/yasna.rs", rev = "d60ed2c0ab1fb6974ed82a6459e0c4ad873c68ad" }
 #yasna = { path = "../yasna.rs" }
 ring = "0.14.0-alpha4"
 untrusted = "0.6"
