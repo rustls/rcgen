@@ -8,7 +8,7 @@ use std::fs;
 use std::io::Result;
 
 fn main() -> Result<()> {
-	let not_before = date_time_ymd(1024, 01, 01);
+	let not_before = date_time_ymd(1975, 01, 01);
 	let not_after = date_time_ymd(4096, 01, 01);
 	let mut distinguished_name = DistinguishedName::new();
 	distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
