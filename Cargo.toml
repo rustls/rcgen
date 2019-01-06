@@ -16,8 +16,8 @@ name = "rcgen"
 path = "src/main.rs"
 
 [dependencies]
-#yasna = "0.1"
-yasna = { git = "https://github.com/qnighy/yasna.rs", rev = "ba39de95e3657ac4625476480f03668c0198e34e", features = ["chrono", "bit-vec"] }
+yasna = { version = "0.2", features = ["chrono", "bit-vec"] }
+#yasna = { git = "https://github.com/qnighy/yasna.rs", rev = "ba39de95e3657ac4625476480f03668c0198e34e", features = ["chrono", "bit-vec"] }
 #yasna = { path = "../yasna.rs", features = ["chrono", "bit-vec"] }
 bit-vec = "0.5"
 ring = "0.14.0-alpha4"
