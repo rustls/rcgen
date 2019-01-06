@@ -20,7 +20,7 @@ use ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING as KALG;
 use yasna::DERWriter;
 use yasna::models::GeneralizedTime;
 use chrono::{DateTime, Timelike};
-use chrono::offset::Utc;
+use chrono::{NaiveDate, Utc};
 use std::collections::HashMap;
 use bit_vec::BitVec;
 
@@ -94,6 +94,19 @@ pub struct CertificateParams {
 	pub serial_number :Option<u64>,
 	pub subject_alt_names :Vec<String>,
 	pub distinguished_name :DistinguishedName,
+}
+
+/// Helper to obtain a DateTime from year, month, day values
+///
+/// The year, month, day values are assumed to be in UTC.
+///
+/// This helper function serves two purposes: first, so that you don't
+/// have to import the chrono crate yourself in order to use this crate,
+/// second so that users don't have to type unproportionately long code
+/// just to generate an instance of `DateTime<Utc>`.
+pub fn date_time_ymd(year :i32, month :u32, day :u32) -> DateTime<Utc> {
+	let naive_dt = NaiveDate::from_ymd(year, month, day).and_hms_milli(0, 0, 0, 0);
+	DateTime::<Utc>::from_utc(naive_dt, Utc)
 }
 
 fn dt_to_generalized(dt :&DateTime<Utc>) -> GeneralizedTime {
