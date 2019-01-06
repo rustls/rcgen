@@ -13,7 +13,7 @@ extern crate bit_vec;
 use yasna::Tag;
 use yasna::models::ObjectIdentifier;
 use pem::Pem;
-use ring::signature::{EcdsaKeyPair, KeyPair};
+use ring::signature::{ECDSAKeyPair, KeyPair};
 use ring::rand::SystemRandom;
 use untrusted::Input;
 use ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING as KALG;
@@ -26,7 +26,7 @@ use bit_vec::BitVec;
 
 pub struct Certificate {
 	params :CertificateParams,
-	key_pair :EcdsaKeyPair,
+	key_pair :ECDSAKeyPair,
 	key_pair_serialized :Vec<u8>,
 }
 
@@ -124,13 +124,49 @@ fn dt_to_generalized(dt :&DateTime<Utc>) -> GeneralizedTime {
 	GeneralizedTime::from_datetime::<Utc>(&date_time)
 }
 
+// Parses the DER formatted key pair to obtain the public key.
+// TODO: replace this function with the newly arriving
+// ring-provided functionality once we can use ring 0.14.0.
+fn get_public_key_from_pair(pair_der :&[u8]) -> BitVec {
+	/*let p = Pem {
+		tag : "KEY PAIR".to_string(),
+		contents : pair_der.to_vec(),
+	};
+	println!("{}", pem::encode(&p));*/
+	yasna::parse_der(pair_der, |reader| {
+		reader.read_sequence(|reader| {
+			// Ignore the two first items.
+			reader.next().read_u8()?;
+			reader.next().read_sequence(|reader| {
+				reader.next().read_oid()?;
+				reader.next().read_oid()?;
+				Ok(())
+			})?;
+			// ec_private_key formatted as ECPrivateKey as
+			// specified in [1].
+			// [1]: https://tools.ietf.org/html/rfc5915#section-3
+			let ec_private_key = reader.next().read_bytes()?;
+			yasna::parse_der(&ec_private_key, |reader| {
+				reader.read_sequence(|reader| {
+					reader.next().read_u8()?;
+					reader.next().read_bytes()?;
+					reader.next().read_tagged(Tag::context(1), |reader| {
+						let bit_vec = reader.read_bitvec()?;
+						Ok(bit_vec)
+					})
+				})
+			})
+		})
+	}).unwrap()
+}
+
 impl Certificate {
 	pub fn from_params(params :CertificateParams) -> Self {
 		let system_random = SystemRandom::new();
-		let key_pair_doc = EcdsaKeyPair::generate_pkcs8(&KALG, &system_random).unwrap();
+		let key_pair_doc = ECDSAKeyPair::generate_pkcs8(&KALG, &system_random).unwrap();
 		let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
-		let key_pair = EcdsaKeyPair::from_pkcs8(&KALG, Input::from(&&key_pair_doc.as_ref())).unwrap();
+		let key_pair = ECDSAKeyPair::from_pkcs8(&KALG, Input::from(&&key_pair_doc.as_ref())).unwrap();
 
 		Certificate {
 			params,
@@ -184,9 +220,8 @@ impl Certificate {
 					let oid = ObjectIdentifier::from_slice(OID_EC_SECP_256_R1);
 					writer.next().write_oid(&oid);
 				});
-				let public_key = &self.key_pair.public_key().as_ref();
-				let pkbs = BitVec::from_bytes(&public_key);
-				writer.next().write_bitvec(&pkbs);
+				let public_key = get_public_key_from_pair(&self.key_pair_serialized);
+				writer.next().write_bitvec(&public_key);
 			});
 			// write extensions
 			writer.next().write_tagged(Tag::context(3), |writer| {
@@ -230,7 +265,7 @@ impl Certificate {
 				// Write signature
 				let cl_input = Input::from(&tbs_cert_list_serialized);
 				let system_random = SystemRandom::new();
-				let signature = self.key_pair.sign(&system_random, cl_input).unwrap();
+				let signature = self.key_pair.sign(cl_input, &system_random).unwrap();
 				let sig = BitVec::from_bytes(&signature.as_ref());
 				writer.next().write_bitvec(&sig);
 			})
