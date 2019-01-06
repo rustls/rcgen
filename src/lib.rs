@@ -19,7 +19,8 @@ use untrusted::Input;
 use ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING as KALG;
 use yasna::DERWriter;
 use yasna::models::GeneralizedTime;
-use chrono::{NaiveDateTime, Timelike};
+use chrono::{DateTime, Timelike};
+use chrono::offset::Utc;
 use std::collections::HashMap;
 use bit_vec::BitVec;
 
@@ -88,17 +89,15 @@ impl DistinguishedName {
 
 pub struct CertificateParams {
 	pub alg :SignatureAlgorithm,
-	pub not_before :NaiveDateTime,
-	pub not_after :NaiveDateTime,
+	pub not_before :DateTime<Utc>,
+	pub not_after :DateTime<Utc>,
 	pub serial_number :Option<u64>,
 	pub subject_alt_names :Vec<String>,
 	pub distinguished_name :DistinguishedName,
 }
 
-fn naive_dt_to_generalized(ndt :&NaiveDateTime) -> GeneralizedTime {
-	use chrono::DateTime;
-	use chrono::offset::Utc;
-	let mut date_time = DateTime::from_utc(*ndt, Utc);
+fn dt_to_generalized(dt :&DateTime<Utc>) -> GeneralizedTime {
+	let mut date_time = *dt;
 	// Set nanoseconds to zero (or to one leap second if there is a leap second)
 	// This is needed because the GeneralizedTime serializer would otherwise
 	// output fractional values which RFC 5820 explicitly forbode [1].
@@ -156,10 +155,10 @@ impl Certificate {
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
-				let nb_gt = naive_dt_to_generalized(&self.params.not_before);
+				let nb_gt = dt_to_generalized(&self.params.not_before);
 				writer.next().write_generalized_time(&nb_gt);
 				// Not after
-				let na_gt = naive_dt_to_generalized(&self.params.not_after);
+				let na_gt = dt_to_generalized(&self.params.not_after);
 				writer.next().write_generalized_time(&na_gt);
 			});
 			// Write subject

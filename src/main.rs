@@ -1,7 +1,7 @@
 extern crate rcgen;
 extern crate chrono;
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, DateTime, Utc};
 use rcgen::{Certificate, CertificateParams,
 	DistinguishedName, DnType,
 	PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION};
@@ -9,8 +9,8 @@ use std::fs;
 use std::io::Result;
 
 fn main() -> Result<()> {
-	let not_before = NaiveDate::from_ymd(2000, 01, 01).and_hms_milli(0, 0, 0, 0);
-	let not_after = NaiveDate::from_ymd(2020, 01, 01).and_hms_milli(0, 0, 0, 0);
+	let not_before = DateTime::<Utc>::from_utc(NaiveDate::from_ymd(2000, 01, 01).and_hms_milli(0, 0, 0, 0), Utc);
+	let not_after = DateTime::<Utc>::from_utc(NaiveDate::from_ymd(2020, 01, 01).and_hms_milli(0, 0, 0, 0), Utc);
 	let mut distinguished_name = DistinguishedName::new();
 	distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	distinguished_name.push(DnType::CommonName, "Master CA");
