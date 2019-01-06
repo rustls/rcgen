@@ -24,5 +24,5 @@ pem = "0.5"
 chrono = "0.4.6"
 
 [dev-dependencies]
-openssl = { version = "0.10" }
+openssl = "0.10"
 webpki = "0.18.1"
