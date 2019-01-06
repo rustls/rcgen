@@ -13,7 +13,7 @@ extern crate bit_vec;
 use yasna::Tag;
 use yasna::models::ObjectIdentifier;
 use pem::Pem;
-use ring::signature::{ECDSAKeyPair, KeyPair};
+use ring::signature::ECDSAKeyPair;
 use ring::rand::SystemRandom;
 use untrusted::Input;
 use ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING as KALG;
