@@ -151,6 +151,7 @@ impl DistinguishedName {
 	}
 }
 
+/// Parameters used for certificate generation
 pub struct CertificateParams {
 	pub alg :SignatureAlgorithm,
 	pub not_before :DateTime<Utc>,
@@ -220,6 +221,7 @@ fn get_public_key_from_pair(pair_der :&[u8]) -> BitVec {
 }
 
 impl Certificate {
+	/// Generates a new self-signed certificate from the given parameters
 	pub fn from_params(params :CertificateParams) -> Self {
 		let system_random = SystemRandom::new();
 		let key_pair_doc = ECDSAKeyPair::generate_pkcs8(&KALG, &system_random).unwrap();
