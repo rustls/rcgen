@@ -18,8 +18,8 @@ use ring::rand::SystemRandom;
 use untrusted::Input;
 use ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING as KALG;
 use yasna::DERWriter;
-use yasna::models::{GeneralizedTime, GeneralizedTimeKind};
-use chrono::{NaiveDateTime, Datelike, Timelike};
+use yasna::models::GeneralizedTime;
+use chrono::{NaiveDateTime};
 use std::collections::HashMap;
 use bit_vec::BitVec;
 
@@ -96,29 +96,11 @@ pub struct CertificateParams {
 }
 
 fn naive_dt_to_generalized(ndt :&NaiveDateTime) -> GeneralizedTime {
-	// The constraints onto how the GeneralizedTime
-	// has to be encoded are described in:
-	// https://tools.ietf.org/html/rfc5280#section-4.1.2.5.2
-	let leap_sec = if ndt.nanosecond() > 0 {
-		let ms = ndt.nanosecond() / 1000;
-		if ms < 1000 {
-			0
-		} else {
-			1
-		}
-	} else {
-		0
-	};
-	GeneralizedTime {
-		kind: GeneralizedTimeKind::Utc,
-		year: ndt.year() as u16,
-		month: ndt.month() as u16,
-		day: ndt.day() as u16,
-		hour: ndt.hour() as u16,
-		minute : Some(ndt.minute() as u16),
-		second : Some(ndt.second() as u16 + leap_sec),
-		milisecond : None,
-	}
+	use chrono::DateTime;
+	use chrono::offset::Utc;
+	let time = GeneralizedTime::from_datetime::<Utc>(&DateTime::from_utc(*ndt, Utc));
+	// TODO set nanos to zero
+	time
 }
 
 impl Certificate {
@@ -216,7 +198,8 @@ impl Certificate {
 					self.write_cert(writer);
 				});
 				// Write tbsCertList
-				writer.next().write_der(&tbs_cert_list_serialized);
+				self.write_cert(writer.next());
+				//writer.next().write_der(&tbs_cert_list_serialized);
 
 				// Write signatureAlgorithm
 				writer.next().write_sequence(|writer| {
