@@ -2,6 +2,27 @@
 Rust X.509 certificate generation utility
 
 This crate provides a way to generate self signed X.509 certificates.
+
+The most simple way of using this crate is by calling the
+`generate_simple_self_signed` function.
+For more customization abilities, we provide the lower level
+`Certificate::from_params` function.
+
+## Example
+
+```
+extern crate rcgen;
+use rcgen::generate_simple_self_signed;
+# fn main () {
+// Generate a certificate that's valid for "localhost" and "hello.world.example"
+let subject_alt_names = vec!["hello.world.example".to_string(),
+	"localhost".to_string()];
+
+let cert = generate_simple_self_signed(subject_alt_names);
+println!("{}", cert.serialize_pem());
+println!("{}", cert.serialize_private_key_pem());
+# }
+```
 */
 extern crate yasna;
 extern crate ring;
@@ -24,13 +45,40 @@ use chrono::{NaiveDate, Utc};
 use std::collections::HashMap;
 use bit_vec::BitVec;
 
+/// A self signed certificate together with signing keys
 pub struct Certificate {
 	params :CertificateParams,
 	key_pair :ECDSAKeyPair,
 	key_pair_serialized :Vec<u8>,
 }
 
+
+/**
+KISS function to generate a self signed certificate
+
+Given a set of domain names you want your certificate to be valid for,
+this function fills in the other generation parameters with
+reasonable defaults and generates a self signed certificate
+as output.
+
+## Example
+
+```
+extern crate rcgen;
+use rcgen::generate_simple_self_signed;
+# fn main () {
+let subject_alt_names = vec!["hello.world.example".to_string(),
+	"localhost".to_string()];
+
+let cert = generate_simple_self_signed(subject_alt_names);
+// The certificate is now valid for localhost and the domain "hello.world.example"
+println!("{}", cert.serialize_pem());
+println!("{}", cert.serialize_private_key_pem());
+# }
+```
+*/
 pub fn generate_simple_self_signed(subject_alt_names :Vec<String>) -> Certificate {
+	// not_before and not_after set to reasonably long dates
 	let not_before = date_time_ymd(1975, 01, 01);
 	let not_after = date_time_ymd(4096, 01, 01);
 	let mut distinguished_name = DistinguishedName::new();
@@ -117,9 +165,9 @@ pub struct CertificateParams {
 /// The year, month, day values are assumed to be in UTC.
 ///
 /// This helper function serves two purposes: first, so that you don't
-/// have to import the chrono crate yourself in order to use this crate,
-/// second so that users don't have to type unproportionately long code
-/// just to generate an instance of `DateTime<Utc>`.
+/// have to import the chrono crate yourself in order to specify date
+/// information, second so that users don't have to type unproportionately
+/// long code just to generate an instance of `DateTime<Utc>`.
 pub fn date_time_ymd(year :i32, month :u32, day :u32) -> DateTime<Utc> {
 	let naive_dt = NaiveDate::from_ymd(year, month, day).and_hms_milli(0, 0, 0, 0);
 	DateTime::<Utc>::from_utc(naive_dt, Utc)
