@@ -30,6 +30,22 @@ pub struct Certificate {
 	key_pair_serialized :Vec<u8>,
 }
 
+pub fn generate_simple_self_signed(subject_alt_names :Vec<String>) -> Certificate {
+	let not_before = date_time_ymd(1975, 01, 01);
+	let not_after = date_time_ymd(4096, 01, 01);
+	let mut distinguished_name = DistinguishedName::new();
+	distinguished_name.push(DnType::CommonName, "rcgen self signed cert");
+	let params = CertificateParams {
+		alg : PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
+		not_before,
+		not_after,
+		serial_number : None,
+		subject_alt_names,
+		distinguished_name,
+	};
+	Certificate::from_params(params)
+}
+
 // https://tools.ietf.org/html/rfc5280#section-4.1.1
 
 // Example certs usable as reference:
