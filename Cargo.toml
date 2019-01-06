@@ -22,3 +22,6 @@ ring = "0.14.0-alpha4"
 untrusted = "0.6"
 pem = "0.5"
 chrono = "0.4.6"
+
+[dev-dependencies]
+openssl = { version = "0.10" }
