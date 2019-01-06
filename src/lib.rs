@@ -128,11 +128,6 @@ fn dt_to_generalized(dt :&DateTime<Utc>) -> GeneralizedTime {
 // TODO: replace this function with the newly arriving
 // ring-provided functionality once we can use ring 0.14.0.
 fn get_public_key_from_pair(pair_der :&[u8]) -> BitVec {
-	/*let p = Pem {
-		tag : "KEY PAIR".to_string(),
-		contents : pair_der.to_vec(),
-	};
-	println!("{}", pem::encode(&p));*/
 	yasna::parse_der(pair_der, |reader| {
 		reader.read_sequence(|reader| {
 			// Ignore the two first items.
