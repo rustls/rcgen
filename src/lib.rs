@@ -19,7 +19,7 @@ use untrusted::Input;
 use ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING as KALG;
 use yasna::DERWriter;
 use yasna::models::GeneralizedTime;
-use chrono::{NaiveDateTime};
+use chrono::{NaiveDateTime, Timelike};
 use std::collections::HashMap;
 use bit_vec::BitVec;
 
@@ -98,9 +98,18 @@ pub struct CertificateParams {
 fn naive_dt_to_generalized(ndt :&NaiveDateTime) -> GeneralizedTime {
 	use chrono::DateTime;
 	use chrono::offset::Utc;
-	let time = GeneralizedTime::from_datetime::<Utc>(&DateTime::from_utc(*ndt, Utc));
-	// TODO set nanos to zero
-	time
+	let mut date_time = DateTime::from_utc(*ndt, Utc);
+	// Set nanoseconds to zero (or to one leap second if there is a leap second)
+	// This is needed because the GeneralizedTime serializer would otherwise
+	// output fractional values which RFC 5820 explicitly forbode [1].
+	// [1]: https://tools.ietf.org/html/rfc5280#section-4.1.2.5.2
+	let nanos = if date_time.nanosecond() >= 1_000_000 {
+		1_000_000
+	} else {
+		0
+	};
+	date_time = date_time.with_nanosecond(nanos).unwrap();
+	GeneralizedTime::from_datetime::<Utc>(&date_time)
 }
 
 impl Certificate {
