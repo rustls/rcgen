@@ -115,6 +115,7 @@ const OID_EC_SECP_256_R1 :&[u64] = &[1, 2, 840, 10045, 3, 1, 7];
 const OID_SUBJECT_ALT_NAME :&[u64] = &[2, 5, 29, 17];
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
+/// The attribute type of a distinguished name entry
 pub enum DnType {
 	CountryName,
 	OrganizationName,
@@ -136,6 +137,14 @@ impl DnType {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+/**
+Distinguished name used e.g. for the issuer and subject fields of a certificate
+
+A distinguished name is a set of (attribute type, attribute value) tuples.
+
+See also the RFC 5280 sections on the [issuer](https://tools.ietf.org/html/rfc5280#section-4.1.2.4)
+and [subject](https://tools.ietf.org/html/rfc5280#section-4.1.2.6) fields.
+*/
 pub struct DistinguishedName {
 	entries :HashMap<DnType, String>,
 }
@@ -146,6 +155,7 @@ impl DistinguishedName {
 			entries : HashMap::new(),
 		}
 	}
+	/// Inserts a new attribute that consists of type and name
 	pub fn push(&mut self, ty :DnType, s :impl Into<String>) {
 		self.entries.insert(ty, s.into());
 	}
