@@ -42,6 +42,13 @@ cargo run --example client -- --ca ../rcgen/certs/cert.der https://localhost:443
 
 ```
 
+## MSRV
+
+The currently latest stable Rust release is the minimum Rust
+version that this crate supports. Having a policy reaching
+further back would make no sense because this crate
+depends on `ring` which has this same policy.
+
 ### License
 [license]: #license
 
