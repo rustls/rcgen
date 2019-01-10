@@ -14,15 +14,15 @@ use webpki::ECDSA_P256_SHA256;
 use webpki::{Time, DNSNameRef};
 
 use ring::rand::SystemRandom;
-use ring::signature::ECDSAKeyPair;
+use ring::signature::EcdsaKeyPair;
 use ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING as KALG;
 
 fn sign_msg(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
-	let key_pair = ECDSAKeyPair::from_pkcs8(&KALG, Input::from(&pk_der)).unwrap();
+	let key_pair = EcdsaKeyPair::from_pkcs8(&KALG, Input::from(&pk_der)).unwrap();
 	let system_random = SystemRandom::new();
 	let msg_input = Input::from(&msg);
-	let signature = key_pair.sign(msg_input, &system_random).unwrap();
+	let signature = key_pair.sign(&system_random, msg_input).unwrap();
 	signature.as_ref().to_vec()
 }
 

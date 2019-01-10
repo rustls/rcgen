@@ -19,11 +19,11 @@ path = "src/main.rs"
 [dependencies]
 yasna = { version = "0.2", features = ["chrono", "bit-vec"] }
 bit-vec = "0.5"
-ring = "0.13"
+ring = "0.14"
 untrusted = "0.6"
 pem = "0.5"
 chrono = "0.4.6"
 
 [dev-dependencies]
 openssl = "0.10"
-webpki = "0.18.1"
+webpki = "0.19"

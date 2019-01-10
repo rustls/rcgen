@@ -34,7 +34,7 @@ extern crate bit_vec;
 use yasna::Tag;
 use yasna::models::ObjectIdentifier;
 use pem::Pem;
-use ring::signature::ECDSAKeyPair;
+use ring::signature::EcdsaKeyPair;
 use ring::rand::SystemRandom;
 use untrusted::Input;
 use ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING as KALG;
@@ -48,7 +48,7 @@ use bit_vec::BitVec;
 /// A self signed certificate together with signing keys
 pub struct Certificate {
 	params :CertificateParams,
-	key_pair :ECDSAKeyPair,
+	key_pair :EcdsaKeyPair,
 	key_pair_serialized :Vec<u8>,
 }
 
@@ -234,10 +234,10 @@ impl Certificate {
 	/// Generates a new self-signed certificate from the given parameters
 	pub fn from_params(params :CertificateParams) -> Self {
 		let system_random = SystemRandom::new();
-		let key_pair_doc = ECDSAKeyPair::generate_pkcs8(&KALG, &system_random).unwrap();
+		let key_pair_doc = EcdsaKeyPair::generate_pkcs8(&KALG, &system_random).unwrap();
 		let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
-		let key_pair = ECDSAKeyPair::from_pkcs8(&KALG, Input::from(&&key_pair_doc.as_ref())).unwrap();
+		let key_pair = EcdsaKeyPair::from_pkcs8(&KALG, Input::from(&&key_pair_doc.as_ref())).unwrap();
 
 		Certificate {
 			params,
@@ -336,7 +336,7 @@ impl Certificate {
 				// Write signature
 				let cl_input = Input::from(&tbs_cert_list_serialized);
 				let system_random = SystemRandom::new();
-				let signature = self.key_pair.sign(cl_input, &system_random).unwrap();
+				let signature = self.key_pair.sign(&system_random, cl_input).unwrap();
 				let sig = BitVec::from_bytes(&signature.as_ref());
 				writer.next().write_bitvec(&sig);
 			})
