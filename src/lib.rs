@@ -67,7 +67,7 @@ as output.
 extern crate rcgen;
 use rcgen::generate_simple_self_signed;
 # fn main () {
-let subject_alt_names = vec!["hello.world.example".to_string(),
+let subject_alt_names :&[_] = &["hello.world.example".to_string(),
 	"localhost".to_string()];
 
 let cert = generate_simple_self_signed(subject_alt_names);
@@ -77,7 +77,7 @@ println!("{}", cert.serialize_private_key_pem());
 # }
 ```
 */
-pub fn generate_simple_self_signed(subject_alt_names :Vec<String>) -> Certificate {
+pub fn generate_simple_self_signed(subject_alt_names :impl Into<Vec<String>>) -> Certificate {
 	// not_before and not_after set to reasonably long dates
 	let not_before = date_time_ymd(1975, 01, 01);
 	let not_after = date_time_ymd(4096, 01, 01);
@@ -88,7 +88,7 @@ pub fn generate_simple_self_signed(subject_alt_names :Vec<String>) -> Certificat
 		not_before,
 		not_after,
 		serial_number : None,
-		subject_alt_names,
+		subject_alt_names : subject_alt_names.into(),
 		distinguished_name,
 	};
 	Certificate::from_params(params)
