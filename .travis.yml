@@ -3,6 +3,9 @@ rust:
   - nightly
   - beta
   - stable
+matrix:
+  allow_failures:
+    - rust: nightly
 script:
   - cargo build --verbose
   - cargo test --verbose
