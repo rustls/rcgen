@@ -24,6 +24,9 @@ println!("{}", cert.serialize_private_key_pem());
 # }
 ```
 */
+
+#![forbid(unsafe_code)]
+
 extern crate yasna;
 extern crate ring;
 extern crate pem;
