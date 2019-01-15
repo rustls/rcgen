@@ -296,8 +296,7 @@ impl Certificate {
 					self.write_cert(writer);
 				});
 				// Write tbsCertList
-				self.write_cert(writer.next());
-				//writer.next().write_der(&tbs_cert_list_serialized);
+				writer.next().write_der(&tbs_cert_list_serialized);
 
 				// Write signatureAlgorithm
 				writer.next().write_sequence(|writer| {
