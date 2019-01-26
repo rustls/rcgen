@@ -26,6 +26,7 @@ println!("{}", cert.serialize_private_key_pem());
 */
 
 #![forbid(unsafe_code)]
+#![deny(missing_docs)]
 
 extern crate yasna;
 extern crate ring;
@@ -119,6 +120,7 @@ const OID_EC_SECP_256_R1 :&[u64] = &[1, 2, 840, 10045, 3, 1, 7];
 const OID_SUBJECT_ALT_NAME :&[u64] = &[2, 5, 29, 17];
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[allow(missing_docs)]
 /// The attribute type of a distinguished name entry
 pub enum DnType {
 	CountryName,
@@ -154,6 +156,7 @@ pub struct DistinguishedName {
 }
 
 impl DistinguishedName {
+	/// Creates a new, empty distinguished name
 	pub fn new() -> Self {
 		Self {
 			entries : HashMap::new(),
@@ -166,6 +169,7 @@ impl DistinguishedName {
 }
 
 /// Parameters used for certificate generation
+#[allow(missing_docs)]
 pub struct CertificateParams {
 	pub alg :SignatureAlgorithm,
 	pub not_before :DateTime<Utc>,
@@ -337,6 +341,7 @@ impl Certificate {
 	}
 }
 
+/// Signature algorithm type
 pub struct SignatureAlgorithm {
 	oid_components : &'static [u64],
 }
