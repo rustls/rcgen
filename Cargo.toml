@@ -21,7 +21,7 @@ yasna = { version = "0.2.1", features = ["chrono", "bit-vec"] }
 bit-vec = "0.5"
 ring = "0.14"
 untrusted = "0.6"
-pem = "0.5"
+pem = "0.6"
 chrono = "0.4.6"
 
 [dev-dependencies]
