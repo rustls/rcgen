@@ -1,5 +1,9 @@
 # Changes
 
+## Release 0.2.1 - April 26, 2019
+
+- Updated to pem 0.6
+
 ## Release 0.2 - January 10, 2019
 
 - Updated to ring 0.14.0
