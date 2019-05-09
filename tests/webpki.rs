@@ -3,7 +3,7 @@ extern crate untrusted;
 extern crate rcgen;
 extern crate ring;
 
-use rcgen::{Certificate, CertificateParams, DnType};
+use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
 use untrusted::Input;
 use webpki::{EndEntityCert, TLSServerTrustAnchors};
 use webpki::trust_anchor_util::cert_der_as_trust_anchor;
@@ -67,4 +67,33 @@ fn test_webpki() {
 		Input::from(msg),
 		Input::from(&signature),
 	).expect("signature is valid");
+}
+
+#[test]
+fn test_webpki_separate_ca() {
+	let mut params = CertificateParams::new(vec![
+		"crabs.crabs".to_string(), "localhost".to_string(),
+	]);
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Master CA");
+	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	let ca_cert = Certificate::from_params(params);
+
+	let ca_der = ca_cert.serialize_der();
+	let trust_anchor_list = &[cert_der_as_trust_anchor(Input::from(&ca_der)).unwrap()];
+	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
+
+	let mut params = CertificateParams::new(vec!["crabs.dev".to_string()]);
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	let cert = Certificate::from_params(params).serialize_der_with_signer(&ca_cert);
+	let end_entity_cert = EndEntityCert::from(Input::from(&cert)).unwrap();
+
+	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
+	end_entity_cert.verify_is_valid_tls_server_cert(
+		&[&ECDSA_P256_SHA256],
+		&trust_anchors,
+		&[Input::from(&ca_der)],
+		time,
+	).expect("valid TLS server cert");
 }

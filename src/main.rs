@@ -1,7 +1,7 @@
 extern crate rcgen;
 
 use rcgen::{Certificate, CertificateParams,
-	DistinguishedName, DnType,
+	DistinguishedName, DnType, IsCa,
 	PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
 	date_time_ymd};
 use std::fs;
@@ -20,6 +20,7 @@ fn main() -> Result<()> {
 		serial_number : None,
 		subject_alt_names : vec!["crabs.crabs".to_string(), "localhost".to_string()],
 		distinguished_name,
+		is_ca : IsCa::SelfSignedOnly,
 	};
 	let cert = Certificate::from_params(params);
 	println!("{}", cert.serialize_pem());
