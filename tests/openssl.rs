@@ -1,30 +1,18 @@
 extern crate openssl;
 extern crate rcgen;
 
-use rcgen::{Certificate, CertificateParams,
-	DistinguishedName, DnType,
-	PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
-	date_time_ymd};
-
+use rcgen::{Certificate, CertificateParams, DnType};
 use openssl::x509::{X509, X509StoreContext};
 use openssl::x509::store::{X509StoreBuilder, X509Store};
 use openssl::stack::Stack;
 
 #[test]
 fn test_openssl() {
-	let not_before = date_time_ymd(1900, 01, 01);
-	let not_after = date_time_ymd(1901, 01, 01);
-	let mut distinguished_name = DistinguishedName::new();
-	distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	distinguished_name.push(DnType::CommonName, "Master CA");
-	let params = CertificateParams {
-		alg : PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
-		not_before,
-		not_after,
-		serial_number : None,
-		subject_alt_names : vec!["crabs.crabs".to_string(), "localhost".to_string()],
-		distinguished_name,
-	};
+	let mut params = CertificateParams::new(vec![
+		"crabs.crabs".to_string(), "localhost".to_string(),
+	]);
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Master CA");
 	let cert = Certificate::from_params(params);
 
 	println!("{}", cert.serialize_pem());
