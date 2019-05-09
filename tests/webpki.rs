@@ -3,10 +3,7 @@ extern crate untrusted;
 extern crate rcgen;
 extern crate ring;
 
-use rcgen::{Certificate, CertificateParams,
-	DistinguishedName, DnType,
-	PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
-	date_time_ymd};
+use rcgen::{Certificate, CertificateParams, DnType};
 use untrusted::Input;
 use webpki::{EndEntityCert, TLSServerTrustAnchors};
 use webpki::trust_anchor_util::cert_der_as_trust_anchor;
@@ -28,19 +25,11 @@ fn sign_msg(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 
 #[test]
 fn test_webpki() {
-	let not_before = date_time_ymd(1975, 01, 01);
-	let not_after = date_time_ymd(4096, 01, 01);
-	let mut distinguished_name = DistinguishedName::new();
-	distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	distinguished_name.push(DnType::CommonName, "Master CA");
-	let params = CertificateParams {
-		alg : PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
-		not_before,
-		not_after,
-		serial_number : None,
-		subject_alt_names : vec!["crabs.crabs".to_string(), "localhost".to_string()],
-		distinguished_name,
-	};
+	let mut params = CertificateParams::new(vec![
+		"crabs.crabs".to_string(), "localhost".to_string(),
+	]);
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Master CA");
 	let cert = Certificate::from_params(params);
 
 	println!("{}", cert.serialize_pem());
