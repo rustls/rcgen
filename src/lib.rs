@@ -38,6 +38,7 @@ extern crate bit_vec;
 use yasna::Tag;
 use yasna::models::ObjectIdentifier;
 use pem::Pem;
+use ring::digest;
 use ring::signature::EcdsaKeyPair;
 use ring::rand::SystemRandom;
 use ring::signature::KeyPair;
@@ -106,6 +107,12 @@ const OID_EC_SECP_256_R1 :&[u64] = &[1, 2, 840, 10045, 3, 1, 7];
 // https://tools.ietf.org/html/rfc5280#section-4.2.1.6
 const OID_SUBJECT_ALT_NAME :&[u64] = &[2, 5, 29, 17];
 
+// https://tools.ietf.org/html/rfc5280#section-4.2.1.9
+const OID_BASIC_CONSTRAINTS :&[u64] = &[2, 5, 29, 19];
+
+// https://tools.ietf.org/html/rfc5280#section-4.2.1.2
+const OID_SUBJECT_KEY_IDENTIFIER :&[u64] = &[2, 5, 29, 14];
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[allow(missing_docs)]
 /// The attribute type of a distinguished name entry
@@ -164,6 +171,26 @@ pub struct CertificateParams {
 	pub serial_number :Option<u64>,
 	pub subject_alt_names :Vec<String>,
 	pub distinguished_name :DistinguishedName,
+	pub is_ca :IsCa,
+}
+
+/// Whether the certificate is allowed to sign other certificates
+pub enum IsCa {
+	/// The certificate can only sign itself
+	SelfSignedOnly,
+	/// The certificate may be used to sign other certificates
+	Ca(BasicConstraints),
+}
+
+/// The path length constraint (only relevant for CA certificates)
+///
+/// Sets an optional upper limit on the length of the intermediate certificate chain
+/// length allowed for this CA certificate (not including the end entity certificate).
+pub enum BasicConstraints {
+	/// No constraint
+	Unconstrained,
+	/// Constrain to the contained number of intermediate certificates
+	Constrained(u8),
 }
 
 impl CertificateParams {
@@ -181,6 +208,7 @@ impl CertificateParams {
 			serial_number : None,
 			subject_alt_names : subject_alt_names.into(),
 			distinguished_name,
+			is_ca : IsCa::SelfSignedOnly,
 		}
 	}
 }
@@ -228,10 +256,10 @@ impl Certificate {
 			key_pair_serialized,
 		}
 	}
-	fn write_name(&self, writer :DERWriter) {
+	fn write_name(&self, writer :DERWriter, ca :&Certificate) {
 		writer.write_sequence(|writer| {
 			writer.next().write_set(|writer| {
-				for (ty, content) in self.params.distinguished_name.entries.iter() {
+				for (ty, content) in ca.params.distinguished_name.entries.iter() {
 					writer.next().write_sequence(|writer| {
 						writer.next().write_oid(&ty.to_oid());
 						writer.next().write_utf8_string(content);
@@ -240,7 +268,7 @@ impl Certificate {
 			});
 		});
 	}
-	fn write_cert(&self, writer :DERWriter) {
+	fn write_cert(&self, writer :DERWriter, ca :&Certificate) {
 		writer.write_sequence(|writer| {
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
@@ -254,7 +282,7 @@ impl Certificate {
 				writer.next().write_oid(&self.params.alg.oid());
 			});
 			// Write issuer
-			self.write_name(writer.next());
+			self.write_name(writer.next(), ca);
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
@@ -265,7 +293,7 @@ impl Certificate {
 				writer.next().write_generalized_time(&na_gt);
 			});
 			// Write subject
-			self.write_name(writer.next());
+			self.write_name(writer.next(), self);
 			// Write subjectPublicKeyInfo
 			writer.next().write_sequence(|writer| {
 				writer.next().write_sequence(|writer| {
@@ -296,17 +324,44 @@ impl Certificate {
 						});
 						writer.next().write_bytes(&bytes);
 					});
+					if let IsCa::Ca(ref constraint) = self.params.is_ca {
+						// Write subject_key_identifier
+						writer.next().write_sequence(|writer| {
+							let oid = ObjectIdentifier::from_slice(OID_SUBJECT_KEY_IDENTIFIER);
+							writer.next().write_oid(&oid);
+							let digest = digest::digest(&digest::SHA256, self.key_pair.public_key().as_ref());
+							writer.next().write_bytes(&digest.as_ref());
+						});
+						// Write basic_constraints
+						writer.next().write_sequence(|writer| {
+							let oid = ObjectIdentifier::from_slice(OID_BASIC_CONSTRAINTS);
+							writer.next().write_oid(&oid);
+							let bytes = yasna::construct_der(|writer| {
+								writer.write_sequence(|writer| {
+									writer.next().write_bool(true); // cA flag
+									if let BasicConstraints::Constrained(path_len_constraint) = constraint {
+										writer.next().write_u8(*path_len_constraint);
+									}
+								});
+							});
+							writer.next().write_bytes(&bytes);
+						});
+					}
 				});
 			});
 		})
 	}
 	/// Serializes the certificate to the binary DER format
 	pub fn serialize_der(&self) -> Vec<u8> {
+		self.serialize_der_with_signer(&self)
+	}
+	/// Serializes the certificate, signed with another certificate's key, in binary DER format
+	pub fn serialize_der_with_signer(&self, ca :&Certificate) -> Vec<u8> {
 		yasna::construct_der(|writer| {
 			writer.write_sequence(|writer| {
 
 				let tbs_cert_list_serialized = yasna::construct_der(|writer| {
-					self.write_cert(writer);
+					self.write_cert(writer, ca);
 				});
 				// Write tbsCertList
 				writer.next().write_der(&tbs_cert_list_serialized);
@@ -319,7 +374,7 @@ impl Certificate {
 				// Write signature
 				let cl_input = Input::from(&tbs_cert_list_serialized);
 				let system_random = SystemRandom::new();
-				let signature = self.key_pair.sign(&system_random, cl_input).unwrap();
+				let signature = ca.key_pair.sign(&system_random, cl_input).unwrap();
 				let sig = BitVec::from_bytes(&signature.as_ref());
 				writer.next().write_bitvec(&sig);
 			})
@@ -330,6 +385,14 @@ impl Certificate {
 		let p = Pem {
 			tag : "CERTIFICATE".to_string(),
 			contents : self.serialize_der(),
+		};
+		pem::encode(&p)
+	}
+	/// Serializes the certificate, signed with another certificate's key, to the ASCII PEM format
+	pub fn serialize_pem_with_signer(&self, ca :&Certificate) -> String {
+		let p = Pem {
+			tag : "CERTIFICATE".to_string(),
+			contents : self.serialize_der_with_signer(ca),
 		};
 		pem::encode(&p)
 	}
