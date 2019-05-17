@@ -12,7 +12,7 @@ use webpki::{Time, DNSNameRef};
 
 use ring::rand::SystemRandom;
 use ring::signature;
-use ring::signature::{EcdsaKeyPair, EcdsaSigningAlgorithm};
+use ring::signature::{EcdsaKeyPair, EcdsaSigningAlgorithm, Ed25519KeyPair};
 
 fn sign_msg_ecdsa(cert :&Certificate, msg :&[u8], alg :&'static EcdsaSigningAlgorithm) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
@@ -20,6 +20,13 @@ fn sign_msg_ecdsa(cert :&Certificate, msg :&[u8], alg :&'static EcdsaSigningAlgo
 	let system_random = SystemRandom::new();
 	let msg_input = Input::from(&msg);
 	let signature = key_pair.sign(&system_random, msg_input).unwrap();
+	signature.as_ref().to_vec()
+}
+
+fn sign_msg_ed25519(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
+	let pk_der = cert.serialize_private_key_der();
+	let key_pair = Ed25519KeyPair::from_pkcs8(Input::from(&pk_der)).unwrap();
+	let signature = key_pair.sign(&msg);
 	signature.as_ref().to_vec()
 }
 
@@ -97,6 +104,26 @@ fn test_webpki_384() {
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
 		&signature::ECDSA_P384_SHA384_ASN1_SIGNING);
 	check_cert(&cert_der, &cert, &webpki::ECDSA_P384_SHA384, sign_fn);
+}
+
+#[test]
+fn test_webpki_25519() {
+	let mut params = CertificateParams::new(vec![
+		"crabs.crabs".to_string(), "localhost".to_string(),
+	]);
+	params.alg = &rcgen::PKCS_ED25519;
+
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Master CA");
+	let cert = Certificate::from_params(params);
+
+	println!("{}", cert.serialize_pem());
+
+	// Now verify the certificate.
+
+	let cert_der = cert.serialize_der();
+
+	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
 }
 
 #[test]

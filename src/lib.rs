@@ -39,11 +39,11 @@ use yasna::Tag;
 use yasna::models::ObjectIdentifier;
 use pem::Pem;
 use ring::digest;
-use ring::signature::EcdsaKeyPair;
+use ring::signature::{EcdsaKeyPair, Ed25519KeyPair};
 use ring::rand::SystemRandom;
 use ring::signature::KeyPair;
 use untrusted::Input;
-use ring::signature::{self, EcdsaSigningAlgorithm};
+use ring::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters};
 use yasna::DERWriter;
 use yasna::models::GeneralizedTime;
 use chrono::{DateTime, Timelike};
@@ -420,10 +420,12 @@ impl Certificate {
 
 enum SignAlgo {
 	EcDsa(&'static EcdsaSigningAlgorithm),
+	EdDsa(&'static EdDSAParameters),
 }
 
 enum DynKeyPair {
 	EcKp(EcdsaKeyPair),
+	EdKp(Ed25519KeyPair),
 }
 
 impl DynKeyPair {
@@ -437,12 +439,20 @@ impl DynKeyPair {
 				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, Input::from(&&key_pair_doc.as_ref())).unwrap();
 				(DynKeyPair::EcKp(key_pair), key_pair_serialized)
 			},
+			SignAlgo::EdDsa(_sign_alg) => {
+				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(&system_random).unwrap();
+				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
+
+				let key_pair = Ed25519KeyPair::from_pkcs8(Input::from(&&key_pair_doc.as_ref())).unwrap();
+				(DynKeyPair::EdKp(key_pair), key_pair_serialized)
+			},
 		}
 	}
 
 	fn public_key(&self) -> &[u8] {
 		match self {
 			DynKeyPair::EcKp(kp) => kp.public_key().as_ref(),
+			DynKeyPair::EdKp(kp) => kp.public_key().as_ref(),
 		}
 	}
 	fn sign(&self, msg :&[u8]) -> signature::Signature {
@@ -452,6 +462,9 @@ impl DynKeyPair {
 				let system_random = SystemRandom::new();
 				kp.sign(&system_random, msg_input).unwrap()
 			},
+			DynKeyPair::EdKp(kp) => {
+				kp.sign(msg)
+			}
 		}
 	}
 }
@@ -488,7 +501,15 @@ pub static PKCS_ECDSA_P384_SHA384 :SignatureAlgorithm = SignatureAlgorithm {
 
 // TODO PKCS_ECDSA_P521_SHA512 https://github.com/briansmith/ring/issues/824
 
-// TODO add ED25519 https://tools.ietf.org/html/rfc8410
+/// ED25519 curve signing as per [RFC 8410](https://tools.ietf.org/html/rfc8410)
+pub static PKCS_ED25519 :SignatureAlgorithm = SignatureAlgorithm {
+	/// id-Ed25519 in RFC 8410
+	oids_sign_alg :&[&[1, 3, 101, 112]],
+	sign_alg :SignAlgo::EdDsa(&signature::ED25519),
+	digest_alg :&digest::SHA512,
+	/// id-Ed25519 in RFC 8410
+	oid_components : &[1, 3, 101, 112],
+};
 
 // Signature algorithm IDs as per https://tools.ietf.org/html/rfc4055
 impl SignatureAlgorithm {
