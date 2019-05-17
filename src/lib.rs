@@ -456,6 +456,8 @@ pub static PKCS_ECDSA_P384_SHA384 :SignatureAlgorithm = SignatureAlgorithm {
 
 // TODO PKCS_ECDSA_P521_SHA512 https://github.com/briansmith/ring/issues/824
 
+// TODO add ED25519 https://tools.ietf.org/html/rfc8410
+
 // Signature algorithm IDs as per https://tools.ietf.org/html/rfc4055
 impl SignatureAlgorithm {
 	fn oid(&self) -> ObjectIdentifier {
