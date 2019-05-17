@@ -3,7 +3,7 @@
 ## Release 0.3.0 - May 18, 2019
 
 - Support for CA certificate generation. Thanks to contributions by [@Ralith](https://github.com/Ralith)
-- Support for certificate signing (thanks to contributions by [@Ralith](https://github.com/Ralith))
+- Support for certificate signing. Thanks to contributions by [@Ralith](https://github.com/Ralith))
 - Support for ED25519 certificates
 - Support for SHA-384 certificates
 - API cleanups (Future proofing CertificateParams, public constant renames)
