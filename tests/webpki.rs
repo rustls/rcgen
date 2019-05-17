@@ -23,20 +23,7 @@ fn sign_msg(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 	signature.as_ref().to_vec()
 }
 
-#[test]
-fn test_webpki() {
-	let mut params = CertificateParams::new(vec![
-		"crabs.crabs".to_string(), "localhost".to_string(),
-	]);
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Master CA");
-	let cert = Certificate::from_params(params);
-
-	println!("{}", cert.serialize_pem());
-
-	// Now verify the certificate.
-
-	let cert_der = cert.serialize_der();
+fn check_cert(cert_der :&[u8], cert :&Certificate) {
 	let trust_anchor = cert_der_as_trust_anchor(Input::from(&cert_der)).unwrap();
 	let trust_anchor_list = &[trust_anchor];
 	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
@@ -70,6 +57,24 @@ fn test_webpki() {
 }
 
 #[test]
+fn test_webpki() {
+	let mut params = CertificateParams::new(vec![
+		"crabs.crabs".to_string(), "localhost".to_string(),
+	]);
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Master CA");
+	let cert = Certificate::from_params(params);
+
+	println!("{}", cert.serialize_pem());
+
+	// Now verify the certificate.
+
+	let cert_der = cert.serialize_der();
+
+	check_cert(&cert_der, &cert);
+}
+
+#[test]
 fn test_webpki_separate_ca() {
 	let mut params = CertificateParams::new(vec![
 		"crabs.crabs".to_string(), "localhost".to_string(),
@@ -89,7 +94,9 @@ fn test_webpki_separate_ca() {
 	let cert = Certificate::from_params(params).serialize_der_with_signer(&ca_cert);
 	let end_entity_cert = EndEntityCert::from(Input::from(&cert)).unwrap();
 
+	// Set time to Jan 10, 2004
 	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
+
 	end_entity_cert.verify_is_valid_tls_server_cert(
 		&[&ECDSA_P256_SHA256],
 		&trust_anchors,
