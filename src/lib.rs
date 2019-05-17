@@ -43,7 +43,7 @@ use ring::signature::EcdsaKeyPair;
 use ring::rand::SystemRandom;
 use ring::signature::KeyPair;
 use untrusted::Input;
-use ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING as KALG;
+use ring::signature::{self, EcdsaSigningAlgorithm};
 use yasna::DERWriter;
 use yasna::models::GeneralizedTime;
 use chrono::{DateTime, Timelike};
@@ -258,10 +258,10 @@ impl Certificate {
 	/// Generates a new self-signed certificate from the given parameters
 	pub fn from_params(params :CertificateParams) -> Self {
 		let system_random = SystemRandom::new();
-		let key_pair_doc = EcdsaKeyPair::generate_pkcs8(&KALG, &system_random).unwrap();
+		let key_pair_doc = EcdsaKeyPair::generate_pkcs8(params.alg.sign_alg, &system_random).unwrap();
 		let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
-		let key_pair = EcdsaKeyPair::from_pkcs8(&KALG, Input::from(&&key_pair_doc.as_ref())).unwrap();
+		let key_pair = EcdsaKeyPair::from_pkcs8(&params.alg.sign_alg, Input::from(&&key_pair_doc.as_ref())).unwrap();
 
 		Certificate {
 			params,
@@ -425,6 +425,7 @@ impl Certificate {
 
 /// Signature algorithm type
 pub struct SignatureAlgorithm {
+	sign_alg :&'static EcdsaSigningAlgorithm,
 	digest_alg :&'static ring::digest::Algorithm,
 	oid_components : &'static [u64],
 }
@@ -438,6 +439,7 @@ pub static PKCS_WITH_SHA256_WITH_RSA_ENCRYPTION :SignatureAlgorithm = SignatureA
 
 /// Signature algorithm ID as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 pub static PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
+	sign_alg :&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
 	digest_alg :&digest::SHA256,
 	/// ecdsa-with-SHA256 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 2],
@@ -445,17 +447,20 @@ pub static PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = Signatur
 
 /// Signature algorithm ID as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 pub static PKCS_WITH_SHA384_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
+	sign_alg :&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
 	digest_alg :&digest::SHA384,
 	/// ecdsa-with-SHA384 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 3],
 };
 
+/*
 /// Signature algorithm ID as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 pub static PKCS_WITH_SHA512_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
+	sign_alg :&signature::ECDSA_P384_SHA512_ASN1_SIGNING,
 	digest_alg :&digest::SHA512,
 	/// ecdsa-with-SHA512 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 4],
-};
+};*/
 
 // Signature algorithm IDs as per https://tools.ietf.org/html/rfc4055
 impl SignatureAlgorithm {
