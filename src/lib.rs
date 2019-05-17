@@ -102,6 +102,7 @@ const OID_COMMON_NAME :&[u64] = &[2, 5, 4, 3];
 // https://tools.ietf.org/html/rfc5480#section-2.1.1
 const OID_EC_PUBLIC_KEY :&[u64] = &[1, 2, 840, 10045, 2, 1];
 const OID_EC_SECP_256_R1 :&[u64] = &[1, 2, 840, 10045, 3, 1, 7];
+const OID_EC_SECP_384_R1 :&[u64] = &[1, 3, 132, 0, 34];
 
 // https://tools.ietf.org/html/rfc5280#appendix-A.2
 // https://tools.ietf.org/html/rfc5280#section-4.2.1.6
@@ -312,7 +313,7 @@ impl Certificate {
 				writer.next().write_sequence(|writer| {
 					let oid = ObjectIdentifier::from_slice(OID_EC_PUBLIC_KEY);
 					writer.next().write_oid(&oid);
-					let oid = ObjectIdentifier::from_slice(OID_EC_SECP_256_R1);
+					let oid = ObjectIdentifier::from_slice(self.params.alg.oid_sign_alg);
 					writer.next().write_oid(&oid);
 				});
 				let public_key = &self.key_pair.public_key().as_ref();
@@ -425,9 +426,10 @@ impl Certificate {
 
 /// Signature algorithm type
 pub struct SignatureAlgorithm {
+	oid_sign_alg :&'static [u64],
 	sign_alg :&'static EcdsaSigningAlgorithm,
 	digest_alg :&'static ring::digest::Algorithm,
-	oid_components : &'static [u64],
+	oid_components :&'static [u64],
 }
 
 /*
@@ -439,6 +441,7 @@ pub static PKCS_WITH_SHA256_WITH_RSA_ENCRYPTION :SignatureAlgorithm = SignatureA
 
 /// Signature algorithm ID as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 pub static PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
+	oid_sign_alg :&OID_EC_SECP_256_R1,
 	sign_alg :&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
 	digest_alg :&digest::SHA256,
 	/// ecdsa-with-SHA256 in RFC 5758
@@ -447,6 +450,7 @@ pub static PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = Signatur
 
 /// Signature algorithm ID as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 pub static PKCS_WITH_SHA384_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
+	oid_sign_alg :&OID_EC_SECP_384_R1,
 	sign_alg :&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
 	digest_alg :&digest::SHA384,
 	/// ecdsa-with-SHA384 in RFC 5758
