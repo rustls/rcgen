@@ -432,12 +432,9 @@ pub struct SignatureAlgorithm {
 	oid_components :&'static [u64],
 }
 
-/*
-pub static PKCS_RSA_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
-	/// sha256WithRSAEncryption in RFC 4055
-	oid_components : &[1, 2, 840, 113549, 1, 1, 11],
-};
-*/
+// TODO add RSA. Blocked by: https://github.com/briansmith/ring/pull/733
+// sha256WithRSAEncryption in RFC 4055
+// oid_components : &[1, 2, 840, 113549, 1, 1, 11],
 
 /// ECDSA signing using the P-256 curves and SHA-256 as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
