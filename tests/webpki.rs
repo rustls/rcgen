@@ -81,7 +81,7 @@ fn test_webpki_384() {
 	let mut params = CertificateParams::new(vec![
 		"crabs.crabs".to_string(), "localhost".to_string(),
 	]);
-	params.alg = &rcgen::PKCS_WITH_SHA384_WITH_ECDSA_ENCRYPTION;
+	params.alg = &rcgen::PKCS_ECDSA_P384_SHA384;
 
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Master CA");

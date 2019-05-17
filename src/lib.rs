@@ -185,7 +185,7 @@ impl Default for CertificateParams {
 		let mut distinguished_name = DistinguishedName::new();
 		distinguished_name.push(DnType::CommonName, "rcgen self signed cert");
 		CertificateParams {
-			alg : &PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
+			alg : &PKCS_ECDSA_P256_SHA256,
 			not_before,
 			not_after,
 			serial_number : None,
@@ -433,14 +433,14 @@ pub struct SignatureAlgorithm {
 }
 
 /*
-pub static PKCS_WITH_SHA256_WITH_RSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
+pub static PKCS_RSA_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	/// sha256WithRSAEncryption in RFC 4055
 	oid_components : &[1, 2, 840, 113549, 1, 1, 11],
 };
 */
 
-/// Signature algorithm ID as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
-pub static PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
+/// ECDSA signing using the P-256 curves and SHA-256 as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	oid_sign_alg :&OID_EC_SECP_256_R1,
 	sign_alg :&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
 	digest_alg :&digest::SHA256,
@@ -448,23 +448,14 @@ pub static PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = Signatur
 	oid_components : &[1, 2, 840, 10045, 4, 3, 2],
 };
 
-/// Signature algorithm ID as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
-pub static PKCS_WITH_SHA384_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
+/// ECDSA signing using the P-384 curves and SHA-384 as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+pub static PKCS_ECDSA_P384_SHA384 :SignatureAlgorithm = SignatureAlgorithm {
 	oid_sign_alg :&OID_EC_SECP_384_R1,
 	sign_alg :&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
 	digest_alg :&digest::SHA384,
 	/// ecdsa-with-SHA384 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 3],
 };
-
-/*
-/// Signature algorithm ID as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
-pub static PKCS_WITH_SHA512_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
-	sign_alg :&signature::ECDSA_P384_SHA512_ASN1_SIGNING,
-	digest_alg :&digest::SHA512,
-	/// ecdsa-with-SHA512 in RFC 5758
-	oid_components : &[1, 2, 840, 10045, 4, 3, 4],
-};*/
 
 // Signature algorithm IDs as per https://tools.ietf.org/html/rfc4055
 impl SignatureAlgorithm {
