@@ -165,7 +165,7 @@ impl DistinguishedName {
 /// Parameters used for certificate generation
 #[allow(missing_docs)]
 pub struct CertificateParams {
-	pub alg :SignatureAlgorithm,
+	pub alg :&'static SignatureAlgorithm,
 	pub not_before :DateTime<Utc>,
 	pub not_after :DateTime<Utc>,
 	pub serial_number :Option<u64>,
@@ -184,7 +184,7 @@ impl Default for CertificateParams {
 		let mut distinguished_name = DistinguishedName::new();
 		distinguished_name.push(DnType::CommonName, "rcgen self signed cert");
 		CertificateParams {
-			alg : PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
+			alg : &PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
 			not_before,
 			not_after,
 			serial_number : None,
@@ -342,7 +342,7 @@ impl Certificate {
 						writer.next().write_sequence(|writer| {
 							let oid = ObjectIdentifier::from_slice(OID_SUBJECT_KEY_IDENTIFIER);
 							writer.next().write_oid(&oid);
-							let digest = digest::digest(&digest::SHA256, self.key_pair.public_key().as_ref());
+							let digest = digest::digest(&self.params.alg.digest_alg, self.key_pair.public_key().as_ref());
 							writer.next().write_bytes(&digest.as_ref());
 						});
 						// Write basic_constraints
@@ -425,18 +425,20 @@ impl Certificate {
 
 /// Signature algorithm type
 pub struct SignatureAlgorithm {
+	digest_alg :&'static ring::digest::Algorithm,
 	oid_components : &'static [u64],
 }
 
 /*
-pub const PKCS_WITH_SHA256_WITH_RSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
+pub static PKCS_WITH_SHA256_WITH_RSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
 	/// sha256WithRSAEncryption in RFC 4055
 	oid_components : &[1, 2, 840, 113549, 1, 1, 11],
 };
 */
 
 /// Signature algorithm ID as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
-pub const PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
+pub static PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION :SignatureAlgorithm = SignatureAlgorithm {
+	digest_alg :&digest::SHA256,
 	/// ecdsa-with-SHA256 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 2],
 };
