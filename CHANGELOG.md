@@ -1,5 +1,13 @@
 # Changes
 
+## Release 0.3.0 - May 18, 2019
+
+- Support for CA certificate generation. Thanks to contributions by [@Ralith](https://github.com/Ralith)
+- Support for certificate signing (thanks to contributions by [@Ralith](https://github.com/Ralith))
+- Support for ED25519 certificates
+- Support for SHA-384 certificates
+- API cleanups (Future proofing CertificateParams, public constant renames)
+
 ## Release 0.2.1 - April 26, 2019
 
 - Updated to pem 0.6
