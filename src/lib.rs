@@ -481,7 +481,7 @@ pub struct SignatureAlgorithm {
 // sha256WithRSAEncryption in RFC 4055
 // oid_components : &[1, 2, 840, 113549, 1, 1, 11],
 
-/// ECDSA signing using the P-256 curves and SHA-256 as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+/// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	oids_sign_alg :&[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_256_R1],
 	sign_alg :SignAlgo::EcDsa(&signature::ECDSA_P256_SHA256_ASN1_SIGNING),
@@ -490,7 +490,7 @@ pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	oid_components : &[1, 2, 840, 10045, 4, 3, 2],
 };
 
-/// ECDSA signing using the P-384 curves and SHA-384 as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+/// ECDSA signing using the P-384 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 pub static PKCS_ECDSA_P384_SHA384 :SignatureAlgorithm = SignatureAlgorithm {
 	oids_sign_alg :&[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_384_R1],
 	sign_alg :SignAlgo::EcDsa(&signature::ECDSA_P384_SHA384_ASN1_SIGNING),
