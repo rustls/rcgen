@@ -54,7 +54,7 @@ use bit_vec::BitVec;
 /// A self signed certificate together with signing keys
 pub struct Certificate {
 	params :CertificateParams,
-	key_pair :EcdsaKeyPair,
+	key_pair :DynKeyPair,
 	key_pair_serialized :Vec<u8>,
 }
 
@@ -258,11 +258,7 @@ fn dt_to_generalized(dt :&DateTime<Utc>) -> GeneralizedTime {
 impl Certificate {
 	/// Generates a new self-signed certificate from the given parameters
 	pub fn from_params(params :CertificateParams) -> Self {
-		let system_random = SystemRandom::new();
-		let key_pair_doc = EcdsaKeyPair::generate_pkcs8(params.alg.sign_alg, &system_random).unwrap();
-		let key_pair_serialized = key_pair_doc.as_ref().to_vec();
-
-		let key_pair = EcdsaKeyPair::from_pkcs8(&params.alg.sign_alg, Input::from(&&key_pair_doc.as_ref())).unwrap();
+		let (key_pair, key_pair_serialized) = DynKeyPair::generate(&params.alg);
 
 		Certificate {
 			params,
@@ -311,12 +307,12 @@ impl Certificate {
 			// Write subjectPublicKeyInfo
 			writer.next().write_sequence(|writer| {
 				writer.next().write_sequence(|writer| {
-					let oid = ObjectIdentifier::from_slice(OID_EC_PUBLIC_KEY);
-					writer.next().write_oid(&oid);
-					let oid = ObjectIdentifier::from_slice(self.params.alg.oid_sign_alg);
-					writer.next().write_oid(&oid);
+					for oid in self.params.alg.oids_sign_alg {
+						let oid = ObjectIdentifier::from_slice(oid);
+						writer.next().write_oid(&oid);
+					}
 				});
-				let public_key = &self.key_pair.public_key().as_ref();
+				let public_key = self.key_pair.public_key();
 				let pkbs = BitVec::from_bytes(&public_key);
 				writer.next().write_bitvec(&pkbs);
 			});
@@ -386,9 +382,7 @@ impl Certificate {
 				});
 
 				// Write signature
-				let cl_input = Input::from(&tbs_cert_list_serialized);
-				let system_random = SystemRandom::new();
-				let signature = ca.key_pair.sign(&system_random, cl_input).unwrap();
+				let signature = ca.key_pair.sign(&tbs_cert_list_serialized);
 				let sig = BitVec::from_bytes(&signature.as_ref());
 				writer.next().write_bitvec(&sig);
 			})
@@ -424,10 +418,48 @@ impl Certificate {
 	}
 }
 
+enum SignAlgo {
+	EcDsa(&'static EcdsaSigningAlgorithm),
+}
+
+enum DynKeyPair {
+	EcKp(EcdsaKeyPair),
+}
+
+impl DynKeyPair {
+	fn generate(alg :&SignatureAlgorithm) -> (Self, Vec<u8>) {
+		let system_random = SystemRandom::new();
+		match alg.sign_alg {
+			SignAlgo::EcDsa(sign_alg) => {
+				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, &system_random).unwrap();
+				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
+
+				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, Input::from(&&key_pair_doc.as_ref())).unwrap();
+				(DynKeyPair::EcKp(key_pair), key_pair_serialized)
+			},
+		}
+	}
+
+	fn public_key(&self) -> &[u8] {
+		match self {
+			DynKeyPair::EcKp(kp) => kp.public_key().as_ref(),
+		}
+	}
+	fn sign(&self, msg :&[u8]) -> signature::Signature {
+		match self {
+			DynKeyPair::EcKp(kp) => {
+				let msg_input = Input::from(&msg);
+				let system_random = SystemRandom::new();
+				kp.sign(&system_random, msg_input).unwrap()
+			},
+		}
+	}
+}
+
 /// Signature algorithm type
 pub struct SignatureAlgorithm {
-	oid_sign_alg :&'static [u64],
-	sign_alg :&'static EcdsaSigningAlgorithm,
+	oids_sign_alg :&'static [&'static [u64]],
+	sign_alg :SignAlgo,
 	digest_alg :&'static ring::digest::Algorithm,
 	oid_components :&'static [u64],
 }
@@ -438,8 +470,8 @@ pub struct SignatureAlgorithm {
 
 /// ECDSA signing using the P-256 curves and SHA-256 as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
-	oid_sign_alg :&OID_EC_SECP_256_R1,
-	sign_alg :&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+	oids_sign_alg :&[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_256_R1],
+	sign_alg :SignAlgo::EcDsa(&signature::ECDSA_P256_SHA256_ASN1_SIGNING),
 	digest_alg :&digest::SHA256,
 	/// ecdsa-with-SHA256 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 2],
@@ -447,8 +479,8 @@ pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 
 /// ECDSA signing using the P-384 curves and SHA-384 as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 pub static PKCS_ECDSA_P384_SHA384 :SignatureAlgorithm = SignatureAlgorithm {
-	oid_sign_alg :&OID_EC_SECP_384_R1,
-	sign_alg :&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
+	oids_sign_alg :&[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_384_R1],
+	sign_alg :SignAlgo::EcDsa(&signature::ECDSA_P384_SHA384_ASN1_SIGNING),
 	digest_alg :&digest::SHA384,
 	/// ecdsa-with-SHA384 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 3],

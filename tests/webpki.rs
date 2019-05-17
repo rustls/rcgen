@@ -23,8 +23,8 @@ fn sign_msg_ecdsa(cert :&Certificate, msg :&[u8], alg :&'static EcdsaSigningAlgo
 	signature.as_ref().to_vec()
 }
 
-fn check_cert(cert_der :&[u8], cert :&Certificate, alg :&SignatureAlgorithm,
-		sign_alg :&'static EcdsaSigningAlgorithm) {
+fn check_cert<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, alg :&SignatureAlgorithm,
+		sign_fn :impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>) {
 	let trust_anchor = cert_der_as_trust_anchor(Input::from(&cert_der)).unwrap();
 	let trust_anchor_list = &[trust_anchor];
 	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
@@ -49,7 +49,7 @@ fn check_cert(cert_der :&[u8], cert :&Certificate, alg :&SignatureAlgorithm,
 
 	// (3/3) Check that a message signed by the cert is valid.
 	let msg = b"Hello, World! This message is signed.";
-	let signature = sign_msg_ecdsa(&cert, msg, sign_alg);
+	let signature = sign_fn(&cert, msg);
 	end_entity_cert.verify_signature(
 		&alg,
 		Input::from(msg),
@@ -72,8 +72,9 @@ fn test_webpki() {
 
 	let cert_der = cert.serialize_der();
 
-	check_cert(&cert_der, &cert, &webpki::ECDSA_P256_SHA256,
+	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
 		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	check_cert(&cert_der, &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
 }
 
 #[test]
@@ -93,8 +94,9 @@ fn test_webpki_384() {
 
 	let cert_der = cert.serialize_der();
 
-	check_cert(&cert_der, &cert, &webpki::ECDSA_P384_SHA384,
+	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
 		&signature::ECDSA_P384_SHA384_ASN1_SIGNING);
+	check_cert(&cert_der, &cert, &webpki::ECDSA_P384_SHA384, sign_fn);
 }
 
 #[test]
