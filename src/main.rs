@@ -1,27 +1,20 @@
 extern crate rcgen;
 
 use rcgen::{Certificate, CertificateParams,
-	DistinguishedName, DnType, IsCa,
-	PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
+	DistinguishedName, DnType,
 	date_time_ymd};
 use std::fs;
 use std::io::Result;
 
 fn main() -> Result<()> {
-	let not_before = date_time_ymd(1975, 01, 01);
-	let not_after = date_time_ymd(4096, 01, 01);
-	let mut distinguished_name = DistinguishedName::new();
-	distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	distinguished_name.push(DnType::CommonName, "Master CA");
-	let params = CertificateParams {
-		alg : PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
-		not_before,
-		not_after,
-		serial_number : None,
-		subject_alt_names : vec!["crabs.crabs".to_string(), "localhost".to_string()],
-		distinguished_name,
-		is_ca : IsCa::SelfSignedOnly,
-	};
+	let mut params :CertificateParams =  Default::default();
+	params.not_before = date_time_ymd(1975, 01, 01);
+	params.not_after = date_time_ymd(4096, 01, 01);
+	params.distinguished_name = DistinguishedName::new();
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Master Cert");
+	params.subject_alt_names = vec!["crabs.crabs".to_string(), "localhost".to_string()];
+
 	let cert = Certificate::from_params(params);
 	println!("{}", cert.serialize_pem());
 	println!("{}", cert.serialize_private_key_pem());

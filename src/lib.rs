@@ -172,7 +172,30 @@ pub struct CertificateParams {
 	pub subject_alt_names :Vec<String>,
 	pub distinguished_name :DistinguishedName,
 	pub is_ca :IsCa,
+	// To make the struct non-exhaustive
+	_hidden :(),
 }
+
+impl Default for CertificateParams {
+	fn default() -> Self {
+		// not_before and not_after set to reasonably long dates
+		let not_before = date_time_ymd(1975, 01, 01);
+		let not_after = date_time_ymd(4096, 01, 01);
+		let mut distinguished_name = DistinguishedName::new();
+		distinguished_name.push(DnType::CommonName, "rcgen self signed cert");
+		CertificateParams {
+			alg : PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
+			not_before,
+			not_after,
+			serial_number : None,
+			subject_alt_names : Vec::new(),
+			distinguished_name,
+			is_ca : IsCa::SelfSignedOnly,
+			_hidden :(),
+		}
+	}
+}
+
 
 /// Whether the certificate is allowed to sign other certificates
 pub enum IsCa {
@@ -196,19 +219,9 @@ pub enum BasicConstraints {
 impl CertificateParams {
 	/// Generate certificate parameters with reasonable defaults
 	pub fn new(subject_alt_names :impl Into<Vec<String>>) -> Self {
-		// not_before and not_after set to reasonably long dates
-		let not_before = date_time_ymd(1975, 01, 01);
-		let not_after = date_time_ymd(4096, 01, 01);
-		let mut distinguished_name = DistinguishedName::new();
-		distinguished_name.push(DnType::CommonName, "rcgen self signed cert");
 		CertificateParams {
-			alg : PKCS_WITH_SHA256_WITH_ECDSA_ENCRYPTION,
-			not_before,
-			not_after,
-			serial_number : None,
 			subject_alt_names : subject_alt_names.into(),
-			distinguished_name,
-			is_ca : IsCa::SelfSignedOnly,
+			.. Default::default()
 		}
 	}
 }
