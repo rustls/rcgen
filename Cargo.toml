@@ -24,6 +24,9 @@ untrusted = "0.6"
 pem = { version = "0.6", optional = true }
 chrono = "0.4.6"
 
+[features]
+default = ["pem"]
+
 [dev-dependencies]
 openssl = "0.10"
 webpki = "0.19"
