@@ -10,4 +10,4 @@ script:
   - cargo build --verbose
   - cargo test --verbose
   - cargo doc --verbose
-  - cargo build --no-default-features
+  - cargo build --lib --no-default-features
