@@ -30,6 +30,7 @@ println!("{}", cert.serialize_private_key_pem());
 
 extern crate yasna;
 extern crate ring;
+#[cfg(feature = "pem")]
 extern crate pem;
 extern crate untrusted;
 extern crate chrono;
@@ -37,6 +38,7 @@ extern crate bit_vec;
 
 use yasna::Tag;
 use yasna::models::ObjectIdentifier;
+#[cfg(feature = "pem")]
 use pem::Pem;
 use ring::digest;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair};
@@ -389,6 +391,7 @@ impl Certificate {
 		})
 	}
 	/// Serializes the certificate to the ASCII PEM format
+	#[cfg(feature = "pem")]
 	pub fn serialize_pem(&self) -> String {
 		let p = Pem {
 			tag : "CERTIFICATE".to_string(),
@@ -397,6 +400,7 @@ impl Certificate {
 		pem::encode(&p)
 	}
 	/// Serializes the certificate, signed with another certificate's key, to the ASCII PEM format
+	#[cfg(feature = "pem")]
 	pub fn serialize_pem_with_signer(&self, ca :&Certificate) -> String {
 		let p = Pem {
 			tag : "CERTIFICATE".to_string(),
@@ -409,6 +413,7 @@ impl Certificate {
 		self.key_pair_serialized.clone()
 	}
 	/// Serializes the private key in PEM format
+	#[cfg(feature = "pem")]
 	pub fn serialize_private_key_pem(&self) -> String {
 		let p = Pem {
 			tag : "PRIVATE KEY".to_string(),
