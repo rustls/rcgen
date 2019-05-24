@@ -2,8 +2,8 @@
 
 ## Release 0.3.0 - May 18, 2019
 
-- Support for CA certificate generation. Thanks to contributions by [@djc](https://github.com/djc)
-- Support for certificate signing. Thanks to contributions by [@djc](https://github.com/djc))
+- Support for CA certificate generation. Contributed by [@djc](https://github.com/djc).
+- Support for certificate signing. Contributed by [@djc](https://github.com/djc).
 - Support for ED25519 certificates
 - Support for SHA-384 certificates
 - API cleanups (Future proofing CertificateParams, public constant renames)
