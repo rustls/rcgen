@@ -94,6 +94,9 @@ pub fn generate_simple_self_signed(subject_alt_names :impl Into<Vec<String>>) ->
 // Example certs usable as reference:
 // Uses ECDSA: https://crt.sh/?asn1=607203242
 
+/// pkcs-9-at-extensionRequest in RFC 2985
+const OID_PKCS_9_AT_EXTENSION_REQUEST :&[u64] = &[1, 2, 840, 113549, 1, 9, 14];
+
 /// id-at-countryName in RFC 5820
 const OID_COUNTRY_NAME :&[u64] = &[2, 5, 4, 6];
 /// id-at-organizationName in RFC 5820
@@ -280,6 +283,61 @@ impl Certificate {
 			});
 		});
 	}
+    fn write_request(&self, writer :DERWriter) {
+		writer.write_sequence(|writer| {
+			// Write version
+			writer.next().write_u8(0);
+			// Write issuer
+			writer.next().write_sequence(|writer| {
+				for (ty, content) in self.params.distinguished_name.entries.iter() {
+					writer.next().write_set(|writer| {
+						writer.next().write_sequence(|writer| {
+							writer.next().write_oid(&ty.to_oid());
+							writer.next().write_utf8_string(content);
+						});
+					});
+				}
+			});
+			// Write subjectPublicKeyInfo
+			writer.next().write_sequence(|writer| {
+				writer.next().write_sequence(|writer| {
+					for oid in self.params.alg.oids_sign_alg {
+						let oid = ObjectIdentifier::from_slice(oid);
+						writer.next().write_oid(&oid);
+					}
+				});
+				let public_key = self.key_pair.public_key();
+				let pkbs = BitVec::from_bytes(&public_key);
+				writer.next().write_bitvec(&pkbs);
+			});
+			// Write extensions
+			writer.next().write_tagged(Tag::context(0), |writer| {
+				writer.write_sequence(|writer| {
+					let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
+					writer.next().write_oid(&oid);
+					writer.next().write_set(|writer| {
+						writer.next().write_sequence(|writer| {
+							// Write subject_alt_names
+							writer.next().write_sequence(|writer| {
+								let oid = ObjectIdentifier::from_slice(OID_SUBJECT_ALT_NAME);
+								writer.next().write_oid(&oid);
+								let bytes = yasna::construct_der(|writer| {
+									writer.write_sequence(|writer| {
+										for san in self.params.subject_alt_names.iter() {
+										    writer.next().write_tagged_implicit(Tag::context(2), |writer| {
+												writer.write_utf8_string(san);
+											});
+										}
+									});
+								});
+								writer.next().write_bytes(&bytes);
+							});
+						});
+					});
+				});
+			});
+		});
+	}
 	fn write_cert(&self, writer :DERWriter, ca :&Certificate) {
 		writer.write_sequence(|writer| {
 			// Write version
@@ -390,6 +448,27 @@ impl Certificate {
 			})
 		})
 	}
+    /// Serializes a certificate signing request in binary DER format
+    pub fn serialize_request_der(&self) -> Vec<u8> {
+		yasna::construct_der(|writer| {
+			writer.write_sequence(|writer| {
+				let cert_data = yasna::construct_der(|writer| {
+					self.write_request(writer);
+				});
+				writer.next().write_der(&cert_data);
+
+				// Write signatureAlgorithm
+				writer.next().write_sequence(|writer| {
+					writer.next().write_oid(&self.params.alg.oid());
+				});
+
+				// Write signature
+				let signature = self.key_pair.sign(&cert_data);
+				let sig = BitVec::from_bytes(&signature.as_ref());
+				writer.next().write_bitvec(&sig);
+			});
+		})
+	}
 	/// Serializes the certificate to the ASCII PEM format
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem(&self) -> String {
@@ -405,6 +484,15 @@ impl Certificate {
 		let p = Pem {
 			tag : "CERTIFICATE".to_string(),
 			contents : self.serialize_der_with_signer(ca),
+		};
+		pem::encode(&p)
+	}
+	/// Serializes the certificate signing request to the ASCII PEM format
+	#[cfg(feature = "pem")]
+	pub fn serialize_request_pem(&self) -> String {
+		let p = Pem {
+			tag : "CERTIFICATE REQUEST".to_string(),
+			contents : self.serialize_request_der(),
 		};
 		pem::encode(&p)
 	}

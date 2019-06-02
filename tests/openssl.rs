@@ -2,7 +2,8 @@ extern crate openssl;
 extern crate rcgen;
 
 use rcgen::{Certificate, CertificateParams, DnType};
-use openssl::x509::{X509, X509StoreContext};
+use openssl::pkey::PKey;
+use openssl::x509::{X509, X509Req, X509StoreContext};
 use openssl::x509::store::{X509StoreBuilder, X509Store};
 use openssl::stack::Stack;
 
@@ -30,4 +31,16 @@ fn test_openssl() {
 		ctx.verify_cert().unwrap();
 		Ok(())
 	}).unwrap();
+}
+
+#[test]
+fn test_request() {
+	let params = CertificateParams::new(vec!["crabs.crabs".to_string(), "localhost".to_string()]);
+	let cert = Certificate::from_params(params);
+
+	let key = cert.serialize_private_key_der();
+	let pkey = PKey::private_key_from_der(&key).unwrap();
+
+	let req = X509Req::from_pem(&cert.serialize_request_pem().as_bytes()).unwrap();
+	req.verify(&pkey).unwrap();
 }
