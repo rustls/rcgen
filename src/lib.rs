@@ -466,15 +466,17 @@ impl Certificate {
 					}
 					// Write the custom extensions
 					for ext in &self.params.custom_extensions {
-						let oid = ObjectIdentifier::from_slice(&ext.oid);
-						writer.next().write_oid(&oid);
-						// If the extension is critical, we should signal this.
-						// It's false by default so we don't need to write anything
-						// if the extension is not critical.
-						if ext.critical {
-							writer.next().write_bool(true);
-						}
-						writer.next().write_bytes(&ext.content);
+						writer.next().write_sequence(|writer| {
+							let oid = ObjectIdentifier::from_slice(&ext.oid);
+							writer.next().write_oid(&oid);
+							// If the extension is critical, we should signal this.
+							// It's false by default so we don't need to write anything
+							// if the extension is not critical.
+							if ext.critical {
+								writer.next().write_bool(true);
+							}
+							writer.next().write_bytes(&ext.content);
+						});
 					}
 				});
 			});
