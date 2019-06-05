@@ -178,6 +178,7 @@ pub struct CertificateParams {
 	pub subject_alt_names :Vec<String>,
 	pub distinguished_name :DistinguishedName,
 	pub is_ca :IsCa,
+	pub custom_extensions :Vec<CustomExtension>,
 	// To make the struct non-exhaustive
 	_hidden :(),
 }
@@ -197,11 +198,11 @@ impl Default for CertificateParams {
 			subject_alt_names : Vec::new(),
 			distinguished_name,
 			is_ca : IsCa::SelfSignedOnly,
+			custom_extensions : Vec::new(),
 			_hidden :(),
 		}
 	}
 }
-
 
 /// Whether the certificate is allowed to sign other certificates
 pub enum IsCa {
@@ -228,6 +229,22 @@ impl CertificateParams {
 		CertificateParams {
 			subject_alt_names : subject_alt_names.into(),
 			.. Default::default()
+		}
+	}
+}
+
+/// A custom extension of a certificate
+pub struct CustomExtension {
+	oid :Vec<u64>,
+	content :Vec<u8>,
+}
+
+impl CustomExtension {
+	/// Create a new custom extension
+	pub fn from_oid_content(oid :&[u64], content :Vec<u8>) -> Self {
+		Self {
+			oid : oid.to_owned(),
+			content,
 		}
 	}
 }
@@ -416,6 +433,12 @@ impl Certificate {
 							});
 							writer.next().write_bytes(&bytes);
 						});
+					}
+					// Write the custom extensions
+					for ext in &self.params.custom_extensions {
+						let oid = ObjectIdentifier::from_slice(&ext.oid);
+						writer.next().write_oid(&oid);
+						writer.next().write_bytes(&ext.content);
 					}
 				});
 			});
