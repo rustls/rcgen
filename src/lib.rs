@@ -348,7 +348,9 @@ impl Certificate {
 								let bytes = yasna::construct_der(|writer| {
 									writer.write_sequence(|writer| {
 										for san in self.params.subject_alt_names.iter() {
-										    writer.next().write_tagged_implicit(Tag::context(2), |writer| {
+											// All subject alt names are dNSName.
+											const TAG_DNS_NAME :u64 = 2;
+											writer.next().write_tagged_implicit(Tag::context(TAG_DNS_NAME), |writer| {
 												writer.write_utf8_string(san);
 											});
 										}
@@ -410,7 +412,9 @@ impl Certificate {
 						let bytes = yasna::construct_der(|writer| {
 							writer.write_sequence(|writer|{
 								for san in self.params.subject_alt_names.iter() {
-									writer.next().write_tagged_implicit(Tag::context(2), |writer| {
+									// All subject alt names are dNSName.
+									const TAG_DNS_NAME :u64 = 2;
+									writer.next().write_tagged_implicit(Tag::context(TAG_DNS_NAME), |writer| {
 										writer.write_utf8_string(san);
 									});
 								}
