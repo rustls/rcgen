@@ -119,6 +119,10 @@ const OID_BASIC_CONSTRAINTS :&[u64] = &[2, 5, 29, 19];
 // https://tools.ietf.org/html/rfc5280#section-4.2.1.2
 const OID_SUBJECT_KEY_IDENTIFIER :&[u64] = &[2, 5, 29, 14];
 
+// id-pe-acmeIdentifier in
+// https://www.iana.org/assignments/smi-numbers/smi-numbers.xhtml#smi-numbers-1.3.6.1.5.5.7.1
+const OID_PE_ACME :&[u64] = &[1, 3, 6, 1, 5, 5, 7, 1, 31];
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[allow(missing_docs)]
 /// The attribute type of a distinguished name entry
@@ -242,6 +246,21 @@ pub struct CustomExtension {
 }
 
 impl CustomExtension {
+	/// Creates a new acmeIdentifier extension for ACME TLS-ALPN-01
+	/// as specified in [draft-ietf-acme-tls-alpn-05](https://tools.ietf.org/html/draft-ietf-acme-tls-alpn-05#section-3)
+	///
+	/// Panics if the passed `sha_digest` parameter doesn't hold 32 bytes (256 bits).
+	pub fn new_acme_identifier(sha_digest :&[u8]) -> Self {
+		assert_eq!(sha_digest.len(), 32, "wrong size of sha_digest");
+		let content = yasna::construct_der(|writer| {
+			writer.write_bytes(sha_digest);
+		});
+		Self {
+			oid : OID_PE_ACME.to_owned(),
+			critical : true,
+			content,
+		}
+	}
 	/// Create a new custom extension
 	pub fn from_oid_content(oid :&[u64], content :Vec<u8>) -> Self {
 		Self {
