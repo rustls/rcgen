@@ -237,6 +237,7 @@ impl CertificateParams {
 /// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
 pub struct CustomExtension {
 	oid :Vec<u64>,
+	critical :bool,
 	content :Vec<u8>,
 }
 
@@ -245,8 +246,13 @@ impl CustomExtension {
 	pub fn from_oid_content(oid :&[u64], content :Vec<u8>) -> Self {
 		Self {
 			oid : oid.to_owned(),
+			critical : false,
 			content,
 		}
+	}
+	/// Sets the criticality flag of the extension.
+	pub fn set_criticality(&mut self, criticality :bool) {
+		self.critical = criticality;
 	}
 }
 
@@ -439,6 +445,12 @@ impl Certificate {
 					for ext in &self.params.custom_extensions {
 						let oid = ObjectIdentifier::from_slice(&ext.oid);
 						writer.next().write_oid(&oid);
+						// If the extension is critical, we should signal this.
+						// It's false by default so we don't need to write anything
+						// if the extension is not critical.
+						if ext.critical {
+							writer.next().write_bool(true);
+						}
 						writer.next().write_bytes(&ext.content);
 					}
 				});
