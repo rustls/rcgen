@@ -233,7 +233,8 @@ impl CertificateParams {
 	}
 }
 
-/// A custom extension of a certificate
+/// A custom extension of a certificate, as specified in
+/// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
 pub struct CustomExtension {
 	oid :Vec<u64>,
 	content :Vec<u8>,
