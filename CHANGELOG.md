@@ -1,5 +1,13 @@
 # Changes
 
+## Release 0.3.1 - June 6, 2019
+
+- Ability to disable the dependency on the `pem` crate
+- Support for creating CSRs (Certificate Signing Requests). Contributed by [@djc](https://github.com/djc).
+- Ability to specify custom extensions for certificates
+- Ability to craft `acmeIdentifier` extensions
+- Update yasna to 0.3.0
+
 ## Release 0.3.0 - May 18, 2019
 
 - Support for CA certificate generation. Contributed by [@djc](https://github.com/djc).
