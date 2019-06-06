@@ -1,6 +1,6 @@
 [package]
 name = "rcgen"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["est31 <MTest31@outlook.com>"]
 description = "Rust X.509 certificate generator"
 repository = "https://github.com/est31/rcgen"
