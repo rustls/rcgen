@@ -17,8 +17,8 @@ name = "rcgen"
 path = "src/main.rs"
 
 [dependencies]
-yasna = { version = "0.2.1", features = ["chrono", "bit-vec"] }
-bit-vec = "0.5"
+yasna = { version = "0.3.0", features = ["chrono", "bit-vec"] }
+bit-vec = "0.6.1"
 ring = "0.14"
 untrusted = "0.6"
 pem = { version = "0.6", optional = true }
