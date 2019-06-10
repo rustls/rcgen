@@ -43,7 +43,7 @@ use pem::Pem;
 use ring::digest;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair};
 use ring::rand::SystemRandom;
-use ring::signature::KeyPair;
+use ring::signature::KeyPair as RingKeyPair;
 use untrusted::Input;
 use ring::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters};
 use yasna::DERWriter;
@@ -56,8 +56,7 @@ use bit_vec::BitVec;
 /// A self signed certificate together with signing keys
 pub struct Certificate {
 	params :CertificateParams,
-	key_pair :DynKeyPair,
-	key_pair_serialized :Vec<u8>,
+	key_pair :KeyPair,
 }
 
 
@@ -183,6 +182,8 @@ pub struct CertificateParams {
 	pub distinguished_name :DistinguishedName,
 	pub is_ca :IsCa,
 	pub custom_extensions :Vec<CustomExtension>,
+	/// The certificate's key pair, a new random key pair will be generated if this is `None`
+	pub key_pair :Option<KeyPair>,
 	// To make the struct non-exhaustive
 	_hidden :(),
 }
@@ -203,6 +204,7 @@ impl Default for CertificateParams {
 			distinguished_name,
 			is_ca : IsCa::SelfSignedOnly,
 			custom_extensions : Vec::new(),
+			key_pair : None,
 			_hidden :(),
 		}
 	}
@@ -304,14 +306,17 @@ fn dt_to_generalized(dt :&DateTime<Utc>) -> GeneralizedTime {
 }
 
 impl Certificate {
-	/// Generates a new self-signed certificate from the given parameters
-	pub fn from_params(params :CertificateParams) -> Self {
-		let (key_pair, key_pair_serialized) = DynKeyPair::generate(&params.alg);
+	/// Generates a new certificate from the given parameters
+	pub fn from_params(mut params :CertificateParams) -> Self {
+		let key_pair = if let Some(key_pair) = params.key_pair.take() {
+			key_pair
+		} else {
+			KeyPair::generate(&params.alg)
+		};
 
 		Certificate {
 			params,
 			key_pair,
-			key_pair_serialized,
 		}
 	}
 	fn write_name(&self, writer :DERWriter, ca :&Certificate) {
@@ -559,16 +564,12 @@ impl Certificate {
 	}
 	/// Serializes the private key in PKCS#8 format
 	pub fn serialize_private_key_der(&self) -> Vec<u8> {
-		self.key_pair_serialized.clone()
+		self.key_pair.serialize_der()
 	}
 	/// Serializes the private key in PEM format
 	#[cfg(feature = "pem")]
 	pub fn serialize_private_key_pem(&self) -> String {
-		let p = Pem {
-			tag : "PRIVATE KEY".to_string(),
-			contents : self.serialize_private_key_der(),
-		};
-		pem::encode(&p)
+		self.key_pair.serialize_pem()
 	}
 }
 
@@ -577,13 +578,34 @@ enum SignAlgo {
 	EdDsa(&'static EdDSAParameters),
 }
 
-enum DynKeyPair {
-	EcKp(EcdsaKeyPair),
-	EdKp(Ed25519KeyPair),
+/// A key pair used to sign certificates and CSRs
+pub enum KeyPair {
+	/// A Ecdsa key pair
+	EcKp(EcdsaKeyPair, Vec<u8>),
+	/// A Ed25519 key pair
+	EdKp(Ed25519KeyPair, Vec<u8>),
 }
 
-impl DynKeyPair {
-	fn generate(alg :&SignatureAlgorithm) -> (Self, Vec<u8>) {
+impl From<&[u8]> for KeyPair {
+	fn from(pkcs8 :&[u8]) -> KeyPair {
+		let input = Input::from(pkcs8);
+		let pkcs8_vec = std::iter::FromIterator::from_iter(pkcs8.iter().cloned());
+
+		if let Ok(edkp) = Ed25519KeyPair::from_pkcs8(input) {
+			KeyPair::EdKp(edkp, pkcs8_vec)
+		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, input) {
+			KeyPair::EcKp(eckp, pkcs8_vec)
+		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, input) {
+			KeyPair::EcKp(eckp, pkcs8_vec)
+		} else {
+			panic!("Could not parse key pair");
+		}
+	}
+}
+
+impl KeyPair {
+	/// Generate a new random key pair for the specified signature algorithm
+	pub fn generate(alg :&SignatureAlgorithm) -> Self {
 		let system_random = SystemRandom::new();
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
@@ -591,35 +613,51 @@ impl DynKeyPair {
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, Input::from(&&key_pair_doc.as_ref())).unwrap();
-				(DynKeyPair::EcKp(key_pair), key_pair_serialized)
+				KeyPair::EcKp(key_pair, key_pair_serialized)
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
 				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(&system_random).unwrap();
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(Input::from(&&key_pair_doc.as_ref())).unwrap();
-				(DynKeyPair::EdKp(key_pair), key_pair_serialized)
+				KeyPair::EdKp(key_pair, key_pair_serialized)
 			},
 		}
 	}
-
 	fn public_key(&self) -> &[u8] {
 		match self {
-			DynKeyPair::EcKp(kp) => kp.public_key().as_ref(),
-			DynKeyPair::EdKp(kp) => kp.public_key().as_ref(),
+			KeyPair::EcKp(kp, _) => kp.public_key().as_ref(),
+			KeyPair::EdKp(kp, _) => kp.public_key().as_ref(),
 		}
 	}
 	fn sign(&self, msg :&[u8]) -> signature::Signature {
 		match self {
-			DynKeyPair::EcKp(kp) => {
+			KeyPair::EcKp(kp, _) => {
 				let msg_input = Input::from(&msg);
 				let system_random = SystemRandom::new();
 				kp.sign(&system_random, msg_input).unwrap()
 			},
-			DynKeyPair::EdKp(kp) => {
+			KeyPair::EdKp(kp, _) => {
 				kp.sign(msg)
 			}
 		}
+	}
+	/// Serializes the private key in PKCS#8 format
+	pub fn serialize_der(&self) -> Vec<u8> {
+		let serialized_key = match self {
+			KeyPair::EcKp(_, ref serialized_key) => serialized_key,
+			KeyPair::EdKp(_, ref serialized_key) => serialized_key,
+		};
+		serialized_key.clone()
+	}
+	/// Serializes the private key in PEM format
+	#[cfg(feature = "pem")]
+	pub fn serialize_pem(&self) -> String {
+		let p = Pem {
+			tag : "PRIVATE KEY".to_string(),
+			contents : self.serialize_der(),
+		};
+		pem::encode(&p)
 	}
 }
 
