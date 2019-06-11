@@ -28,6 +28,14 @@ fn verify_cert(cert :&Certificate) {
 	}).unwrap();
 }
 
+fn verify_csr(cert :&Certificate) {
+	let key = cert.serialize_private_key_der();
+	let pkey = PKey::private_key_from_der(&key).unwrap();
+
+	let req = X509Req::from_pem(&cert.serialize_request_pem().as_bytes()).unwrap();
+	req.verify(&pkey).unwrap();
+}
+
 #[test]
 fn test_openssl() {
 	let params = util::default_params();
@@ -42,27 +50,7 @@ fn test_request() {
 	let params = util::default_params();
 	let cert = Certificate::from_params(params);
 
-	let key = cert.serialize_private_key_der();
-	let pkey = PKey::private_key_from_der(&key).unwrap();
-
-	let req = X509Req::from_pem(&cert.serialize_request_pem().as_bytes()).unwrap();
-	req.verify(&pkey).unwrap();
-}
-
-#[test]
-fn test_request_rsa_given() {
-	let mut params = util::default_params();
-	params.alg = &rcgen::PKCS_RSA_SHA256;
-
-	let kp = rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM).into();
-	params.key_pair = Some(kp);
-	let cert = Certificate::from_params(params);
-
-	let key = cert.serialize_private_key_der();
-	let pkey = PKey::private_key_from_der(&key).unwrap();
-
-	let req = X509Req::from_pem(&cert.serialize_request_pem().as_bytes()).unwrap();
-	req.verify(&pkey).unwrap();
+	verify_csr(&cert);
 }
 
 #[test]
@@ -76,4 +64,16 @@ fn test_openssl_rsa_given() {
 
 	// Now verify the certificate.
 	verify_cert(&cert);
+}
+
+#[test]
+fn test_request_rsa_given() {
+	let mut params = util::default_params();
+	params.alg = &rcgen::PKCS_RSA_SHA256;
+
+	let kp = rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM).into();
+	params.key_pair = Some(kp);
+	let cert = Certificate::from_params(params);
+
+	verify_csr(&cert);
 }
