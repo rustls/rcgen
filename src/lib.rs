@@ -401,12 +401,7 @@ impl Certificate {
 			let serial = self.params.serial_number.unwrap_or(42);
 			writer.next().write_u64(serial);
 			// Write signature
-			writer.next().write_sequence(|writer| {
-				writer.next().write_oid(&self.params.alg.alg_ident_oid());
-				if self.params.alg.write_null_params {
-					writer.next().write_null();
-				}
-			});
+			self.params.alg.write_alg_ident(writer.next());
 			// Write issuer
 			self.write_name(writer.next(), ca);
 			// Write validity
@@ -512,12 +507,7 @@ impl Certificate {
 				writer.next().write_der(&tbs_cert_list_serialized);
 
 				// Write signatureAlgorithm
-				writer.next().write_sequence(|writer| {
-					writer.next().write_oid(&self.params.alg.alg_ident_oid());
-					if self.params.alg.write_null_params {
-						writer.next().write_null();
-					}
-				});
+				self.params.alg.write_alg_ident(writer.next());
 
 				// Write signature
 				ca.key_pair.sign(&tbs_cert_list_serialized, writer.next());
@@ -534,12 +524,7 @@ impl Certificate {
 				writer.next().write_der(&cert_data);
 
 				// Write signatureAlgorithm
-				writer.next().write_sequence(|writer| {
-					writer.next().write_oid(&self.params.alg.alg_ident_oid());
-					if self.params.alg.write_null_params {
-						writer.next().write_null();
-					}
-				});
+				self.params.alg.write_alg_ident(writer.next());
 
 				// Write signature
 				self.key_pair.sign(&cert_data, writer.next());
@@ -763,5 +748,13 @@ pub static PKCS_ED25519 :SignatureAlgorithm = SignatureAlgorithm {
 impl SignatureAlgorithm {
 	fn alg_ident_oid(&self) -> ObjectIdentifier {
 		ObjectIdentifier::from_slice(self.oid_components)
+	}
+	fn write_alg_ident(&self, writer :DERWriter) {
+		writer.write_sequence(|writer| {
+			writer.next().write_oid(&self.alg_ident_oid());
+			if self.write_null_params {
+				writer.next().write_null();
+			}
+		});
 	}
 }
