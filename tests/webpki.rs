@@ -93,6 +93,21 @@ fn test_webpki() {
 }
 
 #[test]
+fn test_webpki_256() {
+	let mut params = util::default_params();
+	params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+
+	let cert = Certificate::from_params(params);
+
+	// Now verify the certificate.
+	let cert_der = cert.serialize_der();
+
+	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
+		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	check_cert(&cert_der, &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
+}
+
+#[test]
 fn test_webpki_384() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ECDSA_P384_SHA384;
