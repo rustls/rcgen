@@ -41,7 +41,7 @@ use yasna::models::ObjectIdentifier;
 #[cfg(feature = "pem")]
 use pem::Pem;
 use ring::digest;
-use ring::signature::{EcdsaKeyPair, Ed25519KeyPair};
+use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 use ring::rand::SystemRandom;
 use ring::signature::KeyPair as RingKeyPair;
 use untrusted::Input;
@@ -107,6 +107,9 @@ const OID_COMMON_NAME :&[u64] = &[2, 5, 4, 3];
 const OID_EC_PUBLIC_KEY :&[u64] = &[1, 2, 840, 10045, 2, 1];
 const OID_EC_SECP_256_R1 :&[u64] = &[1, 2, 840, 10045, 3, 1, 7];
 const OID_EC_SECP_384_R1 :&[u64] = &[1, 3, 132, 0, 34];
+
+// rsaEncryption in RFC 4055
+const OID_RSA_ENCRYPTION :&[u64] = &[1, 2, 840, 113549, 1, 1, 1];
 
 // https://tools.ietf.org/html/rfc5280#appendix-A.2
 // https://tools.ietf.org/html/rfc5280#section-4.2.1.6
@@ -399,7 +402,10 @@ impl Certificate {
 			writer.next().write_u64(serial);
 			// Write signature
 			writer.next().write_sequence(|writer| {
-				writer.next().write_oid(&self.params.alg.oid());
+				writer.next().write_oid(&self.params.alg.alg_ident_oid());
+				if self.params.alg.write_null_params {
+					writer.next().write_null();
+				}
 			});
 			// Write issuer
 			self.write_name(writer.next(), ca);
@@ -420,6 +426,9 @@ impl Certificate {
 					for oid in self.params.alg.oids_sign_alg {
 						let oid = ObjectIdentifier::from_slice(oid);
 						writer.next().write_oid(&oid);
+					}
+					if self.params.alg.write_null_params {
+						writer.next().write_null();
 					}
 				});
 				let public_key = self.key_pair.public_key();
@@ -504,13 +513,14 @@ impl Certificate {
 
 				// Write signatureAlgorithm
 				writer.next().write_sequence(|writer| {
-					writer.next().write_oid(&self.params.alg.oid());
+					writer.next().write_oid(&self.params.alg.alg_ident_oid());
+					if self.params.alg.write_null_params {
+						writer.next().write_null();
+					}
 				});
 
 				// Write signature
-				let signature = ca.key_pair.sign(&tbs_cert_list_serialized);
-				let sig = BitVec::from_bytes(&signature.as_ref());
-				writer.next().write_bitvec(&sig);
+				ca.key_pair.sign(&tbs_cert_list_serialized, writer.next());
 			})
 		})
 	}
@@ -525,13 +535,14 @@ impl Certificate {
 
 				// Write signatureAlgorithm
 				writer.next().write_sequence(|writer| {
-					writer.next().write_oid(&self.params.alg.oid());
+					writer.next().write_oid(&self.params.alg.alg_ident_oid());
+					if self.params.alg.write_null_params {
+						writer.next().write_null();
+					}
 				});
 
 				// Write signature
-				let signature = self.key_pair.sign(&cert_data);
-				let sig = BitVec::from_bytes(&signature.as_ref());
-				writer.next().write_bitvec(&sig);
+				self.key_pair.sign(&cert_data, writer.next());
 			});
 		})
 	}
@@ -576,6 +587,7 @@ impl Certificate {
 enum SignAlgo {
 	EcDsa(&'static EcdsaSigningAlgorithm),
 	EdDsa(&'static EdDSAParameters),
+	Rsa(),
 }
 
 /// A key pair used to sign certificates and CSRs
@@ -584,6 +596,8 @@ pub enum KeyPair {
 	EcKp(EcdsaKeyPair, Vec<u8>),
 	/// A Ed25519 key pair
 	EdKp(Ed25519KeyPair, Vec<u8>),
+	/// A RSA key pair
+	Rsa(RsaKeyPair, Vec<u8>),
 }
 
 impl From<&[u8]> for KeyPair {
@@ -597,8 +611,10 @@ impl From<&[u8]> for KeyPair {
 			KeyPair::EcKp(eckp, pkcs8_vec)
 		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, input) {
 			KeyPair::EcKp(eckp, pkcs8_vec)
+		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(input) {
+			KeyPair::Rsa(rsakp, pkcs8_vec)
 		} else {
-			panic!("Could not parse key pair");
+			panic!("Could not parse key pair {:?}", RsaKeyPair::from_pkcs8(input));
 		}
 	}
 }
@@ -622,24 +638,41 @@ impl KeyPair {
 				let key_pair = Ed25519KeyPair::from_pkcs8(Input::from(&&key_pair_doc.as_ref())).unwrap();
 				KeyPair::EdKp(key_pair, key_pair_serialized)
 			},
+			// Ring doesn't have RSA key generation yet:
+			// https://github.com/briansmith/ring/issues/219
+			// https://github.com/briansmith/ring/pull/733
+			SignAlgo::Rsa() => panic!("Key generation for RSA not available."),
 		}
 	}
 	fn public_key(&self) -> &[u8] {
 		match self {
 			KeyPair::EcKp(kp, _) => kp.public_key().as_ref(),
 			KeyPair::EdKp(kp, _) => kp.public_key().as_ref(),
+			KeyPair::Rsa(kp, _) => kp.public_key().as_ref(),
 		}
 	}
-	fn sign(&self, msg :&[u8]) -> signature::Signature {
+	fn sign(&self, msg :&[u8], writer :DERWriter) {
 		match self {
 			KeyPair::EcKp(kp, _) => {
 				let msg_input = Input::from(&msg);
 				let system_random = SystemRandom::new();
-				kp.sign(&system_random, msg_input).unwrap()
+				let signature = kp.sign(&system_random, msg_input).unwrap();
+				let sig = BitVec::from_bytes(&signature.as_ref());
+				writer.write_bitvec(&sig);
 			},
 			KeyPair::EdKp(kp, _) => {
-				kp.sign(msg)
-			}
+				let signature = kp.sign(msg);
+				let sig = BitVec::from_bytes(&signature.as_ref());
+				writer.write_bitvec(&sig);
+			},
+			KeyPair::Rsa(kp, _) => {
+				let system_random = SystemRandom::new();
+				let mut signature = vec![0; kp.public_modulus_len()];
+				kp.sign(&signature::RSA_PKCS1_SHA256, &system_random,
+					msg, &mut signature).unwrap();
+				let sig = BitVec::from_bytes(&signature.as_ref());
+				writer.write_bitvec(&sig);
+			},
 		}
 	}
 	/// Serializes the private key in PKCS#8 format
@@ -647,6 +680,7 @@ impl KeyPair {
 		let serialized_key = match self {
 			KeyPair::EcKp(_, ref serialized_key) => serialized_key,
 			KeyPair::EdKp(_, ref serialized_key) => serialized_key,
+			KeyPair::Rsa(_, ref serialized_key) => serialized_key,
 		};
 		serialized_key.clone()
 	}
@@ -667,11 +701,20 @@ pub struct SignatureAlgorithm {
 	sign_alg :SignAlgo,
 	digest_alg :&'static ring::digest::Algorithm,
 	oid_components :&'static [u64],
+	write_null_params :bool,
 }
 
-// TODO add RSA. Blocked by: https://github.com/briansmith/ring/pull/733
-// sha256WithRSAEncryption in RFC 4055
-// oid_components : &[1, 2, 840, 113549, 1, 1, 11],
+
+/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+pub static PKCS_RSA_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
+	oids_sign_alg :&[&OID_RSA_ENCRYPTION],
+	sign_alg :SignAlgo::Rsa(),
+	digest_alg :&digest::SHA256,
+	// sha256WithRSAEncryption in RFC 4055
+	oid_components : &[1, 2, 840, 113549, 1, 1, 11],
+	write_null_params : true,
+};
+
 
 /// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
@@ -680,6 +723,7 @@ pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	digest_alg :&digest::SHA256,
 	/// ecdsa-with-SHA256 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 2],
+	write_null_params : false,
 };
 
 /// ECDSA signing using the P-384 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
@@ -689,6 +733,7 @@ pub static PKCS_ECDSA_P384_SHA384 :SignatureAlgorithm = SignatureAlgorithm {
 	digest_alg :&digest::SHA384,
 	/// ecdsa-with-SHA384 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 3],
+	write_null_params : false,
 };
 
 // TODO PKCS_ECDSA_P521_SHA512 https://github.com/briansmith/ring/issues/824
@@ -701,11 +746,12 @@ pub static PKCS_ED25519 :SignatureAlgorithm = SignatureAlgorithm {
 	digest_alg :&digest::SHA512,
 	/// id-Ed25519 in RFC 8410
 	oid_components : &[1, 3, 101, 112],
+	write_null_params : false,
 };
 
 // Signature algorithm IDs as per https://tools.ietf.org/html/rfc4055
 impl SignatureAlgorithm {
-	fn oid(&self) -> ObjectIdentifier {
+	fn alg_ident_oid(&self) -> ObjectIdentifier {
 		ObjectIdentifier::from_slice(self.oid_components)
 	}
 }
