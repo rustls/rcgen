@@ -746,11 +746,11 @@ impl SignatureAlgorithm {
 	}
 	fn write_oids_sign_alg(&self, writer :DERWriter) {
 		writer.write_sequence(|writer| {
-			for oid in self.params.alg.oids_sign_alg {
+			for oid in self.oids_sign_alg {
 				let oid = ObjectIdentifier::from_slice(oid);
 				writer.next().write_oid(&oid);
 			}
-			if self.params.alg.write_null_params {
+			if self.write_null_params {
 				writer.next().write_null();
 			}
 		});
