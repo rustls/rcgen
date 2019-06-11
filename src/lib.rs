@@ -587,7 +587,7 @@ impl From<&[u8]> for KeyPair {
 		let input = Input::from(pkcs8);
 		let pkcs8_vec = std::iter::FromIterator::from_iter(pkcs8.iter().cloned());
 
-		if let Ok(edkp) = Ed25519KeyPair::from_pkcs8(input) {
+		if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(input) {
 			KeyPair::EdKp(edkp, pkcs8_vec)
 		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, input) {
 			KeyPair::EcKp(eckp, pkcs8_vec)

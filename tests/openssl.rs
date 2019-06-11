@@ -87,15 +87,31 @@ fn test_openssl_25519() {
 	// Now verify the certificate.
 	verify_cert(&cert);
 	// TODO this fails. Not sure why!
+	// https://github.com/openssl/openssl/issues/9134
 	//verify_csr(&cert);
 }
 
 #[test]
-fn test_openssl_25519_given() {
+fn test_openssl_25519_v1_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM).into();
+	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1).into();
+	params.key_pair = Some(kp);
+
+	let cert = Certificate::from_params(params);
+
+	// Now verify the certificate.
+	verify_cert(&cert);
+	verify_csr(&cert);
+}
+
+#[test]
+fn test_openssl_25519_v2_given() {
+	let mut params = util::default_params();
+	params.alg = &rcgen::PKCS_ED25519;
+
+	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2).into();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params);
@@ -103,6 +119,7 @@ fn test_openssl_25519_given() {
 	// Now verify the certificate.
 	verify_cert(&cert);
 	// TODO this fails. Not sure why!
+	// https://github.com/openssl/openssl/issues/9134
 	//verify_csr(&cert);
 }
 

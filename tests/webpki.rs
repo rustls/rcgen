@@ -29,7 +29,7 @@ fn sign_msg_ecdsa(cert :&Certificate, msg :&[u8], alg :&'static EcdsaSigningAlgo
 
 fn sign_msg_ed25519(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
-	let key_pair = Ed25519KeyPair::from_pkcs8(Input::from(&pk_der)).unwrap();
+	let key_pair = Ed25519KeyPair::from_pkcs8_maybe_unchecked(Input::from(&pk_der)).unwrap();
 	let signature = key_pair.sign(&msg);
 	signature.as_ref().to_vec()
 }
@@ -136,11 +136,27 @@ fn test_webpki_25519() {
 }
 
 #[test]
-fn test_webpki_25519_given() {
+fn test_webpki_25519_v1_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM).into();
+	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1).into();
+	params.key_pair = Some(kp);
+
+	let cert = Certificate::from_params(params);
+
+	// Now verify the certificate.
+	let cert_der = cert.serialize_der();
+
+	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
+}
+
+#[test]
+fn test_webpki_25519_v2_given() {
+	let mut params = util::default_params();
+	params.alg = &rcgen::PKCS_ED25519;
+
+	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2).into();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params);
