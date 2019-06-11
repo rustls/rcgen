@@ -16,6 +16,8 @@ use ring::signature;
 use ring::signature::{EcdsaKeyPair, EcdsaSigningAlgorithm,
 	Ed25519KeyPair, RSA_PKCS1_SHA256, RsaKeyPair};
 
+mod util;
+
 fn sign_msg_ecdsa(cert :&Certificate, msg :&[u8], alg :&'static EcdsaSigningAlgorithm) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
 	let key_pair = EcdsaKeyPair::from_pkcs8(&alg, Input::from(&pk_der)).unwrap();
@@ -78,11 +80,7 @@ fn check_cert<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, alg :&SignatureAlg
 
 #[test]
 fn test_webpki() {
-	let mut params = CertificateParams::new(vec![
-		"crabs.crabs".to_string(), "localhost".to_string(),
-	]);
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Master CA");
+	let mut params = util::default_params();
 	let cert = Certificate::from_params(params);
 
 	println!("{}", cert.serialize_pem());
@@ -98,13 +96,9 @@ fn test_webpki() {
 
 #[test]
 fn test_webpki_384() {
-	let mut params = CertificateParams::new(vec![
-		"crabs.crabs".to_string(), "localhost".to_string(),
-	]);
+	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ECDSA_P384_SHA384;
 
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Master CA");
 	let cert = Certificate::from_params(params);
 
 	println!("{}", cert.serialize_pem());
@@ -120,13 +114,9 @@ fn test_webpki_384() {
 
 #[test]
 fn test_webpki_25519() {
-	let mut params = CertificateParams::new(vec![
-		"crabs.crabs".to_string(), "localhost".to_string(),
-	]);
+	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Master CA");
 	let cert = Certificate::from_params(params);
 
 	println!("{}", cert.serialize_pem());
@@ -152,15 +142,11 @@ oSMDIQDrvH/x8Nx9untsuc6ET+ce3w7PSuLY8BLWcHdXDGvkQA==
 
 #[test]
 fn test_webpki_25519_given() {
-	let mut params = CertificateParams::new(vec![
-		"crabs.crabs".to_string(), "localhost".to_string(),
-	]);
+	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
 	params.key_pair = Some(rcgen::KeyPair::from_pem(ED25519_PRIVATE_TEST_KEY).into());
 
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Master CA");
 	let cert = Certificate::from_params(params);
 
 	println!("{}", cert.serialize_pem());
@@ -213,15 +199,11 @@ YPTHy8SWRA2sMII3ArhHJ8A=
 #[test]
 #[cfg(feature = "pem")]
 fn test_webpki_rsa_given() {
-	let mut params = CertificateParams::new(vec![
-		"crabs.crabs".to_string(), "localhost".to_string(),
-	]);
+	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_RSA_SHA256;
 
 	params.key_pair = Some(rcgen::KeyPair::from_pem(RSA_TEST_KEY_PAIR_PEM).into());
 
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Master CA");
 	let cert = Certificate::from_params(params);
 
 	println!("{}", cert.serialize_pem());
@@ -234,14 +216,9 @@ fn test_webpki_rsa_given() {
 		&sign_msg_rsa);
 }
 
-
 #[test]
 fn test_webpki_separate_ca() {
-	let mut params = CertificateParams::new(vec![
-		"crabs.crabs".to_string(), "localhost".to_string(),
-	]);
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Master CA");
+	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::from_params(params);
 

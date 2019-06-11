@@ -7,13 +7,11 @@ use openssl::x509::{X509, X509Req, X509StoreContext};
 use openssl::x509::store::{X509StoreBuilder, X509Store};
 use openssl::stack::Stack;
 
+mod util;
+
 #[test]
 fn test_openssl() {
-	let mut params = CertificateParams::new(vec![
-		"crabs.crabs".to_string(), "localhost".to_string(),
-	]);
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Master CA");
+	let mut params = util::default_params();
 	let cert = Certificate::from_params(params);
 
 	println!("{}", cert.serialize_pem());
@@ -35,7 +33,7 @@ fn test_openssl() {
 
 #[test]
 fn test_request() {
-	let params = CertificateParams::new(vec!["crabs.crabs".to_string(), "localhost".to_string()]);
+	let mut params = util::default_params();
 	let cert = Certificate::from_params(params);
 
 	let key = cert.serialize_private_key_der();
@@ -85,7 +83,7 @@ YPTHy8SWRA2sMII3ArhHJ8A=
 
 #[test]
 fn test_request_rsa_given() {
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string(), "localhost".to_string()]);
+	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_RSA_SHA256;
 
 	params.key_pair = Some(rcgen::KeyPair::from_pem(RSA_TEST_KEY_PAIR_PEM).into());
@@ -101,15 +99,11 @@ fn test_request_rsa_given() {
 #[test]
 #[cfg(feature = "pem")]
 fn test_openssl_rsa_given() {
-	let mut params = CertificateParams::new(vec![
-		"crabs.crabs".to_string(), "localhost".to_string(),
-	]);
+	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_RSA_SHA256;
 
 	params.key_pair = Some(rcgen::KeyPair::from_pem(RSA_TEST_KEY_PAIR_PEM).into());
 
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Master CA");
 	let cert = Certificate::from_params(params);
 
 	println!("{}", cert.serialize_pem());
