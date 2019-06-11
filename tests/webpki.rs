@@ -152,7 +152,6 @@ fn test_webpki_25519_given() {
 }
 
 #[test]
-#[cfg(feature = "pem")]
 fn test_webpki_rsa_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_RSA_SHA256;

@@ -1,5 +1,3 @@
-#![cfg(feature = "pem")]
-
 extern crate openssl;
 extern crate rcgen;
 
