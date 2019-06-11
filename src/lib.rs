@@ -600,6 +600,16 @@ pub enum KeyPair {
 	Rsa(RsaKeyPair, Vec<u8>),
 }
 
+impl KeyPair {
+	/// Parses the key pair from the ASCII PEM format
+	#[cfg(feature = "pem")]
+	pub fn from_pem(pem_str :&str) -> Self {
+		let private_key = pem::parse(pem_str).unwrap();
+		let private_key_der :&[_] = &private_key.contents;
+		private_key_der.into()
+	}
+}
+
 impl From<&[u8]> for KeyPair {
 	fn from(pkcs8 :&[u8]) -> KeyPair {
 		let input = Input::from(pkcs8);

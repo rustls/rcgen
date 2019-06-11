@@ -30,4 +30,3 @@ default = ["pem"]
 [dev-dependencies]
 openssl = "0.10"
 webpki = "0.19"
-pem = "0.6"
