@@ -54,6 +54,30 @@ fn test_request() {
 }
 
 #[test]
+fn test_openssl_256() {
+	let mut params = util::default_params();
+	params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+
+	let cert = Certificate::from_params(params);
+
+	// Now verify the certificate.
+	verify_cert(&cert);
+	verify_csr(&cert);
+}
+
+#[test]
+fn test_openssl_384() {
+	let mut params = util::default_params();
+	params.alg = &rcgen::PKCS_ECDSA_P384_SHA384;
+
+	let cert = Certificate::from_params(params);
+
+	// Now verify the certificate.
+	verify_cert(&cert);
+	verify_csr(&cert);
+}
+
+#[test]
 fn test_openssl_25519_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
