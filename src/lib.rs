@@ -351,12 +351,7 @@ impl Certificate {
 			});
 			// Write subjectPublicKeyInfo
 			writer.next().write_sequence(|writer| {
-				writer.next().write_sequence(|writer| {
-					for oid in self.params.alg.oids_sign_alg {
-						let oid = ObjectIdentifier::from_slice(oid);
-						writer.next().write_oid(&oid);
-					}
-				});
+				self.params.alg.write_oids_sign_alg(writer.next());
 				let public_key = self.key_pair.public_key();
 				let pkbs = BitVec::from_bytes(&public_key);
 				writer.next().write_bitvec(&pkbs);
@@ -417,15 +412,7 @@ impl Certificate {
 			self.write_name(writer.next(), self);
 			// Write subjectPublicKeyInfo
 			writer.next().write_sequence(|writer| {
-				writer.next().write_sequence(|writer| {
-					for oid in self.params.alg.oids_sign_alg {
-						let oid = ObjectIdentifier::from_slice(oid);
-						writer.next().write_oid(&oid);
-					}
-					if self.params.alg.write_null_params {
-						writer.next().write_null();
-					}
-				});
+				self.params.alg.write_oids_sign_alg(writer.next());
 				let public_key = self.key_pair.public_key();
 				let pkbs = BitVec::from_bytes(&public_key);
 				writer.next().write_bitvec(&pkbs);
@@ -753,6 +740,17 @@ impl SignatureAlgorithm {
 		writer.write_sequence(|writer| {
 			writer.next().write_oid(&self.alg_ident_oid());
 			if self.write_null_params {
+				writer.next().write_null();
+			}
+		});
+	}
+	fn write_oids_sign_alg(&self, writer :DERWriter) {
+		writer.write_sequence(|writer| {
+			for oid in self.params.alg.oids_sign_alg {
+				let oid = ObjectIdentifier::from_slice(oid);
+				writer.next().write_oid(&oid);
+			}
+			if self.params.alg.write_null_params {
 				writer.next().write_null();
 			}
 		});
