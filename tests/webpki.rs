@@ -46,6 +46,7 @@ fn sign_msg_rsa(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 
 fn check_cert<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, alg :&SignatureAlgorithm,
 		sign_fn :impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>) {
+	println!("{}", cert.serialize_pem());
 	let trust_anchor = cert_der_as_trust_anchor(Input::from(&cert_der)).unwrap();
 	let trust_anchor_list = &[trust_anchor];
 	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
@@ -83,10 +84,7 @@ fn test_webpki() {
 	let params = util::default_params();
 	let cert = Certificate::from_params(params);
 
-	println!("{}", cert.serialize_pem());
-
 	// Now verify the certificate.
-
 	let cert_der = cert.serialize_der();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
@@ -101,10 +99,7 @@ fn test_webpki_384() {
 
 	let cert = Certificate::from_params(params);
 
-	println!("{}", cert.serialize_pem());
-
 	// Now verify the certificate.
-
 	let cert_der = cert.serialize_der();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
@@ -119,10 +114,7 @@ fn test_webpki_25519() {
 
 	let cert = Certificate::from_params(params);
 
-	println!("{}", cert.serialize_pem());
-
 	// Now verify the certificate.
-
 	let cert_der = cert.serialize_der();
 
 	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
@@ -138,10 +130,7 @@ fn test_webpki_25519_given() {
 
 	let cert = Certificate::from_params(params);
 
-	println!("{}", cert.serialize_pem());
-
 	// Now verify the certificate.
-
 	let cert_der = cert.serialize_der();
 
 	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
@@ -158,10 +147,7 @@ fn test_webpki_rsa_given() {
 
 	let cert = Certificate::from_params(params);
 
-	println!("{}", cert.serialize_pem());
-
 	// Now verify the certificate.
-
 	let cert_der = cert.serialize_der();
 
 	check_cert(&cert_der, &cert, &webpki::RSA_PKCS1_2048_8192_SHA256,
