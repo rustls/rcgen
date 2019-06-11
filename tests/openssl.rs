@@ -1,7 +1,7 @@
 extern crate openssl;
 extern crate rcgen;
 
-use rcgen::{Certificate, CertificateParams, DnType};
+use rcgen::{Certificate};
 use openssl::pkey::PKey;
 use openssl::x509::{X509, X509Req, X509StoreContext};
 use openssl::x509::store::{X509StoreBuilder, X509Store};
@@ -9,14 +9,9 @@ use openssl::stack::Stack;
 
 mod util;
 
-#[test]
-fn test_openssl() {
-	let mut params = util::default_params();
-	let cert = Certificate::from_params(params);
-
+fn verify_cert(cert :&Certificate) {
 	println!("{}", cert.serialize_pem());
 
-	// Now verify the certificate.
 	let x509 = X509::from_pem(&cert.serialize_pem().as_bytes()).unwrap();
 	let mut builder = X509StoreBuilder::new().unwrap();
 	builder.add_cert(x509.clone()).unwrap();
@@ -32,8 +27,17 @@ fn test_openssl() {
 }
 
 #[test]
+fn test_openssl() {
+	let params = util::default_params();
+	let cert = Certificate::from_params(params);
+
+	// Now verify the certificate.
+	verify_cert(&cert);
+}
+
+#[test]
 fn test_request() {
-	let mut params = util::default_params();
+	let params = util::default_params();
 	let cert = Certificate::from_params(params);
 
 	let key = cert.serialize_private_key_der();
@@ -106,19 +110,6 @@ fn test_openssl_rsa_given() {
 
 	let cert = Certificate::from_params(params);
 
-	println!("{}", cert.serialize_pem());
-
 	// Now verify the certificate.
-	let x509 = X509::from_pem(&cert.serialize_pem().as_bytes()).unwrap();
-	let mut builder = X509StoreBuilder::new().unwrap();
-	builder.add_cert(x509.clone()).unwrap();
-
-	let store :X509Store = builder.build();
-	let mut ctx = X509StoreContext::new().unwrap();
-	let mut stack = Stack::new().unwrap();
-	stack.push(x509.clone()).unwrap();
-	ctx.init(&store, &x509, &stack.as_ref(), |ctx| {
-		ctx.verify_cert().unwrap();
-		Ok(())
-	}).unwrap();
+	verify_cert(&cert);
 }
