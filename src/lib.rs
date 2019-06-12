@@ -51,6 +51,8 @@ use yasna::models::GeneralizedTime;
 use chrono::{DateTime, Timelike};
 use chrono::{NaiveDate, Utc};
 use std::collections::HashMap;
+use std::fmt;
+use std::convert::{TryFrom, TryInto};
 use bit_vec::BitVec;
 
 /// A self signed certificate together with signing keys
@@ -581,15 +583,36 @@ pub struct KeyPair {
 impl KeyPair {
 	/// Parses the key pair from the ASCII PEM format
 	#[cfg(feature = "pem")]
-	pub fn from_pem(pem_str :&str) -> Self {
+	pub fn from_pem(pem_str :&str) -> Result<Self, RcgenError> {
 		let private_key = pem::parse(pem_str).unwrap();
 		let private_key_der :&[_] = &private_key.contents;
-		private_key_der.into()
+		Ok(private_key_der.try_into()?)
 	}
 }
 
-impl From<&[u8]> for KeyPair {
-	fn from(pkcs8 :&[u8]) -> KeyPair {
+#[derive(Debug)]
+/// The error type of the rcgen crate
+pub enum RcgenError {
+	/// The given key pair couldn't be parsed
+	CouldNotParseKeyPair,
+	#[doc(hidden)]
+	_Nonexhaustive,
+}
+
+impl fmt::Display for RcgenError {
+	fn fmt(&self, f :&mut fmt::Formatter) -> fmt::Result {
+		use self::RcgenError::*;
+		match self {
+			CouldNotParseKeyPair => write!(f, "Could not parse key pair"),
+			_Nonexhaustive => panic!("Nonexhaustive error variant ought not be constructed"),
+		};
+		Ok(())
+	}
+}
+
+impl TryFrom<&[u8]> for KeyPair {
+	type Error = RcgenError;
+	fn try_from(pkcs8 :&[u8]) -> Result<KeyPair, RcgenError> {
 		let input = Input::from(pkcs8);
 		let pkcs8_vec = std::iter::FromIterator::from_iter(pkcs8.iter().cloned());
 
@@ -602,13 +625,13 @@ impl From<&[u8]> for KeyPair {
 		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(input) {
 			KeyPairKind::Rsa(rsakp)
 		} else {
-			panic!("Could not parse key pair {:?}", RsaKeyPair::from_pkcs8(input));
+			return Err(RcgenError::CouldNotParseKeyPair);
 		};
 
-		KeyPair {
+		Ok(KeyPair {
 			kind,
 			serialized_der : pkcs8_vec,
-		}
+		})
 	}
 }
 

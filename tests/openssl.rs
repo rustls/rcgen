@@ -96,7 +96,7 @@ fn test_openssl_25519_v1_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1).into();
+	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1).unwrap();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params);
@@ -111,7 +111,7 @@ fn test_openssl_25519_v2_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2).into();
+	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2).unwrap();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params);
@@ -128,7 +128,8 @@ fn test_openssl_rsa_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_RSA_SHA256;
 
-	params.key_pair = Some(rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM).into());
+	let kp = rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM).unwrap();
+	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params);
 
