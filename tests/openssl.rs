@@ -103,7 +103,10 @@ fn test_openssl_25519_v1_given() {
 
 	// Now verify the certificate.
 	verify_cert(&cert);
-	verify_csr(&cert);
+	// Verify the csr but only on OpenSSL >= 1.1.1
+	if openssl::version::number() >= 0x1_01_01_00_f {
+		verify_csr(&cert);
+	}
 }
 
 #[test]
