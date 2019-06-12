@@ -562,14 +562,20 @@ enum SignAlgo {
 	Rsa(),
 }
 
-/// A key pair used to sign certificates and CSRs
-pub enum KeyPair {
+/// A key pair vairant
+enum KeyPairKind {
 	/// A Ecdsa key pair
-	Ec(EcdsaKeyPair, Vec<u8>),
+	Ec(EcdsaKeyPair),
 	/// A Ed25519 key pair
-	Ed(Ed25519KeyPair, Vec<u8>),
+	Ed(Ed25519KeyPair),
 	/// A RSA key pair
-	Rsa(RsaKeyPair, Vec<u8>),
+	Rsa(RsaKeyPair),
+}
+
+/// A key pair used to sign certificates and CSRs
+pub struct KeyPair {
+	kind :KeyPairKind,
+	serialized_der :Vec<u8>,
 }
 
 impl KeyPair {
@@ -587,16 +593,21 @@ impl From<&[u8]> for KeyPair {
 		let input = Input::from(pkcs8);
 		let pkcs8_vec = std::iter::FromIterator::from_iter(pkcs8.iter().cloned());
 
-		if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(input) {
-			KeyPair::Ed(edkp, pkcs8_vec)
+		let kind = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(input) {
+			KeyPairKind::Ed(edkp)
 		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, input) {
-			KeyPair::Ec(eckp, pkcs8_vec)
+			KeyPairKind::Ec(eckp)
 		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, input) {
-			KeyPair::Ec(eckp, pkcs8_vec)
+			KeyPairKind::Ec(eckp)
 		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(input) {
-			KeyPair::Rsa(rsakp, pkcs8_vec)
+			KeyPairKind::Rsa(rsakp)
 		} else {
 			panic!("Could not parse key pair {:?}", RsaKeyPair::from_pkcs8(input));
+		};
+
+		KeyPair {
+			kind,
+			serialized_der : pkcs8_vec,
 		}
 	}
 }
@@ -611,14 +622,20 @@ impl KeyPair {
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, Input::from(&&key_pair_doc.as_ref())).unwrap();
-				KeyPair::Ec(key_pair, key_pair_serialized)
+				KeyPair {
+					kind : KeyPairKind::Ec(key_pair),
+					serialized_der : key_pair_serialized,
+				}
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
 				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(&system_random).unwrap();
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(Input::from(&&key_pair_doc.as_ref())).unwrap();
-				KeyPair::Ed(key_pair, key_pair_serialized)
+				KeyPair {
+					kind : KeyPairKind::Ed(key_pair),
+					serialized_der : key_pair_serialized,
+				}
 			},
 			// Ring doesn't have RSA key generation yet:
 			// https://github.com/briansmith/ring/issues/219
@@ -627,27 +644,27 @@ impl KeyPair {
 		}
 	}
 	fn public_key(&self) -> &[u8] {
-		match self {
-			KeyPair::Ec(kp, _) => kp.public_key().as_ref(),
-			KeyPair::Ed(kp, _) => kp.public_key().as_ref(),
-			KeyPair::Rsa(kp, _) => kp.public_key().as_ref(),
+		match &self.kind {
+			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
+			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
+			KeyPairKind::Rsa(kp) => kp.public_key().as_ref(),
 		}
 	}
 	fn sign(&self, msg :&[u8], writer :DERWriter) {
-		match self {
-			KeyPair::Ec(kp, _) => {
+		match &self.kind {
+			KeyPairKind::Ec(kp) => {
 				let msg_input = Input::from(&msg);
 				let system_random = SystemRandom::new();
 				let signature = kp.sign(&system_random, msg_input).unwrap();
 				let sig = BitVec::from_bytes(&signature.as_ref());
 				writer.write_bitvec(&sig);
 			},
-			KeyPair::Ed(kp, _) => {
+			KeyPairKind::Ed(kp) => {
 				let signature = kp.sign(msg);
 				let sig = BitVec::from_bytes(&signature.as_ref());
 				writer.write_bitvec(&sig);
 			},
-			KeyPair::Rsa(kp, _) => {
+			KeyPairKind::Rsa(kp) => {
 				let system_random = SystemRandom::new();
 				let mut signature = vec![0; kp.public_modulus_len()];
 				kp.sign(&signature::RSA_PKCS1_SHA256, &system_random,
@@ -659,12 +676,7 @@ impl KeyPair {
 	}
 	/// Serializes the private key in PKCS#8 format
 	pub fn serialize_der(&self) -> Vec<u8> {
-		let serialized_key = match self {
-			KeyPair::Ec(_, ref serialized_key) => serialized_key,
-			KeyPair::Ed(_, ref serialized_key) => serialized_key,
-			KeyPair::Rsa(_, ref serialized_key) => serialized_key,
-		};
-		serialized_key.clone()
+		self.serialized_der.clone()
 	}
 	/// Serializes the private key in PEM format
 	#[cfg(feature = "pem")]
