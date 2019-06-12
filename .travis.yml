@@ -9,5 +9,6 @@ matrix:
 script:
   - cargo build --verbose
   - cargo test --verbose
+  - cargo test --verbose --features x509-parser
   - cargo doc --verbose
   - cargo build --lib --no-default-features
