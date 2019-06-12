@@ -39,7 +39,7 @@ fn verify_csr(cert :&Certificate) {
 #[test]
 fn test_openssl() {
 	let params = util::default_params();
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	verify_cert(&cert);
@@ -48,7 +48,7 @@ fn test_openssl() {
 #[test]
 fn test_request() {
 	let params = util::default_params();
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	verify_csr(&cert);
 }
@@ -58,7 +58,7 @@ fn test_openssl_256() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	verify_cert(&cert);
@@ -70,7 +70,7 @@ fn test_openssl_384() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ECDSA_P384_SHA384;
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	verify_cert(&cert);
@@ -82,7 +82,7 @@ fn test_openssl_25519() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	verify_cert(&cert);
@@ -99,7 +99,7 @@ fn test_openssl_25519_v1_given() {
 	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1).unwrap();
 	params.key_pair = Some(kp);
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	verify_cert(&cert);
@@ -114,7 +114,7 @@ fn test_openssl_25519_v2_given() {
 	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2).unwrap();
 	params.key_pair = Some(kp);
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	verify_cert(&cert);
@@ -131,7 +131,7 @@ fn test_openssl_rsa_given() {
 	let kp = rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM).unwrap();
 	params.key_pair = Some(kp);
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	verify_cert(&cert);

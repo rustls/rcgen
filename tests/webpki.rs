@@ -82,7 +82,7 @@ fn check_cert<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, alg :&SignatureAlg
 #[test]
 fn test_webpki() {
 	let params = util::default_params();
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	let cert_der = cert.serialize_der();
@@ -97,7 +97,7 @@ fn test_webpki_256() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	let cert_der = cert.serialize_der();
@@ -112,7 +112,7 @@ fn test_webpki_384() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ECDSA_P384_SHA384;
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	let cert_der = cert.serialize_der();
@@ -127,7 +127,7 @@ fn test_webpki_25519() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	let cert_der = cert.serialize_der();
@@ -143,7 +143,7 @@ fn test_webpki_25519_v1_given() {
 	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1).unwrap();
 	params.key_pair = Some(kp);
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	let cert_der = cert.serialize_der();
@@ -159,7 +159,7 @@ fn test_webpki_25519_v2_given() {
 	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2).unwrap();
 	params.key_pair = Some(kp);
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	let cert_der = cert.serialize_der();
@@ -175,7 +175,7 @@ fn test_webpki_rsa_given() {
 	let kp = rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM).unwrap();
 	params.key_pair = Some(kp);
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
 	let cert_der = cert.serialize_der();
@@ -188,7 +188,7 @@ fn test_webpki_rsa_given() {
 fn test_webpki_separate_ca() {
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-	let ca_cert = Certificate::from_params(params);
+	let ca_cert = Certificate::from_params(params).unwrap();
 
 	let ca_der = ca_cert.serialize_der();
 	let trust_anchor_list = &[cert_der_as_trust_anchor(Input::from(&ca_der)).unwrap()];
@@ -197,7 +197,8 @@ fn test_webpki_separate_ca() {
 	let mut params = CertificateParams::new(vec!["crabs.dev".to_string()]);
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
-	let cert = Certificate::from_params(params).serialize_der_with_signer(&ca_cert);
+	let cert = Certificate::from_params(params).unwrap()
+		.serialize_der_with_signer(&ca_cert);
 	let end_entity_cert = EndEntityCert::from(Input::from(&cert)).unwrap();
 
 	// Set time to Jan 10, 2004

@@ -18,7 +18,7 @@ use rcgen::generate_simple_self_signed;
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let cert = generate_simple_self_signed(subject_alt_names);
+let cert = generate_simple_self_signed(subject_alt_names).unwrap();
 println!("{}", cert.serialize_pem());
 println!("{}", cert.serialize_private_key_pem());
 # }
@@ -53,6 +53,7 @@ use chrono::{NaiveDate, Utc};
 use std::collections::HashMap;
 use std::fmt;
 use std::convert::{TryFrom, TryInto};
+use std::error::Error;
 use bit_vec::BitVec;
 
 /// A self signed certificate together with signing keys
@@ -79,14 +80,14 @@ use rcgen::generate_simple_self_signed;
 let subject_alt_names :&[_] = &["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let cert = generate_simple_self_signed(subject_alt_names);
+let cert = generate_simple_self_signed(subject_alt_names).unwrap();
 // The certificate is now valid for localhost and the domain "hello.world.example"
 println!("{}", cert.serialize_pem());
 println!("{}", cert.serialize_private_key_pem());
 # }
 ```
 */
-pub fn generate_simple_self_signed(subject_alt_names :impl Into<Vec<String>>) -> Certificate {
+pub fn generate_simple_self_signed(subject_alt_names :impl Into<Vec<String>>) -> Result<Certificate, RcgenError> {
 	Certificate::from_params(CertificateParams::new(subject_alt_names))
 }
 
@@ -312,17 +313,17 @@ fn dt_to_generalized(dt :&DateTime<Utc>) -> GeneralizedTime {
 
 impl Certificate {
 	/// Generates a new certificate from the given parameters
-	pub fn from_params(mut params :CertificateParams) -> Self {
+	pub fn from_params(mut params :CertificateParams) -> Result<Self, RcgenError> {
 		let key_pair = if let Some(key_pair) = params.key_pair.take() {
 			key_pair
 		} else {
-			KeyPair::generate(&params.alg)
+			KeyPair::generate(&params.alg)?
 		};
 
-		Certificate {
+		Ok(Certificate {
 			params,
 			key_pair,
-		}
+		})
 	}
 	fn write_name(&self, writer :DERWriter, ca :&Certificate) {
 		writer.write_sequence(|writer| {
@@ -595,6 +596,9 @@ impl KeyPair {
 pub enum RcgenError {
 	/// The given key pair couldn't be parsed
 	CouldNotParseKeyPair,
+	/// There is no support for generating
+	/// keys for the given algorithm
+	KeyGenerationUnavailable,
 	#[doc(hidden)]
 	_Nonexhaustive,
 }
@@ -603,11 +607,16 @@ impl fmt::Display for RcgenError {
 	fn fmt(&self, f :&mut fmt::Formatter) -> fmt::Result {
 		use self::RcgenError::*;
 		match self {
-			CouldNotParseKeyPair => write!(f, "Could not parse key pair"),
+			CouldNotParseKeyPair => write!(f, "Could not parse key pair")?,
+			KeyGenerationUnavailable => write!(f, "There is no support for generating \
+				keys for the given algorithm")?,
 			_Nonexhaustive => panic!("Nonexhaustive error variant ought not be constructed"),
 		};
 		Ok(())
 	}
+}
+
+impl Error for RcgenError {
 }
 
 impl TryFrom<&[u8]> for KeyPair {
@@ -637,7 +646,7 @@ impl TryFrom<&[u8]> for KeyPair {
 
 impl KeyPair {
 	/// Generate a new random key pair for the specified signature algorithm
-	pub fn generate(alg :&SignatureAlgorithm) -> Self {
+	pub fn generate(alg :&SignatureAlgorithm) -> Result<Self, RcgenError> {
 		let system_random = SystemRandom::new();
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
@@ -645,20 +654,20 @@ impl KeyPair {
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, Input::from(&&key_pair_doc.as_ref())).unwrap();
-				KeyPair {
+				Ok(KeyPair {
 					kind : KeyPairKind::Ec(key_pair),
 					serialized_der : key_pair_serialized,
-				}
+				})
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
 				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(&system_random).unwrap();
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(Input::from(&&key_pair_doc.as_ref())).unwrap();
-				KeyPair {
+				Ok(KeyPair {
 					kind : KeyPairKind::Ed(key_pair),
 					serialized_der : key_pair_serialized,
-				}
+				})
 			},
 			// Ring doesn't have RSA key generation yet:
 			// https://github.com/briansmith/ring/issues/219

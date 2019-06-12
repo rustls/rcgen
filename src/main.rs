@@ -4,9 +4,8 @@ use rcgen::{Certificate, CertificateParams,
 	DistinguishedName, DnType,
 	date_time_ymd};
 use std::fs;
-use std::io::Result;
 
-fn main() -> Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let mut params :CertificateParams =  Default::default();
 	params.not_before = date_time_ymd(1975, 01, 01);
 	params.not_after = date_time_ymd(4096, 01, 01);
@@ -15,7 +14,7 @@ fn main() -> Result<()> {
 	params.distinguished_name.push(DnType::CommonName, "Master Cert");
 	params.subject_alt_names = vec!["crabs.crabs".to_string(), "localhost".to_string()];
 
-	let cert = Certificate::from_params(params);
+	let cert = Certificate::from_params(params)?;
 	println!("{}", cert.serialize_pem());
 	println!("{}", cert.serialize_private_key_pem());
 	std::fs::create_dir_all("certs/")?;
