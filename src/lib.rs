@@ -599,6 +599,8 @@ pub enum RcgenError {
 	/// There is no support for generating
 	/// keys for the given algorithm
 	KeyGenerationUnavailable,
+	/// Unspecified ring error
+	RingUnspecified,
 	#[doc(hidden)]
 	_Nonexhaustive,
 }
@@ -610,13 +612,19 @@ impl fmt::Display for RcgenError {
 			CouldNotParseKeyPair => write!(f, "Could not parse key pair")?,
 			KeyGenerationUnavailable => write!(f, "There is no support for generating \
 				keys for the given algorithm")?,
+			RingUnspecified => write!(f, "Unspecified ring error")?,
 			_Nonexhaustive => panic!("Nonexhaustive error variant ought not be constructed"),
 		};
 		Ok(())
 	}
 }
 
-impl Error for RcgenError {
+impl Error for RcgenError {}
+
+impl From<ring::error::Unspecified> for RcgenError {
+	fn from(_unspecified :ring::error::Unspecified) -> Self {
+		RcgenError::RingUnspecified
+	}
 }
 
 impl TryFrom<&[u8]> for KeyPair {
@@ -650,7 +658,7 @@ impl KeyPair {
 		let system_random = SystemRandom::new();
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
-				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, &system_random).unwrap();
+				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, &system_random)?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, Input::from(&&key_pair_doc.as_ref())).unwrap();
@@ -660,7 +668,7 @@ impl KeyPair {
 				})
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
-				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(&system_random).unwrap();
+				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(&system_random)?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(Input::from(&&key_pair_doc.as_ref())).unwrap();
@@ -672,7 +680,7 @@ impl KeyPair {
 			// Ring doesn't have RSA key generation yet:
 			// https://github.com/briansmith/ring/issues/219
 			// https://github.com/briansmith/ring/pull/733
-			SignAlgo::Rsa() => panic!("Key generation for RSA not available."),
+			SignAlgo::Rsa() => Err(RcgenError::KeyGenerationUnavailable),
 		}
 	}
 	fn public_key(&self) -> &[u8] {
