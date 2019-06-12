@@ -211,3 +211,40 @@ fn test_webpki_separate_ca() {
 		time,
 	).expect("valid TLS server cert");
 }
+
+#[cfg(feature = "x509-parser")]
+#[test]
+fn test_webpki_imported_ca() {
+	use std::convert::TryInto;
+	let mut params = util::default_params();
+	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	let ca_cert = Certificate::from_params(params).unwrap();
+
+	let (ca_cert_der, ca_key_der) = (ca_cert.serialize_der().unwrap(), ca_cert.serialize_private_key_der());
+
+	let ca_key_pair = ca_key_der.as_slice().try_into().unwrap();
+	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der.as_slice(), ca_key_pair)
+		.unwrap();
+	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();
+
+	let trust_anchor_list = &[cert_der_as_trust_anchor(Input::from(&ca_cert_der)).unwrap()];
+	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
+
+	let mut params = CertificateParams::new(vec!["crabs.dev".to_string()]);
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	let cert = Certificate::from_params(params).unwrap()
+		.serialize_der_with_signer(&imported_ca_cert)
+		.unwrap();
+	let end_entity_cert = EndEntityCert::from(Input::from(&cert)).unwrap();
+
+	// Set time to Jan 10, 2004
+	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
+
+	end_entity_cert.verify_is_valid_tls_server_cert(
+		&[&webpki::ECDSA_P256_SHA256],
+		&trust_anchors,
+		&[Input::from(&ca_cert_der)],
+		time,
+	).expect("valid TLS server cert");
+}
