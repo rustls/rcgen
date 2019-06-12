@@ -565,9 +565,9 @@ enum SignAlgo {
 /// A key pair used to sign certificates and CSRs
 pub enum KeyPair {
 	/// A Ecdsa key pair
-	EcKp(EcdsaKeyPair, Vec<u8>),
+	Ec(EcdsaKeyPair, Vec<u8>),
 	/// A Ed25519 key pair
-	EdKp(Ed25519KeyPair, Vec<u8>),
+	Ed(Ed25519KeyPair, Vec<u8>),
 	/// A RSA key pair
 	Rsa(RsaKeyPair, Vec<u8>),
 }
@@ -588,11 +588,11 @@ impl From<&[u8]> for KeyPair {
 		let pkcs8_vec = std::iter::FromIterator::from_iter(pkcs8.iter().cloned());
 
 		if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(input) {
-			KeyPair::EdKp(edkp, pkcs8_vec)
+			KeyPair::Ed(edkp, pkcs8_vec)
 		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, input) {
-			KeyPair::EcKp(eckp, pkcs8_vec)
+			KeyPair::Ec(eckp, pkcs8_vec)
 		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, input) {
-			KeyPair::EcKp(eckp, pkcs8_vec)
+			KeyPair::Ec(eckp, pkcs8_vec)
 		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(input) {
 			KeyPair::Rsa(rsakp, pkcs8_vec)
 		} else {
@@ -611,14 +611,14 @@ impl KeyPair {
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, Input::from(&&key_pair_doc.as_ref())).unwrap();
-				KeyPair::EcKp(key_pair, key_pair_serialized)
+				KeyPair::Ec(key_pair, key_pair_serialized)
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
 				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(&system_random).unwrap();
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(Input::from(&&key_pair_doc.as_ref())).unwrap();
-				KeyPair::EdKp(key_pair, key_pair_serialized)
+				KeyPair::Ed(key_pair, key_pair_serialized)
 			},
 			// Ring doesn't have RSA key generation yet:
 			// https://github.com/briansmith/ring/issues/219
@@ -628,21 +628,21 @@ impl KeyPair {
 	}
 	fn public_key(&self) -> &[u8] {
 		match self {
-			KeyPair::EcKp(kp, _) => kp.public_key().as_ref(),
-			KeyPair::EdKp(kp, _) => kp.public_key().as_ref(),
+			KeyPair::Ec(kp, _) => kp.public_key().as_ref(),
+			KeyPair::Ed(kp, _) => kp.public_key().as_ref(),
 			KeyPair::Rsa(kp, _) => kp.public_key().as_ref(),
 		}
 	}
 	fn sign(&self, msg :&[u8], writer :DERWriter) {
 		match self {
-			KeyPair::EcKp(kp, _) => {
+			KeyPair::Ec(kp, _) => {
 				let msg_input = Input::from(&msg);
 				let system_random = SystemRandom::new();
 				let signature = kp.sign(&system_random, msg_input).unwrap();
 				let sig = BitVec::from_bytes(&signature.as_ref());
 				writer.write_bitvec(&sig);
 			},
-			KeyPair::EdKp(kp, _) => {
+			KeyPair::Ed(kp, _) => {
 				let signature = kp.sign(msg);
 				let sig = BitVec::from_bytes(&signature.as_ref());
 				writer.write_bitvec(&sig);
@@ -660,8 +660,8 @@ impl KeyPair {
 	/// Serializes the private key in PKCS#8 format
 	pub fn serialize_der(&self) -> Vec<u8> {
 		let serialized_key = match self {
-			KeyPair::EcKp(_, ref serialized_key) => serialized_key,
-			KeyPair::EdKp(_, ref serialized_key) => serialized_key,
+			KeyPair::Ec(_, ref serialized_key) => serialized_key,
+			KeyPair::Ed(_, ref serialized_key) => serialized_key,
 			KeyPair::Rsa(_, ref serialized_key) => serialized_key,
 		};
 		serialized_key.clone()
