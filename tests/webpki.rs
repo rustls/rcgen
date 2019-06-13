@@ -46,7 +46,7 @@ fn sign_msg_rsa(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 
 fn check_cert<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, alg :&SignatureAlgorithm,
 		sign_fn :impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>) {
-	println!("{}", cert.serialize_pem());
+	println!("{}", cert.serialize_pem().unwrap());
 	let trust_anchor = cert_der_as_trust_anchor(Input::from(&cert_der)).unwrap();
 	let trust_anchor_list = &[trust_anchor];
 	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
@@ -85,7 +85,7 @@ fn test_webpki() {
 	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
-	let cert_der = cert.serialize_der();
+	let cert_der = cert.serialize_der().unwrap();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
 		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
@@ -100,7 +100,7 @@ fn test_webpki_256() {
 	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
-	let cert_der = cert.serialize_der();
+	let cert_der = cert.serialize_der().unwrap();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
 		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
@@ -115,7 +115,7 @@ fn test_webpki_384() {
 	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
-	let cert_der = cert.serialize_der();
+	let cert_der = cert.serialize_der().unwrap();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
 		&signature::ECDSA_P384_SHA384_ASN1_SIGNING);
@@ -130,7 +130,7 @@ fn test_webpki_25519() {
 	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
-	let cert_der = cert.serialize_der();
+	let cert_der = cert.serialize_der().unwrap();
 
 	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
 }
@@ -146,7 +146,7 @@ fn test_webpki_25519_v1_given() {
 	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
-	let cert_der = cert.serialize_der();
+	let cert_der = cert.serialize_der().unwrap();
 
 	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
 }
@@ -162,7 +162,7 @@ fn test_webpki_25519_v2_given() {
 	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
-	let cert_der = cert.serialize_der();
+	let cert_der = cert.serialize_der().unwrap();
 
 	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
 }
@@ -178,7 +178,7 @@ fn test_webpki_rsa_given() {
 	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
-	let cert_der = cert.serialize_der();
+	let cert_der = cert.serialize_der().unwrap();
 
 	check_cert(&cert_der, &cert, &webpki::RSA_PKCS1_2048_8192_SHA256,
 		&sign_msg_rsa);
@@ -190,7 +190,7 @@ fn test_webpki_separate_ca() {
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::from_params(params).unwrap();
 
-	let ca_der = ca_cert.serialize_der();
+	let ca_der = ca_cert.serialize_der().unwrap();
 	let trust_anchor_list = &[cert_der_as_trust_anchor(Input::from(&ca_der)).unwrap()];
 	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
 
@@ -198,7 +198,7 @@ fn test_webpki_separate_ca() {
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap()
-		.serialize_der_with_signer(&ca_cert);
+		.serialize_der_with_signer(&ca_cert).unwrap();
 	let end_entity_cert = EndEntityCert::from(Input::from(&cert)).unwrap();
 
 	// Set time to Jan 10, 2004

@@ -19,7 +19,7 @@ let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
 let cert = generate_simple_self_signed(subject_alt_names).unwrap();
-println!("{}", cert.serialize_pem());
+println!("{}", cert.serialize_pem().unwrap());
 println!("{}", cert.serialize_private_key_pem());
 # }
 ```
@@ -82,7 +82,7 @@ let subject_alt_names :&[_] = &["hello.world.example".to_string(),
 
 let cert = generate_simple_self_signed(subject_alt_names).unwrap();
 // The certificate is now valid for localhost and the domain "hello.world.example"
-println!("{}", cert.serialize_pem());
+println!("{}", cert.serialize_pem().unwrap());
 println!("{}", cert.serialize_private_key_pem());
 # }
 ```
@@ -482,12 +482,12 @@ impl Certificate {
 		})
 	}
 	/// Serializes the certificate to the binary DER format
-	pub fn serialize_der(&self) -> Vec<u8> {
+	pub fn serialize_der(&self) -> Result<Vec<u8>, RcgenError> {
 		self.serialize_der_with_signer(&self)
 	}
 	/// Serializes the certificate, signed with another certificate's key, in binary DER format
-	pub fn serialize_der_with_signer(&self, ca :&Certificate) -> Vec<u8> {
-		yasna::construct_der(|writer| {
+	pub fn serialize_der_with_signer(&self, ca :&Certificate) -> Result<Vec<u8>, RcgenError> {
+		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 
 				let tbs_cert_list_serialized = yasna::construct_der(|writer| {
@@ -500,13 +500,15 @@ impl Certificate {
 				self.params.alg.write_alg_ident(writer.next());
 
 				// Write signature
-				ca.key_pair.sign(&tbs_cert_list_serialized, writer.next());
+				ca.key_pair.sign(&tbs_cert_list_serialized, writer.next())?;
+
+				Ok(())
 			})
 		})
 	}
     /// Serializes a certificate signing request in binary DER format
-    pub fn serialize_request_der(&self) -> Vec<u8> {
-		yasna::construct_der(|writer| {
+    pub fn serialize_request_der(&self) -> Result<Vec<u8>, RcgenError> {
+		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 				let cert_data = yasna::construct_der(|writer| {
 					self.write_request(writer);
@@ -517,36 +519,38 @@ impl Certificate {
 				self.params.alg.write_alg_ident(writer.next());
 
 				// Write signature
-				self.key_pair.sign(&cert_data, writer.next());
-			});
+				self.key_pair.sign(&cert_data, writer.next())?;
+
+				Ok(())
+			})
 		})
 	}
 	/// Serializes the certificate to the ASCII PEM format
 	#[cfg(feature = "pem")]
-	pub fn serialize_pem(&self) -> String {
+	pub fn serialize_pem(&self) -> Result<String, RcgenError> {
 		let p = Pem {
 			tag : "CERTIFICATE".to_string(),
-			contents : self.serialize_der(),
+			contents : self.serialize_der()?,
 		};
-		pem::encode(&p)
+		Ok(pem::encode(&p))
 	}
 	/// Serializes the certificate, signed with another certificate's key, to the ASCII PEM format
 	#[cfg(feature = "pem")]
-	pub fn serialize_pem_with_signer(&self, ca :&Certificate) -> String {
+	pub fn serialize_pem_with_signer(&self, ca :&Certificate) -> Result<String, RcgenError> {
 		let p = Pem {
 			tag : "CERTIFICATE".to_string(),
-			contents : self.serialize_der_with_signer(ca),
+			contents : self.serialize_der_with_signer(ca)?,
 		};
-		pem::encode(&p)
+		Ok(pem::encode(&p))
 	}
 	/// Serializes the certificate signing request to the ASCII PEM format
 	#[cfg(feature = "pem")]
-	pub fn serialize_request_pem(&self) -> String {
+	pub fn serialize_request_pem(&self) -> Result<String, RcgenError> {
 		let p = Pem {
 			tag : "CERTIFICATE REQUEST".to_string(),
-			contents : self.serialize_request_der(),
+			contents : self.serialize_request_der()?,
 		};
-		pem::encode(&p)
+		Ok(pem::encode(&p))
 	}
 	/// Serializes the private key in PKCS#8 format
 	pub fn serialize_private_key_der(&self) -> Vec<u8> {
@@ -690,12 +694,12 @@ impl KeyPair {
 			KeyPairKind::Rsa(kp) => kp.public_key().as_ref(),
 		}
 	}
-	fn sign(&self, msg :&[u8], writer :DERWriter) {
+	fn sign(&self, msg :&[u8], writer :DERWriter) -> Result<(), RcgenError> {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => {
 				let msg_input = Input::from(&msg);
 				let system_random = SystemRandom::new();
-				let signature = kp.sign(&system_random, msg_input).unwrap();
+				let signature = kp.sign(&system_random, msg_input)?;
 				let sig = BitVec::from_bytes(&signature.as_ref());
 				writer.write_bitvec(&sig);
 			},
@@ -708,11 +712,12 @@ impl KeyPair {
 				let system_random = SystemRandom::new();
 				let mut signature = vec![0; kp.public_modulus_len()];
 				kp.sign(&signature::RSA_PKCS1_SHA256, &system_random,
-					msg, &mut signature).unwrap();
+					msg, &mut signature)?;
 				let sig = BitVec::from_bytes(&signature.as_ref());
 				writer.write_bitvec(&sig);
 			},
 		}
+		Ok(())
 	}
 	/// Serializes the private key in PKCS#8 format
 	pub fn serialize_der(&self) -> Vec<u8> {

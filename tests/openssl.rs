@@ -10,9 +10,10 @@ use openssl::stack::Stack;
 mod util;
 
 fn verify_cert(cert :&Certificate) {
-	println!("{}", cert.serialize_pem());
+	let cert_pem = cert.serialize_pem().unwrap();
+	println!("{}", cert_pem);
 
-	let x509 = X509::from_pem(&cert.serialize_pem().as_bytes()).unwrap();
+	let x509 = X509::from_pem(&cert_pem.as_bytes()).unwrap();
 	let mut builder = X509StoreBuilder::new().unwrap();
 	builder.add_cert(x509.clone()).unwrap();
 
@@ -27,12 +28,12 @@ fn verify_cert(cert :&Certificate) {
 }
 
 fn verify_csr(cert :&Certificate) {
-	let csr = cert.serialize_request_pem();
+	let csr = cert.serialize_request_pem().unwrap();
 	println!("{}", csr);
 	let key = cert.serialize_private_key_der();
 	let pkey = PKey::private_key_from_der(&key).unwrap();
 
-	let req = X509Req::from_pem(&cert.serialize_request_pem().as_bytes()).unwrap();
+	let req = X509Req::from_pem(&csr.as_bytes()).unwrap();
 	req.verify(&pkey).unwrap();
 }
 
