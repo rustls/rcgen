@@ -34,7 +34,6 @@ extern crate ring;
 extern crate pem;
 extern crate untrusted;
 extern crate chrono;
-extern crate bit_vec;
 
 use yasna::Tag;
 use yasna::models::ObjectIdentifier;
@@ -54,7 +53,6 @@ use std::collections::HashMap;
 use std::fmt;
 use std::convert::{TryFrom, TryInto};
 use std::error::Error;
-use bit_vec::BitVec;
 
 /// A self signed certificate together with signing keys
 pub struct Certificate {
@@ -355,9 +353,8 @@ impl Certificate {
 			// Write subjectPublicKeyInfo
 			writer.next().write_sequence(|writer| {
 				self.params.alg.write_oids_sign_alg(writer.next());
-				let public_key = self.key_pair.public_key();
-				let pkbs = BitVec::from_bytes(&public_key);
-				writer.next().write_bitvec(&pkbs);
+				let pk = self.key_pair.public_key();
+				writer.next().write_bitvec_bytes(&pk, pk.len() * 8);
 			});
 			// Write extensions
 			writer.next().write_tagged(Tag::context(0), |writer| {
@@ -416,9 +413,8 @@ impl Certificate {
 			// Write subjectPublicKeyInfo
 			writer.next().write_sequence(|writer| {
 				self.params.alg.write_oids_sign_alg(writer.next());
-				let public_key = self.key_pair.public_key();
-				let pkbs = BitVec::from_bytes(&public_key);
-				writer.next().write_bitvec(&pkbs);
+				let pk = self.key_pair.public_key();
+				writer.next().write_bitvec_bytes(&pk, pk.len() * 8);
 			});
 			// write extensions
 			writer.next().write_tagged(Tag::context(3), |writer| {
@@ -700,21 +696,21 @@ impl KeyPair {
 				let msg_input = Input::from(&msg);
 				let system_random = SystemRandom::new();
 				let signature = kp.sign(&system_random, msg_input)?;
-				let sig = BitVec::from_bytes(&signature.as_ref());
-				writer.write_bitvec(&sig);
+				let sig = &signature.as_ref();
+				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
 			KeyPairKind::Ed(kp) => {
 				let signature = kp.sign(msg);
-				let sig = BitVec::from_bytes(&signature.as_ref());
-				writer.write_bitvec(&sig);
+				let sig = &signature.as_ref();
+				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
 			KeyPairKind::Rsa(kp) => {
 				let system_random = SystemRandom::new();
 				let mut signature = vec![0; kp.public_modulus_len()];
 				kp.sign(&signature::RSA_PKCS1_SHA256, &system_random,
 					msg, &mut signature)?;
-				let sig = BitVec::from_bytes(&signature.as_ref());
-				writer.write_bitvec(&sig);
+				let sig = &signature.as_ref();
+				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
 		}
 		Ok(())
