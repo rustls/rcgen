@@ -294,7 +294,7 @@ pub fn date_time_ymd(year :i32, month :u32, day :u32) -> DateTime<Utc> {
 	DateTime::<Utc>::from_utc(naive_dt, Utc)
 }
 
-fn dt_to_generalized(dt :&DateTime<Utc>) -> GeneralizedTime {
+fn dt_to_generalized(dt :&DateTime<Utc>) -> Result<GeneralizedTime, RcgenError> {
 	let mut date_time = *dt;
 	// Set nanoseconds to zero (or to one leap second if there is a leap second)
 	// This is needed because the GeneralizedTime serializer would otherwise
@@ -305,8 +305,8 @@ fn dt_to_generalized(dt :&DateTime<Utc>) -> GeneralizedTime {
 	} else {
 		0
 	};
-	date_time = date_time.with_nanosecond(nanos).unwrap();
-	GeneralizedTime::from_datetime::<Utc>(&date_time)
+	date_time = date_time.with_nanosecond(nanos).ok_or(RcgenError::Time)?;
+	Ok(GeneralizedTime::from_datetime::<Utc>(&date_time))
 }
 
 impl Certificate {
@@ -389,7 +389,7 @@ impl Certificate {
 			});
 		});
 	}
-	fn write_cert(&self, writer :DERWriter, ca :&Certificate) {
+	fn write_cert(&self, writer :DERWriter, ca :&Certificate) -> Result<(), RcgenError> {
 		writer.write_sequence(|writer| {
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
@@ -405,12 +405,13 @@ impl Certificate {
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
-				let nb_gt = dt_to_generalized(&self.params.not_before);
+				let nb_gt = dt_to_generalized(&self.params.not_before)?;
 				writer.next().write_generalized_time(&nb_gt);
 				// Not after
-				let na_gt = dt_to_generalized(&self.params.not_after);
+				let na_gt = dt_to_generalized(&self.params.not_after)?;
 				writer.next().write_generalized_time(&na_gt);
-			});
+				Ok::<(), RcgenError>(())
+			})?;
 			// Write subject
 			self.write_name(writer.next(), self);
 			// Write subjectPublicKeyInfo
@@ -478,6 +479,7 @@ impl Certificate {
 					}
 				});
 			});
+			Ok(())
 		})
 	}
 	/// Serializes the certificate to the binary DER format
@@ -489,9 +491,10 @@ impl Certificate {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 
-				let tbs_cert_list_serialized = yasna::construct_der(|writer| {
-					self.write_cert(writer, ca);
-				});
+				let tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
+					self.write_cert(writer, ca)?;
+					Ok::<(), RcgenError>(())
+				})?;
 				// Write tbsCertList
 				writer.next().write_der(&tbs_cert_list_serialized);
 
@@ -607,6 +610,8 @@ pub enum RcgenError {
 	/// The provided certificate's signature algorithm
 	/// is incompatible with the given key pair
 	CertificateKeyPairMismatch,
+	/// Time conversion related errors
+	Time,
 	#[doc(hidden)]
 	_Nonexhaustive,
 }
@@ -621,6 +626,7 @@ impl fmt::Display for RcgenError {
 			RingUnspecified => write!(f, "Unspecified ring error")?,
 			CertificateKeyPairMismatch => write!(f, "The provided certificate's signature \
 				algorithm is incompatible with the given key pair")?,
+			Time => write!(f, "Time error")?,
 			_Nonexhaustive => panic!("Nonexhaustive error variant ought not be constructed"),
 		};
 		Ok(())
