@@ -313,6 +313,9 @@ impl Certificate {
 	/// Generates a new certificate from the given parameters
 	pub fn from_params(mut params :CertificateParams) -> Result<Self, RcgenError> {
 		let key_pair = if let Some(key_pair) = params.key_pair.take() {
+			if !key_pair.is_compatible(&params.alg) {
+				return Err(RcgenError::CertificateKeyPairMismatch);
+			}
 			key_pair
 		} else {
 			KeyPair::generate(&params.alg)?
@@ -601,6 +604,9 @@ pub enum RcgenError {
 	KeyGenerationUnavailable,
 	/// Unspecified ring error
 	RingUnspecified,
+	/// The provided certificate's signature algorithm
+	/// is incompatible with the given key pair
+	CertificateKeyPairMismatch,
 	#[doc(hidden)]
 	_Nonexhaustive,
 }
@@ -613,6 +619,8 @@ impl fmt::Display for RcgenError {
 			KeyGenerationUnavailable => write!(f, "There is no support for generating \
 				keys for the given algorithm")?,
 			RingUnspecified => write!(f, "Unspecified ring error")?,
+			CertificateKeyPairMismatch => write!(f, "The provided certificate's signature \
+				algorithm is incompatible with the given key pair")?,
 			_Nonexhaustive => panic!("Nonexhaustive error variant ought not be constructed"),
 		};
 		Ok(())
@@ -688,6 +696,14 @@ impl KeyPair {
 			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
 			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
 			KeyPairKind::Rsa(kp) => kp.public_key().as_ref(),
+		}
+	}
+	fn is_compatible(&self, signature_algorithm :&SignatureAlgorithm) -> bool {
+		match (&self.kind, &signature_algorithm.sign_alg) {
+			(KeyPairKind::Ec(_), SignAlgo::EcDsa(_)) => true,
+			(KeyPairKind::Ed(_), SignAlgo::EdDsa(_)) => true,
+			(KeyPairKind::Rsa(_), SignAlgo::Rsa()) => true,
+			_ => false,
 		}
 	}
 	fn sign(&self, msg :&[u8], writer :DERWriter) -> Result<(), RcgenError> {
