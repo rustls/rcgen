@@ -88,6 +88,7 @@ fn test_openssl_25519() {
 	// Now verify the certificate.
 	verify_cert(&cert);
 	// TODO this fails. Not sure why!
+	// https://github.com/est31/rcgen/issues/11
 	// https://github.com/openssl/openssl/issues/9134
 	//verify_csr(&cert);
 }
@@ -123,6 +124,7 @@ fn test_openssl_25519_v2_given() {
 	// Now verify the certificate.
 	verify_cert(&cert);
 	// TODO this fails. Not sure why!
+	// https://github.com/est31/rcgen/issues/11
 	// https://github.com/openssl/openssl/issues/9134
 	//verify_csr(&cert);
 }
