@@ -327,14 +327,14 @@ impl Certificate {
 	}
 	fn write_name(&self, writer :DERWriter, ca :&Certificate) {
 		writer.write_sequence(|writer| {
-			writer.next().write_set(|writer| {
-				for (ty, content) in ca.params.distinguished_name.entries.iter() {
+			for (ty, content) in ca.params.distinguished_name.entries.iter() {
+				writer.next().write_set(|writer| {
 					writer.next().write_sequence(|writer| {
 						writer.next().write_oid(&ty.to_oid());
 						writer.next().write_utf8_string(content);
 					});
-				}
-			});
+				});
+			}
 		});
 	}
     fn write_request(&self, writer :DERWriter) {
