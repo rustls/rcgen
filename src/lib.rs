@@ -591,7 +591,7 @@ impl KeyPair {
 	/// Parses the key pair from the ASCII PEM format
 	#[cfg(feature = "pem")]
 	pub fn from_pem(pem_str :&str) -> Result<Self, RcgenError> {
-		let private_key = pem::parse(pem_str).unwrap();
+		let private_key = pem::parse(pem_str)?;
 		let private_key_der :&[_] = &private_key.contents;
 		Ok(private_key_der.try_into()?)
 	}
@@ -612,6 +612,9 @@ pub enum RcgenError {
 	CertificateKeyPairMismatch,
 	/// Time conversion related errors
 	Time,
+	#[cfg(feature = "pem")]
+	/// Error from the pem crate
+	PemError(pem::PemError),
 	#[doc(hidden)]
 	_Nonexhaustive,
 }
@@ -627,6 +630,8 @@ impl fmt::Display for RcgenError {
 			CertificateKeyPairMismatch => write!(f, "The provided certificate's signature \
 				algorithm is incompatible with the given key pair")?,
 			Time => write!(f, "Time error")?,
+			#[cfg(feature = "pem")]
+			PemError(e) => write!(f, "PEM error: {}", e)?,
 			_Nonexhaustive => panic!("Nonexhaustive error variant ought not be constructed"),
 		};
 		Ok(())
@@ -637,6 +642,13 @@ impl Error for RcgenError {}
 
 impl From<ring::error::Unspecified> for RcgenError {
 	fn from(_unspecified :ring::error::Unspecified) -> Self {
+		RcgenError::RingUnspecified
+	}
+}
+
+#[cfg(feature = "pem")]
+impl From<pem::PemError> for RcgenError {
+	fn from(_pem_error :pem::PemError) -> Self {
 		RcgenError::RingUnspecified
 	}
 }
