@@ -1,5 +1,14 @@
 # Changes
 
+## Release 0.4.0 - June 18, 2019
+
+- Support for user supplied keypairs. Contributed by [@fzgregor](https://github.com/fzgregor).
+- Support for signing with user supplied CA certificates. Contributed by [@fzgregor](https://github.com/fzgregor).
+- Correct a bug with distinguished name serialization ([PR link](https://github.com/est31/rcgen/pull/13)). Contributed by [@fzgregor](https://github.com/fzgregor).
+- Addition of limited (no key generation) RSA support
+- Proper error handling with `Result` and our own Error type
+- Improvements of the testsuite
+
 ## Release 0.3.1 - June 6, 2019
 
 - Ability to disable the dependency on the `pem` crate
