@@ -27,6 +27,9 @@ x509-parser = { version = "0.4.2", optional = true }
 [features]
 default = ["pem"]
 
+[package.metadata.docs.rs]
+features = ["x509-parser"]
+
 [dev-dependencies]
 openssl = "0.10"
 webpki = "0.19"
