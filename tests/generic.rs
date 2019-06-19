@@ -17,10 +17,6 @@ fn test_key_params_mismatch() {
 			if i == j {
 				continue;
 			}
-			// Issue https://github.com/est31/rcgen/issues/18
-			if (i, j) == (1, 2) || (i, j) == (2, 1) {
-				continue;
-			}
 			let mut wrong_params = util::default_params();
 			if i != 0 {
 				wrong_params.key_pair = Some(KeyPair::generate(kalg_1).unwrap());

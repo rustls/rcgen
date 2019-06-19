@@ -455,11 +455,7 @@ impl Certificate {
 				}
 			});
 			// Write subjectPublicKeyInfo
-			writer.next().write_sequence(|writer| {
-				self.params.alg.write_oids_sign_alg(writer.next());
-				let pk = self.key_pair.public_key();
-				writer.next().write_bitvec_bytes(&pk, pk.len() * 8);
-			});
+			self.key_pair.serialize_public_key_der(writer.next());
 			// Write extensions
 			writer.next().write_tagged(Tag::context(0), |writer| {
 				writer.write_sequence(|writer| {
@@ -516,11 +512,7 @@ impl Certificate {
 			// Write subject
 			self.write_name(writer.next(), self);
 			// Write subjectPublicKeyInfo
-			writer.next().write_sequence(|writer| {
-				self.params.alg.write_oids_sign_alg(writer.next());
-				let pk = self.key_pair.public_key();
-				writer.next().write_bitvec_bytes(&pk, pk.len() * 8);
-			});
+			self.key_pair.serialize_public_key_der(writer.next());
 			// write extensions
 			writer.next().write_tagged(Tag::context(3), |writer| {
 				writer.write_sequence(|writer| {
@@ -628,6 +620,10 @@ impl Certificate {
 			})
 		})
 	}
+	/// Return the certificate's key pair
+	pub fn get_key_pair(&self) -> &KeyPair {
+		&self.key_pair
+	}
 	/// Serializes the certificate to the ASCII PEM format
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem(&self) -> Result<String, RcgenError> {
@@ -687,6 +683,7 @@ enum KeyPairKind {
 #[derive(Debug)]
 pub struct KeyPair {
 	kind :KeyPairKind,
+	alg :&'static SignatureAlgorithm,
 	serialized_der :Vec<u8>,
 }
 
@@ -769,20 +766,21 @@ impl TryFrom<&[u8]> for KeyPair {
 		let input = Input::from(pkcs8);
 		let pkcs8_vec = std::iter::FromIterator::from_iter(pkcs8.iter().cloned());
 
-		let kind = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(input) {
-			KeyPairKind::Ed(edkp)
+		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(input) {
+			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
 		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, input) {
-			KeyPairKind::Ec(eckp)
+			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
 		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, input) {
-			KeyPairKind::Ec(eckp)
+			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
 		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(input) {
-			KeyPairKind::Rsa(rsakp)
+			(KeyPairKind::Rsa(rsakp), &PKCS_RSA_SHA256)
 		} else {
 			return Err(RcgenError::CouldNotParseKeyPair);
 		};
 
 		Ok(KeyPair {
 			kind,
+			alg,
 			serialized_der : pkcs8_vec,
 		})
 	}
@@ -790,7 +788,7 @@ impl TryFrom<&[u8]> for KeyPair {
 
 impl KeyPair {
 	/// Generate a new random key pair for the specified signature algorithm
-	pub fn generate(alg :&SignatureAlgorithm) -> Result<Self, RcgenError> {
+	pub fn generate(alg :&'static SignatureAlgorithm) -> Result<Self, RcgenError> {
 		let system_random = SystemRandom::new();
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
@@ -800,6 +798,7 @@ impl KeyPair {
 				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, Input::from(&&key_pair_doc.as_ref())).unwrap();
 				Ok(KeyPair {
 					kind : KeyPairKind::Ec(key_pair),
+					alg,
 					serialized_der : key_pair_serialized,
 				})
 			},
@@ -810,6 +809,7 @@ impl KeyPair {
 				let key_pair = Ed25519KeyPair::from_pkcs8(Input::from(&&key_pair_doc.as_ref())).unwrap();
 				Ok(KeyPair {
 					kind : KeyPairKind::Ed(key_pair),
+					alg,
 					serialized_der : key_pair_serialized,
 				})
 			},
@@ -819,6 +819,13 @@ impl KeyPair {
 			SignAlgo::Rsa() => Err(RcgenError::KeyGenerationUnavailable),
 		}
 	}
+	fn serialize_public_key_der(&self, writer :DERWriter) {
+		writer.write_sequence(|writer| {
+			self.alg.write_oids_sign_alg(writer.next());
+			let pk = self.public_key();
+			writer.next().write_bitvec_bytes(&pk, pk.len() * 8);
+		})
+	}
 	fn public_key(&self) -> &[u8] {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
@@ -826,13 +833,9 @@ impl KeyPair {
 			KeyPairKind::Rsa(kp) => kp.public_key().as_ref(),
 		}
 	}
-	fn is_compatible(&self, signature_algorithm :&SignatureAlgorithm) -> bool {
-		match (&self.kind, &signature_algorithm.sign_alg) {
-			(KeyPairKind::Ec(_), SignAlgo::EcDsa(_)) => true,
-			(KeyPairKind::Ed(_), SignAlgo::EdDsa(_)) => true,
-			(KeyPairKind::Rsa(_), SignAlgo::Rsa()) => true,
-			_ => false,
-		}
+	/// Check if this key pair can be used with the given signature algorithm
+	pub fn is_compatible(&self, signature_algorithm :&SignatureAlgorithm) -> bool {
+		self.alg == signature_algorithm
 	}
 	fn sign(&self, msg :&[u8], writer :DERWriter) -> Result<(), RcgenError> {
 		match &self.kind {
@@ -859,11 +862,29 @@ impl KeyPair {
 		}
 		Ok(())
 	}
-	/// Serializes the private key in PKCS#8 format
+	/// Return the key pair's public key in DER format
+	///
+	/// The key is formatted according to the SubjectPublicKeyInfo struct of
+	/// X.509 see https://tools.ietf.org/html/rfc5280#section-4.1
+	pub fn public_key_der(&self) -> Vec<u8> {
+		yasna::construct_der(|writer| self.serialize_public_key_der(writer))
+	}
+	/// Return the key pair's public key in PEM format
+	///
+	/// The returned string can be interpreted with `openssl pkey --inform PEM -pubout -pubin -text`
+	#[cfg(feature = "pem")]
+	pub fn public_key_pem(&self) -> String {
+		let p = Pem {
+			tag : "PUBLIC KEY".to_string(),
+			contents : self.public_key_der(),
+		};
+		pem::encode(&p)
+	}
+	/// Serializes the key pair (including the private key) in PKCS#8 format in DER
 	pub fn serialize_der(&self) -> Vec<u8> {
 		self.serialized_der.clone()
 	}
-	/// Serializes the private key in PEM format
+	/// Serializes the key pair (including the private key) in PKCS#8 format in PEM
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem(&self) -> String {
 		let p = Pem {
@@ -882,6 +903,37 @@ pub struct SignatureAlgorithm {
 	oid_components :&'static [u64],
 	write_null_params :bool,
 }
+
+impl fmt::Debug for SignatureAlgorithm {
+    fn fmt(&self, f :&mut fmt::Formatter) -> fmt::Result {
+		if self == &PKCS_RSA_SHA256 {
+			write!(f, "PKCS_RSA_SHA256")
+		} else if self == &PKCS_ECDSA_P256_SHA256 {
+			write!(f, "PKCS_ECDSA_P256_SHA256")
+		} else if self == &PKCS_ECDSA_P384_SHA384 {
+			write!(f, "PKCS_ECDSA_P384_SHA384")
+		} else if self == &PKCS_ED25519 {
+			write!(f, "PKCS_ED25519")
+		} else {
+			write!(f, "Unknown")
+		}
+    }
+}
+
+impl PartialEq for SignatureAlgorithm {
+    fn eq(&self, other :&Self) -> bool {
+		let self_iter = self.oids_sign_alg.iter().map(|s| s.iter()).flatten();
+		let othr_iter = other.oids_sign_alg.iter().map(|s| s.iter()).flatten();
+        for (s, o) in self_iter.zip(othr_iter)  {
+			if s != o {
+				return false;
+			}
+		}
+		true
+    }
+}
+
+impl Eq for SignatureAlgorithm {}
 
 impl SignatureAlgorithm {
 	#[cfg(feature = "x509-parser")]
