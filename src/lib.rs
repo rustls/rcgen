@@ -193,8 +193,8 @@ impl DistinguishedName {
 		}
 		self.entries.insert(ty, s.into());
 	}
-
-	fn iter(&self) -> DistinguishedNameIterator<'_> {
+	/// Iterate over the entries
+	pub fn iter(&self) -> DistinguishedNameIterator<'_> {
 		DistinguishedNameIterator {
 			distinguished_name :self,
 			iter :self.order.iter()
@@ -202,7 +202,10 @@ impl DistinguishedName {
 	}
 }
 
-struct DistinguishedNameIterator<'a> {
+/**
+Iterator over `DistinguishedName` entries
+*/
+pub struct DistinguishedNameIterator<'a> {
 	distinguished_name :&'a DistinguishedName,
 	iter :std::slice::Iter<'a, DnType>,
 }
