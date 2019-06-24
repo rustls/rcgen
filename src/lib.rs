@@ -700,7 +700,7 @@ impl KeyPair {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 /// The error type of the rcgen crate
 pub enum RcgenError {
 	/// The given certificate couldn't be parsed
