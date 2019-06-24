@@ -673,6 +673,7 @@ enum SignAlgo {
 }
 
 /// A key pair vairant
+#[derive(Debug)]
 enum KeyPairKind {
 	/// A Ecdsa key pair
 	Ec(EcdsaKeyPair),
@@ -683,6 +684,7 @@ enum KeyPairKind {
 }
 
 /// A key pair used to sign certificates and CSRs
+#[derive(Debug)]
 pub struct KeyPair {
 	kind :KeyPairKind,
 	serialized_der :Vec<u8>,
