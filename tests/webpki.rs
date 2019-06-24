@@ -4,7 +4,8 @@ extern crate rcgen;
 extern crate ring;
 extern crate pem;
 
-use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
+use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType,
+	IsCa, RcgenError};
 use untrusted::Input;
 use webpki::{EndEntityCert, TLSServerTrustAnchors};
 use webpki::trust_anchor_util::cert_der_as_trust_anchor;
@@ -210,6 +211,40 @@ fn test_webpki_separate_ca() {
 		&[Input::from(&ca_der)],
 		time,
 	).expect("valid TLS server cert");
+}
+
+#[test]
+fn test_key_params_mismatch() {
+	let available_key_params = [
+		&rcgen::PKCS_RSA_SHA256,
+		&rcgen::PKCS_ECDSA_P256_SHA256,
+		&rcgen::PKCS_ECDSA_P384_SHA384,
+		&rcgen::PKCS_ED25519,
+	];
+	for (i, kalg_1) in available_key_params.iter().enumerate() {
+		for (j, kalg_2) in available_key_params.iter().enumerate() {
+			if i == j {
+				continue;
+			}
+			// Issue https://github.com/est31/rcgen/issues/18
+			if (i, j) == (1, 2) || (i, j) == (2, 1) {
+				continue;
+			}
+			let mut wrong_params = util::default_params();
+			if i != 0 {
+				wrong_params.key_pair = Some(rcgen::KeyPair::generate(kalg_1).unwrap());
+			} else {
+				let kp = rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM).unwrap();
+				wrong_params.key_pair = Some(kp);
+			}
+			wrong_params.alg = *kalg_2;
+
+			assert_eq!(
+				Certificate::from_params(wrong_params).err(),
+				Some(RcgenError::CertificateKeyPairMismatch),
+				"i: {} j: {}", i, j);
+		}
+	}
 }
 
 #[cfg(feature = "x509-parser")]
