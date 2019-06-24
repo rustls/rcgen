@@ -6,6 +6,7 @@ use rcgen::{CertificateParams, DnType};
 // to the test_webpki_25519 test and panicing explicitly.
 // This is a "v2" key containing the public key as well as the
 // private one.
+#[allow(unused)]
 pub const ED25519_TEST_KEY_PAIR_PEM_V2 :&str = r#"
 -----BEGIN PRIVATE KEY-----
 MFMCAQEwBQYDK2VwBCIEIC2pHJYjFHhK8V7mj6BnHWUVMS4CRolUlDdRXKCtguDu
@@ -15,6 +16,7 @@ oSMDIQDrvH/x8Nx9untsuc6ET+ce3w7PSuLY8BLWcHdXDGvkQA==
 // Generated with `openssl genpkey -algorithm ED25519`
 // A "v1" key as it doesn't contain the public key (which can be
 // derived from the private one)
+#[allow(unused)]
 pub const ED25519_TEST_KEY_PAIR_PEM_V1 :&str = r#"
 -----BEGIN PRIVATE KEY-----
 MC4CAQAwBQYDK2VwBCIEIDSat0MacDt2fokpnzuBaXvAQR6RJGS9rgIYOU2mZKld
