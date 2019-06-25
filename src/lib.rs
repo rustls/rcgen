@@ -834,13 +834,8 @@ impl KeyPair {
 		}
 	}
 	/// Check if this key pair can be used with the given signature algorithm
-	fn is_compatible(&self, signature_algorithm :&SignatureAlgorithm) -> bool {
-		match (&self.kind, &signature_algorithm.sign_alg) {
-			(KeyPairKind::Ec(_), SignAlgo::EcDsa(_)) => true,
-			(KeyPairKind::Ed(_), SignAlgo::EdDsa(_)) => true,
-			(KeyPairKind::Rsa(_), SignAlgo::Rsa()) => true,
-			_ => false,
-		}
+	pub fn is_compatible(&self, signature_algorithm :&SignatureAlgorithm) -> bool {
+		self.alg == signature_algorithm
 	}
 	fn sign(&self, msg :&[u8], writer :DERWriter) -> Result<(), RcgenError> {
 		match &self.kind {
@@ -924,6 +919,21 @@ impl fmt::Debug for SignatureAlgorithm {
 		}
     }
 }
+
+impl PartialEq for SignatureAlgorithm {
+    fn eq(&self, other: &Self) -> bool {
+		let self_iter = self.oids_sign_alg.iter().map(|s| s.iter()).flatten();
+		let othr_iter = other.oids_sign_alg.iter().map(|s| s.iter()).flatten();
+        for (s, o) in self_iter.zip(othr_iter)  {
+			if s != o {
+				return false;
+			}
+		}
+		true
+    }
+}
+
+impl Eq for SignatureAlgorithm {}
 
 impl SignatureAlgorithm {
 	#[cfg(feature = "x509-parser")]
