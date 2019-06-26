@@ -186,6 +186,13 @@ impl DistinguishedName {
 			order : Vec::new(),
 		}
 	}
+	/// Obtains the attribute value for the given attribute type
+	pub fn get(&self, ty :&DnType) -> Option<&str> {
+		self.entries.get(ty).map(|s| {
+			let s :&str = s;
+			s
+		})
+	}
 	/// Inserts a new attribute that consists of type and name
 	pub fn push(&mut self, ty :DnType, s :impl Into<String>) {
 		if !self.entries.contains_key(&ty) {
