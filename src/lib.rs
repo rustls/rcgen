@@ -844,6 +844,12 @@ impl KeyPair {
 	pub fn is_compatible(&self, signature_algorithm :&SignatureAlgorithm) -> bool {
 		self.alg == signature_algorithm
 	}
+	/// Returns (possibly multiple) compatible `SignatureAlgorithm`'s
+	/// that the key can be used with
+	pub fn compatible_algs(&self)
+			-> impl Iterator<Item=&'static SignatureAlgorithm> {
+		std::iter::once(self.alg)
+	}
 	fn sign(&self, msg :&[u8], writer :DERWriter) -> Result<(), RcgenError> {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => {
