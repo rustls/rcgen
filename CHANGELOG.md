@@ -1,5 +1,11 @@
 # Changes
 
+## Release 0.4.1 - June 28, 2019
+
+- Allow inspection of `DistinguishedName` via iterators and get functions
+- Fix a bug in `is_compatible` not saying false. Contributed by [@fzgregor](https://github.com/fzgregor).
+- Extend the public interface of `KeyPair. Contributed by [@fzgregor](https://github.com/fzgregor).
+
 ## Release 0.4.0 - June 18, 2019
 
 - Support for user supplied keypairs. Contributed by [@fzgregor](https://github.com/fzgregor).
