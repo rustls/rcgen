@@ -833,7 +833,7 @@ impl KeyPair {
 			writer.next().write_bitvec_bytes(&pk, pk.len() * 8);
 		})
 	}
-	/// Get the public key from this key pair
+	/// Get the public key of this key pair
 	pub fn public_key(&self) -> &[u8] {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
