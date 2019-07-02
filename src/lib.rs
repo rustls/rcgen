@@ -545,7 +545,7 @@ impl Certificate {
 						writer.next().write_sequence(|writer| {
 							let oid = ObjectIdentifier::from_slice(OID_SUBJECT_KEY_IDENTIFIER);
 							writer.next().write_oid(&oid);
-							let digest = digest::digest(&self.params.alg.digest_alg, self.key_pair.public_key().as_ref());
+							let digest = digest::digest(&self.params.alg.digest_alg, self.key_pair.public_key_raw().as_ref());
 							writer.next().write_bytes(&digest.as_ref());
 						});
 						// Write basic_constraints
@@ -829,12 +829,16 @@ impl KeyPair {
 	fn serialize_public_key_der(&self, writer :DERWriter) {
 		writer.write_sequence(|writer| {
 			self.alg.write_oids_sign_alg(writer.next());
-			let pk = self.public_key();
+			let pk = self.public_key_raw();
 			writer.next().write_bitvec_bytes(&pk, pk.len() * 8);
 		})
 	}
-	/// Get the public key of this key pair
-	pub fn public_key(&self) -> &[u8] {
+	/// Get the raw public key of this key pair
+	///
+	/// The key is in raw format, as how `ring::signature::KeyPair::public_key`
+	/// would output, and how `ring::signature::verify`
+	/// would accept.
+	pub fn public_key_raw(&self) -> &[u8] {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
 			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
