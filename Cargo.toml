@@ -18,8 +18,7 @@ path = "src/main.rs"
 
 [dependencies]
 yasna = { version = "0.3.1", features = ["chrono"] }
-ring = "0.14"
-untrusted = "0.6"
+ring = "0.15"
 pem = { version = "0.6", optional = true }
 chrono = "0.4.6"
 x509-parser = { version = "0.4.2", optional = true }
@@ -32,4 +31,5 @@ features = ["x509-parser"]
 
 [dev-dependencies]
 openssl = "0.10"
-webpki = "0.19"
+untrusted = "0.7.0-alpha1"
+webpki = "0.20"

@@ -20,23 +20,22 @@ mod util;
 
 fn sign_msg_ecdsa(cert :&Certificate, msg :&[u8], alg :&'static EcdsaSigningAlgorithm) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
-	let key_pair = EcdsaKeyPair::from_pkcs8(&alg, Input::from(&pk_der)).unwrap();
+	let key_pair = EcdsaKeyPair::from_pkcs8(&alg, &pk_der).unwrap();
 	let system_random = SystemRandom::new();
-	let msg_input = Input::from(&msg);
-	let signature = key_pair.sign(&system_random, msg_input).unwrap();
+	let signature = key_pair.sign(&system_random, &msg).unwrap();
 	signature.as_ref().to_vec()
 }
 
 fn sign_msg_ed25519(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
-	let key_pair = Ed25519KeyPair::from_pkcs8_maybe_unchecked(Input::from(&pk_der)).unwrap();
+	let key_pair = Ed25519KeyPair::from_pkcs8_maybe_unchecked(&pk_der).unwrap();
 	let signature = key_pair.sign(&msg);
 	signature.as_ref().to_vec()
 }
 
 fn sign_msg_rsa(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
-	let key_pair = RsaKeyPair::from_pkcs8(Input::from(&pk_der)).unwrap();
+	let key_pair = RsaKeyPair::from_pkcs8(&pk_der).unwrap();
 	let system_random = SystemRandom::new();
 	let mut signature = vec![0; key_pair.public_modulus_len()];
 	key_pair.sign(&RSA_PKCS1_SHA256, &system_random, &msg,
