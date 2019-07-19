@@ -1,11 +1,9 @@
 extern crate webpki;
-extern crate untrusted;
 extern crate rcgen;
 extern crate ring;
 extern crate pem;
 
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
-use untrusted::Input;
 use webpki::{EndEntityCert, TLSServerTrustAnchors};
 use webpki::trust_anchor_util::cert_der_as_trust_anchor;
 use webpki::SignatureAlgorithm;
@@ -46,10 +44,10 @@ fn sign_msg_rsa(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 fn check_cert<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, alg :&SignatureAlgorithm,
 		sign_fn :impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>) {
 	println!("{}", cert.serialize_pem().unwrap());
-	let trust_anchor = cert_der_as_trust_anchor(Input::from(&cert_der)).unwrap();
+	let trust_anchor = cert_der_as_trust_anchor(&cert_der).unwrap();
 	let trust_anchor_list = &[trust_anchor];
 	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
-	let end_entity_cert = EndEntityCert::from(Input::from(&cert_der)).unwrap();
+	let end_entity_cert = EndEntityCert::from(&cert_der).unwrap();
 
 	// Set time to Jan 10, 2004
 	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
@@ -73,8 +71,8 @@ fn check_cert<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, alg :&SignatureAlg
 	let signature = sign_fn(&cert, msg);
 	end_entity_cert.verify_signature(
 		&alg,
-		Input::from(msg),
-		Input::from(&signature),
+		msg,
+		&signature,
 	).expect("signature is valid");
 }
 
@@ -190,7 +188,7 @@ fn test_webpki_separate_ca() {
 	let ca_cert = Certificate::from_params(params).unwrap();
 
 	let ca_der = ca_cert.serialize_der().unwrap();
-	let trust_anchor_list = &[cert_der_as_trust_anchor(Input::from(&ca_der)).unwrap()];
+	let trust_anchor_list = &[cert_der_as_trust_anchor(&ca_der).unwrap()];
 	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
 
 	let mut params = CertificateParams::new(vec!["crabs.dev".to_string()]);
@@ -198,7 +196,7 @@ fn test_webpki_separate_ca() {
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap()
 		.serialize_der_with_signer(&ca_cert).unwrap();
-	let end_entity_cert = EndEntityCert::from(Input::from(&cert)).unwrap();
+	let end_entity_cert = EndEntityCert::from(&cert).unwrap();
 
 	// Set time to Jan 10, 2004
 	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
@@ -206,7 +204,7 @@ fn test_webpki_separate_ca() {
 	end_entity_cert.verify_is_valid_tls_server_cert(
 		&[&webpki::ECDSA_P256_SHA256],
 		&trust_anchors,
-		&[Input::from(&ca_der)],
+		&[&ca_der],
 		time,
 	).expect("valid TLS server cert");
 }
