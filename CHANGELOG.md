@@ -1,5 +1,11 @@
 # Changes
 
+## Release 0.5.0 - July 19, 2019
+
+- Update to ring 0.16 and webpki 0.21
+- Update to x509-parser 0.5
+- Expose an API to get the raw public key of a key pair
+
 ## Release 0.4.1 - June 28, 2019
 
 - Allow inspection of `DistinguishedName` via iterators and get functions
