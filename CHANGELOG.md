@@ -1,5 +1,9 @@
 # Changes
 
+## Release 0.5.1 - August 19, 2019
+
+- Update to x509-parser 0.6
+
 ## Release 0.5.0 - July 19, 2019
 
 - Update to ring 0.16 and webpki 0.21
