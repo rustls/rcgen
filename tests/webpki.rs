@@ -224,7 +224,7 @@ fn test_webpki_imported_ca() {
 		.unwrap();
 	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();
 
-	let trust_anchor_list = &[cert_der_as_trust_anchor(Input::from(&ca_cert_der)).unwrap()];
+	let trust_anchor_list = &[cert_der_as_trust_anchor(&ca_cert_der).unwrap()];
 	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
 
 	let mut params = CertificateParams::new(vec!["crabs.dev".to_string()]);
@@ -233,7 +233,7 @@ fn test_webpki_imported_ca() {
 	let cert = Certificate::from_params(params).unwrap()
 		.serialize_der_with_signer(&imported_ca_cert)
 		.unwrap();
-	let end_entity_cert = EndEntityCert::from(Input::from(&cert)).unwrap();
+	let end_entity_cert = EndEntityCert::from(&cert).unwrap();
 
 	// Set time to Jan 10, 2004
 	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
@@ -241,7 +241,7 @@ fn test_webpki_imported_ca() {
 	end_entity_cert.verify_is_valid_tls_server_cert(
 		&[&webpki::ECDSA_P256_SHA256],
 		&trust_anchors,
-		&[Input::from(&ca_cert_der)],
+		&[&ca_cert_der],
 		time,
 	).expect("valid TLS server cert");
 }
