@@ -444,6 +444,25 @@ impl Certificate {
 			}
 		});
 	}
+	fn write_subject_alt_names(&self, writer :DERWriter) {
+		writer.write_sequence(|writer| {
+			let oid = ObjectIdentifier::from_slice(OID_SUBJECT_ALT_NAME);
+			writer.next().write_oid(&oid);
+			let bytes = yasna::construct_der(|writer| {
+				writer.write_sequence(|writer| {
+					for san in self.params.subject_alt_names.iter() {
+						// All subject alt names are dNSName.
+						const TAG_DNS_NAME :u64 = 2;
+						writer.next().write_tagged_implicit(Tag::context(TAG_DNS_NAME), |writer| {
+							writer.write_utf8_string(san);
+						});
+					}
+				});
+			});
+			writer.next().write_bytes(&bytes);
+		});
+
+	}
     fn write_request(&self, writer :DERWriter) {
 		writer.write_sequence(|writer| {
 			// Write version
@@ -469,22 +488,7 @@ impl Certificate {
 					writer.next().write_set(|writer| {
 						writer.next().write_sequence(|writer| {
 							// Write subject_alt_names
-							writer.next().write_sequence(|writer| {
-								let oid = ObjectIdentifier::from_slice(OID_SUBJECT_ALT_NAME);
-								writer.next().write_oid(&oid);
-								let bytes = yasna::construct_der(|writer| {
-									writer.write_sequence(|writer| {
-										for san in self.params.subject_alt_names.iter() {
-											// All subject alt names are dNSName.
-											const TAG_DNS_NAME :u64 = 2;
-											writer.next().write_tagged_implicit(Tag::context(TAG_DNS_NAME), |writer| {
-												writer.write_utf8_string(san);
-											});
-										}
-									});
-								});
-								writer.next().write_bytes(&bytes);
-							});
+							self.write_subject_alt_names(writer.next());
 						});
 					});
 				});
@@ -522,22 +526,7 @@ impl Certificate {
 			writer.next().write_tagged(Tag::context(3), |writer| {
 				writer.write_sequence(|writer| {
 					// Write subject_alt_names
-					writer.next().write_sequence(|writer| {
-						let oid = ObjectIdentifier::from_slice(OID_SUBJECT_ALT_NAME);
-						writer.next().write_oid(&oid);
-						let bytes = yasna::construct_der(|writer| {
-							writer.write_sequence(|writer|{
-								for san in self.params.subject_alt_names.iter() {
-									// All subject alt names are dNSName.
-									const TAG_DNS_NAME :u64 = 2;
-									writer.next().write_tagged_implicit(Tag::context(TAG_DNS_NAME), |writer| {
-										writer.write_utf8_string(san);
-									});
-								}
-							});
-						});
-						writer.next().write_bytes(&bytes);
-					});
+					self.write_subject_alt_names(writer.next());
 					if let IsCa::Ca(ref constraint) = self.params.is_ca {
 						// Write subject_key_identifier
 						writer.next().write_sequence(|writer| {
