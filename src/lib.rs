@@ -131,7 +131,7 @@ const OID_PE_ACME :&[u64] = &[1, 3, 6, 1, 5, 5, 7, 1, 31];
 /// The type of subject alt name
 pub enum SanType {
 	DnsName(String),
-	IpAddress(Vec<u8>),
+	IpAddress(CidrSubnet),
 	#[doc(hidden)]
 	_Nonexhaustive,
 }
@@ -148,6 +148,33 @@ impl SanType {
 			SanType::IpAddress(_addr) => TAG_IP_ADDRESS,
 			SanType::_Nonexhaustive => unimplemented!(),
 		}
+	}
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[allow(missing_docs)]
+/// CIDR subnet, as per [RFC 4632](https://tools.ietf.org/html/rfc4632)
+///
+/// The first field in the enum is the address, the second is the mask
+pub enum CidrSubnet {
+	V4([u8; 4], [u8; 4]),
+	V6([u8; 16], [u8; 16]),
+}
+
+impl CidrSubnet {
+	fn to_bytes(&self) -> Vec<u8> {
+		let mut res = Vec::new();
+		match self {
+			CidrSubnet::V4(addr, mask) => {
+				res.extend_from_slice(addr);
+				res.extend_from_slice(mask);
+			},
+			CidrSubnet::V6(addr, mask) => {
+				res.extend_from_slice(addr);
+				res.extend_from_slice(mask);
+			},
+		}
+		res
 	}
 }
 
@@ -484,7 +511,7 @@ impl Certificate {
 						writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
 							match san {
 								SanType::DnsName(name) => writer.write_utf8_string(name),
-								SanType::IpAddress(addr) => writer.write_bytes(addr),
+								SanType::IpAddress(subnet) => writer.write_bytes(&subnet.to_bytes()),
 								SanType::_Nonexhaustive => unimplemented!(),
 							}
 						});
