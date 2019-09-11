@@ -131,6 +131,7 @@ const OID_PE_ACME :&[u64] = &[1, 3, 6, 1, 5, 5, 7, 1, 31];
 /// The type of subject alt name
 pub enum SanType {
 	DnsName(String),
+	IpAddress(Vec<u8>),
 	#[doc(hidden)]
 	_Nonexhaustive,
 }
@@ -140,9 +141,11 @@ impl SanType {
 		// Defined in the GeneralName list in
 		// https://tools.ietf.org/html/rfc5280#page-38
 		const TAG_DNS_NAME :u64 = 2;
+		const TAG_IP_ADDRESS :u64 = 7;
 
 		match self {
 			SanType::DnsName(_name) => TAG_DNS_NAME,
+			SanType::IpAddress(_addr) => TAG_IP_ADDRESS,
 			SanType::_Nonexhaustive => unimplemented!(),
 		}
 	}
@@ -481,6 +484,7 @@ impl Certificate {
 						writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
 							match san {
 								SanType::DnsName(name) => writer.write_utf8_string(name),
+								SanType::IpAddress(addr) => writer.write_bytes(addr),
 								SanType::_Nonexhaustive => unimplemented!(),
 							}
 						});
