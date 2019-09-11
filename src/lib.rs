@@ -128,6 +128,28 @@ const OID_PE_ACME :&[u64] = &[1, 3, 6, 1, 5, 5, 7, 1, 31];
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[allow(missing_docs)]
+/// The type of subject alt name
+pub enum SanType {
+	DnsName(String),
+	#[doc(hidden)]
+	_Nonexhaustive,
+}
+
+impl SanType {
+	fn tag(&self) -> u64 {
+		// Defined in the GeneralName list in
+		// https://tools.ietf.org/html/rfc5280#page-38
+		const TAG_DNS_NAME :u64 = 2;
+
+		match self {
+			SanType::DnsName(_name) => TAG_DNS_NAME,
+			SanType::_Nonexhaustive => unimplemented!(),
+		}
+	}
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[allow(missing_docs)]
 /// The attribute type of a distinguished name entry
 pub enum DnType {
 	CountryName,
@@ -233,7 +255,7 @@ pub struct CertificateParams {
 	pub not_before :DateTime<Utc>,
 	pub not_after :DateTime<Utc>,
 	pub serial_number :Option<u64>,
-	pub subject_alt_names :Vec<String>,
+	pub subject_alt_names :Vec<SanType>,
 	pub distinguished_name :DistinguishedName,
 	pub is_ca :IsCa,
 	pub custom_extensions :Vec<CustomExtension>,
@@ -342,8 +364,12 @@ pub enum BasicConstraints {
 impl CertificateParams {
 	/// Generate certificate parameters with reasonable defaults
 	pub fn new(subject_alt_names :impl Into<Vec<String>>) -> Self {
+		let subject_alt_names = subject_alt_names.into()
+			.into_iter()
+			.map(|s| SanType::DnsName(s))
+			.collect::<Vec<_>>();
 		CertificateParams {
-			subject_alt_names : subject_alt_names.into(),
+			subject_alt_names,
 			.. Default::default()
 		}
 	}
@@ -452,9 +478,11 @@ impl Certificate {
 				writer.write_sequence(|writer| {
 					for san in self.params.subject_alt_names.iter() {
 						// All subject alt names are dNSName.
-						const TAG_DNS_NAME :u64 = 2;
-						writer.next().write_tagged_implicit(Tag::context(TAG_DNS_NAME), |writer| {
-							writer.write_utf8_string(san);
+						writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
+							match san {
+								SanType::DnsName(name) => writer.write_utf8_string(name),
+								SanType::_Nonexhaustive => unimplemented!(),
+							}
 						});
 					}
 				});

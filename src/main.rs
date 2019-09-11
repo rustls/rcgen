@@ -1,18 +1,19 @@
 extern crate rcgen;
 
 use rcgen::{Certificate, CertificateParams,
-	DistinguishedName, DnType,
+	DistinguishedName, DnType, SanType,
 	date_time_ymd};
 use std::fs;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	let mut params :CertificateParams =  Default::default();
+	let mut params :CertificateParams = Default::default();
 	params.not_before = date_time_ymd(1975, 01, 01);
 	params.not_after = date_time_ymd(4096, 01, 01);
 	params.distinguished_name = DistinguishedName::new();
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Master Cert");
-	params.subject_alt_names = vec!["crabs.crabs".to_string(), "localhost".to_string()];
+	params.subject_alt_names = vec![SanType::DnsName("crabs.crabs".to_string()),
+		SanType::DnsName("localhost".to_string())];
 
 	let cert = Certificate::from_params(params)?;
 	println!("{}", cert.serialize_pem().unwrap());
