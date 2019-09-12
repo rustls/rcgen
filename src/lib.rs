@@ -487,7 +487,7 @@ pub struct CustomExtension {
 
 impl CustomExtension {
 	/// Creates a new acmeIdentifier extension for ACME TLS-ALPN-01
-	/// as specified in [draft-ietf-acme-tls-alpn-05](https://tools.ietf.org/html/draft-ietf-acme-tls-alpn-05#section-3)
+	/// as specified in [draft-ietf-acme-tls-alpn-06](https://tools.ietf.org/html/draft-ietf-acme-tls-alpn-06#section-3)
 	///
 	/// Panics if the passed `sha_digest` parameter doesn't hold 32 bytes (256 bits).
 	pub fn new_acme_identifier(sha_digest :&[u8]) -> Self {
