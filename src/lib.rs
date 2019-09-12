@@ -124,6 +124,10 @@ const OID_BASIC_CONSTRAINTS :&[u64] = &[2, 5, 29, 19];
 // https://tools.ietf.org/html/rfc5280#section-4.2.1.2
 const OID_SUBJECT_KEY_IDENTIFIER :&[u64] = &[2, 5, 29, 14];
 
+// id-ce-extKeyUsage in
+// https://tools.ietf.org/html/rfc5280#section-4.2.1.12
+const OID_EXT_KEY_USAGE :&[u64] = &[2, 5, 29, 37];
+
 // id-pe-acmeIdentifier in
 // https://www.iana.org/assignments/smi-numbers/smi-numbers.xhtml#smi-numbers-1.3.6.1.5.5.7.1
 const OID_PE_ACME :&[u64] = &[1, 3, 6, 1, 5, 5, 7, 1, 31];
@@ -360,6 +364,7 @@ pub struct CertificateParams {
 	pub subject_alt_names :Vec<SanType>,
 	pub distinguished_name :DistinguishedName,
 	pub is_ca :IsCa,
+	pub extended_key_usages :Vec<ExtendedKeyUsagePurpose>,
 	pub custom_extensions :Vec<CustomExtension>,
 	/// The certificate's key pair, a new random key pair will be generated if this is `None`
 	pub key_pair :Option<KeyPair>,
@@ -382,6 +387,7 @@ impl Default for CertificateParams {
 			subject_alt_names : Vec::new(),
 			distinguished_name,
 			is_ca : IsCa::SelfSignedOnly,
+			extended_key_usages : Vec::new(),
 			custom_extensions : Vec::new(),
 			key_pair : None,
 			_hidden :(),
@@ -473,6 +479,43 @@ impl CertificateParams {
 		CertificateParams {
 			subject_alt_names,
 			.. Default::default()
+		}
+	}
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[allow(missing_docs)]
+/// One of the purposes contained in the [extended key usage extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.12)
+pub enum ExtendedKeyUsagePurpose {
+	/// anyExtendedKeyUsage
+	Any,
+	/// id-kp-serverAuth
+	ServerAuth,
+	/// id-kp-clientAuth
+	ClientAuth,
+	/// id-kp-codeSigning
+	CodeSigning,
+	/// id-kp-emailProtection
+	EmailProtection,
+	/// id-kp-timeStamping
+	TimeStamping,
+	/// id-kp-OCSPSigning
+	OcspSigning,
+}
+
+impl ExtendedKeyUsagePurpose {
+	fn oid(&self) -> &'static [u64] {
+		use ExtendedKeyUsagePurpose::*;
+		match self {
+			// anyExtendedKeyUsage
+			Any => &[2, 5, 29, 37],
+			// id-kp-*
+			ServerAuth => &[1, 3, 6, 1, 5, 5, 7, 3, 1],
+			ClientAuth => &[1, 3, 6, 1, 5, 5, 7, 3, 2],
+			CodeSigning => &[1, 3, 6, 1, 5, 5, 7, 3, 3],
+			EmailProtection => &[1, 3, 6, 1, 5, 5, 7, 3, 4],
+			TimeStamping => &[1, 3, 6, 1, 5, 5, 7, 3, 8],
+			OcspSigning => &[1, 3, 6, 1, 5, 5, 7, 3, 9],
 		}
 	}
 }
@@ -658,6 +701,22 @@ impl Certificate {
 				writer.write_sequence(|writer| {
 					// Write subject_alt_names
 					self.write_subject_alt_names(writer.next());
+					// Write extended key usage
+					if !self.params.extended_key_usages.is_empty() {
+						writer.next().write_sequence(|writer| {
+							let oid = ObjectIdentifier::from_slice(OID_EXT_KEY_USAGE);
+							writer.next().write_oid(&oid);
+							let bytes = yasna::construct_der(|writer| {
+								writer.write_sequence(|writer| {
+									for usage in self.params.extended_key_usages.iter() {
+										let oid = ObjectIdentifier::from_slice(usage.oid());
+										writer.next().write_oid(&oid);
+									}
+								});
+							});
+							writer.next().write_bytes(&bytes);
+						});
+					}
 					if let IsCa::Ca(ref constraint) = self.params.is_ca {
 						// Write subject_key_identifier
 						writer.next().write_sequence(|writer| {
