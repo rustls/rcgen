@@ -305,7 +305,7 @@ dependencies = [
 
 [[package]]
 name = "rcgen"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "openssl 0.10.24 (registry+https://github.com/rust-lang/crates.io-index)",
