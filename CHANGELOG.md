@@ -1,5 +1,10 @@
 # Changes
 
+## Release 0.6.0 - September 12, 2019
+
+- Support for email and cidr subnet (ip address) subject alternative names
+- Support for the extended key usage extension
+
 ## Release 0.5.1 - August 19, 2019
 
 - Update to x509-parser 0.6
