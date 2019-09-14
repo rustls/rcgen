@@ -1,5 +1,10 @@
 # Changes
 
+## Release 0.7.0 - September 14, 2019
+
+- Bugfix release for ip address subject alternative names.
+  Turns out they aren't CIDR subnets after all :)
+
 ## Release 0.6.0 - September 12, 2019
 
 - Support for email and cidr subnet (ip address) subject alternative names
