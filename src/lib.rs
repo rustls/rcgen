@@ -54,7 +54,6 @@ use std::fmt;
 use std::convert::TryFrom;
 use std::error::Error;
 use std::net::IpAddr;
-use std::str::FromStr;
 
 /// A self signed certificate together with signing keys
 pub struct Certificate {
@@ -139,7 +138,7 @@ pub enum SanType {
 	/// Also known as E-Mail address
 	Rfc822Name(String),
 	DnsName(String),
-	IpAddress(CidrSubnet),
+	IpAddress(IpAddr),
 	#[doc(hidden)]
 	_Nonexhaustive,
 }
@@ -158,99 +157,6 @@ impl SanType {
 			SanType::IpAddress(_addr) => TAG_IP_ADDRESS,
 			SanType::_Nonexhaustive => unimplemented!(),
 		}
-	}
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-#[allow(missing_docs)]
-/// CIDR subnet, as per [RFC 4632](https://tools.ietf.org/html/rfc4632)
-///
-/// You might know CIDR subnets better by their textual representation
-/// where they consist of an ip address followed by a slash and a prefix
-/// number, for example `192.168.99.0/24`.
-///
-/// The first field in the enum is the address, the second is the mask.
-/// Both are specified in network byte order.
-pub enum CidrSubnet {
-	V4([u8; 4], [u8; 4]),
-	V6([u8; 16], [u8; 16]),
-}
-
-macro_rules! mask {
-	($t:ty, $d:expr) => {{
-		let v = <$t>::max_value();
-		let v = v.checked_shr($d as u32).unwrap_or(0);
-		(!v).to_be_bytes()
-	}};
-}
-
-impl CidrSubnet {
-	/// Obtains the CidrSubnet from the well-known
-	/// addr/prefix notation.
-	/// ```
-	/// # use std::str::FromStr;
-	/// # use rcgen::CidrSubnet;
-	/// // The "192.0.2.0/24" example from
-	/// // https://tools.ietf.org/html/rfc5280#page-42
-	/// let subnet = CidrSubnet::from_str("192.0.2.0/24").unwrap();
-	/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
-	/// ```
-	pub fn from_str(s :&str) -> Result<Self, ()> {
-		let mut iter = s.split("/");
-		if let (Some(addr_s), Some(prefix_s)) = (iter.next(), iter.next()) {
-			let addr = IpAddr::from_str(addr_s).map_err(|_| ())?;
-			let prefix = u8::from_str(prefix_s).map_err(|_| ())?;
-			Ok(Self::from_addr_prefix(addr, prefix))
-		} else {
-			Err(())
-		}
-	}
-	/// Obtains the CidrSubnet from an ip address
-	/// as well as the specified prefix number.
-	///
-	/// ```
-	/// # use std::net::IpAddr;
-	/// # use std::str::FromStr;
-	/// # use rcgen::CidrSubnet;
-	/// // The "192.0.2.0/24" example from
-	/// // https://tools.ietf.org/html/rfc5280#page-42
-	/// let addr = IpAddr::from_str("192.0.2.0").unwrap();
-	/// let subnet = CidrSubnet::from_addr_prefix(addr, 24);
-	/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
-	/// ```
-	pub fn from_addr_prefix(addr :IpAddr, prefix :u8) -> Self {
-		match addr {
-			IpAddr::V4(addr) => {
-				Self::from_v4_prefix(addr.octets(), prefix)
-			},
-			IpAddr::V6(addr) => {
-				Self::from_v6_prefix(addr.octets(), prefix)
-			},
-		}
-	}
-	/// Obtains the CidrSubnet from an IPv4 address in network byte order
-	/// as well as the specified prefix.
-	pub fn from_v4_prefix(addr :[u8; 4], prefix :u8) -> Self {
-		CidrSubnet::V4(addr, mask!(u32, prefix))
-	}
-	/// Obtains the CidrSubnet from an IPv6 address in network byte order
-	/// as well as the specified prefix.
-	pub fn from_v6_prefix(addr :[u8; 16], prefix :u8) -> Self {
-		CidrSubnet::V6(addr, mask!(u128, prefix))
-	}
-	fn to_bytes(&self) -> Vec<u8> {
-		let mut res = Vec::new();
-		match self {
-			CidrSubnet::V4(addr, mask) => {
-				res.extend_from_slice(addr);
-				res.extend_from_slice(mask);
-			},
-			CidrSubnet::V6(addr, mask) => {
-				res.extend_from_slice(addr);
-				res.extend_from_slice(mask);
-			},
-		}
-		res
 	}
 }
 
@@ -626,7 +532,8 @@ impl Certificate {
 							match san {
 								SanType::Rfc822Name(name) |
 								SanType::DnsName(name) => writer.write_utf8_string(name),
-								SanType::IpAddress(subnet) => writer.write_bytes(&subnet.to_bytes()),
+								SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
+								SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
 								SanType::_Nonexhaustive => unimplemented!(),
 							}
 						});
