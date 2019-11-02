@@ -19,7 +19,7 @@ path = "src/main.rs"
 [dependencies]
 yasna = { version = "0.3.1", features = ["chrono"] }
 ring = "0.16"
-pem = { version = "0.6", optional = true }
+pem = { version = "0.7", optional = true }
 chrono = "0.4.6"
 x509-parser = { version = "0.6", optional = true }
 
