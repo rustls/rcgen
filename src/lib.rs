@@ -262,6 +262,7 @@ impl <'a> Iterator for DistinguishedNameIterator<'a> {
 
 /// Parameters used for certificate generation
 #[allow(missing_docs)]
+#[non_exhaustive]
 pub struct CertificateParams {
 	pub alg :&'static SignatureAlgorithm,
 	pub not_before :DateTime<Utc>,
@@ -274,8 +275,6 @@ pub struct CertificateParams {
 	pub custom_extensions :Vec<CustomExtension>,
 	/// The certificate's key pair, a new random key pair will be generated if this is `None`
 	pub key_pair :Option<KeyPair>,
-	// To make the struct non-exhaustive
-	_hidden :(),
 }
 
 impl Default for CertificateParams {
@@ -296,7 +295,6 @@ impl Default for CertificateParams {
 			extended_key_usages : Vec::new(),
 			custom_extensions : Vec::new(),
 			key_pair : None,
-			_hidden :(),
 		}
 	}
 }
