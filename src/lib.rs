@@ -481,8 +481,8 @@ fn dt_to_generalized(dt :&DateTime<Utc>) -> Result<GeneralizedTime, RcgenError> 
 	// This is needed because the GeneralizedTime serializer would otherwise
 	// output fractional values which RFC 5820 explicitly forbode [1].
 	// [1]: https://tools.ietf.org/html/rfc5280#section-4.1.2.5.2
-	let nanos = if date_time.nanosecond() >= 1_000_000 {
-		1_000_000
+	let nanos = if date_time.nanosecond() >= 1_000_000_000 {
+		1_000_000_000
 	} else {
 		0
 	};
