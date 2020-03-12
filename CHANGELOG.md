@@ -1,5 +1,11 @@
 # Changes
 
+## Release 0.8.0 - March 12, 2020
+
+- Update to pem 0.7
+- Correct number of nanoseconds per second. Contributed by [@samlich](https://github.com/samlich).
+- Adoption of the `non_exhaustive` feature in the API
+
 ## Release 0.7.0 - September 14, 2019
 
 - Bugfix release for ip address subject alternative names.
@@ -24,7 +30,7 @@
 
 - Allow inspection of `DistinguishedName` via iterators and get functions
 - Fix a bug in `is_compatible` not saying false. Contributed by [@fzgregor](https://github.com/fzgregor).
-- Extend the public interface of `KeyPair. Contributed by [@fzgregor](https://github.com/fzgregor).
+- Extend the public interface of `KeyPair`. Contributed by [@fzgregor](https://github.com/fzgregor).
 
 ## Release 0.4.0 - June 18, 2019
 
