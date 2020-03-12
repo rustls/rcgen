@@ -133,14 +133,13 @@ const OID_PE_ACME :&[u64] = &[1, 3, 6, 1, 5, 5, 7, 1, 31];
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[allow(missing_docs)]
+#[non_exhaustive]
 /// The type of subject alt name
 pub enum SanType {
 	/// Also known as E-Mail address
 	Rfc822Name(String),
 	DnsName(String),
 	IpAddress(IpAddr),
-	#[doc(hidden)]
-	_Nonexhaustive,
 }
 
 impl SanType {
@@ -155,21 +154,19 @@ impl SanType {
 			SanType::Rfc822Name(_name) => TAG_RFC822_NAME,
 			SanType::DnsName(_name) => TAG_DNS_NAME,
 			SanType::IpAddress(_addr) => TAG_IP_ADDRESS,
-			SanType::_Nonexhaustive => unimplemented!(),
 		}
 	}
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[allow(missing_docs)]
+#[non_exhaustive]
 /// The attribute type of a distinguished name entry
 pub enum DnType {
 	CountryName,
 	OrganizationName,
 	CommonName,
 	CustomDnType(Vec<u64>),
-	#[doc(hidden)]
-	_Nonexhaustive,
 }
 
 impl DnType {
@@ -179,7 +176,6 @@ impl DnType {
 			DnType::OrganizationName => OID_ORG_NAME,
 			DnType::CommonName => OID_COMMON_NAME,
 			DnType::CustomDnType(ref oid) => oid.as_slice(),
-			DnType::_Nonexhaustive => unimplemented!(),
 		};
 		ObjectIdentifier::from_slice(sl)
 	}
@@ -532,7 +528,6 @@ impl Certificate {
 								SanType::DnsName(name) => writer.write_utf8_string(name),
 								SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
 								SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
-								SanType::_Nonexhaustive => unimplemented!(),
 							}
 						});
 					}
@@ -787,6 +782,7 @@ impl KeyPair {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+#[non_exhaustive]
 /// The error type of the rcgen crate
 pub enum RcgenError {
 	/// The given certificate couldn't be parsed
@@ -808,8 +804,6 @@ pub enum RcgenError {
 	#[cfg(feature = "pem")]
 	/// Error from the pem crate
 	PemError(pem::PemError),
-	#[doc(hidden)]
-	_Nonexhaustive,
 }
 
 impl fmt::Display for RcgenError {
@@ -828,7 +822,6 @@ impl fmt::Display for RcgenError {
 			Time => write!(f, "Time error")?,
 			#[cfg(feature = "pem")]
 			PemError(e) => write!(f, "PEM error: {}", e)?,
-			_Nonexhaustive => panic!("Nonexhaustive error variant ought not be constructed"),
 		};
 		Ok(())
 	}
