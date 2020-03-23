@@ -555,18 +555,20 @@ impl Certificate {
 			// Write subjectPublicKeyInfo
 			self.key_pair.serialize_public_key_der(writer.next());
 			// Write extensions
-			writer.next().write_tagged(Tag::context(0), |writer| {
-				writer.write_sequence(|writer| {
-					let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
-					writer.next().write_oid(&oid);
-					writer.next().write_set(|writer| {
-						writer.next().write_sequence(|writer| {
-							// Write subject_alt_names
-							self.write_subject_alt_names(writer.next());
+			if !self.params.subject_alt_names.is_empty() {
+				writer.next().write_tagged(Tag::context(0), |writer| {
+					writer.write_sequence(|writer| {
+						let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
+						writer.next().write_oid(&oid);
+						writer.next().write_set(|writer| {
+							writer.next().write_sequence(|writer| {
+								// Write subject_alt_names
+								self.write_subject_alt_names(writer.next());
+							});
 						});
 					});
 				});
-			});
+			}
 		});
 	}
 	fn write_cert(&self, writer :DERWriter, ca :&Certificate) -> Result<(), RcgenError> {
@@ -597,65 +599,73 @@ impl Certificate {
 			// Write subjectPublicKeyInfo
 			self.key_pair.serialize_public_key_der(writer.next());
 			// write extensions
-			writer.next().write_tagged(Tag::context(3), |writer| {
-				writer.write_sequence(|writer| {
-					// Write subject_alt_names
-					self.write_subject_alt_names(writer.next());
-					// Write extended key usage
-					if !self.params.extended_key_usages.is_empty() {
-						writer.next().write_sequence(|writer| {
-							let oid = ObjectIdentifier::from_slice(OID_EXT_KEY_USAGE);
-							writer.next().write_oid(&oid);
-							let bytes = yasna::construct_der(|writer| {
-								writer.write_sequence(|writer| {
-									for usage in self.params.extended_key_usages.iter() {
-										let oid = ObjectIdentifier::from_slice(usage.oid());
-										writer.next().write_oid(&oid);
-									}
+			let should_write_exts = !self.params.subject_alt_names.is_empty() ||
+				!self.params.extended_key_usages.is_empty() ||
+				matches!(self.params.is_ca, IsCa::Ca(_)) ||
+				self.params.custom_extensions.is_empty();
+			if should_write_exts {
+				writer.next().write_tagged(Tag::context(3), |writer| {
+					writer.write_sequence(|writer| {
+						// Write subject_alt_names
+						if !self.params.subject_alt_names.is_empty() {
+							self.write_subject_alt_names(writer.next());
+						}
+						// Write extended key usage
+						if !self.params.extended_key_usages.is_empty() {
+							writer.next().write_sequence(|writer| {
+								let oid = ObjectIdentifier::from_slice(OID_EXT_KEY_USAGE);
+								writer.next().write_oid(&oid);
+								let bytes = yasna::construct_der(|writer| {
+									writer.write_sequence(|writer| {
+										for usage in self.params.extended_key_usages.iter() {
+											let oid = ObjectIdentifier::from_slice(usage.oid());
+											writer.next().write_oid(&oid);
+										}
+									});
 								});
+								writer.next().write_bytes(&bytes);
 							});
-							writer.next().write_bytes(&bytes);
-						});
-					}
-					if let IsCa::Ca(ref constraint) = self.params.is_ca {
-						// Write subject_key_identifier
-						writer.next().write_sequence(|writer| {
-							let oid = ObjectIdentifier::from_slice(OID_SUBJECT_KEY_IDENTIFIER);
-							writer.next().write_oid(&oid);
-							let digest = digest::digest(&self.params.alg.digest_alg, self.key_pair.public_key_raw().as_ref());
-							writer.next().write_bytes(&digest.as_ref());
-						});
-						// Write basic_constraints
-						writer.next().write_sequence(|writer| {
-							let oid = ObjectIdentifier::from_slice(OID_BASIC_CONSTRAINTS);
-							writer.next().write_oid(&oid);
-							let bytes = yasna::construct_der(|writer| {
-								writer.write_sequence(|writer| {
-									writer.next().write_bool(true); // cA flag
-									if let BasicConstraints::Constrained(path_len_constraint) = constraint {
-										writer.next().write_u8(*path_len_constraint);
-									}
+						}
+						if let IsCa::Ca(ref constraint) = self.params.is_ca {
+							// Write subject_key_identifier
+							writer.next().write_sequence(|writer| {
+								let oid = ObjectIdentifier::from_slice(OID_SUBJECT_KEY_IDENTIFIER);
+								writer.next().write_oid(&oid);
+								let digest = digest::digest(&self.params.alg.digest_alg, self.key_pair.public_key_raw().as_ref());
+								writer.next().write_bytes(&digest.as_ref());
+							});
+							// Write basic_constraints
+							writer.next().write_sequence(|writer| {
+								let oid = ObjectIdentifier::from_slice(OID_BASIC_CONSTRAINTS);
+								writer.next().write_oid(&oid);
+								let bytes = yasna::construct_der(|writer| {
+									writer.write_sequence(|writer| {
+										writer.next().write_bool(true); // cA flag
+										if let BasicConstraints::Constrained(path_len_constraint) = constraint {
+											writer.next().write_u8(*path_len_constraint);
+										}
+									});
 								});
+								writer.next().write_bytes(&bytes);
 							});
-							writer.next().write_bytes(&bytes);
-						});
-					}
-					// Write the custom extensions
-					for ext in &self.params.custom_extensions {
-						writer.next().write_sequence(|writer| {
-							let oid = ObjectIdentifier::from_slice(&ext.oid);
-							writer.next().write_oid(&oid);
-							// If the extension is critical, we should signal this.
-							// It's false by default so we don't need to write anything
-							// if the extension is not critical.
-							if ext.critical {
-								writer.next().write_bool(true);
-							}
-							writer.next().write_bytes(&ext.content);
-						});
-					}
+						}
+						// Write the custom extensions
+						for ext in &self.params.custom_extensions {
+							writer.next().write_sequence(|writer| {
+								let oid = ObjectIdentifier::from_slice(&ext.oid);
+								writer.next().write_oid(&oid);
+								// If the extension is critical, we should signal this.
+								// It's false by default so we don't need to write anything
+								// if the extension is not critical.
+								if ext.critical {
+									writer.next().write_bool(true);
+								}
+								writer.next().write_bytes(&ext.content);
+							});
+						}
+					});
 				});
-			});
+			}
 			Ok(())
 		})
 	}
