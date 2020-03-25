@@ -602,7 +602,7 @@ impl Certificate {
 			let should_write_exts = !self.params.subject_alt_names.is_empty() ||
 				!self.params.extended_key_usages.is_empty() ||
 				matches!(self.params.is_ca, IsCa::Ca(_)) ||
-				self.params.custom_extensions.is_empty();
+				!self.params.custom_extensions.is_empty();
 			if should_write_exts {
 				writer.next().write_tagged(Tag::context(3), |writer| {
 					writer.write_sequence(|writer| {
