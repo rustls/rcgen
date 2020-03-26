@@ -4,6 +4,7 @@
 
 - Fix non-standard-compliant SubjectKeyIdentifier X.509v3 extension format
 - BasicConstraints X.509v3 extension is now marked as critical
+- Always use SHA-256 to calculate subject key identifiers (as per RFC 7093 method 1)
 
 ## Release 0.8.0 - March 12, 2020
 

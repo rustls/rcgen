@@ -620,8 +620,8 @@ impl Certificate {
 						if let IsCa::Ca(ref constraint) = self.params.is_ca {
 							// Write subject_key_identifier
 							Self::write_extension(writer.next(), OID_SUBJECT_KEY_IDENTIFIER, false, |writer| {
-								let digest = digest::digest(&self.params.alg.digest_alg, self.key_pair.public_key_raw().as_ref());
-								writer.write_bytes(&digest.as_ref());
+								let key_identifier = self.get_key_identifier();
+								writer.write_bytes(key_identifier.as_ref());
 							});
 							// Write basic_constraints
 							Self::write_extension(writer.next(), OID_BASIC_CONSTRAINTS, true, |writer| {
@@ -674,6 +674,14 @@ impl Certificate {
 			let bytes = yasna::construct_der(value_serializer);
 			writer.next().write_bytes(&bytes);
 		})
+	}
+	/// Calculates a subject key identifier for the certificate subject's public key.
+	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
+	pub fn get_key_identifier(&self) -> Vec<u8> {
+		// This uses method number 1) from RFC 7093
+		let digest = digest::digest(&digest::SHA256, self.key_pair.public_key_raw().as_ref());
+		let truncated_digest = &digest.as_ref()[0..20];
+		truncated_digest.to_vec()
 	}
 	/// Serializes the certificate to the binary DER format
 	pub fn serialize_der(&self) -> Result<Vec<u8>, RcgenError> {
@@ -1006,7 +1014,6 @@ impl KeyPair {
 pub struct SignatureAlgorithm {
 	oids_sign_alg :&'static [&'static [u64]],
 	sign_alg :SignAlgo,
-	digest_alg :&'static ring::digest::Algorithm,
 	oid_components :&'static [u64],
 	write_null_params :bool,
 }
@@ -1071,7 +1078,6 @@ impl SignatureAlgorithm {
 pub static PKCS_RSA_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	oids_sign_alg :&[&OID_RSA_ENCRYPTION],
 	sign_alg :SignAlgo::Rsa(),
-	digest_alg :&digest::SHA256,
 	// sha256WithRSAEncryption in RFC 4055
 	oid_components : &[1, 2, 840, 113549, 1, 1, 11],
 	write_null_params : true,
@@ -1081,7 +1087,6 @@ pub static PKCS_RSA_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	oids_sign_alg :&[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_256_R1],
 	sign_alg :SignAlgo::EcDsa(&signature::ECDSA_P256_SHA256_ASN1_SIGNING),
-	digest_alg :&digest::SHA256,
 	/// ecdsa-with-SHA256 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 2],
 	write_null_params : false,
@@ -1091,7 +1096,6 @@ pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 pub static PKCS_ECDSA_P384_SHA384 :SignatureAlgorithm = SignatureAlgorithm {
 	oids_sign_alg :&[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_384_R1],
 	sign_alg :SignAlgo::EcDsa(&signature::ECDSA_P384_SHA384_ASN1_SIGNING),
-	digest_alg :&digest::SHA384,
 	/// ecdsa-with-SHA384 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 3],
 	write_null_params : false,
@@ -1104,7 +1108,6 @@ pub static PKCS_ED25519 :SignatureAlgorithm = SignatureAlgorithm {
 	/// id-Ed25519 in RFC 8410
 	oids_sign_alg :&[&[1, 3, 101, 112]],
 	sign_alg :SignAlgo::EdDsa(&signature::ED25519),
-	digest_alg :&digest::SHA512,
 	/// id-Ed25519 in RFC 8410
 	oid_components : &[1, 3, 101, 112],
 	write_null_params : false,
