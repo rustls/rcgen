@@ -624,7 +624,7 @@ impl Certificate {
 								writer.write_bytes(&digest.as_ref());
 							});
 							// Write basic_constraints
-							Self::write_extension(writer.next(), OID_BASIC_CONSTRAINTS, false, |writer| {
+							Self::write_extension(writer.next(), OID_BASIC_CONSTRAINTS, true, |writer| {
 								writer.write_sequence(|writer| {
 									writer.next().write_bool(true); // cA flag
 									if let BasicConstraints::Constrained(path_len_constraint) = constraint {

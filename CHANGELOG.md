@@ -3,6 +3,7 @@
 ## Next Release
 
 - Fix non-standard-compliant SubjectKeyIdentifier X.509v3 extension format
+- BasicConstraints X.509v3 extension is now marked as critical
 
 ## Release 0.8.0 - March 12, 2020
 
