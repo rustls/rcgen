@@ -425,6 +425,8 @@ impl ExtendedKeyUsagePurpose {
 pub struct CustomExtension {
 	oid :Vec<u64>,
 	critical :bool,
+
+	/// The content must be DER-encoded
 	content :Vec<u8>,
 }
 
@@ -516,28 +518,22 @@ impl Certificate {
 		});
 	}
 	fn write_subject_alt_names(&self, writer :DERWriter) {
-		writer.write_sequence(|writer| {
-			let oid = ObjectIdentifier::from_slice(OID_SUBJECT_ALT_NAME);
-			writer.next().write_oid(&oid);
-			let bytes = yasna::construct_der(|writer| {
-				writer.write_sequence(|writer| {
-					for san in self.params.subject_alt_names.iter() {
-						writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
-							match san {
-								SanType::Rfc822Name(name) |
-								SanType::DnsName(name) => writer.write_utf8_string(name),
-								SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
-								SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
-							}
-						});
-					}
-				});
+		Self::write_extension(writer, OID_SUBJECT_ALT_NAME, false, |writer| {
+			writer.write_sequence(|writer| {
+				for san in self.params.subject_alt_names.iter() {
+					writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
+						match san {
+							SanType::Rfc822Name(name) |
+							SanType::DnsName(name) => writer.write_utf8_string(name),
+							SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
+							SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
+						}
+					});
+				}
 			});
-			writer.next().write_bytes(&bytes);
 		});
-
 	}
-    fn write_request(&self, writer :DERWriter) {
+	fn write_request(&self, writer :DERWriter) {
 		writer.write_sequence(|writer| {
 			// Write version
 			writer.next().write_u8(0);
@@ -612,41 +608,29 @@ impl Certificate {
 						}
 						// Write extended key usage
 						if !self.params.extended_key_usages.is_empty() {
-							writer.next().write_sequence(|writer| {
-								let oid = ObjectIdentifier::from_slice(OID_EXT_KEY_USAGE);
-								writer.next().write_oid(&oid);
-								let bytes = yasna::construct_der(|writer| {
-									writer.write_sequence(|writer| {
-										for usage in self.params.extended_key_usages.iter() {
-											let oid = ObjectIdentifier::from_slice(usage.oid());
-											writer.next().write_oid(&oid);
-										}
-									});
+							Self::write_extension(writer.next(), OID_EXT_KEY_USAGE, false, |writer| {
+								writer.write_sequence(|writer| {
+									for usage in self.params.extended_key_usages.iter() {
+										let oid = ObjectIdentifier::from_slice(usage.oid());
+										writer.next().write_oid(&oid);
+									}
 								});
-								writer.next().write_bytes(&bytes);
 							});
 						}
 						if let IsCa::Ca(ref constraint) = self.params.is_ca {
 							// Write subject_key_identifier
-							writer.next().write_sequence(|writer| {
-								let oid = ObjectIdentifier::from_slice(OID_SUBJECT_KEY_IDENTIFIER);
-								writer.next().write_oid(&oid);
+							Self::write_extension(writer.next(), OID_SUBJECT_KEY_IDENTIFIER, false, |writer| {
 								let digest = digest::digest(&self.params.alg.digest_alg, self.key_pair.public_key_raw().as_ref());
-								writer.next().write_bytes(&digest.as_ref());
+								writer.write_bytes(&digest.as_ref());
 							});
 							// Write basic_constraints
-							writer.next().write_sequence(|writer| {
-								let oid = ObjectIdentifier::from_slice(OID_BASIC_CONSTRAINTS);
-								writer.next().write_oid(&oid);
-								let bytes = yasna::construct_der(|writer| {
-									writer.write_sequence(|writer| {
-										writer.next().write_bool(true); // cA flag
-										if let BasicConstraints::Constrained(path_len_constraint) = constraint {
-											writer.next().write_u8(*path_len_constraint);
-										}
-									});
+							Self::write_extension(writer.next(), OID_BASIC_CONSTRAINTS, false, |writer| {
+								writer.write_sequence(|writer| {
+									writer.next().write_bool(true); // cA flag
+									if let BasicConstraints::Constrained(path_len_constraint) = constraint {
+										writer.next().write_u8(*path_len_constraint);
+									}
 								});
-								writer.next().write_bytes(&bytes);
 							});
 						}
 						// Write the custom extensions
@@ -667,6 +651,28 @@ impl Certificate {
 				});
 			}
 			Ok(())
+		})
+	}
+	/// Serializes an X.509v3 extension according to RFC 5280
+	fn write_extension(writer :DERWriter, extension_oid :&[u64], is_critical :bool, value_serializer :impl FnOnce(DERWriter)) {
+		// Extension specification:
+		//    Extension  ::=  SEQUENCE  {
+		//         extnID      OBJECT IDENTIFIER,
+		//         critical    BOOLEAN DEFAULT FALSE,
+		//         extnValue   OCTET STRING
+		//                     -- contains the DER encoding of an ASN.1 value
+		//                     -- corresponding to the extension type identified
+		//                     -- by extnID
+		//         }
+
+		writer.write_sequence(|writer| {
+			let oid = ObjectIdentifier::from_slice(extension_oid);
+			writer.next().write_oid(&oid);
+			if is_critical {
+				writer.next().write_bool(true);
+			}
+			let bytes = yasna::construct_der(value_serializer);
+			writer.next().write_bytes(&bytes);
 		})
 	}
 	/// Serializes the certificate to the binary DER format

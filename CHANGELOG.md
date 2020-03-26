@@ -1,5 +1,9 @@
 # Changes
 
+## Next Release
+
+- Fix non-standard-compliant SubjectKeyIdentifier X.509v3 extension format
+
 ## Release 0.8.0 - March 12, 2020
 
 - Update to pem 0.7
