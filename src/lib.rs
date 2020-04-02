@@ -276,6 +276,7 @@ pub struct CertificateParams {
 	pub key_pair :Option<KeyPair>,
 	/// If `true` (and not self-signed), the 'Authority Key Identifier' extension will be added to the generated cert
 	pub use_authority_key_identifier_extension :bool,
+	pub key_identifier_method :KeyIdMethod,
 }
 
 impl Default for CertificateParams {
@@ -296,7 +297,8 @@ impl Default for CertificateParams {
 			extended_key_usages : Vec::new(),
 			custom_extensions : Vec::new(),
 			key_pair : None,
-			use_authority_key_identifier_extension: false,
+			use_authority_key_identifier_extension : false,
+			key_identifier_method : KeyIdMethod::Sha256,
 		}
 	}
 }
@@ -464,6 +466,21 @@ impl CustomExtension {
 	pub fn set_criticality(&mut self, criticality :bool) {
 		self.critical = criticality;
 	}
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[non_exhaustive]
+/// Method to generate key identifiers from public keys.
+///
+/// This allows choice over methods to generate key identifiers
+/// as specified in RFC 7093 section 2.
+pub enum KeyIdMethod {
+	/// RFC 7093 method 1
+	Sha256,
+	/// RFC 7093 method 2
+	Sha384,
+	/// RFC 7093 method 3
+	Sha512,
 }
 
 /// Helper to obtain a DateTime from year, month, day values
@@ -702,8 +719,13 @@ impl Certificate {
 	/// Calculates a subject key identifier for the certificate subject's public key.
 	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
 	pub fn get_key_identifier(&self) -> Vec<u8> {
-		// This uses method number 1) from RFC 7093
-		let digest = digest::digest(&digest::SHA256, self.key_pair.public_key_raw().as_ref());
+		// Decide which method from RFC 7093 to use
+		let digest_method = match self.params.key_identifier_method {
+			KeyIdMethod::Sha256 => &digest::SHA256,
+			KeyIdMethod::Sha384 => &digest::SHA384,
+			KeyIdMethod::Sha512 => &digest::SHA512,
+		};
+		let digest = digest::digest(digest_method, self.key_pair.public_key_raw().as_ref());
 		let truncated_digest = &digest.as_ref()[0..20];
 		truncated_digest.to_vec()
 	}
