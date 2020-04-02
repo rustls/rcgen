@@ -506,9 +506,9 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "x509-parser"
-version = "0.6.5"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99bbe736dd2b422d66e4830f4a06f34387c9814c027efcbda5c2f86463e8e5b0"
+checksum = "6dba437c45e779568868b2c46ed1d1c57c98d9f868e47c9bcbfe9114d4cbd97d"
 dependencies = [
  "base64",
  "der-parser",
