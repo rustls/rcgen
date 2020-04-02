@@ -1,11 +1,12 @@
 # Changes
 
-## Next Release
+## Release 0.8.1 - April 2, 2020
 
 - Fix non-standard-compliant SubjectKeyIdentifier X.509v3 extension format
 - BasicConstraints X.509v3 extension is now marked as critical
 - Use RFC 7093 to calculate calculate subject key identifiers
 - Add option to insert AuthorityKeyIdentifier X.509v3 extension into non-self-signed certificates
+- Update to x509-parser 0.7
 
 ## Release 0.8.0 - March 12, 2020
 
