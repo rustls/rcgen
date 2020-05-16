@@ -5,11 +5,12 @@ use rcgen::{Certificate};
 use openssl::pkey::PKey;
 use openssl::x509::{X509, X509Req, X509StoreContext};
 use openssl::x509::store::{X509StoreBuilder, X509Store};
+use openssl::ssl::{SslContextBuilder, SslMethod};
 use openssl::stack::Stack;
 
 mod util;
 
-fn verify_cert(cert :&Certificate) {
+fn verify_cert_basic(cert :&Certificate) -> X509Store {
 	let cert_pem = cert.serialize_pem().unwrap();
 	println!("{}", cert_pem);
 
@@ -25,6 +26,26 @@ fn verify_cert(cert :&Certificate) {
 		ctx.verify_cert().unwrap();
 		Ok(())
 	}).unwrap();
+	store
+}
+
+fn verify_cert(cert :&Certificate) {
+	let store = verify_cert_basic(cert);
+
+	let srv = SslMethod::tls_server();
+	let mut ssl_srv_ctx = SslContextBuilder::new(srv).unwrap();
+	let key = cert.serialize_private_key_der();
+	let pkey = PKey::private_key_from_der(&key).unwrap();
+	ssl_srv_ctx.set_private_key(&pkey).unwrap();
+
+	let cln = SslMethod::tls_client();
+	let mut ssl_cln_ctx = SslContextBuilder::new(cln).unwrap();
+	ssl_cln_ctx.set_cert_store(store);
+
+	let mut ssl_srv_ctx = ssl_srv_ctx.build();
+	let mut ssl_cln_ctx = ssl_cln_ctx.build();
+
+	// TODO do proper handshake
 }
 
 fn verify_csr(cert :&Certificate) {
@@ -86,10 +107,10 @@ fn test_openssl_25519() {
 	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
-	verify_cert(&cert);
-	// TODO this fails. Not sure why!
+	// TODO openssl doesn't support v2 keys (yet)
 	// https://github.com/est31/rcgen/issues/11
-	// https://github.com/openssl/openssl/issues/9134
+	// https://github.com/openssl/openssl/issues/10468
+	verify_cert_basic(&cert);
 	//verify_csr(&cert);
 }
 
@@ -122,10 +143,10 @@ fn test_openssl_25519_v2_given() {
 	let cert = Certificate::from_params(params).unwrap();
 
 	// Now verify the certificate.
-	verify_cert(&cert);
-	// TODO this fails. Not sure why!
+	// TODO openssl doesn't support v2 keys (yet)
 	// https://github.com/est31/rcgen/issues/11
-	// https://github.com/openssl/openssl/issues/9134
+	// https://github.com/openssl/openssl/issues/10468
+	verify_cert_basic(&cert);
 	//verify_csr(&cert);
 }
 
