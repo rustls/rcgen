@@ -15,6 +15,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "rcgen"
 path = "src/main.rs"
+required-features = ["pem"]
 
 [dependencies]
 yasna = { version = "0.3.1", features = ["chrono"] }
