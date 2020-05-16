@@ -21,7 +21,7 @@ required-features = ["pem"]
 yasna = { version = "0.3.1", features = ["chrono"] }
 ring = "0.16"
 pem = { version = "0.7", optional = true }
-chrono = "0.4.6"
+chrono = { version = "0.4.6", default-features = false }
 x509-parser = { version = "0.7", optional = true }
 
 [features]
