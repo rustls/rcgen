@@ -5,8 +5,13 @@ use rcgen::{Certificate};
 use openssl::pkey::PKey;
 use openssl::x509::{X509, X509Req, X509StoreContext};
 use openssl::x509::store::{X509StoreBuilder, X509Store};
-use openssl::ssl::{SslContextBuilder, SslMethod};
+use openssl::ssl::{SslContextBuilder, SslMethod,
+	SslStreamBuilder, Ssl, HandshakeError};
 use openssl::stack::Stack;
+use std::io::{Write, Read, Result as ioResult, ErrorKind,
+	Error};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 mod util;
 
@@ -29,6 +34,57 @@ fn verify_cert_basic(cert :&Certificate) -> X509Store {
 	store
 }
 
+// TODO implement Debug manually instead of
+// deriving it
+#[derive(Debug)]
+struct PipeInner([Vec<u8>; 2]);
+
+#[derive(Debug)]
+struct PipeEnd {
+	read_pos :usize,
+	/// Which end of the pipe
+	end_idx :usize,
+	inner :Rc<RefCell<PipeInner>>,
+}
+
+fn create_pipe() -> (PipeEnd, PipeEnd) {
+	let pipe_inner = PipeInner([Vec::new(), Vec::new()]);
+	let inner = Rc::new(RefCell::new(pipe_inner));
+	(PipeEnd {
+		read_pos : 0,
+		end_idx : 0,
+		inner : inner.clone(),
+	},	PipeEnd {
+		read_pos : 0,
+		end_idx : 1,
+		inner,
+	})
+}
+
+impl Write for PipeEnd {
+	fn write(&mut self, buf: &[u8]) -> ioResult<usize> {
+		self.inner.borrow_mut().0[self.end_idx].extend_from_slice(buf);
+		Ok(buf.len())
+	}
+	fn flush(&mut self) -> ioResult<()> {
+		Ok(())
+	}
+}
+
+impl Read for PipeEnd {
+	fn read(&mut self, mut buf: &mut [u8]) -> ioResult<usize> {
+		let inner = self.inner.borrow_mut();
+		let r_sl = &inner.0[1-self.end_idx][self.read_pos..];
+		let r = buf.len();
+		if r_sl.len() < r {
+			return Err(Error::new(ErrorKind::WouldBlock, "oh no!"));
+		}
+		std::io::copy(&mut &r_sl[..r], &mut buf)?;
+		self.read_pos += r;
+		Ok(r)
+	}
+}
+
 fn verify_cert(cert :&Certificate) {
 	let store = verify_cert_basic(cert);
 
@@ -42,10 +98,46 @@ fn verify_cert(cert :&Certificate) {
 	let mut ssl_cln_ctx = SslContextBuilder::new(cln).unwrap();
 	ssl_cln_ctx.set_cert_store(store);
 
-	let mut ssl_srv_ctx = ssl_srv_ctx.build();
-	let mut ssl_cln_ctx = ssl_cln_ctx.build();
+	let ssl_srv_ctx = ssl_srv_ctx.build();
+	let ssl_cln_ctx = ssl_cln_ctx.build();
 
-	// TODO do proper handshake
+	let ssl_srv = Ssl::new(&ssl_srv_ctx).unwrap();
+	let mut ssl_cln = Ssl::new(&ssl_cln_ctx).unwrap();
+
+	ssl_cln.param_mut().set_host("crabs.crabs").unwrap();
+
+	let (pipe_end_1, pipe_end_2) = create_pipe();
+	let ssl_srv_stream = SslStreamBuilder::new(ssl_srv, pipe_end_1);
+	let ssl_cln_stream = SslStreamBuilder::new(ssl_cln, pipe_end_2);
+
+	let (mut ssl_srv_stream, mut ssl_cln_stream) = {
+		let mut srv_res = ssl_srv_stream.accept();
+		let mut cln_res = ssl_cln_stream.connect();
+		let mut ready = 0u8;
+		loop {
+			match cln_res {
+				Ok(_) => ready &= 2,
+				Err(HandshakeError::WouldBlock(mh)) => cln_res = mh.handshake(),
+				Err(e) => panic!("Error: {:?}", e),
+			}
+			match srv_res {
+				Ok(_) => ready &= 1,
+				Err(HandshakeError::WouldBlock(mh)) => srv_res = mh.handshake(),
+				Err(e) => panic!("Error: {:?}", e),
+			}
+			if ready == 3 {
+				break (cln_res.unwrap(), srv_res.unwrap());
+			}
+		}
+	};
+
+	const HELLO_FROM_SRV :&[u8] = b"hello from server";
+	const HELLO_FROM_CLN :&[u8] = b"hello from client";
+
+	ssl_srv_stream.ssl_write(HELLO_FROM_SRV).unwrap();
+	ssl_cln_stream.ssl_write(HELLO_FROM_CLN).unwrap();
+
+	// TODO read the data we just wrote from the streams
 }
 
 fn verify_csr(cert :&Certificate) {
