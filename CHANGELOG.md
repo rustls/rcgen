@@ -1,5 +1,10 @@
 # Changes
 
+## Release 0.8.2 - May 18, 2020
+
+- Disable `chrono` default features to get rid of time crate
+- Improve `openssl` tests to do a full handshake withthe generated cert
+
 ## Release 0.8.1 - April 2, 2020
 
 - Fix non-standard-compliant SubjectKeyIdentifier X.509v3 extension format
