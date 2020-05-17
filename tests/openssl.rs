@@ -216,11 +216,14 @@ fn test_openssl_25519_v1_given() {
 
 	let cert = Certificate::from_params(params).unwrap();
 
-	// Now verify the certificate.
-	verify_cert(&cert);
-	// Verify the csr but only on OpenSSL >= 1.1.1
+	// Now verify the certificate as well as CSR,
+	// but only on OpenSSL >= 1.1.1
+	// On prior versions, only do basic verification
 	if openssl::version::number() >= 0x1_01_01_00_f {
+		verify_cert(&cert);
 		verify_csr(&cert);
+	} else {
+		verify_cert_basic(&cert);
 	}
 }
 
