@@ -5,8 +5,8 @@ use rcgen::{Certificate};
 use openssl::pkey::PKey;
 use openssl::x509::{X509, X509Req, X509StoreContext};
 use openssl::x509::store::{X509StoreBuilder, X509Store};
-use openssl::ssl::{SslContextBuilder, SslMethod,
-	SslStreamBuilder, Ssl, HandshakeError};
+use openssl::ssl::{SslMethod, SslConnector,
+	SslAcceptor, HandshakeError};
 use openssl::stack::Stack;
 use std::io::{Write, Read, Result as ioResult, ErrorKind,
 	Error};
@@ -15,7 +15,7 @@ use std::rc::Rc;
 
 mod util;
 
-fn verify_cert_basic(cert :&Certificate) -> X509Store {
+fn verify_cert_basic(cert :&Certificate) -> (X509, X509Store) {
 	let cert_pem = cert.serialize_pem().unwrap();
 	println!("{}", cert_pem);
 
@@ -31,7 +31,7 @@ fn verify_cert_basic(cert :&Certificate) -> X509Store {
 		ctx.verify_cert().unwrap();
 		Ok(())
 	}).unwrap();
-	store
+	(x509, store)
 }
 
 // TODO implement Debug manually instead of
@@ -86,34 +86,30 @@ impl Read for PipeEnd {
 }
 
 fn verify_cert(cert :&Certificate) {
-	let store = verify_cert_basic(cert);
+	let (x509, store) = verify_cert_basic(cert);
 
 	let srv = SslMethod::tls_server();
-	let mut ssl_srv_ctx = SslContextBuilder::new(srv).unwrap();
+	let mut ssl_srv_ctx = SslAcceptor::mozilla_modern_v5(srv).unwrap();
 	let key = cert.serialize_private_key_der();
 	let pkey = PKey::private_key_from_der(&key).unwrap();
 	ssl_srv_ctx.set_private_key(&pkey).unwrap();
 
+	ssl_srv_ctx.set_certificate(&x509).unwrap();
+
 	let cln = SslMethod::tls_client();
-	let mut ssl_cln_ctx = SslContextBuilder::new(cln).unwrap();
+	let mut ssl_cln_ctx = SslConnector::builder(cln).unwrap();
 	ssl_cln_ctx.set_cert_store(store);
 
 	let ssl_srv_ctx = ssl_srv_ctx.build();
 	let ssl_cln_ctx = ssl_cln_ctx.build();
 
-	let ssl_srv = Ssl::new(&ssl_srv_ctx).unwrap();
-	let mut ssl_cln = Ssl::new(&ssl_cln_ctx).unwrap();
-
-	ssl_cln.param_mut().set_host("crabs.crabs").unwrap();
-
 	let (pipe_end_1, pipe_end_2) = create_pipe();
-	let ssl_srv_stream = SslStreamBuilder::new(ssl_srv, pipe_end_1);
-	let ssl_cln_stream = SslStreamBuilder::new(ssl_cln, pipe_end_2);
 
 	let (mut ssl_srv_stream, mut ssl_cln_stream) = {
-		let mut srv_res = ssl_srv_stream.accept();
-		let mut cln_res = ssl_cln_stream.connect();
+		let mut srv_res = ssl_srv_ctx.accept(pipe_end_1);
+		let mut cln_res = ssl_cln_ctx.connect("crabs.crabs", pipe_end_2);
 		let mut ready = 0u8;
+		let mut iter_budget = 100;
 		loop {
 			match cln_res {
 				Ok(_) => ready &= 2,
@@ -128,6 +124,10 @@ fn verify_cert(cert :&Certificate) {
 			if ready == 3 {
 				break (cln_res.unwrap(), srv_res.unwrap());
 			}
+			if iter_budget == 0 {
+				panic!("iter budget exhausted");
+			}
+			iter_budget -= 1;
 		}
 	};
 
