@@ -89,7 +89,7 @@ fn verify_cert(cert :&Certificate) {
 	let (x509, store) = verify_cert_basic(cert);
 
 	let srv = SslMethod::tls_server();
-	let mut ssl_srv_ctx = SslAcceptor::mozilla_modern_v5(srv).unwrap();
+	let mut ssl_srv_ctx = SslAcceptor::mozilla_modern(srv).unwrap();
 	let key = cert.serialize_private_key_der();
 	let pkey = PKey::private_key_from_der(&key).unwrap();
 	ssl_srv_ctx.set_private_key(&pkey).unwrap();
