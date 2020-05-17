@@ -75,10 +75,10 @@ impl Read for PipeEnd {
 	fn read(&mut self, mut buf: &mut [u8]) -> ioResult<usize> {
 		let inner = self.inner.borrow_mut();
 		let r_sl = &inner.0[1-self.end_idx][self.read_pos..];
-		let r = buf.len();
-		if r_sl.len() < r {
+		if r_sl.len() == 0 {
 			return Err(Error::new(ErrorKind::WouldBlock, "oh no!"));
 		}
+		let r = buf.len().min(r_sl.len());
 		std::io::copy(&mut &r_sl[..r], &mut buf)?;
 		self.read_pos += r;
 		Ok(r)
@@ -112,12 +112,12 @@ fn verify_cert(cert :&Certificate) {
 		let mut iter_budget = 100;
 		loop {
 			match cln_res {
-				Ok(_) => ready &= 2,
+				Ok(_) => ready |= 2,
 				Err(HandshakeError::WouldBlock(mh)) => cln_res = mh.handshake(),
 				Err(e) => panic!("Error: {:?}", e),
 			}
 			match srv_res {
-				Ok(_) => ready &= 1,
+				Ok(_) => ready |= 1,
 				Err(HandshakeError::WouldBlock(mh)) => srv_res = mh.handshake(),
 				Err(e) => panic!("Error: {:?}", e),
 			}
