@@ -573,21 +573,23 @@ impl Certificate {
 			});
 			// Write subjectPublicKeyInfo
 			self.key_pair.serialize_public_key_der(writer.next());
-			// Write extensions
-			if !self.params.subject_alt_names.is_empty() {
-				writer.next().write_tagged(Tag::context(0), |writer| {
-					writer.write_sequence(|writer| {
-						let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
-						writer.next().write_oid(&oid);
-						writer.next().write_set(|writer| {
-							writer.next().write_sequence(|writer| {
-								// Write subject_alt_names
-								self.write_subject_alt_names(writer.next());
-							});
-						});
-					});
-				});
-			}
+            // Write extensions
+            // According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
+            writer.next().write_tagged(Tag::context(0), |writer| {
+                if !self.params.subject_alt_names.is_empty() {
+                    writer.write_sequence(|writer| {
+                        let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
+                        writer.next().write_oid(&oid);
+                        writer.next().write_set(|writer| {
+                            writer.next().write_sequence(|writer| {
+                                // Write subject_alt_names
+                                self.write_subject_alt_names(writer.next());
+                            });
+                        });
+                    });
+                }
+            });
+			
 		});
 	}
 	fn write_cert(&self, writer :DERWriter, ca :&Certificate) -> Result<(), RcgenError> {
