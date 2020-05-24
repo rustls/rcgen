@@ -1,5 +1,10 @@
 # Changes
 
+## Release 0.8.3 - May 24, 2020
+
+- Fix regression of `0.8.1` that generated standards non compliant CSRs
+  and broke Go toolchain parsers. Contributed by [@thomastaylor312](https://github.com/thomastaylor312).
+
 ## Release 0.8.2 - May 18, 2020
 
 - Disable `chrono` default features to get rid of time crate
