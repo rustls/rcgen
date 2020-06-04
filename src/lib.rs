@@ -46,8 +46,8 @@ use ring::rand::SystemRandom;
 use ring::signature::KeyPair as RingKeyPair;
 use ring::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters};
 use yasna::DERWriter;
-use yasna::models::GeneralizedTime;
-use chrono::{DateTime, Timelike};
+use yasna::models::{GeneralizedTime, UTCTime};
+use chrono::{DateTime, Timelike, Datelike};
 use chrono::{NaiveDate, Utc};
 use std::collections::HashMap;
 use std::fmt;
@@ -511,6 +511,23 @@ fn dt_to_generalized(dt :&DateTime<Utc>) -> Result<GeneralizedTime, RcgenError> 
 	Ok(GeneralizedTime::from_datetime::<Utc>(&date_time))
 }
 
+fn write_dt_utc_or_generalized(writer :DERWriter, dt :&DateTime<Utc>) -> Result<(), RcgenError> {
+	// RFC 5280 requires CAs to write certificate validity dates
+	// below 2050 as UTCTime, and anything starting from 2050
+	// as GeneralizedTime [1]. The RFC doesn't say anything
+	// about dates before 1950, but as UTCTime can't represent
+	// them, we have to use GeneralizedTime if we want to or not.
+	// [1]: https://tools.ietf.org/html/rfc5280#section-4.1.2.5
+	if (1950 .. 2050).contains(&dt.year()) {
+		let ut = UTCTime::from_datetime::<Utc>(dt);
+		writer.write_utctime(&ut);
+	} else {
+		let gt = dt_to_generalized(dt)?;
+		writer.write_generalized_time(&gt);
+	}
+	Ok(())
+}
+
 impl Certificate {
 	/// Generates a new certificate from the given parameters
 	pub fn from_params(mut params :CertificateParams) -> Result<Self, RcgenError> {
@@ -589,7 +606,7 @@ impl Certificate {
                     });
                 }
             });
-			
+
 		});
 	}
 	fn write_cert(&self, writer :DERWriter, ca :&Certificate) -> Result<(), RcgenError> {
@@ -608,11 +625,9 @@ impl Certificate {
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
-				let nb_gt = dt_to_generalized(&self.params.not_before)?;
-				writer.next().write_generalized_time(&nb_gt);
+				write_dt_utc_or_generalized(writer.next(), &self.params.not_before)?;
 				// Not after
-				let na_gt = dt_to_generalized(&self.params.not_after)?;
-				writer.next().write_generalized_time(&na_gt);
+				write_dt_utc_or_generalized(writer.next(), &self.params.not_after)?;
 				Ok::<(), RcgenError>(())
 			})?;
 			// Write subject
