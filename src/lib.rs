@@ -100,9 +100,11 @@ const OID_PKCS_9_AT_EXTENSION_REQUEST :&[u64] = &[1, 2, 840, 113549, 1, 9, 14];
 
 /// id-at-countryName in RFC 5820
 const OID_COUNTRY_NAME :&[u64] = &[2, 5, 4, 6];
+/// id-at-localityName in RFC 5820
+const OID_LOCALITY_NAME :&[u64] = &[2, 5, 4, 7];
 /// id-at-organizationName in RFC 5820
 const OID_ORG_NAME :&[u64] = &[2, 5, 4, 10];
-/// id-at-organizationalUnitName in RFC 5280
+/// id-at-organizationalUnitName in RFC 5820
 const OID_ORG_UNIT_NAME :&[u64] = &[2, 5, 4, 11];
 /// id-at-commonName in RFC 5820
 const OID_COMMON_NAME :&[u64] = &[2, 5, 4, 3];
@@ -169,6 +171,8 @@ impl SanType {
 pub enum DnType {
 	/// X520countryName
 	CountryName,
+	/// X520LocalityName
+	LocalityName,
 	/// X520OrganizationName
 	OrganizationName,
 	/// X520OrganizationalUnitName
@@ -183,6 +187,7 @@ impl DnType {
 	fn to_oid(&self) -> ObjectIdentifier {
 		let sl = match self {
 			DnType::CountryName => OID_COUNTRY_NAME,
+			DnType::LocalityName => OID_LOCALITY_NAME,
 			DnType::OrganizationName => OID_ORG_NAME,
 			DnType::OrganizationalUnitName => OID_ORG_UNIT_NAME,
 			DnType::CommonName => OID_COMMON_NAME,
@@ -196,6 +201,7 @@ impl DnType {
 	pub fn from_oid(slice :&[u64]) -> Self {
 		match slice {
 			OID_COUNTRY_NAME => DnType::CountryName,
+			OID_LOCALITY_NAME => DnType::LocalityName,
 			OID_ORG_NAME => DnType::OrganizationName,
 			OID_ORG_UNIT_NAME => DnType::OrganizationalUnitName,
 			OID_COMMON_NAME => DnType::CommonName,
