@@ -102,6 +102,8 @@ const OID_PKCS_9_AT_EXTENSION_REQUEST :&[u64] = &[1, 2, 840, 113549, 1, 9, 14];
 const OID_COUNTRY_NAME :&[u64] = &[2, 5, 4, 6];
 /// id-at-localityName in RFC 5820
 const OID_LOCALITY_NAME :&[u64] = &[2, 5, 4, 7];
+/// id-at-stateOrProvinceName in RFC 5820
+const OID_STATE_OR_PROVINCE_NAME :&[u64] = &[2, 5, 4, 8];
 /// id-at-organizationName in RFC 5820
 const OID_ORG_NAME :&[u64] = &[2, 5, 4, 10];
 /// id-at-organizationalUnitName in RFC 5820
@@ -173,6 +175,8 @@ pub enum DnType {
 	CountryName,
 	/// X520LocalityName
 	LocalityName,
+	/// X520StateOrProvinceName
+	StateOrProvinceName,
 	/// X520OrganizationName
 	OrganizationName,
 	/// X520OrganizationalUnitName
@@ -188,6 +192,7 @@ impl DnType {
 		let sl = match self {
 			DnType::CountryName => OID_COUNTRY_NAME,
 			DnType::LocalityName => OID_LOCALITY_NAME,
+			DnType::StateOrProvinceName => OID_STATE_OR_PROVINCE_NAME,
 			DnType::OrganizationName => OID_ORG_NAME,
 			DnType::OrganizationalUnitName => OID_ORG_UNIT_NAME,
 			DnType::CommonName => OID_COMMON_NAME,
@@ -202,6 +207,7 @@ impl DnType {
 		match slice {
 			OID_COUNTRY_NAME => DnType::CountryName,
 			OID_LOCALITY_NAME => DnType::LocalityName,
+			OID_STATE_OR_PROVINCE_NAME => DnType::StateOrProvinceName,
 			OID_ORG_NAME => DnType::OrganizationName,
 			OID_ORG_UNIT_NAME => DnType::OrganizationalUnitName,
 			OID_COMMON_NAME => DnType::CommonName,
