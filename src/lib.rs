@@ -162,13 +162,16 @@ impl SanType {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-#[allow(missing_docs)]
 #[non_exhaustive]
 /// The attribute type of a distinguished name entry
 pub enum DnType {
+	/// X520countryName
 	CountryName,
+	/// X520OrganizationName
 	OrganizationName,
+	/// X520CommonName
 	CommonName,
+	/// Custom distinguished name type
 	CustomDnType(Vec<u64>),
 }
 
