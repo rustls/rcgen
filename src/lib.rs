@@ -102,6 +102,8 @@ const OID_PKCS_9_AT_EXTENSION_REQUEST :&[u64] = &[1, 2, 840, 113549, 1, 9, 14];
 const OID_COUNTRY_NAME :&[u64] = &[2, 5, 4, 6];
 /// id-at-organizationName in RFC 5820
 const OID_ORG_NAME :&[u64] = &[2, 5, 4, 10];
+/// id-at-organizationalUnitName in RFC 5280
+const OID_ORG_UNIT_NAME :&[u64] = &[2, 5, 4, 11];
 /// id-at-commonName in RFC 5820
 const OID_COMMON_NAME :&[u64] = &[2, 5, 4, 3];
 
@@ -169,6 +171,8 @@ pub enum DnType {
 	CountryName,
 	/// X520OrganizationName
 	OrganizationName,
+	/// X520OrganizationalUnitName
+	OrganizationalUnitName,
 	/// X520CommonName
 	CommonName,
 	/// Custom distinguished name type
@@ -180,6 +184,7 @@ impl DnType {
 		let sl = match self {
 			DnType::CountryName => OID_COUNTRY_NAME,
 			DnType::OrganizationName => OID_ORG_NAME,
+			DnType::OrganizationalUnitName => OID_ORG_UNIT_NAME,
 			DnType::CommonName => OID_COMMON_NAME,
 			DnType::CustomDnType(ref oid) => oid.as_slice(),
 		};
@@ -190,9 +195,10 @@ impl DnType {
 	#[cfg(feature = "x509-parser")]
 	pub fn from_oid(slice :&[u64]) -> Self {
 		match slice {
-			OID_COMMON_NAME => DnType::CommonName,
-			OID_ORG_NAME => DnType::OrganizationName,
 			OID_COUNTRY_NAME => DnType::CountryName,
+			OID_ORG_NAME => DnType::OrganizationName,
+			OID_ORG_UNIT_NAME => DnType::OrganizationalUnitName,
+			OID_COMMON_NAME => DnType::CommonName,
 			oid => DnType::CustomDnType(oid.into())
 		}
 	}
