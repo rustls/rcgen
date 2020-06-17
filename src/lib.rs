@@ -851,6 +851,12 @@ enum KeyPairKind {
 }
 
 /// A key pair used to sign certificates and CSRs
+///
+/// Note that ring, the underlying library to handle RSA keys
+/// requires them to be in a special format, meaning that
+/// `openssl genrsa` doesn't work. See ring's [documentation](https://docs.rs/ring/0.16.15/ring/signature/struct.RsaKeyPair.html#method.from_pkcs8)
+/// for how to generate RSA keys in the wanted format
+/// and conversion between the formats.
 #[derive(Debug)]
 pub struct KeyPair {
 	kind :KeyPairKind,
