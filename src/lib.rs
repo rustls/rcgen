@@ -201,8 +201,7 @@ impl DnType {
 		ObjectIdentifier::from_slice(sl)
 	}
 
-    /// Generate a DnType for the provided OID
-	#[cfg(feature = "x509-parser")]
+	/// Generate a DnType for the provided OID
 	pub fn from_oid(slice :&[u64]) -> Self {
 		match slice {
 			OID_COUNTRY_NAME => DnType::CountryName,
@@ -1140,7 +1139,6 @@ impl PartialEq for SignatureAlgorithm {
 impl Eq for SignatureAlgorithm {}
 
 impl SignatureAlgorithm {
-	#[cfg(feature = "x509-parser")]
 	fn iter() -> std::slice::Iter<'static, &'static SignatureAlgorithm> {
 		static ALGORITHMS :&[&SignatureAlgorithm] = &[
 			&PKCS_RSA_SHA256,
@@ -1152,7 +1150,6 @@ impl SignatureAlgorithm {
 	}
 
 	/// Retrieve the SignatureAlgorithm for the provided OID
-	#[cfg(feature = "x509-parser")]
 	pub fn from_oid(oid :&[u64]) -> Result<&'static SignatureAlgorithm, RcgenError> {
 		for algo in Self::iter() {
 			if algo.oid_components == oid {
