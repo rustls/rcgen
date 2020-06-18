@@ -245,7 +245,7 @@ impl DistinguishedName {
 			s
 		})
 	}
-	/// Inserts a new attribute that consists of type and name
+	/// Inserts or updates an attribute that consists of type and name
 	pub fn push(&mut self, ty :DnType, s :impl Into<String>) {
 		if !self.entries.contains_key(&ty) {
 			self.order.push(ty.clone());
