@@ -221,6 +221,8 @@ Distinguished name used e.g. for the issuer and subject fields of a certificate
 
 A distinguished name is a set of (attribute type, attribute value) tuples.
 
+This datastructure keeps them ordered by insertion order.
+
 See also the RFC 5280 sections on the [issuer](https://tools.ietf.org/html/rfc5280#section-4.1.2.4)
 and [subject](https://tools.ietf.org/html/rfc5280#section-4.1.2.6) fields.
 */
@@ -243,6 +245,18 @@ impl DistinguishedName {
 			let s :&str = s;
 			s
 		})
+	}
+	/// Removes the attribute with the specified DnType
+	///
+	/// Returns true when an actual removal happened, false
+	/// when no attribute with the specified DnType was
+	/// found.
+	pub fn remove(&mut self, ty :DnType) -> bool {
+		let removed = self.entries.remove(&ty).is_some();
+		if removed {
+			self.order.retain(|ty_o| &ty != ty_o);
+		}
+		removed
 	}
 	/// Inserts or updates an attribute that consists of type and name
 	pub fn push(&mut self, ty :DnType, s :impl Into<String>) {
