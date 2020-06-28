@@ -136,6 +136,10 @@ const OID_AUTHORITY_KEY_IDENTIFIER :&[u64] = &[2, 5, 29, 35];
 // https://tools.ietf.org/html/rfc5280#section-4.2.1.12
 const OID_EXT_KEY_USAGE :&[u64] = &[2, 5, 29, 37];
 
+// id-ce-nameConstraints in
+/// https://tools.ietf.org/html/rfc5280#section-4.2.1.10
+const OID_NAME_CONSTRAINTS :&[u64] = &[2, 5, 29, 30];
+
 // id-pe-acmeIdentifier in
 // https://www.iana.org/assignments/smi-numbers/smi-numbers.xhtml#smi-numbers-1.3.6.1.5.5.7.1
 const OID_PE_ACME :&[u64] = &[1, 3, 6, 1, 5, 5, 7, 1, 31];
@@ -305,6 +309,7 @@ pub struct CertificateParams {
 	pub distinguished_name :DistinguishedName,
 	pub is_ca :IsCa,
 	pub extended_key_usages :Vec<ExtendedKeyUsagePurpose>,
+	pub name_constraints :Option<NameConstraints>,
 	pub custom_extensions :Vec<CustomExtension>,
 	/// The certificate's key pair, a new random key pair will be generated if this is `None`
 	pub key_pair :Option<KeyPair>,
@@ -332,6 +337,7 @@ impl Default for CertificateParams {
 			distinguished_name,
 			is_ca : IsCa::SelfSignedOnly,
 			extended_key_usages : Vec::new(),
+			name_constraints : None,
 			custom_extensions : Vec::new(),
 			key_pair : None,
 			use_authority_key_identifier_extension : false,
@@ -426,6 +432,21 @@ impl CertificateParams {
 			.. Default::default()
 		}
 	}
+}
+
+// TODO we might not use SanType because ip addresses have to be CIDR subnets
+/// The [NameConstraints extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.10)
+/// (only relevant for CA certificates)
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct NameConstraints {
+	/// If non-empty, a whitelist of subtrees that the
+	/// domain has to match.
+	pub permitted_subtrees :Vec<SanType>,
+	/// A list of excluded subtrees.
+	///
+	/// Any name matching an excluded subtree is invalid
+	/// even if it also matches a permitted subtree.
+	pub excluded_subtrees :Vec<SanType>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -675,6 +696,7 @@ impl Certificate {
 			let should_write_exts = (not_self_signed && self.params.use_authority_key_identifier_extension) ||
 				!self.params.subject_alt_names.is_empty() ||
 				!self.params.extended_key_usages.is_empty() ||
+				self.params.name_constraints.is_some() ||
 				matches!(self.params.is_ca, IsCa::Ca(_)) ||
 				!self.params.custom_extensions.is_empty();
 			if should_write_exts {
@@ -707,6 +729,51 @@ impl Certificate {
 									for usage in self.params.extended_key_usages.iter() {
 										let oid = ObjectIdentifier::from_slice(usage.oid());
 										writer.next().write_oid(&oid);
+									}
+								});
+							});
+						}
+						if let Some(name_constraints) = &self.params.name_constraints {
+							// TODO if both trees are empty, the extension must be omitted.
+							Self::write_extension(writer.next(), OID_NAME_CONSTRAINTS, true, |writer| {
+								writer.write_sequence(|writer| {
+									if !name_constraints.permitted_subtrees.is_empty() {
+										writer.next().write_tagged(Tag::context(0), |writer| {
+											writer.write_sequence(|writer| {
+												for san in name_constraints.permitted_subtrees.iter() {
+													writer.next().write_sequence(|writer| {
+														writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
+															match san {
+																SanType::Rfc822Name(name) |
+																SanType::DnsName(name) => writer.write_utf8_string(name),
+																SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
+																SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
+															}
+														});
+														// minimum must be 0 (the default) and maximum must be absent
+													});
+												}
+											});
+										});
+									}
+									if !name_constraints.excluded_subtrees.is_empty() {
+										writer.next().write_tagged(Tag::context(1), |writer| {
+											writer.write_sequence(|writer| {
+												for san in name_constraints.excluded_subtrees.iter() {
+													writer.next().write_sequence(|writer| {
+														writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
+															match san {
+																SanType::Rfc822Name(name) |
+																SanType::DnsName(name) => writer.write_utf8_string(name),
+																SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
+																SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
+															}
+														});
+														// minimum must be 0 (the default) and maximum must be absent
+													});
+												}
+											});
+										});
 									}
 								});
 							});

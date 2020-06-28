@@ -3,7 +3,8 @@ extern crate rcgen;
 extern crate ring;
 extern crate pem;
 
-use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
+use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa,
+	NameConstraints, SanType};
 use webpki::{EndEntityCert, TLSServerTrustAnchors};
 use webpki::trust_anchor_util::cert_der_as_trust_anchor;
 use webpki::SignatureAlgorithm;
@@ -185,6 +186,40 @@ fn test_webpki_rsa_given() {
 fn test_webpki_separate_ca() {
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	let ca_cert = Certificate::from_params(params).unwrap();
+
+	let ca_der = ca_cert.serialize_der().unwrap();
+	let trust_anchor_list = &[cert_der_as_trust_anchor(&ca_der).unwrap()];
+	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
+
+	let mut params = CertificateParams::new(vec!["crabs.dev".to_string()]);
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	let cert = Certificate::from_params(params).unwrap()
+		.serialize_der_with_signer(&ca_cert).unwrap();
+	let end_entity_cert = EndEntityCert::from(&cert).unwrap();
+
+	// Set time to Jan 10, 2004
+	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
+
+	end_entity_cert.verify_is_valid_tls_server_cert(
+		&[&webpki::ECDSA_P256_SHA256],
+		&trust_anchors,
+		&[&ca_der],
+		time,
+	).expect("valid TLS server cert");
+}
+
+
+#[test]
+fn test_webpki_separate_ca_name_constraints() {
+	let mut params = util::default_params();
+	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	params.name_constraints = Some(NameConstraints {
+		//permitted_subtrees : vec![SanType::DnsName("".to_string())],
+		permitted_subtrees : Vec::new(),
+		excluded_subtrees : vec![SanType::DnsName("v".to_string())],
+	});
 	let ca_cert = Certificate::from_params(params).unwrap();
 
 	let ca_der = ca_cert.serialize_der().unwrap();
