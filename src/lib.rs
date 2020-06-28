@@ -310,6 +310,9 @@ pub struct CertificateParams {
 	pub key_pair :Option<KeyPair>,
 	/// If `true` (and not self-signed), the 'Authority Key Identifier' extension will be added to the generated cert
 	pub use_authority_key_identifier_extension :bool,
+	/// Method to generate key identifiers from public keys
+	///
+	/// Defaults to SHA-256.
 	pub key_identifier_method :KeyIdMethod,
 }
 
