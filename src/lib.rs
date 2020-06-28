@@ -429,7 +429,6 @@ impl CertificateParams {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-#[allow(missing_docs)]
 /// One of the purposes contained in the [extended key usage extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.12)
 pub enum ExtendedKeyUsagePurpose {
 	/// anyExtendedKeyUsage
