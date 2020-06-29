@@ -628,6 +628,26 @@ fn write_distinguished_name(writer :DERWriter, dn :&DistinguishedName) {
 		});
 }
 
+fn write_general_subtrees(writer :DERWriter, tag :u64, general_subtrees :&[GeneralSubtree]) {
+	writer.write_tagged(Tag::context(tag), |writer| {
+		writer.write_sequence(|writer| {
+			for subtree in general_subtrees.iter() {
+				writer.next().write_sequence(|writer| {
+					writer.next().write_tagged_implicit(Tag::context(subtree.tag()), |writer| {
+						match subtree {
+							GeneralSubtree::Rfc822Name(name) |
+							GeneralSubtree::DnsName(name) => writer.write_utf8_string(name),
+							GeneralSubtree::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
+							GeneralSubtree::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
+						}
+					});
+					// minimum must be 0 (the default) and maximum must be absent
+				});
+			}
+		});
+	});
+}
+
 impl Certificate {
 	/// Generates a new certificate from the given parameters
 	pub fn from_params(mut params :CertificateParams) -> Result<Self, RcgenError> {
@@ -769,42 +789,10 @@ impl Certificate {
 							Self::write_extension(writer.next(), OID_NAME_CONSTRAINTS, true, |writer| {
 								writer.write_sequence(|writer| {
 									if !name_constraints.permitted_subtrees.is_empty() {
-										writer.next().write_tagged(Tag::context(0), |writer| {
-											writer.write_sequence(|writer| {
-												for subtree in name_constraints.permitted_subtrees.iter() {
-													writer.next().write_sequence(|writer| {
-														writer.next().write_tagged_implicit(Tag::context(subtree.tag()), |writer| {
-															match subtree {
-																GeneralSubtree::Rfc822Name(name) |
-																GeneralSubtree::DnsName(name) => writer.write_utf8_string(name),
-																GeneralSubtree::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
-																GeneralSubtree::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
-															}
-														});
-														// minimum must be 0 (the default) and maximum must be absent
-													});
-												}
-											});
-										});
+										write_general_subtrees(writer.next(), 0, &name_constraints.permitted_subtrees);
 									}
 									if !name_constraints.excluded_subtrees.is_empty() {
-										writer.next().write_tagged(Tag::context(1), |writer| {
-											writer.write_sequence(|writer| {
-												for subtree in name_constraints.excluded_subtrees.iter() {
-													writer.next().write_sequence(|writer| {
-														writer.next().write_tagged_implicit(Tag::context(subtree.tag()), |writer| {
-															match subtree {
-																GeneralSubtree::Rfc822Name(name) |
-																GeneralSubtree::DnsName(name) => writer.write_utf8_string(name),
-																GeneralSubtree::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
-																GeneralSubtree::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
-															}
-														});
-														// minimum must be 0 (the default) and maximum must be absent
-													});
-												}
-											});
-										});
+										write_general_subtrees(writer.next(), 1, &name_constraints.excluded_subtrees);
 									}
 								});
 							});
