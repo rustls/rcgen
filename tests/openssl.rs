@@ -1,7 +1,8 @@
 extern crate openssl;
 extern crate rcgen;
 
-use rcgen::{Certificate};
+use rcgen::{Certificate, IsCa, BasicConstraints,
+	CertificateParams, DnType};
 use openssl::pkey::PKey;
 use openssl::x509::{X509, X509Req, X509StoreContext};
 use openssl::x509::store::{X509StoreBuilder, X509Store};
@@ -91,6 +92,73 @@ fn verify_cert(cert :&Certificate) {
 	let srv = SslMethod::tls_server();
 	let mut ssl_srv_ctx = SslAcceptor::mozilla_modern(srv).unwrap();
 	let key = cert.serialize_private_key_der();
+	let pkey = PKey::private_key_from_der(&key).unwrap();
+	ssl_srv_ctx.set_private_key(&pkey).unwrap();
+
+	ssl_srv_ctx.set_certificate(&x509).unwrap();
+
+	let cln = SslMethod::tls_client();
+	let mut ssl_cln_ctx = SslConnector::builder(cln).unwrap();
+	ssl_cln_ctx.set_cert_store(store);
+
+	let ssl_srv_ctx = ssl_srv_ctx.build();
+	let ssl_cln_ctx = ssl_cln_ctx.build();
+
+	let (pipe_end_1, pipe_end_2) = create_pipe();
+
+	let (mut ssl_srv_stream, mut ssl_cln_stream) = {
+		let mut srv_res = ssl_srv_ctx.accept(pipe_end_1);
+		let mut cln_res = ssl_cln_ctx.connect("crabs.crabs", pipe_end_2);
+		let mut ready = 0u8;
+		let mut iter_budget = 100;
+		loop {
+			match cln_res {
+				Ok(_) => ready |= 2,
+				Err(HandshakeError::WouldBlock(mh)) => cln_res = mh.handshake(),
+				Err(e) => panic!("Error: {:?}", e),
+			}
+			match srv_res {
+				Ok(_) => ready |= 1,
+				Err(HandshakeError::WouldBlock(mh)) => srv_res = mh.handshake(),
+				Err(e) => panic!("Error: {:?}", e),
+			}
+			if ready == 3 {
+				break (cln_res.unwrap(), srv_res.unwrap());
+			}
+			if iter_budget == 0 {
+				panic!("iter budget exhausted");
+			}
+			iter_budget -= 1;
+		}
+	};
+
+	const HELLO_FROM_SRV :&[u8] = b"hello from server";
+	const HELLO_FROM_CLN :&[u8] = b"hello from client";
+
+	ssl_srv_stream.ssl_write(HELLO_FROM_SRV).unwrap();
+	ssl_cln_stream.ssl_write(HELLO_FROM_CLN).unwrap();
+
+	// TODO read the data we just wrote from the streams
+}
+
+fn verify_cert_ca(cert_pem :&str, key :&[u8], ca :&Certificate) {
+	println!("{}", cert_pem);
+	let ca_cert_pem = ca.serialize_pem().unwrap();
+	println!("{}", ca_cert_pem);
+
+	let x509 = X509::from_pem(&cert_pem.as_bytes()).unwrap();
+
+	let ca_x509 = X509::from_pem(&ca_cert_pem.as_bytes()).unwrap();
+
+
+	let mut builder = X509StoreBuilder::new().unwrap();
+	builder.add_cert(ca_x509).unwrap();
+
+	let store :X509Store = builder.build();
+
+	let srv = SslMethod::tls_server();
+	let mut ssl_srv_ctx = SslAcceptor::mozilla_modern(srv).unwrap();
+	//let key = cert.serialize_private_key_der();
 	let pkey = PKey::private_key_from_der(&key).unwrap();
 	ssl_srv_ctx.set_private_key(&pkey).unwrap();
 
@@ -258,4 +326,20 @@ fn test_openssl_rsa_given() {
 	// Now verify the certificate.
 	verify_cert(&cert);
 	verify_csr(&cert);
+}
+
+#[test]
+fn test_openssl_separate_ca() {
+	let mut params = util::default_params();
+	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	let ca_cert = Certificate::from_params(params).unwrap();
+
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	let cert = Certificate::from_params(params).unwrap();
+	let cert_pem = cert.serialize_pem_with_signer(&ca_cert).unwrap();
+	let key = cert.serialize_private_key_der();
+
+	verify_cert_ca(&cert_pem, &key, &ca_cert);
 }
