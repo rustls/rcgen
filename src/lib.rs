@@ -559,7 +559,6 @@ impl CertificateParams {
 	}
 }
 
-// TODO we might not use SanType because ip addresses have to be CIDR subnets
 /// The [NameConstraints extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.10)
 /// (only relevant for CA certificates)
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -572,6 +571,12 @@ pub struct NameConstraints {
 	/// Any name matching an excluded subtree is invalid
 	/// even if it also matches a permitted subtree.
 	pub excluded_subtrees :Vec<GeneralSubtree>,
+}
+
+impl NameConstraints {
+	fn is_empty(&self) -> bool {
+		self.permitted_subtrees.is_empty() && self.excluded_subtrees.is_empty()
+	}
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -841,7 +846,7 @@ impl Certificate {
 			let should_write_exts = (not_self_signed && self.params.use_authority_key_identifier_extension) ||
 				!self.params.subject_alt_names.is_empty() ||
 				!self.params.extended_key_usages.is_empty() ||
-				self.params.name_constraints.is_some() ||
+				self.params.name_constraints.iter().any(|c| !c.is_empty()) ||
 				matches!(self.params.is_ca, IsCa::Ca(_)) ||
 				!self.params.custom_extensions.is_empty();
 			if should_write_exts {
@@ -879,17 +884,19 @@ impl Certificate {
 							});
 						}
 						if let Some(name_constraints) = &self.params.name_constraints {
-							// TODO if both trees are empty, the extension must be omitted.
-							Self::write_extension(writer.next(), OID_NAME_CONSTRAINTS, true, |writer| {
-								writer.write_sequence(|writer| {
-									if !name_constraints.permitted_subtrees.is_empty() {
-										write_general_subtrees(writer.next(), 0, &name_constraints.permitted_subtrees);
-									}
-									if !name_constraints.excluded_subtrees.is_empty() {
-										write_general_subtrees(writer.next(), 1, &name_constraints.excluded_subtrees);
-									}
+							// If both trees are empty, the extension must be omitted.
+							if !name_constraints.is_empty() {
+								Self::write_extension(writer.next(), OID_NAME_CONSTRAINTS, true, |writer| {
+									writer.write_sequence(|writer| {
+										if !name_constraints.permitted_subtrees.is_empty() {
+											write_general_subtrees(writer.next(), 0, &name_constraints.permitted_subtrees);
+										}
+										if !name_constraints.excluded_subtrees.is_empty() {
+											write_general_subtrees(writer.next(), 1, &name_constraints.excluded_subtrees);
+										}
+									});
 								});
-							});
+							}
 						}
 						if let IsCa::Ca(ref constraint) = self.params.is_ca {
 							// Write subject_key_identifier
