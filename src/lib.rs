@@ -172,6 +172,36 @@ impl SanType {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[allow(missing_docs)]
+#[non_exhaustive]
+/// General Subtree type.
+///
+/// This type has similarities to the `SanType` enum but is not equal.
+/// For example, SanType can be zero.
+pub enum GeneralSubtree {
+	/// Also known as E-Mail address
+	Rfc822Name(String),
+	DnsName(String),
+	IpAddress(IpAddr),
+}
+
+impl GeneralSubtree {
+	fn tag(&self) -> u64 {
+		// Defined in the GeneralName list in
+		// https://tools.ietf.org/html/rfc5280#page-38
+		const TAG_RFC822_NAME :u64 = 1;
+		const TAG_DNS_NAME :u64 = 2;
+		const TAG_IP_ADDRESS :u64 = 7;
+
+		match self {
+			GeneralSubtree::Rfc822Name(_name) => TAG_RFC822_NAME,
+			GeneralSubtree::DnsName(_name) => TAG_DNS_NAME,
+			GeneralSubtree::IpAddress(_addr) => TAG_IP_ADDRESS,
+		}
+	}
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[non_exhaustive]
 /// The attribute type of a distinguished name entry
 pub enum DnType {
@@ -441,12 +471,12 @@ impl CertificateParams {
 pub struct NameConstraints {
 	/// If non-empty, a whitelist of subtrees that the
 	/// domain has to match.
-	pub permitted_subtrees :Vec<SanType>,
+	pub permitted_subtrees :Vec<GeneralSubtree>,
 	/// A list of excluded subtrees.
 	///
 	/// Any name matching an excluded subtree is invalid
 	/// even if it also matches a permitted subtree.
-	pub excluded_subtrees :Vec<SanType>,
+	pub excluded_subtrees :Vec<GeneralSubtree>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -741,14 +771,14 @@ impl Certificate {
 									if !name_constraints.permitted_subtrees.is_empty() {
 										writer.next().write_tagged(Tag::context(0), |writer| {
 											writer.write_sequence(|writer| {
-												for san in name_constraints.permitted_subtrees.iter() {
+												for subtree in name_constraints.permitted_subtrees.iter() {
 													writer.next().write_sequence(|writer| {
-														writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
-															match san {
-																SanType::Rfc822Name(name) |
-																SanType::DnsName(name) => writer.write_utf8_string(name),
-																SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
-																SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
+														writer.next().write_tagged_implicit(Tag::context(subtree.tag()), |writer| {
+															match subtree {
+																GeneralSubtree::Rfc822Name(name) |
+																GeneralSubtree::DnsName(name) => writer.write_utf8_string(name),
+																GeneralSubtree::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
+																GeneralSubtree::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
 															}
 														});
 														// minimum must be 0 (the default) and maximum must be absent
@@ -760,14 +790,14 @@ impl Certificate {
 									if !name_constraints.excluded_subtrees.is_empty() {
 										writer.next().write_tagged(Tag::context(1), |writer| {
 											writer.write_sequence(|writer| {
-												for san in name_constraints.excluded_subtrees.iter() {
+												for subtree in name_constraints.excluded_subtrees.iter() {
 													writer.next().write_sequence(|writer| {
-														writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
-															match san {
-																SanType::Rfc822Name(name) |
-																SanType::DnsName(name) => writer.write_utf8_string(name),
-																SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
-																SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
+														writer.next().write_tagged_implicit(Tag::context(subtree.tag()), |writer| {
+															match subtree {
+																GeneralSubtree::Rfc822Name(name) |
+																GeneralSubtree::DnsName(name) => writer.write_utf8_string(name),
+																GeneralSubtree::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
+																GeneralSubtree::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
 															}
 														});
 														// minimum must be 0 (the default) and maximum must be absent

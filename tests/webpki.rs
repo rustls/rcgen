@@ -4,7 +4,7 @@ extern crate ring;
 extern crate pem;
 
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa,
-	NameConstraints, SanType};
+	NameConstraints, GeneralSubtree};
 use webpki::{EndEntityCert, TLSServerTrustAnchors};
 use webpki::trust_anchor_util::cert_der_as_trust_anchor;
 use webpki::SignatureAlgorithm;
@@ -216,9 +216,10 @@ fn test_webpki_separate_ca_name_constraints() {
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	params.name_constraints = Some(NameConstraints {
-		//permitted_subtrees : vec![SanType::DnsName("".to_string())],
+		//permitted_subtrees : vec![GeneralSubtree::DnsName("".to_string())],
 		permitted_subtrees : Vec::new(),
-		excluded_subtrees : vec![SanType::DnsName("v".to_string())],
+		excluded_subtrees : vec![GeneralSubtree::DnsName("v".to_string())],
+		//excluded_subtrees : Vec::new(),
 	});
 	let ca_cert = Certificate::from_params(params).unwrap();
 
