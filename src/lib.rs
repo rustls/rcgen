@@ -585,6 +585,19 @@ fn write_dt_utc_or_generalized(writer :DERWriter, dt :&DateTime<Utc>) -> Result<
 	Ok(())
 }
 
+fn write_distinguished_name(writer :DERWriter, dn :&DistinguishedName) {
+		writer.write_sequence(|writer| {
+			for (ty, content) in dn.iter() {
+				writer.next().write_set(|writer| {
+					writer.next().write_sequence(|writer| {
+						writer.next().write_oid(&ty.to_oid());
+						writer.next().write_utf8_string(content);
+					});
+				});
+			}
+		});
+}
+
 impl Certificate {
 	/// Generates a new certificate from the given parameters
 	pub fn from_params(mut params :CertificateParams) -> Result<Self, RcgenError> {
@@ -601,18 +614,6 @@ impl Certificate {
 			params,
 			key_pair,
 		})
-	}
-	fn write_name(&self, writer :DERWriter, ca :&Certificate) {
-		writer.write_sequence(|writer| {
-			for (ty, content) in ca.params.distinguished_name.iter() {
-				writer.next().write_set(|writer| {
-					writer.next().write_sequence(|writer| {
-						writer.next().write_oid(&ty.to_oid());
-						writer.next().write_utf8_string(content);
-					});
-				});
-			}
-		});
 	}
 	fn write_subject_alt_names(&self, writer :DERWriter) {
 		Self::write_extension(writer, OID_SUBJECT_ALT_NAME, false, |writer| {
@@ -678,7 +679,7 @@ impl Certificate {
 			// Write signature
 			self.params.alg.write_alg_ident(writer.next());
 			// Write issuer
-			self.write_name(writer.next(), ca);
+			write_distinguished_name(writer.next(), &ca.params.distinguished_name);
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
@@ -688,7 +689,7 @@ impl Certificate {
 				Ok::<(), RcgenError>(())
 			})?;
 			// Write subject
-			self.write_name(writer.next(), self);
+			write_distinguished_name(writer.next(), &self.params.distinguished_name);
 			// Write subjectPublicKeyInfo
 			self.key_pair.serialize_public_key_der(writer.next());
 			// write extensions
