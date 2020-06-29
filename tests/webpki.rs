@@ -3,8 +3,7 @@ extern crate rcgen;
 extern crate ring;
 extern crate pem;
 
-use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa,
-	NameConstraints, GeneralSubtree};
+use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
 use webpki::{EndEntityCert, TLSServerTrustAnchors};
 use webpki::trust_anchor_util::cert_der_as_trust_anchor;
 use webpki::SignatureAlgorithm;
@@ -45,7 +44,12 @@ fn sign_msg_rsa(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 fn check_cert<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, alg :&SignatureAlgorithm,
 		sign_fn :impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>) {
 	println!("{}", cert.serialize_pem().unwrap());
-	let trust_anchor = cert_der_as_trust_anchor(&cert_der).unwrap();
+	check_cert_ca(cert_der, cert, cert_der, alg, sign_fn);
+}
+
+fn check_cert_ca<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, ca_der :&[u8],
+		alg :&SignatureAlgorithm, sign_fn :impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>) {
+	let trust_anchor = cert_der_as_trust_anchor(&ca_der).unwrap();
 	let trust_anchor_list = &[trust_anchor];
 	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
 	let end_entity_cert = EndEntityCert::from(&cert_der).unwrap();
@@ -189,27 +193,19 @@ fn test_webpki_separate_ca() {
 	let ca_cert = Certificate::from_params(params).unwrap();
 
 	let ca_der = ca_cert.serialize_der().unwrap();
-	let trust_anchor_list = &[cert_der_as_trust_anchor(&ca_der).unwrap()];
-	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
 
-	let mut params = CertificateParams::new(vec!["crabs.dev".to_string()]);
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
-	let cert = Certificate::from_params(params).unwrap()
-		.serialize_der_with_signer(&ca_cert).unwrap();
-	let end_entity_cert = EndEntityCert::from(&cert).unwrap();
 
-	// Set time to Jan 10, 2004
-	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
+	let cert = Certificate::from_params(params).unwrap();
+	let cert_der = cert.serialize_der_with_signer(&ca_cert).unwrap();
 
-	end_entity_cert.verify_is_valid_tls_server_cert(
-		&[&webpki::ECDSA_P256_SHA256],
-		&trust_anchors,
-		&[&ca_der],
-		time,
-	).expect("valid TLS server cert");
+	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
+		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	check_cert_ca(&cert_der, &cert, &ca_der,
+		&webpki::ECDSA_P256_SHA256, sign_fn);
 }
-
 
 /*
 // TODO https://github.com/briansmith/webpki/issues/134
@@ -233,8 +229,6 @@ fn test_webpki_separate_ca_name_constraints() {
 	println!("{}", ca_cert.serialize_pem().unwrap());
 
 	let ca_der = ca_cert.serialize_der().unwrap();
-	let trust_anchor_list = &[cert_der_as_trust_anchor(&ca_der).unwrap()];
-	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
 
 	let mut params = CertificateParams::new(vec!["crabs.dev".to_string()]);
 	params.distinguished_name = rcgen::DistinguishedName::new();
@@ -243,17 +237,11 @@ fn test_webpki_separate_ca_name_constraints() {
 	let cert = Certificate::from_params(params).unwrap();
 	let cert_der = cert.serialize_der_with_signer(&ca_cert).unwrap();
 	println!("{}", cert.serialize_pem_with_signer(&ca_cert).unwrap());
-	let end_entity_cert = EndEntityCert::from(&cert_der).unwrap();
 
-	// Set time to Jan 10, 2004
-	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
-
-	end_entity_cert.verify_is_valid_tls_server_cert(
-		&[&webpki::ECDSA_P256_SHA256],
-		&trust_anchors,
-		&[&ca_der],
-		time,
-	).expect("valid TLS server cert");
+	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
+		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	check_cert_ca(&cert_der, &cert, &ca_der,
+		&webpki::ECDSA_P256_SHA256, sign_fn);
 }
 */
 
@@ -272,24 +260,14 @@ fn test_webpki_imported_ca() {
 		.unwrap();
 	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();
 
-	let trust_anchor_list = &[cert_der_as_trust_anchor(&ca_cert_der).unwrap()];
-	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
-
-	let mut params = CertificateParams::new(vec!["crabs.dev".to_string()]);
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
-	let cert = Certificate::from_params(params).unwrap()
-		.serialize_der_with_signer(&imported_ca_cert)
-		.unwrap();
-	let end_entity_cert = EndEntityCert::from(&cert).unwrap();
+	let cert = Certificate::from_params(params).unwrap();
+	let cert_der = cert.serialize_der_with_signer(&imported_ca_cert).unwrap();
 
-	// Set time to Jan 10, 2004
-	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
-
-	end_entity_cert.verify_is_valid_tls_server_cert(
-		&[&webpki::ECDSA_P256_SHA256],
-		&trust_anchors,
-		&[&ca_cert_der],
-		time,
-	).expect("valid TLS server cert");
+	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
+		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	check_cert_ca(&cert_der, &cert, &ca_cert_der,
+		&webpki::ECDSA_P256_SHA256, sign_fn);
 }
