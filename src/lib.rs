@@ -172,7 +172,7 @@ impl SanType {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(missing_docs)]
 #[non_exhaustive]
 /// General Subtree type.
@@ -184,6 +184,7 @@ pub enum GeneralSubtree {
 	/// Also known as E-Mail address
 	Rfc822Name(String),
 	DnsName(String),
+	DirectoryName(DistinguishedName),
 	IpAddress(CidrSubnet),
 }
 
@@ -193,11 +194,13 @@ impl GeneralSubtree {
 		// https://tools.ietf.org/html/rfc5280#page-38
 		const TAG_RFC822_NAME :u64 = 1;
 		const TAG_DNS_NAME :u64 = 2;
+		const TAG_DIRECTORY_NAME :u64 = 4;
 		const TAG_IP_ADDRESS :u64 = 7;
 
 		match self {
 			GeneralSubtree::Rfc822Name(_name) => TAG_RFC822_NAME,
 			GeneralSubtree::DnsName(_name) => TAG_DNS_NAME,
+			GeneralSubtree::DirectoryName(_name) => TAG_DIRECTORY_NAME,
 			GeneralSubtree::IpAddress(_addr) => TAG_IP_ADDRESS,
 		}
 	}
@@ -561,7 +564,7 @@ impl CertificateParams {
 
 /// The [NameConstraints extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.10)
 /// (only relevant for CA certificates)
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct NameConstraints {
 	/// If non-empty, a whitelist of subtrees that the
 	/// domain has to match.
@@ -737,6 +740,7 @@ fn write_general_subtrees(writer :DERWriter, tag :u64, general_subtrees :&[Gener
 						match subtree {
 							GeneralSubtree::Rfc822Name(name) |
 							GeneralSubtree::DnsName(name) => writer.write_utf8_string(name),
+							GeneralSubtree::DirectoryName(name) => write_distinguished_name(writer, name),
 							GeneralSubtree::IpAddress(subnet) => writer.write_bytes(&subnet.to_bytes()),
 						}
 					});

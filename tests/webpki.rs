@@ -216,23 +216,30 @@ fn test_webpki_separate_ca_name_constraints() {
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	params.name_constraints = Some(NameConstraints {
-		//permitted_subtrees : vec![GeneralSubtree::DnsName("".to_string())],
-		permitted_subtrees : Vec::new(),
-		excluded_subtrees : vec![GeneralSubtree::DnsName("v".to_string())],
-		//excluded_subtrees : Vec::new(),
+		// TODO also add a test with non-empty permitted_subtrees that
+		// doesn't contain a DirectoryName entry. This isn't possible
+		// currently due to a limitation of webpki.
+		permitted_subtrees : vec![GeneralSubtree::DnsName("dev".to_string()), GeneralSubtree::DirectoryName(rcgen::DistinguishedName::new())],
+		//permitted_subtrees : Vec::new(),
+		//excluded_subtrees : vec![GeneralSubtree::DnsName("v".to_string())],
+		excluded_subtrees : Vec::new(),
 	});
+
 	let ca_cert = Certificate::from_params(params).unwrap();
+	println!("{}", ca_cert.serialize_pem().unwrap());
 
 	let ca_der = ca_cert.serialize_der().unwrap();
 	let trust_anchor_list = &[cert_der_as_trust_anchor(&ca_der).unwrap()];
 	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
 
 	let mut params = CertificateParams::new(vec!["crabs.dev".to_string()]);
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Dev domain");
-	let cert = Certificate::from_params(params).unwrap()
-		.serialize_der_with_signer(&ca_cert).unwrap();
-	let end_entity_cert = EndEntityCert::from(&cert).unwrap();
+	params.distinguished_name = rcgen::DistinguishedName::new();
+	//params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	//params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	let cert = Certificate::from_params(params).unwrap();
+	let cert_der = cert.serialize_der_with_signer(&ca_cert).unwrap();
+	println!("{}", cert.serialize_pem_with_signer(&ca_cert).unwrap());
+	let end_entity_cert = EndEntityCert::from(&cert_der).unwrap();
 
 	// Set time to Jan 10, 2004
 	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
