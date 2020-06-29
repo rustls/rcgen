@@ -732,7 +732,7 @@ fn write_distinguished_name(writer :DERWriter, dn :&DistinguishedName) {
 }
 
 fn write_general_subtrees(writer :DERWriter, tag :u64, general_subtrees :&[GeneralSubtree]) {
-	writer.write_tagged(Tag::context(tag), |writer| {
+	writer.write_tagged_implicit(Tag::context(tag), |writer| {
 		writer.write_sequence(|writer| {
 			for subtree in general_subtrees.iter() {
 				writer.next().write_sequence(|writer| {
