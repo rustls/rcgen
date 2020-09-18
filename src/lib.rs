@@ -478,6 +478,8 @@ impl CertificateParams {
 	/// Parses the ca certificate from the ASCII PEM format
 	///
 	/// See `from_ca_cert_der` for more details.
+	///
+	/// *This constructor is only available if rcgen is built with the "pem" and "x509-parser" features*
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
 	pub fn from_ca_cert_pem(pem_str :&str, key_pair :KeyPair) -> Result<Self, RcgenError> {
 		let certificate = pem::parse(pem_str)
@@ -492,6 +494,8 @@ impl CertificateParams {
 	/// `serialize_der_with_signer()` or `serialize_pem_with_signer()` functions.
 	///
 	/// Will not check if certificate is a ca certificate!
+	///
+	/// *This constructor is only available if rcgen is built with the "x509-parser" feature*
 	#[cfg(feature = "x509-parser")]
 	pub fn from_ca_cert_der(ca_cert :&[u8], key_pair :KeyPair) -> Result<Self, RcgenError> {
 		let (_remainder, x509) = x509_parser::parse_x509_der(ca_cert)
@@ -1023,6 +1027,8 @@ impl Certificate {
 		&self.key_pair
 	}
 	/// Serializes the certificate to the ASCII PEM format
+	///
+	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem(&self) -> Result<String, RcgenError> {
 		let p = Pem {
@@ -1032,6 +1038,8 @@ impl Certificate {
 		Ok(pem::encode(&p))
 	}
 	/// Serializes the certificate, signed with another certificate's key, to the ASCII PEM format
+	///
+	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem_with_signer(&self, ca :&Certificate) -> Result<String, RcgenError> {
 		let p = Pem {
@@ -1041,6 +1049,8 @@ impl Certificate {
 		Ok(pem::encode(&p))
 	}
 	/// Serializes the certificate signing request to the ASCII PEM format
+	///
+	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_request_pem(&self) -> Result<String, RcgenError> {
 		let p = Pem {
@@ -1054,6 +1064,8 @@ impl Certificate {
 		self.key_pair.serialize_der()
 	}
 	/// Serializes the private key in PEM format
+	///
+	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_private_key_pem(&self) -> String {
 		self.key_pair.serialize_pem()
@@ -1093,6 +1105,8 @@ pub struct KeyPair {
 
 impl KeyPair {
 	/// Parses the key pair from the ASCII PEM format
+	///
+	/// *This constructor is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn from_pem(pem_str :&str) -> Result<Self, RcgenError> {
 		let private_key = pem::parse(pem_str)?;
@@ -1123,6 +1137,8 @@ pub enum RcgenError {
 	Time,
 	#[cfg(feature = "pem")]
 	/// Error from the pem crate
+	///
+	/// *This variant is only available if rcgen is built with the "pem" feature*
 	PemError(pem::PemError),
 }
 
@@ -1283,6 +1299,8 @@ impl KeyPair {
 	/// Return the key pair's public key in PEM format
 	///
 	/// The returned string can be interpreted with `openssl pkey --inform PEM -pubout -pubin -text`
+	///
+	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn public_key_pem(&self) -> String {
 		let p = Pem {
@@ -1296,6 +1314,8 @@ impl KeyPair {
 		self.serialized_der.clone()
 	}
 	/// Serializes the key pair (including the private key) in PKCS#8 format in PEM
+	///
+	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem(&self) -> String {
 		let p = Pem {
