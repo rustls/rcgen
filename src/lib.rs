@@ -1292,7 +1292,8 @@ impl KeyPair {
 	/// Return the key pair's public key in DER format
 	///
 	/// The key is formatted according to the SubjectPublicKeyInfo struct of
-	/// X.509 see https://tools.ietf.org/html/rfc5280#section-4.1
+	/// X.509.
+	/// See [RFC 5820 section 4.1](https://tools.ietf.org/html/rfc5280#section-4.1).
 	pub fn public_key_der(&self) -> Vec<u8> {
 		yasna::construct_der(|writer| self.serialize_public_key_der(writer))
 	}
