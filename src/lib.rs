@@ -1104,6 +1104,12 @@ pub struct KeyPair {
 }
 
 impl KeyPair {
+	/// Parses the key pair from the DER format
+	///
+	/// Equivalent to using the `TryFrom` implementation.
+	pub fn from_der(der :&[u8]) -> Result<Self, RcgenError> {
+		Ok(der.try_into()?)
+	}
 	/// Parses the key pair from the ASCII PEM format
 	///
 	/// *This constructor is only available if rcgen is built with the "pem" feature*
