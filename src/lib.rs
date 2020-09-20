@@ -38,7 +38,6 @@ use yasna::Tag;
 use yasna::models::ObjectIdentifier;
 #[cfg(feature = "pem")]
 use pem::Pem;
-#[cfg(feature = "pem")]
 use std::convert::TryInto;
 use ring::digest;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
