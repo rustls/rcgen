@@ -99,17 +99,17 @@ pub fn generate_simple_self_signed(subject_alt_names :impl Into<Vec<String>>) ->
 /// pkcs-9-at-extensionRequest in RFC 2985
 const OID_PKCS_9_AT_EXTENSION_REQUEST :&[u64] = &[1, 2, 840, 113549, 1, 9, 14];
 
-/// id-at-countryName in RFC 5820
+/// id-at-countryName in RFC 5280
 const OID_COUNTRY_NAME :&[u64] = &[2, 5, 4, 6];
-/// id-at-localityName in RFC 5820
+/// id-at-localityName in RFC 5280
 const OID_LOCALITY_NAME :&[u64] = &[2, 5, 4, 7];
-/// id-at-stateOrProvinceName in RFC 5820
+/// id-at-stateOrProvinceName in RFC 5280
 const OID_STATE_OR_PROVINCE_NAME :&[u64] = &[2, 5, 4, 8];
-/// id-at-organizationName in RFC 5820
+/// id-at-organizationName in RFC 5280
 const OID_ORG_NAME :&[u64] = &[2, 5, 4, 10];
-/// id-at-organizationalUnitName in RFC 5820
+/// id-at-organizationalUnitName in RFC 5280
 const OID_ORG_UNIT_NAME :&[u64] = &[2, 5, 4, 11];
-/// id-at-commonName in RFC 5820
+/// id-at-commonName in RFC 5280
 const OID_COMMON_NAME :&[u64] = &[2, 5, 4, 3];
 
 // https://tools.ietf.org/html/rfc5480#section-2.1.1
@@ -694,7 +694,7 @@ fn dt_to_generalized(dt :&DateTime<Utc>) -> Result<GeneralizedTime, RcgenError> 
 	let mut date_time = *dt;
 	// Set nanoseconds to zero (or to one leap second if there is a leap second)
 	// This is needed because the GeneralizedTime serializer would otherwise
-	// output fractional values which RFC 5820 explicitly forbode [1].
+	// output fractional values which RFC 5280 explicitly forbode [1].
 	// [1]: https://tools.ietf.org/html/rfc5280#section-4.1.2.5.2
 	let nanos = if date_time.nanosecond() >= 1_000_000_000 {
 		1_000_000_000
@@ -1299,7 +1299,7 @@ impl KeyPair {
 	///
 	/// The key is formatted according to the SubjectPublicKeyInfo struct of
 	/// X.509.
-	/// See [RFC 5820 section 4.1](https://tools.ietf.org/html/rfc5280#section-4.1).
+	/// See [RFC 5280 section 4.1](https://tools.ietf.org/html/rfc5280#section-4.1).
 	pub fn public_key_der(&self) -> Vec<u8> {
 		yasna::construct_der(|writer| self.serialize_public_key_der(writer))
 	}
