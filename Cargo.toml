@@ -33,3 +33,4 @@ features = ["x509-parser"]
 [dev-dependencies]
 openssl = "0.10"
 webpki = "0.21"
+botan = { version = "0.7", features = ["vendored"] }

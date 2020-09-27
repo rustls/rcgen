@@ -40,6 +40,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 
 [[package]]
+name = "botan"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfa8960063986eba42d9e5ae5354d1d94bcc8c99a2ef8ca2965d8a634f3de409"
+dependencies = [
+ "botan-sys",
+ "cty",
+]
+
+[[package]]
+name = "botan-src"
+version = "0.21500.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "288cb19c3fdcc24c697dd6f1fa2fcbb92d11d43050e2f3ca1845d9328f0bf04d"
+
+[[package]]
+name = "botan-sys"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e22a749d6304467b44a6fb97579996def00d15652bc756754153f8ece88c2c1"
+dependencies = [
+ "botan-src",
+ "cty",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -66,6 +92,12 @@ dependencies = [
  "num-integer",
  "num-traits",
 ]
+
+[[package]]
+name = "cty"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7313c0d620d0cb4dbd9d019e461a4beb501071ff46ec0ab933efb4daa76d73e3"
 
 [[package]]
 name = "der-parser"
@@ -255,6 +287,7 @@ dependencies = [
 name = "rcgen"
 version = "0.8.5"
 dependencies = [
+ "botan",
  "chrono",
  "openssl",
  "pem",
