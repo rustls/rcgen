@@ -1,3 +1,4 @@
+dist: focal
 language: rust
 rust:
   - nightly
