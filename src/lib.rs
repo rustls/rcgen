@@ -504,7 +504,9 @@ impl CertificateParams {
 		let (_remainder, x509) = x509_parser::parse_x509_der(ca_cert)
 			.or(Err(RcgenError::CouldNotParseCertificate))?;
 
-		let alg = SignatureAlgorithm::from_oid(x509.signature_algorithm.algorithm.iter().as_slice())?;
+		let alg_oid = x509.signature_algorithm.algorithm.iter()
+			.ok_or(RcgenError::CouldNotParseCertificate)?;
+		let alg = SignatureAlgorithm::from_oid(&alg_oid.collect::<Vec<_>>())?;
 
 		let mut dn = DistinguishedName::new();
 		for rdn in x509.tbs_certificate.subject.rdn_seq.iter() {
@@ -519,7 +521,9 @@ impl CertificateParams {
 			let value = attr.attr_value.as_slice()
 				.or(Err(RcgenError::CouldNotParseCertificate))?;
 
-			let dn_type = DnType::from_oid(attr.attr_type.iter().as_slice());
+			let attr_type_oid = attr.attr_type.iter()
+				.ok_or(RcgenError::CouldNotParseCertificate)?;
+			let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
 			let dn_value = String::from_utf8(value.into())
 				.or(Err(RcgenError::CouldNotParseCertificate))?;
 			dn.push(dn_type, dn_value);
