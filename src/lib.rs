@@ -1254,24 +1254,13 @@ impl KeyPair {
 			SignAlgo::Rsa() => Err(RcgenError::KeyGenerationUnavailable),
 		}
 	}
-	fn serialize_public_key_der(&self, writer :DERWriter) {
-		writer.write_sequence(|writer| {
-			self.alg.write_oids_sign_alg(writer.next());
-			let pk = self.public_key_raw();
-			writer.next().write_bitvec_bytes(&pk, pk.len() * 8);
-		})
-	}
 	/// Get the raw public key of this key pair
 	///
 	/// The key is in raw format, as how `ring::signature::KeyPair::public_key`
 	/// would output, and how `ring::signature::verify`
 	/// would accept.
 	pub fn public_key_raw(&self) -> &[u8] {
-		match &self.kind {
-			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
-			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
-			KeyPairKind::Rsa(kp) => kp.public_key().as_ref(),
-		}
+		self.raw_bytes()
 	}
 	/// Check if this key pair can be used with the given signature algorithm
 	pub fn is_compatible(&self, signature_algorithm :&SignatureAlgorithm) -> bool {
@@ -1342,6 +1331,31 @@ impl KeyPair {
 			contents : self.serialize_der(),
 		};
 		pem::encode(&p)
+	}
+}
+
+impl PublicKeyData for KeyPair {
+	fn alg(&self) -> &SignatureAlgorithm {
+		self.alg
+	}
+	fn raw_bytes(&self) -> &[u8] {
+		match &self.kind {
+			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
+			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
+			KeyPairKind::Rsa(kp) => kp.public_key().as_ref(),
+		}
+	}
+}
+
+trait PublicKeyData {
+	fn alg(&self) -> &SignatureAlgorithm;
+	fn raw_bytes(&self) -> &[u8];
+	fn serialize_public_key_der(&self, writer :DERWriter) {
+		writer.write_sequence(|writer| {
+			self.alg().write_oids_sign_alg(writer.next());
+			let pk = self.raw_bytes();
+			writer.next().write_bitvec_bytes(&pk, pk.len() * 8);
+		})
 	}
 }
 
