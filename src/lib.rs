@@ -403,6 +403,31 @@ impl DistinguishedName {
 			iter :self.order.iter()
 		}
 	}
+
+	#[cfg(feature = "x509-parser")]
+	fn from_name(name :&x509_parser::x509::X509Name) -> Result<Self, RcgenError> {
+		let mut dn = DistinguishedName::new();
+		for rdn in name.rdn_seq.iter() {
+			assert!(rdn.set.len() != 0, "x509-parser distinguished name set is empty");
+
+			let attr = if rdn.set.len() > 1 {
+				// no support for distinguished names with more than one attribute
+				return Err(RcgenError::CouldNotParseCertificate);
+			} else {
+				&rdn.set.as_slice()[0]
+			};
+			let value = attr.attr_value.as_slice()
+				.or(Err(RcgenError::CouldNotParseCertificate))?;
+
+			let attr_type_oid = attr.attr_type.iter()
+				.ok_or(RcgenError::CouldNotParseCertificate)?;
+			let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
+			let dn_value = String::from_utf8(value.into())
+				.or(Err(RcgenError::CouldNotParseCertificate))?;
+			dn.push(dn_type, dn_value);
+		}
+		Ok(dn)
+	}
 }
 
 /**
@@ -508,27 +533,7 @@ impl CertificateParams {
 			.ok_or(RcgenError::CouldNotParseCertificate)?;
 		let alg = SignatureAlgorithm::from_oid(&alg_oid.collect::<Vec<_>>())?;
 
-		let mut dn = DistinguishedName::new();
-		for rdn in x509.tbs_certificate.subject.rdn_seq.iter() {
-			assert!(rdn.set.len() != 0, "x509-parser distinguished name set is empty");
-
-			let attr = if rdn.set.len() > 1 {
-				// no support for distinguished names with more than one attribute
-				return Err(RcgenError::CouldNotParseCertificate);
-			} else {
-				&rdn.set.as_slice()[0]
-			};
-			let value = attr.attr_value.as_slice()
-				.or(Err(RcgenError::CouldNotParseCertificate))?;
-
-			let attr_type_oid = attr.attr_type.iter()
-				.ok_or(RcgenError::CouldNotParseCertificate)?;
-			let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
-			let dn_value = String::from_utf8(value.into())
-				.or(Err(RcgenError::CouldNotParseCertificate))?;
-			dn.push(dn_type, dn_value);
-		}
-
+		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
 		Ok(
 			CertificateParams {
 				alg,
