@@ -3,6 +3,8 @@ extern crate rcgen;
 extern crate ring;
 extern crate pem;
 
+#[cfg(feature = "x509-parser")]
+use rcgen::CertificateSigningRequest;
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
 use webpki::{EndEntityCert, TLSServerTrustAnchors};
 use webpki::trust_anchor_util::cert_der_as_trust_anchor;
@@ -265,6 +267,28 @@ fn test_webpki_imported_ca() {
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap();
 	let cert_der = cert.serialize_der_with_signer(&imported_ca_cert).unwrap();
+
+	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
+		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	check_cert_ca(&cert_der, &cert, &ca_cert_der,
+		&webpki::ECDSA_P256_SHA256, sign_fn);
+}
+
+#[cfg(feature = "x509-parser")]
+#[test]
+fn test_certificate_from_csr() {
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	let cert = Certificate::from_params(params).unwrap();
+	let csr_der = cert.serialize_request_der().unwrap();
+	let csr = CertificateSigningRequest::from_der(&csr_der).unwrap();
+
+	let mut params = util::default_params();
+	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	let ca_cert = Certificate::from_params(params).unwrap();
+	let ca_cert_der = ca_cert.serialize_der().unwrap();
+	let cert_der = csr.serialize_der_with_signer(&ca_cert).unwrap();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
 		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
