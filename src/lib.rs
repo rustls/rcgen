@@ -501,7 +501,7 @@ impl CertificateParams {
 	/// *This constructor is only available if rcgen is built with the "x509-parser" feature*
 	#[cfg(feature = "x509-parser")]
 	pub fn from_ca_cert_der(ca_cert :&[u8], key_pair :KeyPair) -> Result<Self, RcgenError> {
-		let (_remainder, x509) = x509_parser::parse_x509_der(ca_cert)
+		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
 			.or(Err(RcgenError::CouldNotParseCertificate))?;
 
 		let alg_oid = x509.signature_algorithm.algorithm.iter()
