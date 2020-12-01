@@ -297,6 +297,25 @@ fn test_openssl_separate_ca() {
 }
 
 #[test]
+fn test_openssl_separate_ca_with_other_signing_alg() {
+	let mut params = util::default_params();
+	params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	let ca_cert = Certificate::from_params(params).unwrap();
+	let ca_cert_pem = ca_cert.serialize_pem().unwrap();
+
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	params.alg = &rcgen::PKCS_ECDSA_P384_SHA384;
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	let cert = Certificate::from_params(params).unwrap();
+	let cert_pem = cert.serialize_pem_with_signer(&ca_cert).unwrap();
+	let key = cert.serialize_private_key_der();
+
+	verify_cert_ca(&cert_pem, &key, &ca_cert_pem);
+}
+
+#[test]
 fn test_openssl_separate_ca_name_constraints() {
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);

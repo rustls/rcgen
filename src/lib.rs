@@ -714,7 +714,7 @@ impl CertificateParams {
 			let serial = self.serial_number.unwrap_or(42);
 			writer.next().write_u64(serial);
 			// Write signature
-			self.alg.write_alg_ident(writer.next());
+			ca.params.alg.write_alg_ident(writer.next());
 			// Write issuer
 			write_distinguished_name(writer.next(), &ca.params.distinguished_name);
 			// Write validity
@@ -869,7 +869,7 @@ impl CertificateParams {
 				writer.next().write_der(&tbs_cert_list_serialized);
 
 				// Write signatureAlgorithm
-				self.alg.write_alg_ident(writer.next());
+				ca.params.alg.write_alg_ident(writer.next());
 
 				// Write signature
 				ca.key_pair.sign(&tbs_cert_list_serialized, writer.next())?;
