@@ -1,5 +1,12 @@
 # Changes
 
+## Release 0.8.6 - December 1, 2020
+
+- Add `KeyPair::from_der`
+- Add botan based test to the testsuite
+- Update x509-parser to 0.9. Contributed by [@djc](https://github.com/djc).
+- Ability to create certificates from CSRs. Contributed by [@djc](https://github.com/djc).
+
 ## Release 0.8.5 - June 29, 2020
 
 - Add some more `DnType`s: `OrganizationalUnitName`, `LocalityName`, `StateOrProvinceName`
