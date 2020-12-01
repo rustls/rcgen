@@ -35,4 +35,4 @@ openssl = "0.10"
 webpki = "0.21"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-botan = { version = "0.7", features = ["vendored"] }
+botan = { version = "0.8", features = ["vendored"] }
