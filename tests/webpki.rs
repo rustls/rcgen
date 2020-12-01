@@ -46,11 +46,12 @@ fn sign_msg_rsa(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 fn check_cert<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, alg :&SignatureAlgorithm,
 		sign_fn :impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>) {
 	println!("{}", cert.serialize_pem().unwrap());
-	check_cert_ca(cert_der, cert, cert_der, alg, sign_fn);
+	check_cert_ca(cert_der, cert, cert_der, alg, alg, sign_fn);
 }
 
 fn check_cert_ca<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, ca_der :&[u8],
-		alg :&SignatureAlgorithm, sign_fn :impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>) {
+		cert_alg :&SignatureAlgorithm, ca_alg :&SignatureAlgorithm,
+		sign_fn :impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>) {
 	let trust_anchor = cert_der_as_trust_anchor(&ca_der).unwrap();
 	let trust_anchor_list = &[trust_anchor];
 	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
@@ -61,7 +62,7 @@ fn check_cert_ca<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, ca_der :&[u8],
 
 	// (1/3) Check whether the cert is valid
 	end_entity_cert.verify_is_valid_tls_server_cert(
-		&[&alg],
+		&[&cert_alg, &ca_alg],
 		&trust_anchors,
 		&[],
 		time,
@@ -77,7 +78,7 @@ fn check_cert_ca<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, ca_der :&[u8],
 	let msg = b"Hello, World! This message is signed.";
 	let signature = sign_fn(&cert, msg);
 	end_entity_cert.verify_signature(
-		&alg,
+		&cert_alg,
 		msg,
 		&signature,
 	).expect("signature is valid");
@@ -206,7 +207,28 @@ fn test_webpki_separate_ca() {
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
 		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(&cert_der, &cert, &ca_der,
-		&webpki::ECDSA_P256_SHA256, sign_fn);
+		&webpki::ECDSA_P256_SHA256, &webpki::ECDSA_P256_SHA256, sign_fn);
+}
+
+#[test]
+fn test_webpki_separate_ca_with_other_signing_alg() {
+	let mut params = util::default_params();
+	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+	let ca_cert = Certificate::from_params(params).unwrap();
+
+	let ca_der = ca_cert.serialize_der().unwrap();
+
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	params.alg = &rcgen::PKCS_ED25519;
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+
+	let cert = Certificate::from_params(params).unwrap();
+	let cert_der = cert.serialize_der_with_signer(&ca_cert).unwrap();
+
+	check_cert_ca(&cert_der, &cert, &ca_der,
+				&webpki::ED25519, &webpki::ECDSA_P256_SHA256, sign_msg_ed25519);
 }
 
 /*
@@ -271,7 +293,7 @@ fn test_webpki_imported_ca() {
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
 		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(&cert_der, &cert, &ca_cert_der,
-		&webpki::ECDSA_P256_SHA256, sign_fn);
+		&webpki::ECDSA_P256_SHA256, &webpki::ECDSA_P256_SHA256, sign_fn);
 }
 
 #[cfg(feature = "x509-parser")]
@@ -293,5 +315,5 @@ fn test_certificate_from_csr() {
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
 		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(&cert_der, &cert, &ca_cert_der,
-		&webpki::ECDSA_P256_SHA256, sign_fn);
+		&webpki::ECDSA_P256_SHA256, &webpki::ECDSA_P256_SHA256, sign_fn);
 }
