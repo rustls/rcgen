@@ -1,5 +1,10 @@
 # Changes
 
+## Release 0.8.7 - December 1, 2020
+
+- Turn `botan` back into a dev-dependency. Contributed by [@nthuemmel](https://github.com/nthuemmel).
+- Fix signing when CA uses different signing algorithm . Contributed by [@nthuemmel](https://github.com/nthuemmel).
+
 ## Release 0.8.6 - December 1, 2020
 
 - Add `KeyPair::from_der`
