@@ -1037,12 +1037,14 @@ pub fn date_time_ymd(year :i32, month :u32, day :u32) -> DateTime<Utc> {
 	DateTime::<Utc>::from_utc(naive_dt, Utc)
 }
 
-fn dt_strip_nanos(dt :&DateTime<Utc>) -> Result<DateTime<Utc>, RcgenError> {
+fn dt_strip_nanos(dt :&DateTime<Utc>, allow_leap: bool) -> Result<DateTime<Utc>, RcgenError> {
 	// Set nanoseconds to zero (or to one leap second if there is a leap second)
 	// This is needed because the GeneralizedTime serializer would otherwise
 	// output fractional values which RFC 5280 explicitly forbode [1].
+	// UTCTime cannot express fractional seconds or leap seconds
+	// therefore, it needs to be stripped of nanoseconds fully.
 	// [1]: https://tools.ietf.org/html/rfc5280#section-4.1.2.5.2
-	let nanos = if dt.nanosecond() >= 1_000_000_000 {
+	let nanos = if dt.nanosecond() >= 1_000_000_000 && allow_leap {
 		1_000_000_000
 	} else {
 		0
@@ -1051,7 +1053,7 @@ fn dt_strip_nanos(dt :&DateTime<Utc>) -> Result<DateTime<Utc>, RcgenError> {
 }
 
 fn dt_to_generalized(dt :&DateTime<Utc>) -> Result<GeneralizedTime, RcgenError> {
-	let date_time = dt_strip_nanos(dt)?;
+	let date_time = dt_strip_nanos(dt, true)?;
 	Ok(GeneralizedTime::from_datetime::<Utc>(&date_time))
 }
 
@@ -1063,7 +1065,7 @@ fn write_dt_utc_or_generalized(writer :DERWriter, dt :&DateTime<Utc>) -> Result<
 	// them, we have to use GeneralizedTime if we want to or not.
 	// [1]: https://tools.ietf.org/html/rfc5280#section-4.1.2.5
 	if (1950..2050).contains(&dt.year()) {
-		let date_time = dt_strip_nanos(dt)?;
+		let date_time = dt_strip_nanos(dt, false)?;
 		let ut = UTCTime::from_datetime::<Utc>(&date_time);
 		writer.write_utctime(&ut);
 	} else {
@@ -1619,5 +1621,45 @@ impl SignatureAlgorithm {
 				writer.next().write_null();
 			}
 		});
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use std::panic::catch_unwind;
+	use chrono::TimeZone;
+
+	fn get_times() -> [DateTime<Utc>; 3] {
+		let dt_nanos = Utc.ymd(2020, 12, 3).and_hms_nano(0, 0, 1, 444);
+		let dt_leap = Utc.ymd(2020, 12, 3).and_hms_nano(0, 0, 1, 1_000_000_001);
+		let dt_zero = Utc.ymd(2020, 12, 3).and_hms_nano(0, 0, 1, 0);
+		[dt_nanos, dt_leap, dt_zero]
+	}
+
+	#[test]
+	fn test_dt_utc_strip_nanos() {
+		let times = get_times();
+
+		// No stripping - DateTime with nanos
+		let res = catch_unwind(|| UTCTime::from_datetime::<Utc>(&times[0]));
+		assert!(res.is_err());
+
+		// Stripping
+		for dt in times.iter() {
+			let date_time = dt_strip_nanos(&dt, false);
+			assert!(date_time.is_ok());
+			let _ut = UTCTime::from_datetime::<Utc>(&date_time.unwrap());
+		}
+	}
+
+	#[test]
+	fn test_dt_to_generalized() {
+		let times = get_times();
+
+		for dt in times.iter() {
+			assert!(dt_to_generalized(&dt).is_ok());
+		}
 	}
 }
