@@ -1037,18 +1037,21 @@ pub fn date_time_ymd(year :i32, month :u32, day :u32) -> DateTime<Utc> {
 	DateTime::<Utc>::from_utc(naive_dt, Utc)
 }
 
-fn dt_to_generalized(dt :&DateTime<Utc>) -> Result<GeneralizedTime, RcgenError> {
-	let mut date_time = *dt;
+fn dt_strip_nanos(dt :&DateTime<Utc>) -> Result<DateTime<Utc>, RcgenError> {
 	// Set nanoseconds to zero (or to one leap second if there is a leap second)
 	// This is needed because the GeneralizedTime serializer would otherwise
 	// output fractional values which RFC 5280 explicitly forbode [1].
 	// [1]: https://tools.ietf.org/html/rfc5280#section-4.1.2.5.2
-	let nanos = if date_time.nanosecond() >= 1_000_000_000 {
+	let nanos = if dt.nanosecond() >= 1_000_000_000 {
 		1_000_000_000
 	} else {
 		0
 	};
-	date_time = date_time.with_nanosecond(nanos).ok_or(RcgenError::Time)?;
+	dt.with_nanosecond(nanos).ok_or(RcgenError::Time)
+}
+
+fn dt_to_generalized(dt :&DateTime<Utc>) -> Result<GeneralizedTime, RcgenError> {
+	let date_time = dt_strip_nanos(dt)?;
 	Ok(GeneralizedTime::from_datetime::<Utc>(&date_time))
 }
 
@@ -1059,8 +1062,9 @@ fn write_dt_utc_or_generalized(writer :DERWriter, dt :&DateTime<Utc>) -> Result<
 	// about dates before 1950, but as UTCTime can't represent
 	// them, we have to use GeneralizedTime if we want to or not.
 	// [1]: https://tools.ietf.org/html/rfc5280#section-4.1.2.5
-	if (1950 .. 2050).contains(&dt.year()) {
-		let ut = UTCTime::from_datetime::<Utc>(dt);
+	if (1950..2050).contains(&dt.year()) {
+		let date_time = dt_strip_nanos(dt)?;
+		let ut = UTCTime::from_datetime::<Utc>(&date_time);
 		writer.write_utctime(&ut);
 	} else {
 		let gt = dt_to_generalized(dt)?;
