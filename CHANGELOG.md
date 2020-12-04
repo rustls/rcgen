@@ -1,5 +1,10 @@
 # Changes
 
+## Release 0.8.9 - December 4, 2020
+
+- Switch CI to Github Actions.
+- Strip nanos from `DateTime` as well. Contributed by [@trevor-crypto](https://github.com/trevor-crypto).
+
 ## Release 0.8.7 - December 1, 2020
 
 - Turn `botan` back into a dev-dependency. Contributed by [@nthuemmel](https://github.com/nthuemmel).
