@@ -1624,6 +1624,35 @@ impl SignatureAlgorithm {
 	}
 }
 
+#[cfg(feature = "zeroize")]
+impl zeroize::Zeroize for KeyPair {
+    fn zeroize(&mut self) {
+        self.serialized_der.zeroize();
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl zeroize::Zeroize for Certificate {
+    fn zeroize(&mut self) {
+        self.params.zeroize();
+        self.key_pair.zeroize();
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl zeroize::Zeroize for CertificateSigningRequest {
+    fn zeroize(&mut self) {
+        self.params.zeroize();
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl zeroize::Zeroize for CertificateParams {
+    fn zeroize(&mut self) {
+        self.key_pair.zeroize();
+    }
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

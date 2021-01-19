@@ -347,6 +347,7 @@ dependencies = [
  "webpki",
  "x509-parser",
  "yasna",
+ "zeroize",
 ]
 
 [[package]]
@@ -604,3 +605,9 @@ checksum = "0de7bff972b4f2a06c85f6d8454b09df153af7e3a4ec2aac81db1b105b684ddb"
 dependencies = [
  "chrono",
 ]
+
+[[package]]
+name = "zeroize"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81a974bcdd357f0dca4d41677db03436324d45a4c9ed2d0b873a5a360ce41c36"
