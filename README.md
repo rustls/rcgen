@@ -1,6 +1,6 @@
 # rcgen
 
-[![docs](https://docs.rs/rcgen/badge.svg)](https://docs.rs/crate/rcgen)
+[![docs](https://docs.rs/rcgen/badge.svg)](https://docs.rs/rcgen)
 [![crates.io](https://img.shields.io/crates/v/rcgen.svg)](https://crates.io/crates/rcgen)
 [![dependency status](https://deps.rs/repo/github/est31/rcgen/status.svg)](https://deps.rs/repo/github/est31/rcgen)
 
