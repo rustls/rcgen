@@ -1239,21 +1239,21 @@ pub struct KeyPair {
 }
 
 impl KeyPair {
-	/// Parses the key pair from the DER format
+	/// Parses the key pair from the DER format.
 	///
 	/// Equivalent to using the `TryFrom` implementation.
 	pub fn from_der(der :&[u8]) -> Result<Self, RcgenError> {
 		Ok(der.try_into()?)
 	}
-	/// Parses the key pair from the ASCII PEM format
+	/// Parses the key pair from the ASCII PEM format.
 	///
 	/// *This constructor is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
-	pub fn from_pem(pem_str :&str) -> Result<Self, RcgenError> {
-		let private_key = pem::parse(pem_str)?;
-		let private_key_der :&[_] = &private_key.contents;
-		Ok(private_key_der.try_into()?)
-	}
+	pub fn from_pem<B: AsRef<[u8]>>(pem: B) -> Result<Self, RcgenError> {
+        let private_key = pem::parse(pem)?;
+        let private_key_der: &[_] = &private_key.contents;
+        Ok(private_key_der.try_into()?)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
