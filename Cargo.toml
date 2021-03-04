@@ -34,6 +34,4 @@ features = ["x509-parser"]
 [dev-dependencies]
 openssl = "0.10"
 webpki = "0.21"
-
-[target.'cfg(not(target_os = "macos"))'.dev-dependencies]
 botan = { version = "0.8", features = ["vendored"] }
