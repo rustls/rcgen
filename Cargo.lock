@@ -38,9 +38,9 @@ dependencies = [
 
 [[package]]
 name = "botan"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e05aaaeef77ac5bb0eb14e322432cf15be76918d20a9b7be0e134ff914149f27"
+checksum = "3306a2c5d206197609ca903174243b98c9d490c8d07020fa6b600d76ac8f7521"
 dependencies = [
  "botan-sys",
  "cty",
@@ -48,15 +48,15 @@ dependencies = [
 
 [[package]]
 name = "botan-src"
-version = "0.21701.0"
+version = "0.21703.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "032615a6d5f02fc090056773b7097ef133e1d80a331e0c9d2e0d4bc23c75b126"
+checksum = "c82325b7372ad65831ff9c9a67d35270e4772c94f0c8a51da5596382706a4a68"
 
 [[package]]
 name = "botan-sys"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3801c6a81dc76f638b72240a6029cb354211fc3a886758abac48c27e27a94c5f"
+checksum = "3d7c15ad5ec21b99dcc93aa4978144399f60cf55e31f791285d92ad7e9fa21d4"
 dependencies = [
  "botan-src",
  "cty",

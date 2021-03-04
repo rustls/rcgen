@@ -1,5 +1,3 @@
-#![cfg(not(target_os = "macos"))]
-
 extern crate botan;
 extern crate rcgen;
 
