@@ -7,8 +7,8 @@ jobs:
 
     strategy:
       matrix:
-        os: [macOS-latest, ubuntu-latest]
-        toolchain: [stable, beta, nightly]
+        os: [macOS-latest]
+        toolchain: [nightly-2021-03-13]
 
     runs-on: ${{ matrix.os }}
 
@@ -19,16 +19,6 @@ jobs:
       with:
         toolchain: ${{ matrix.toolchain }}
         override: true
-    - name: Run cargo check --all
-      env:
-        RUSTFLAGS: -D warnings
-      run: |
-        cargo check --all
-    - name: Run the tests
-      env:
-        RUSTFLAGS: -D warnings
-      run: |
-         cargo test --all
     - name: Run the tests with x509-parser enabled
       env:
         RUSTFLAGS: -D warnings
