@@ -28,4 +28,4 @@ jobs:
       env:
         RUSTFLAGS: -D warnings
       run: |
-         cargo test
+         cargo test --features byteorder
