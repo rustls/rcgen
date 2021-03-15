@@ -1,4 +1,2 @@
-#![allow(unused)]
-
 #[test]
-fn test_key_params_mismatch() {}
+fn t() {}
