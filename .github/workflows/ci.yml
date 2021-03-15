@@ -24,8 +24,8 @@ jobs:
         RUSTFLAGS: -D warnings
       run: |
          cargo test --all
-    - name: Run the tests with x509-parser enabled
+    - name: Run the tests with byteorder enabled
       env:
         RUSTFLAGS: -D warnings
       run: |
-         cargo test --verbose --features x509-parser
+         cargo test --verbose --features byteorder
