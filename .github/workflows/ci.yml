@@ -19,6 +19,11 @@ jobs:
       with:
         toolchain: ${{ matrix.toolchain }}
         override: true
+    - name: Run the tests
+      env:
+        RUSTFLAGS: -D warnings
+      run: |
+         cargo test --all
     - name: Run the tests with x509-parser enabled
       env:
         RUSTFLAGS: -D warnings
