@@ -19,11 +19,6 @@ jobs:
       with:
         toolchain: ${{ matrix.toolchain }}
         override: true
-    - name: Run cargo check --all
-      env:
-        RUSTFLAGS: -D warnings
-      run: |
-        cargo check --all
     - name: Run the tests
       env:
         RUSTFLAGS: -D warnings
@@ -34,6 +29,3 @@ jobs:
         RUSTFLAGS: -D warnings
       run: |
          cargo test --verbose --features x509-parser
-    - name: Run cargo doc
-      run: |
-        cargo doc --all --all-features
