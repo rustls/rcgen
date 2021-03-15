@@ -15,14 +15,14 @@ path = "src/lib.rs"
 [[bin]]
 name = "rcgen"
 path = "src/main.rs"
-required-features = ["pem"]
+required-features = ["byteorder"]
 
 [dependencies]
-pem = { version = "0.8", optional = true }
-x509-parser = { version = "0.9", features = ["verify"], optional = true }
+byteorder = { version = "1.0", optional = true }
+x509-parser = { version = "0.9", optional = true }
 
 [features]
-default = ["pem"]
+default = ["byteorder"]
 
 [package.metadata.docs.rs]
 features = ["x509-parser"]
