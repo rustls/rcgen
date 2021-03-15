@@ -8,7 +8,7 @@ jobs:
     strategy:
       matrix:
         os: [windows-latest]
-        toolchain: [nightly]
+        toolchain: [nightly-2021-03-14]
 
     runs-on: ${{ matrix.os }}
 
