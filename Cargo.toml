@@ -18,6 +18,7 @@ path = "src/main.rs"
 required-features = ["pem"]
 
 [dependencies]
+pem = { version = "0.8", optional = true }
 x509-parser = { version = "0.9", features = ["verify"], optional = true }
 
 [features]
