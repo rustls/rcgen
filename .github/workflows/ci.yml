@@ -23,7 +23,7 @@ jobs:
       env:
         RUSTFLAGS: -D warnings
       run: |
-         cargo test --all
+         cargo test
     - name: Run the tests with byteorder enabled
       env:
         RUSTFLAGS: -D warnings
