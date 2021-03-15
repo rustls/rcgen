@@ -1,6 +1,4 @@
 mod util {
-extern crate rcgen;
-
 use rcgen::{CertificateParams, DnType};
 
 /*
