@@ -1033,7 +1033,7 @@ pub enum KeyIdMethod {
 /// This helper function serves two purposes: first, so that you don't
 /// have to import the chrono crate yourself in order to specify date
 /// information, second so that users don't have to type unproportionately
-/// long code just to generate an instance of `DateTime<Utc>`.
+/// long code just to generate an instance of [`DateTime<Utc>`].
 pub fn date_time_ymd(year :i32, month :u32, day :u32) -> DateTime<Utc> {
 	let naive_dt = NaiveDate::from_ymd(year, month, day).and_hms_milli(0, 0, 0, 0);
 	DateTime::<Utc>::from_utc(naive_dt, Utc)
