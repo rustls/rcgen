@@ -489,7 +489,7 @@ pub struct CertificateSigningRequest {
 impl CertificateSigningRequest {
 	/// Parse a certificate signing request from the ASCII PEM format
 	///
-	/// See `from_der()` for more details.
+	/// See [`from_der`](Self::from_der) for more details.
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
 	pub fn from_pem(pem_str :&str) -> Result<Self, RcgenError> {
 		let csr = pem::parse(pem_str)
