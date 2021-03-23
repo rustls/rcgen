@@ -444,7 +444,7 @@ impl DistinguishedName {
 }
 
 /**
-Iterator over `DistinguishedName` entries
+Iterator over [`DistinguishedName`] entries
 */
 pub struct DistinguishedNameIterator<'a> {
 	distinguished_name :&'a DistinguishedName,
