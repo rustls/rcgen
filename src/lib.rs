@@ -1241,7 +1241,7 @@ pub struct KeyPair {
 impl KeyPair {
 	/// Parses the key pair from the DER format
 	///
-	/// Equivalent to using the `TryFrom` implementation.
+	/// Equivalent to using the [`TryFrom`] implementation.
 	pub fn from_der(der :&[u8]) -> Result<Self, RcgenError> {
 		Ok(der.try_into()?)
 	}
