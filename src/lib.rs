@@ -1394,8 +1394,8 @@ impl KeyPair {
 	}
 	/// Get the raw public key of this key pair
 	///
-	/// The key is in raw format, as how `ring::signature::KeyPair::public_key`
-	/// would output, and how `ring::signature::verify`
+	/// The key is in raw format, as how [`ring::signature::KeyPair::public_key`]
+	/// would output, and how [`ring::signature::verify`]
 	/// would accept.
 	pub fn public_key_raw(&self) -> &[u8] {
 		self.raw_bytes()
@@ -1404,7 +1404,7 @@ impl KeyPair {
 	pub fn is_compatible(&self, signature_algorithm :&SignatureAlgorithm) -> bool {
 		self.alg == signature_algorithm
 	}
-	/// Returns (possibly multiple) compatible `SignatureAlgorithm`'s
+	/// Returns (possibly multiple) compatible [`SignatureAlgorithm`]'s
 	/// that the key can be used with
 	pub fn compatible_algs(&self)
 			-> impl Iterator<Item=&'static SignatureAlgorithm> {
