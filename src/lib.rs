@@ -191,7 +191,7 @@ impl SanType {
 ///
 /// This type has similarities to the [`SanType`] enum but is not equal.
 /// For example, `GeneralSubtree` has CIDR subnets for ip addresses
-/// while `SanType` has IP addresses.
+/// while [`SanType`] has IP addresses.
 pub enum GeneralSubtree {
 	/// Also known as E-Mail address
 	Rfc822Name(String),
