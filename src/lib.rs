@@ -4,9 +4,9 @@ Rust X.509 certificate generation utility
 This crate provides a way to generate self signed X.509 certificates.
 
 The most simple way of using this crate is by calling the
-`generate_simple_self_signed` function.
+[`generate_simple_self_signed`] function.
 For more customization abilities, we provide the lower level
-`Certificate::from_params` function.
+[`Certificate::from_params`] function.
 
 ## Example
 
