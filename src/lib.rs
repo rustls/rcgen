@@ -1395,7 +1395,7 @@ impl KeyPair {
 	/// Get the raw public key of this key pair
 	///
 	/// The key is in raw format, as how [`ring::signature::KeyPair::public_key`]
-	/// would output, and how [`ring::signature::verify`]
+	/// would output, and how [`ring::signature::UnparsedPublicKey::verify`]
 	/// would accept.
 	pub fn public_key_raw(&self) -> &[u8] {
 		self.raw_bytes()
