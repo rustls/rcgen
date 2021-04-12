@@ -54,6 +54,7 @@ use std::convert::TryFrom;
 use std::error::Error;
 use std::net::IpAddr;
 use std::str::FromStr;
+use std::hash::{Hash, Hasher};
 
 /// A self signed certificate together with signing keys
 pub struct Certificate {
@@ -464,6 +465,7 @@ impl <'a> Iterator for DistinguishedNameIterator<'a> {
 
 
 /// A public key, extracted from a CSR
+#[derive(Hash)]
 pub struct PublicKey {
 	raw: Vec<u8>,
 	alg: &'static SignatureAlgorithm,
@@ -1215,6 +1217,22 @@ enum SignAlgo {
 	Rsa(),
 }
 
+impl Hash for SignAlgo {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		match self {
+			SignAlgo::EcDsa(_) => {
+				"SignAlgo::EcDsa".hash(state);
+			}
+			SignAlgo::EdDsa(_) => {
+				"SignAlgo::EdDsa".hash(state);
+			}
+			other => {
+				other.hash(state);
+			}
+		}
+	}
+}
+
 /// A key pair vairant
 #[derive(Debug)]
 enum KeyPairKind {
@@ -1537,6 +1555,15 @@ impl PartialEq for SignatureAlgorithm {
 }
 
 impl Eq for SignatureAlgorithm {}
+
+impl Hash for SignatureAlgorithm {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.oids_sign_alg.hash(state);
+		self.sign_alg.hash(state);
+		self.oid_components.hash(state);
+		self.write_null_params.hash(state);
+	}
+}
 
 impl SignatureAlgorithm {
 	fn iter() -> std::slice::Iter<'static, &'static SignatureAlgorithm> {
