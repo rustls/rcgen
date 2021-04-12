@@ -444,6 +444,12 @@ impl DistinguishedName {
 	}
 }
 
+impl Default for DistinguishedName {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 /**
 Iterator over [`DistinguishedName`] entries
 */
@@ -589,7 +595,7 @@ impl Default for CertificateParams {
 		// not_before and not_after set to reasonably long dates
 		let not_before = date_time_ymd(1975, 01, 01);
 		let not_after = date_time_ymd(4096, 01, 01);
-		let mut distinguished_name = DistinguishedName::new();
+		let mut distinguished_name = DistinguishedName::default();
 		distinguished_name.push(DnType::CommonName, "rcgen self signed cert");
 		CertificateParams {
 			alg : &PKCS_ECDSA_P256_SHA256,
