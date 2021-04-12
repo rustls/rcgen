@@ -1277,7 +1277,7 @@ impl KeyPair {
 	///
 	/// Equivalent to using the [`TryFrom`] implementation.
 	pub fn from_der(der :&[u8]) -> Result<Self, RcgenError> {
-		Ok(der.try_into()?)
+		der.try_into()
 	}
 	/// Parses the key pair from the ASCII PEM format
 	///
@@ -1286,7 +1286,7 @@ impl KeyPair {
 	pub fn from_pem(pem_str :&str) -> Result<Self, RcgenError> {
 		let private_key = pem::parse(pem_str)?;
 		let private_key_der :&[_] = &private_key.contents;
-		Ok(private_key_der.try_into()?)
+		private_key_der.try_into()
 	}
 }
 
@@ -1371,7 +1371,7 @@ impl From<pem::PemError> for RcgenError {
 impl TryFrom<&[u8]> for KeyPair {
 	type Error = RcgenError;
 	fn try_from(pkcs8 :&[u8]) -> Result<KeyPair, RcgenError> {
-		let pkcs8_vec = std::iter::FromIterator::from_iter(pkcs8.iter().cloned());
+		let pkcs8_vec = pkcs8.to_vec();
 
 		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
 			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
