@@ -1225,6 +1225,7 @@ impl Certificate {
 	}
 }
 
+#[derive(Debug)]
 enum SignAlgo {
 	EcDsa(&'static EcdsaSigningAlgorithm),
 	EdDsa(&'static EdDSAParameters),
@@ -1233,17 +1234,7 @@ enum SignAlgo {
 
 impl Hash for SignAlgo {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		match self {
-			SignAlgo::EcDsa(_) => {
-				"SignAlgo::EcDsa".hash(state);
-			}
-			SignAlgo::EdDsa(_) => {
-				"SignAlgo::EdDsa".hash(state);
-			}
-			other => {
-				other.hash(state);
-			}
-		}
+		format!("{:?}", self).hash(state)
 	}
 }
 
