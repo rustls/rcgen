@@ -884,6 +884,7 @@ impl CertificateParams {
 }
 
 /// Whether the certificate is allowed to sign other certificates
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum IsCa {
 	/// The certificate can only sign itself
 	SelfSignedOnly,
@@ -895,6 +896,7 @@ pub enum IsCa {
 ///
 /// Sets an optional upper limit on the length of the intermediate certificate chain
 /// length allowed for this CA certificate (not including the end entity certificate).
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum BasicConstraints {
 	/// No constraint
 	Unconstrained,
@@ -974,6 +976,7 @@ impl ExtendedKeyUsagePurpose {
 
 /// A custom extension of a certificate, as specified in
 /// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct CustomExtension {
 	oid :Vec<u64>,
 	critical :bool,
