@@ -16,7 +16,7 @@ use rcgen::generate_simple_self_signed;
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
 let subject_alt_names = vec!["hello.world.example".to_string(),
-	"localhost".to_string()];
+    "localhost".to_string()];
 
 let cert = generate_simple_self_signed(subject_alt_names).unwrap();
 println!("{}", cert.serialize_pem().unwrap());
@@ -78,7 +78,7 @@ extern crate rcgen;
 use rcgen::generate_simple_self_signed;
 # fn main () {
 let subject_alt_names :&[_] = &["hello.world.example".to_string(),
-	"localhost".to_string()];
+    "localhost".to_string()];
 
 let cert = generate_simple_self_signed(subject_alt_names).unwrap();
 // The certificate is now valid for localhost and the domain "hello.world.example"
@@ -306,7 +306,7 @@ impl FromStr for CidrSubnet {
 	/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
 	/// ```
 	fn from_str(s :&str) -> Result<Self, Self::Err> {
-		let mut iter = s.split("/");
+		let mut iter = s.split('/');
 		if let (Some(addr_s), Some(prefix_s)) = (iter.next(), iter.next()) {
 			let addr = IpAddr::from_str(addr_s).map_err(|_| ())?;
 			let prefix = u8::from_str(prefix_s).map_err(|_| ())?;
@@ -598,8 +598,8 @@ pub struct CertificateParams {
 impl Default for CertificateParams {
 	fn default() -> Self {
 		// not_before and not_after set to reasonably long dates
-		let not_before = date_time_ymd(1975, 01, 01);
-		let not_after = date_time_ymd(4096, 01, 01);
+		let not_before = date_time_ymd(1975, 1, 1);
+		let not_after = date_time_ymd(4096, 1, 1);
 		let mut distinguished_name = DistinguishedName::default();
 		distinguished_name.push(DnType::CommonName, "rcgen self signed cert");
 		CertificateParams {
@@ -921,7 +921,7 @@ impl CertificateParams {
 	pub fn new(subject_alt_names :impl Into<Vec<String>>) -> Self {
 		let subject_alt_names = subject_alt_names.into()
 			.into_iter()
-			.map(|s| SanType::DnsName(s))
+			.map(SanType::DnsName)
 			.collect::<Vec<_>>();
 		CertificateParams {
 			subject_alt_names,

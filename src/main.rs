@@ -7,8 +7,8 @@ use std::fs;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let mut params :CertificateParams = Default::default();
-	params.not_before = date_time_ymd(1975, 01, 01);
-	params.not_after = date_time_ymd(4096, 01, 01);
+	params.not_before = date_time_ymd(1975, 1, 1);
+	params.not_after = date_time_ymd(4096, 1, 1);
 	params.distinguished_name = DistinguishedName::new();
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Master Cert");
