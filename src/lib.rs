@@ -1508,7 +1508,8 @@ impl PublicKeyData for KeyPair {
 	}
 }
 
-trait PublicKeyData {
+#[allow(missing_docs)]
+pub trait PublicKeyData {
 	fn alg(&self) -> &SignatureAlgorithm;
 	fn raw_bytes(&self) -> &[u8];
 	fn serialize_public_key_der(&self, writer :DERWriter) {
