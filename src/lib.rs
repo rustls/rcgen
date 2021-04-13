@@ -690,22 +690,22 @@ impl CertificateParams {
 			});
 			// Write subjectPublicKeyInfo
 			pub_key.serialize_public_key_der(writer.next());
-            // Write extensions
-            // According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
-            writer.next().write_tagged(Tag::context(0), |writer| {
-                if !self.subject_alt_names.is_empty() {
-                    writer.write_sequence(|writer| {
-                        let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
-                        writer.next().write_oid(&oid);
-                        writer.next().write_set(|writer| {
-                            writer.next().write_sequence(|writer| {
-                                // Write subject_alt_names
-                                self.write_subject_alt_names(writer.next());
-                            });
-                        });
-                    });
-                }
-            });
+			// Write extensions
+			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
+			writer.next().write_tagged(Tag::context(0), |writer| {
+				if !self.subject_alt_names.is_empty() {
+					writer.write_sequence(|writer| {
+						let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
+						writer.next().write_oid(&oid);
+						writer.next().write_set(|writer| {
+							writer.next().write_sequence(|writer| {
+								// Write subject_alt_names
+								self.write_subject_alt_names(writer.next());
+							});
+						});
+					});
+				}
+			});
 
 		});
 	}
@@ -1146,8 +1146,8 @@ impl Certificate {
 	pub fn serialize_der_with_signer(&self, ca :&Certificate) -> Result<Vec<u8>, RcgenError> {
 		self.params.serialize_der_with_signer(&self.key_pair, ca)
 	}
-    /// Serializes a certificate signing request in binary DER format
-    pub fn serialize_request_der(&self) -> Result<Vec<u8>, RcgenError> {
+	/// Serializes a certificate signing request in binary DER format
+	pub fn serialize_request_der(&self) -> Result<Vec<u8>, RcgenError> {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 				let cert_data = yasna::construct_der(|writer| {
@@ -1514,7 +1514,7 @@ pub struct SignatureAlgorithm {
 }
 
 impl fmt::Debug for SignatureAlgorithm {
-    fn fmt(&self, f :&mut fmt::Formatter) -> fmt::Result {
+	fn fmt(&self, f :&mut fmt::Formatter) -> fmt::Result {
 		if self == &PKCS_RSA_SHA256 {
 			write!(f, "PKCS_RSA_SHA256")
 		} else if self == &PKCS_ECDSA_P256_SHA256 {
@@ -1526,20 +1526,20 @@ impl fmt::Debug for SignatureAlgorithm {
 		} else {
 			write!(f, "Unknown")
 		}
-    }
+	}
 }
 
 impl PartialEq for SignatureAlgorithm {
-    fn eq(&self, other :&Self) -> bool {
+	fn eq(&self, other :&Self) -> bool {
 		let self_iter = self.oids_sign_alg.iter().map(|s| s.iter()).flatten();
 		let othr_iter = other.oids_sign_alg.iter().map(|s| s.iter()).flatten();
-        for (s, o) in self_iter.zip(othr_iter)  {
+		for (s, o) in self_iter.zip(othr_iter)  {
 			if s != o {
 				return false;
 			}
 		}
 		true
-    }
+	}
 }
 
 impl Eq for SignatureAlgorithm {}
