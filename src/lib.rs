@@ -1229,6 +1229,7 @@ enum SignAlgo {
 	Rsa(),
 }
 
+/// `Hash` is not derived but implemented because of explicit implementation of `PartialEq`
 impl Hash for SignAlgo {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		format!("{:?}", self).hash(state)
