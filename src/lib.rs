@@ -27,6 +27,7 @@ println!("{}", cert.serialize_private_key_pem());
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+#![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 
 extern crate yasna;
 extern crate ring;

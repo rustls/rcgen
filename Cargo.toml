@@ -34,5 +34,5 @@ features = ["x509-parser"]
 
 [dev-dependencies]
 openssl = "0.10"
-webpki = "0.21"
+webpki = { version = "0.22", features = ["std"] }
 botan = { version = "0.8", features = ["vendored"] }
