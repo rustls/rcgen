@@ -55,6 +55,7 @@ use std::convert::TryFrom;
 use std::error::Error;
 use std::net::IpAddr;
 use std::str::FromStr;
+use std::hash::{Hash, Hasher};
 
 /// A self signed certificate together with signing keys
 pub struct Certificate {
@@ -465,6 +466,7 @@ impl <'a> Iterator for DistinguishedNameIterator<'a> {
 
 
 /// A public key, extracted from a CSR
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct PublicKey {
 	raw: Vec<u8>,
 	alg: &'static SignatureAlgorithm,
@@ -1541,6 +1543,14 @@ impl PartialEq for SignatureAlgorithm {
 }
 
 impl Eq for SignatureAlgorithm {}
+
+/// The `Hash` trait is not derived, but implemented according to impl of the `PartialEq` trait
+impl Hash for SignatureAlgorithm {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		// see SignatureAlgorithm::eq(), just this field is compared
+		self.oids_sign_alg.hash(state);
+	}
+}
 
 impl SignatureAlgorithm {
 	fn iter() -> std::slice::Iter<'static, &'static SignatureAlgorithm> {
