@@ -16,7 +16,7 @@ use rcgen::generate_simple_self_signed;
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
 let subject_alt_names = vec!["hello.world.example".to_string(),
-    "localhost".to_string()];
+	"localhost".to_string()];
 
 let cert = generate_simple_self_signed(subject_alt_names).unwrap();
 println!("{}", cert.serialize_pem().unwrap());
@@ -78,7 +78,7 @@ extern crate rcgen;
 use rcgen::generate_simple_self_signed;
 # fn main () {
 let subject_alt_names :&[_] = &["hello.world.example".to_string(),
-    "localhost".to_string()];
+	"localhost".to_string()];
 
 let cert = generate_simple_self_signed(subject_alt_names).unwrap();
 // The certificate is now valid for localhost and the domain "hello.world.example"
@@ -243,6 +243,28 @@ macro_rules! mask {
 }
 
 impl CidrSubnet {
+	/// Obtains the CidrSubnet from the well-known
+	/// addr/prefix notation.
+	/// ```
+	/// # use std::str::FromStr;
+	/// # use rcgen::CidrSubnet;
+	/// // The "192.0.2.0/24" example from
+	/// // https://tools.ietf.org/html/rfc5280#page-42
+	/// let subnet = CidrSubnet::from_str("192.0.2.0/24").unwrap();
+	/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
+	/// ```
+	#[allow(clippy::should_implement_trait, clippy::result_unit_err)]
+	pub fn from_str(s :&str) -> Result<Self, ()> {
+		let mut iter = s.split('/');
+		if let (Some(addr_s), Some(prefix_s)) = (iter.next(), iter.next()) {
+			let addr = IpAddr::from_str(addr_s).map_err(|_| ())?;
+			let prefix = u8::from_str(prefix_s).map_err(|_| ())?;
+			Ok(Self::from_addr_prefix(addr, prefix))
+		} else {
+			Err(())
+		}
+	}
+
 	/// Obtains the CidrSubnet from an ip address
 	/// as well as the specified prefix number.
 	///
@@ -289,31 +311,6 @@ impl CidrSubnet {
 			},
 		}
 		res
-	}
-}
-
-impl FromStr for CidrSubnet {
-	type Err = ();
-
-	/// Obtains the CidrSubnet from the well-known
-	/// addr/prefix notation.
-	/// ```
-	/// # use std::str::FromStr;
-	/// # use rcgen::CidrSubnet;
-	/// // The "192.0.2.0/24" example from
-	/// // https://tools.ietf.org/html/rfc5280#page-42
-	/// let subnet = CidrSubnet::from_str("192.0.2.0/24").unwrap();
-	/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
-	/// ```
-	fn from_str(s :&str) -> Result<Self, Self::Err> {
-		let mut iter = s.split('/');
-		if let (Some(addr_s), Some(prefix_s)) = (iter.next(), iter.next()) {
-			let addr = IpAddr::from_str(addr_s).map_err(|_| ())?;
-			let prefix = u8::from_str(prefix_s).map_err(|_| ())?;
-			Ok(Self::from_addr_prefix(addr, prefix))
-		} else {
-			Err(())
-		}
 	}
 }
 
@@ -598,8 +595,8 @@ pub struct CertificateParams {
 impl Default for CertificateParams {
 	fn default() -> Self {
 		// not_before and not_after set to reasonably long dates
-		let not_before = date_time_ymd(1975, 1, 1);
-		let not_after = date_time_ymd(4096, 1, 1);
+		let not_before = date_time_ymd(1975, 01, 01);
+		let not_after = date_time_ymd(4096, 01, 01);
 		let mut distinguished_name = DistinguishedName::default();
 		distinguished_name.push(DnType::CommonName, "rcgen self signed cert");
 		CertificateParams {
