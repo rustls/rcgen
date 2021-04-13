@@ -3,6 +3,14 @@ mod util;
 extern crate rcgen;
 
 use rcgen::{RcgenError, KeyPair, Certificate};
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
+
+fn calculate_hash<T: Hash>(t: &T) -> u64 {
+	let mut s = DefaultHasher::new();
+	t.hash(&mut s);
+	s.finish()
+}
 
 #[test]
 fn test_key_params_mismatch() {
@@ -15,8 +23,14 @@ fn test_key_params_mismatch() {
 	for (i, kalg_1) in available_key_params.iter().enumerate() {
 		for (j, kalg_2) in available_key_params.iter().enumerate() {
 			if i == j {
+				assert_eq!(kalg_1, kalg_2);
+				assert_eq!(calculate_hash(kalg_1), calculate_hash(kalg_2));
 				continue;
 			}
+
+			assert_ne!(kalg_1, kalg_2);
+			assert_ne!(calculate_hash(kalg_1), calculate_hash(kalg_2));
+
 			let mut wrong_params = util::default_params();
 			if i != 0 {
 				wrong_params.key_pair = Some(KeyPair::generate(kalg_1).unwrap());
