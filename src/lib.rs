@@ -254,7 +254,6 @@ impl CidrSubnet {
 	/// let subnet = CidrSubnet::from_str("192.0.2.0/24").unwrap();
 	/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
 	/// ```
-	#[allow(clippy::should_implement_trait, clippy::result_unit_err)]
 	pub fn from_str(s :&str) -> Result<Self, ()> {
 		let mut iter = s.split('/');
 		if let (Some(addr_s), Some(prefix_s)) = (iter.next(), iter.next()) {
