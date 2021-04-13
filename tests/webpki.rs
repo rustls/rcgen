@@ -6,8 +6,7 @@ extern crate pem;
 #[cfg(feature = "x509-parser")]
 use rcgen::CertificateSigningRequest;
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
-use webpki::{EndEntityCert, TLSServerTrustAnchors};
-use webpki::trust_anchor_util::cert_der_as_trust_anchor;
+use webpki::{EndEntityCert, TlsServerTrustAnchors, TrustAnchor};
 use webpki::SignatureAlgorithm;
 use webpki::{Time, DNSNameRef};
 
@@ -15,6 +14,8 @@ use ring::rand::SystemRandom;
 use ring::signature;
 use ring::signature::{EcdsaKeyPair, EcdsaSigningAlgorithm,
 	Ed25519KeyPair, RSA_PKCS1_SHA256, RsaKeyPair};
+
+use std::convert::TryFrom;
 
 mod util;
 
@@ -52,10 +53,10 @@ fn check_cert<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, alg :&SignatureAlg
 fn check_cert_ca<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, ca_der :&[u8],
 		cert_alg :&SignatureAlgorithm, ca_alg :&SignatureAlgorithm,
 		sign_fn :impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>) {
-	let trust_anchor = cert_der_as_trust_anchor(&ca_der).unwrap();
+	let trust_anchor = TrustAnchor::try_from_cert_der(&ca_der).unwrap();
 	let trust_anchor_list = &[trust_anchor];
-	let trust_anchors = TLSServerTrustAnchors(trust_anchor_list);
-	let end_entity_cert = EndEntityCert::from(&cert_der).unwrap();
+	let trust_anchors = TlsServerTrustAnchors(trust_anchor_list);
+	let end_entity_cert = EndEntityCert::try_from(cert_der).unwrap();
 
 	// Set time to Jan 10, 2004
 	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
