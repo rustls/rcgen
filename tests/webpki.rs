@@ -8,7 +8,7 @@ use rcgen::CertificateSigningRequest;
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
 use webpki::{EndEntityCert, TlsServerTrustAnchors, TrustAnchor};
 use webpki::SignatureAlgorithm;
-use webpki::{Time, DNSNameRef};
+use webpki::{Time, DnsNameRef};
 
 use ring::rand::SystemRandom;
 use ring::signature;
@@ -70,7 +70,7 @@ fn check_cert_ca<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, ca_der :&[u8],
 	).expect("valid TLS server cert");
 
 	// (2/3) Check that the cert is valid for the given DNS name
-	let dns_name = DNSNameRef::try_from_ascii_str("crabs.crabs").unwrap();
+	let dns_name = DnsNameRef::try_from_ascii_str("crabs.crabs").unwrap();
 	end_entity_cert.verify_is_valid_for_dns_name(
 		dns_name,
 	).expect("valid for DNS name");
