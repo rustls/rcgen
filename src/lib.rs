@@ -254,7 +254,7 @@ impl CidrSubnet {
 	/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
 	/// ```
 	pub fn from_str(s :&str) -> Result<Self, ()> {
-		let mut iter = s.split("/");
+		let mut iter = s.split('/');
 		if let (Some(addr_s), Some(prefix_s)) = (iter.next(), iter.next()) {
 			let addr = IpAddr::from_str(addr_s).map_err(|_| ())?;
 			let prefix = u8::from_str(prefix_s).map_err(|_| ())?;
