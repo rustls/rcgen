@@ -1343,7 +1343,7 @@ impl From<pem::PemError> for RcgenError {
 impl TryFrom<&[u8]> for KeyPair {
 	type Error = RcgenError;
 	fn try_from(pkcs8 :&[u8]) -> Result<KeyPair, RcgenError> {
-		let pkcs8_vec = std::iter::FromIterator::from_iter(pkcs8.iter().cloned());
+		let pkcs8_vec = pkcs8.to_vec();
 
 		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
 			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
