@@ -1015,6 +1015,14 @@ impl CustomExtension {
 	pub fn set_criticality(&mut self, criticality :bool) {
 		self.critical = criticality;
 	}
+	/// Obtains the criticality flag of the extension.
+	pub fn criticality(&self) -> bool {
+		self.critical
+	}
+	/// Obtains the content of the extension.
+	pub fn content(&self) -> &[u8] {
+		&self.content
+	}
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
