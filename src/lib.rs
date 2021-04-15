@@ -1023,6 +1023,10 @@ impl CustomExtension {
 	pub fn content(&self) -> &[u8] {
 		&self.content
 	}
+	/// Obtains the OID components of the extensions, as u64 pieces
+	pub fn oid_components(&self) -> impl Iterator<u64> {
+		self.oid.iter()
+	}
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
