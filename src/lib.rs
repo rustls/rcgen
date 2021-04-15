@@ -1029,12 +1029,12 @@ impl CustomExtension {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-#[non_exhaustive]
 /// Method to generate key identifiers from public keys.
 ///
 /// This allows choice over methods to generate key identifiers
 /// as specified in RFC 7093 section 2.
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[non_exhaustive]
 pub enum KeyIdMethod {
 	/// RFC 7093 method 1
 	Sha256,
