@@ -1024,8 +1024,8 @@ impl CustomExtension {
 		&self.content
 	}
 	/// Obtains the OID components of the extensions, as u64 pieces
-	pub fn oid_components(&self) -> impl Iterator<u64> {
-		self.oid.iter()
+	pub fn oid_components(&self) -> impl Iterator<Item = u64> + '_ {
+		self.oid.iter().copied()
 	}
 }
 
