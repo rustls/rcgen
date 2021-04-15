@@ -1,5 +1,11 @@
 # Changes
 
+## Release 0.8.10 - April 15, 2021
+
+- Implement some additional traits for some of the types. Contributed by [zurborg](https://github.com/zurborg).
+- Adoption of intra-doc-links
+- Addition of the ability to zero key pairs. Contributed by [didier-wenzek](https://github.com/didier-wenzek).
+
 ## Release 0.8.9 - December 4, 2020
 
 - Switch CI to Github Actions.
