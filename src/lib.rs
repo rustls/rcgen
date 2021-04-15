@@ -1003,7 +1003,7 @@ impl CustomExtension {
 			content,
 		}
 	}
-	/// Create a new custom extension
+	/// Create a new custom extension with the specified content
 	pub fn from_oid_content(oid :&[u64], content :Vec<u8>) -> Self {
 		Self {
 			oid : oid.to_owned(),
