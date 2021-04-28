@@ -1,5 +1,10 @@
 # Changes
 
+## Release 0.8.11 - April 28, 2021
+
+- Add getters for the criticality, content, and `oid_components` of a `CustomExtension`
+- Update yasna to 0.4
+
 ## Release 0.8.10 - April 15, 2021
 
 - Implement some additional traits for some of the types. Contributed by [zurborg](https://github.com/zurborg).
