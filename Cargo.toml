@@ -19,7 +19,7 @@ path = "src/main.rs"
 required-features = ["pem"]
 
 [dependencies]
-yasna = { version = "0.3.1", features = ["chrono"] }
+yasna = { version = "0.4", features = ["chrono", "std"] }
 ring = "0.16"
 pem = { version = "0.8", optional = true }
 chrono = { version = "0.4.6", default-features = false }
