@@ -5,15 +5,15 @@ extern crate pem;
 
 #[cfg(feature = "x509-parser")]
 use rcgen::CertificateSigningRequest;
-use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
+use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, KeyPair, RemoteKeyPair};
 use webpki::{EndEntityCert, TlsServerTrustAnchors, TrustAnchor};
 use webpki::SignatureAlgorithm;
 use webpki::{Time, DnsNameRef};
 
-use ring::rand::SystemRandom;
+use ring::{rand::SystemRandom};
 use ring::signature;
 use ring::signature::{EcdsaKeyPair, EcdsaSigningAlgorithm,
-	Ed25519KeyPair, RSA_PKCS1_SHA256, RsaKeyPair};
+	Ed25519KeyPair, KeyPair as _, RSA_PKCS1_SHA256, RsaKeyPair};
 
 use std::convert::TryFrom;
 
@@ -230,6 +230,48 @@ fn test_webpki_separate_ca_with_other_signing_alg() {
 
 	check_cert_ca(&cert_der, &cert, &ca_der,
 				&webpki::ED25519, &webpki::ECDSA_P256_SHA256, sign_msg_ed25519);
+}
+
+#[test]
+fn from_remote() {
+	struct Remote(EcdsaKeyPair);
+
+	impl RemoteKeyPair for Remote {
+		fn public_key(&self) -> &[u8] {
+			self.0.public_key().as_ref()
+		}
+
+		fn sign(&self, msg :&[u8]) -> Result<Vec<u8>, rcgen::RcgenError> {
+			let system_random = SystemRandom::new();
+			self.0.sign(&system_random, msg)
+				.map(|s| s.as_ref().to_owned())
+				.map_err(rcgen::RcgenError::from)
+		}
+
+		fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
+			&rcgen::PKCS_ECDSA_P256_SHA256
+		}
+	}
+
+	let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let remote = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &key_pair.serialize_der()).unwrap();
+	let key_pair = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &key_pair.serialize_der()).unwrap();
+	let remote = KeyPair::from_remote(Box::new(Remote(remote))).unwrap();
+
+	let mut params = util::default_params();
+	params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+	params.key_pair = Some(remote);
+	let cert = Certificate::from_params(params).unwrap();
+
+	// Now verify the certificate.
+	let cert_der = cert.serialize_der().unwrap();
+
+	let sign_fn = move |_, msg| {
+		let system_random = SystemRandom::new();
+		let signature = key_pair.sign(&system_random, msg).unwrap();
+		signature.as_ref().to_vec()		
+	};
+	check_cert(&cert_der, &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
 }
 
 /*

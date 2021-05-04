@@ -1215,10 +1215,14 @@ impl Certificate {
 		Ok(pem::encode(&p))
 	}
 	/// Serializes the private key in PKCS#8 format
+	///
+	/// Panics if called on a remote key pair.
 	pub fn serialize_private_key_der(&self) -> Vec<u8> {
 		self.key_pair.serialize_der()
 	}
 	/// Serializes the private key in PEM format
+	///
+	/// Panics if called on a remote key pair.
 	///
 	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
@@ -1234,7 +1238,6 @@ enum SignAlgo {
 }
 
 /// A key pair vairant
-#[derive(Debug)]
 enum KeyPairKind {
 	/// A Ecdsa key pair
 	Ec(EcdsaKeyPair),
@@ -1242,6 +1245,19 @@ enum KeyPairKind {
 	Ed(Ed25519KeyPair),
 	/// A RSA key pair
 	Rsa(RsaKeyPair),
+	/// A remote key pair
+	Remote(Box<dyn RemoteKeyPair>),
+}
+
+impl fmt::Debug for KeyPairKind {
+	fn fmt(&self, f :&mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::Ec(key_pair) => write!(f, "{:?}", key_pair),
+			Self::Ed(key_pair) => write!(f, "{:?}", key_pair),
+			Self::Rsa(key_pair) => write!(f, "{:?}", key_pair),
+			Self::Remote(_) => write!(f, "Box<dyn RemotePrivateKey>"),
+		}
+	}
 }
 
 /// A key pair used to sign certificates and CSRs
@@ -1274,6 +1290,29 @@ impl KeyPair {
 		let private_key_der :&[_] = &private_key.contents;
 		Ok(private_key_der.try_into()?)
 	}
+
+	/// Obtains the key pair from a raw public key and a remote private key
+	pub fn from_remote(key_pair :Box<dyn RemoteKeyPair>) -> Result<Self, RcgenError> {
+		Ok(Self {
+			alg :key_pair.algorithm(),
+			kind :KeyPairKind::Remote(key_pair),
+			serialized_der :Vec::new(),
+		})
+	}
+}
+
+/// A private key that is not directly accessible, but can be used to sign messages
+///
+/// This is used to enable generating certificates from a remote and raw private key.
+pub trait RemoteKeyPair {
+	/// Returns the public key of this key pair
+	fn public_key(&self) -> &[u8];
+
+	/// Signs `msg` using the selected algorithm
+	fn sign(&self, msg :&[u8]) -> Result<Vec<u8>, RcgenError>;
+
+	/// Reveals which algorithm will be used when you call `sign()`
+	fn algorithm(&self) -> &'static SignatureAlgorithm;
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1451,6 +1490,10 @@ impl KeyPair {
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
+			KeyPairKind::Remote(kp) => {
+				let signature = kp.sign(msg)?;
+				writer.write_bitvec_bytes(&signature, &signature.len() * 8);
+			},
 		}
 		Ok(())
 	}
@@ -1476,7 +1519,13 @@ impl KeyPair {
 		pem::encode(&p)
 	}
 	/// Serializes the key pair (including the private key) in PKCS#8 format in DER
+	///
+	/// Panics if called on a remote key pair.
 	pub fn serialize_der(&self) -> Vec<u8> {
+		if let KeyPairKind::Remote(_) = self.kind {
+			panic!("Serializing a remote key pair is not supported")
+		}
+
 		self.serialized_der.clone()
 	}
 	/// Serializes the key pair (including the private key) in PKCS#8 format in PEM
@@ -1501,6 +1550,7 @@ impl PublicKeyData for KeyPair {
 			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
 			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
 			KeyPairKind::Rsa(kp) => kp.public_key().as_ref(),
+			KeyPairKind::Remote(kp) => kp.public_key(),
 		}
 	}
 }
