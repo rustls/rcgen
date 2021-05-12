@@ -1303,9 +1303,10 @@ impl KeyPair {
 
 /// A private key that is not directly accessible, but can be used to sign messages
 ///
-/// This is used to enable generating certificates from a remote and raw private key.
+/// Trait objects based on this trait can be passed to the [`KeyPair::from_remote`] function to generating certificates
+/// from a remote and raw private key, for example an HSM.
 pub trait RemoteKeyPair {
-	/// Returns the public key of this key pair
+	/// Returns the public key of this key pair in DER format
 	fn public_key(&self) -> &[u8];
 
 	/// Signs `msg` using the selected algorithm
