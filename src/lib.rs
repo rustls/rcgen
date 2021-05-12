@@ -1294,9 +1294,9 @@ impl KeyPair {
 	/// Obtains the key pair from a raw public key and a remote private key
 	pub fn from_remote(key_pair :Box<dyn RemoteKeyPair>) -> Result<Self, RcgenError> {
 		Ok(Self {
-			alg :key_pair.algorithm(),
-			kind :KeyPairKind::Remote(key_pair),
-			serialized_der :Vec::new(),
+			alg : key_pair.algorithm(),
+			kind : KeyPairKind::Remote(key_pair),
+			serialized_der : Vec::new(),
 		})
 	}
 }
