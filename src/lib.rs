@@ -786,7 +786,7 @@ impl CertificateParams {
 									// Map the index to a value
 									let index = match entry {
 										KeyUsagePurpose::DigitalSignature => 0,
-										KeyUsagePurpose::NonRepudiation => 1,
+										KeyUsagePurpose::ContentCommitment => 1,
 										KeyUsagePurpose::KeyEncipherment => 2,
 										KeyUsagePurpose::DataEncipherment => 3,
 										KeyUsagePurpose::KeyAgreement => 4,
@@ -1005,8 +1005,8 @@ impl NameConstraints {
 pub enum KeyUsagePurpose {
 	/// digitalSignature
 	DigitalSignature,
-	/// nonRepudiation
-	NonRepudiation,
+	/// contentCommitment / nonRepudiation
+	ContentCommitment,
 	/// keyEncipherment
 	KeyEncipherment,
 	/// dataEncipherment
@@ -1862,7 +1862,7 @@ mod tests {
 		params.key_usages = vec![
 			KeyUsagePurpose::DigitalSignature,
 			KeyUsagePurpose::KeyEncipherment,
-			KeyUsagePurpose::NonRepudiation,
+			KeyUsagePurpose::ContentCommitment,
 		];
 
 		// This can sign things!
