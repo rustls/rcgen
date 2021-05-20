@@ -779,8 +779,7 @@ impl CertificateParams {
 								writer.next().write_oid(&oid);
 								writer.next().write_bool(true);
 
-								let mut bits: u16 = 0;
-								let mut msb = 0;
+								let mut bits :u16 = 0;
 
 								for entry in self.key_usages.iter() {
 									// Map the index to a value
@@ -797,27 +796,23 @@ impl CertificateParams {
 									};
 
 									bits |= 1 << index;
-
-									// This helps caculate the max number of bits
-									if index > msb {
-										msb = index;
-									}
 								}
 
-								let mut nb = 1;
-								if msb > 7 {
-									nb = 2;
-								}
+								// Compute the 1-based most significant bit
+								let msb = 16 - bits.leading_zeros();
+								let nb = if msb <= 8 {
+									1
+								} else {
+									2
+								};
 
-								let mut bits = bits.to_le_bytes();
-								bits[0] = bits[0].reverse_bits();
-								bits[1] = bits[1].reverse_bits();
+								let bits = bits.reverse_bits().to_be_bytes();
 
 								// Finally take only the bytes != 0
 								let bits = &bits[..nb];
 
 								let der = yasna::construct_der(|writer| {
-									writer.write_bitvec_bytes(&bits, msb+1)
+									writer.write_bitvec_bytes(&bits, msb as usize)
 								});
 
 								// Write them
