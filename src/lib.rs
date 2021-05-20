@@ -121,6 +121,9 @@ const OID_EC_SECP_384_R1 :&[u64] = &[1, 3, 132, 0, 34];
 // rsaEncryption in RFC 4055
 const OID_RSA_ENCRYPTION :&[u64] = &[1, 2, 840, 113549, 1, 1, 1];
 
+// https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3
+const OID_KEY_USAGE :&[u64] = &[2, 5, 29, 15];
+
 // https://tools.ietf.org/html/rfc5280#appendix-A.2
 // https://tools.ietf.org/html/rfc5280#section-4.2.1.6
 const OID_SUBJECT_ALT_NAME :&[u64] = &[2, 5, 29, 17];
@@ -572,6 +575,7 @@ pub struct CertificateParams {
 	pub subject_alt_names :Vec<SanType>,
 	pub distinguished_name :DistinguishedName,
 	pub is_ca :IsCa,
+	pub key_usages :Vec<KeyUsagePurpose>,
 	pub extended_key_usages :Vec<ExtendedKeyUsagePurpose>,
 	pub name_constraints :Option<NameConstraints>,
 	pub custom_extensions :Vec<CustomExtension>,
@@ -600,6 +604,7 @@ impl Default for CertificateParams {
 			subject_alt_names : Vec::new(),
 			distinguished_name,
 			is_ca : IsCa::SelfSignedOnly,
+			key_usages : Vec::new(),
 			extended_key_usages : Vec::new(),
 			name_constraints : None,
 			custom_extensions : Vec::new(),
@@ -765,6 +770,63 @@ impl CertificateParams {
 						if !self.subject_alt_names.is_empty() {
 							self.write_subject_alt_names(writer.next());
 						}
+
+						// Write standard key usage
+						if !self.key_usages.is_empty() {
+							writer.next().write_sequence(|writer| {
+
+								let oid = ObjectIdentifier::from_slice(OID_KEY_USAGE);
+								writer.next().write_oid(&oid);
+								writer.next().write_bool(true);
+
+								let mut bits: u16 = 0;
+								let mut msb = 0;
+
+								for entry in self.key_usages.iter() {
+
+									// Map the index to a value
+									let index = match entry {
+										KeyUsagePurpose::DigitalSignature => 0,
+										KeyUsagePurpose::NonRepudiation => 1,
+										KeyUsagePurpose::KeyEncipherment => 2,
+										KeyUsagePurpose::DataEncipherment => 3,
+										KeyUsagePurpose::KeyAgreement => 4,
+										KeyUsagePurpose::KeyCertSign => 5,
+										KeyUsagePurpose::CrlSign => 6,
+										KeyUsagePurpose::EncipherOnly => 7,
+										KeyUsagePurpose::DecipherOnly => 8,
+									};
+
+									bits |= 1 << index;
+
+									// This helps caculate the max number of bits
+									if index > msb {
+										msb = index;
+									}
+								}
+
+								let mut nb = 1;
+								if msb > 7 {
+									nb = 2;
+								}
+
+								let mut bits = bits.to_le_bytes();
+								bits[0] = bits[0].reverse_bits();
+								bits[1] = bits[1].reverse_bits();
+
+								// Finally take only the bytes != 0
+								let bits = &bits[..nb];
+
+								let der = yasna::construct_der(|writer| {
+									writer.write_bitvec_bytes(&bits, msb+1)
+								});
+
+								// Write them
+								writer.next().write_bytes(&der);
+
+							});
+						}
+
 						// Write extended key usage
 						if !self.extended_key_usages.is_empty() {
 							Self::write_extension(writer.next(), OID_EXT_KEY_USAGE, false, |writer| {
@@ -938,6 +1000,28 @@ impl NameConstraints {
 	fn is_empty(&self) -> bool {
 		self.permitted_subtrees.is_empty() && self.excluded_subtrees.is_empty()
 	}
+}
+
+/// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension
+pub enum KeyUsagePurpose {
+	/// digitalSignature
+	DigitalSignature,
+	/// nonRepudiation
+	NonRepudiation,
+	/// keyEncipherment
+	KeyEncipherment,
+	/// dataEncipherment
+	DataEncipherment,
+	/// keyAgreement
+	KeyAgreement,
+	/// keyCertSign
+	KeyCertSign,
+	/// cRLSign
+	CrlSign,
+	/// encipherOnly
+	EncipherOnly,
+	/// decipherOnly
+	DecipherOnly,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -1769,5 +1853,91 @@ mod tests {
 		for dt in times.iter() {
 			assert!(dt_to_generalized(&dt).is_ok());
 		}
+	}
+
+	#[test]
+	fn test_with_key_usages() {
+
+		let mut params: CertificateParams = Default::default();
+
+		// Set key_usages
+		params.key_usages = vec![
+			KeyUsagePurpose::DigitalSignature,
+			KeyUsagePurpose::KeyEncipherment,
+			KeyUsagePurpose::NonRepudiation,
+		];
+
+		// This can sign things!
+		params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
+
+		// Make the cert
+		let cert = Certificate::from_params(params).unwrap();
+
+		// Serialize it
+		let der = cert.serialize_der().unwrap();
+
+		// Parse it
+		let (_rem, cert) = x509_parser::parse_x509_certificate(&der).unwrap();
+
+		// Check oid
+		let key_usage_oid_str= "2.5.29.15";
+
+		// Found flag
+		let mut found = false;
+
+		for (oid, ext) in cert.extensions() {
+			if key_usage_oid_str == oid.to_id_string() {
+				match ext.parsed_extension() {
+					x509_parser::extensions::ParsedExtension::KeyUsage(usage) =>{
+						assert!(usage.flags == 7);
+						found = true;
+					}
+					_ => {}
+				}
+			}
+		}
+
+		assert!(found);
+	}
+
+	#[test]
+	fn test_with_key_usages_decipheronly_only() {
+
+		let mut params: CertificateParams = Default::default();
+
+		// Set key_usages
+		params.key_usages = vec![ KeyUsagePurpose::DecipherOnly ];
+
+		// This can sign things!
+		params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
+
+		// Make the cert
+		let cert = Certificate::from_params(params).unwrap();
+
+		// Serialize it
+		let der = cert.serialize_der().unwrap();
+
+		// Parse it
+		let (_rem, cert) = x509_parser::parse_x509_certificate(&der).unwrap();
+		
+		// Check oid
+		let key_usage_oid_str= "2.5.29.15";
+
+		// Found flag
+		let mut found = false;
+
+		for (oid, ext) in cert.extensions() {
+			if key_usage_oid_str == oid.to_id_string() {
+				match ext.parsed_extension() {
+					x509_parser::extensions::ParsedExtension::KeyUsage(usage) =>{
+						assert!(usage.flags == 256);
+						found = true;
+					}
+					_ => {}
+				}
+			}
+		}
+
+		assert!(found);
 	}
 }
