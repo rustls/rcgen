@@ -783,7 +783,6 @@ impl CertificateParams {
 								let mut msb = 0;
 
 								for entry in self.key_usages.iter() {
-
 									// Map the index to a value
 									let index = match entry {
 										KeyUsagePurpose::DigitalSignature => 0,
@@ -1857,7 +1856,6 @@ mod tests {
 
 	#[test]
 	fn test_with_key_usages() {
-
 		let mut params: CertificateParams = Default::default();
 
 		// Set key_usages
@@ -1902,7 +1900,6 @@ mod tests {
 
 	#[test]
 	fn test_with_key_usages_decipheronly_only() {
-
 		let mut params: CertificateParams = Default::default();
 
 		// Set key_usages
@@ -1919,7 +1916,7 @@ mod tests {
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(&der).unwrap();
-		
+
 		// Check oid
 		let key_usage_oid_str= "2.5.29.15";
 
