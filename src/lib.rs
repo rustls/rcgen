@@ -997,6 +997,7 @@ impl NameConstraints {
 }
 
 /// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum KeyUsagePurpose {
 	/// digitalSignature
 	DigitalSignature,
