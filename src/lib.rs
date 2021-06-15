@@ -26,6 +26,7 @@ println!("{}", cert.serialize_private_key_pem());
 */
 
 #![forbid(unsafe_code)]
+#![forbid(non_ascii_idents)]
 #![deny(missing_docs)]
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 
