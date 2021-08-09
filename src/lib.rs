@@ -1880,8 +1880,8 @@ mod tests {
 		// Found flag
 		let mut found = false;
 
-		for (oid, ext) in cert.extensions() {
-			if key_usage_oid_str == oid.to_id_string() {
+		for ext in cert.extensions() {
+			if key_usage_oid_str == ext.oid.to_id_string() {
 				match ext.parsed_extension() {
 					x509_parser::extensions::ParsedExtension::KeyUsage(usage) =>{
 						assert!(usage.flags == 7);
@@ -1920,8 +1920,8 @@ mod tests {
 		// Found flag
 		let mut found = false;
 
-		for (oid, ext) in cert.extensions() {
-			if key_usage_oid_str == oid.to_id_string() {
+		for ext in cert.extensions() {
+			if key_usage_oid_str == ext.oid.to_id_string() {
 				match ext.parsed_extension() {
 					x509_parser::extensions::ParsedExtension::KeyUsage(usage) =>{
 						assert!(usage.flags == 256);
