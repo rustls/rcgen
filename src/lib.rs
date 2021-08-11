@@ -35,6 +35,8 @@ extern crate ring;
 #[cfg(feature = "pem")]
 extern crate pem;
 extern crate chrono;
+#[cfg(feature = "x509-parser")]
+extern crate x509_parser;
 
 use yasna::Tag;
 use yasna::models::ObjectIdentifier;
@@ -426,19 +428,23 @@ impl DistinguishedName {
 	#[cfg(feature = "x509-parser")]
 	fn from_name(name :&x509_parser::x509::X509Name) -> Result<Self, RcgenError> {
 		let mut dn = DistinguishedName::new();
-		for rdn in name.rdn_seq.iter() {
-			assert!(rdn.set.len() != 0, "x509-parser distinguished name set is empty");
-
-			let attr = if rdn.set.len() > 1 {
-				// no support for distinguished names with more than one attribute
-				return Err(RcgenError::CouldNotParseCertificate);
+		for rdn in name.iter() {
+			let mut rdn_iter = rdn.iter();
+			let dn_opt = rdn_iter.next();
+			let attr = if let Some(dn) = dn_opt {
+				if rdn_iter.next().is_some() {
+					// no support for distinguished names with more than one attribute
+					return Err(RcgenError::CouldNotParseCertificate);
+				} else {
+					dn
+				}
 			} else {
-				&rdn.set.as_slice()[0]
+				panic!("x509-parser distinguished name set is empty");
 			};
-			let value = attr.attr_value.as_slice()
+			let value = attr.attr_value().as_slice()
 				.or(Err(RcgenError::CouldNotParseCertificate))?;
 
-			let attr_type_oid = attr.attr_type.iter()
+			let attr_type_oid = attr.attr_type().iter()
 				.ok_or(RcgenError::CouldNotParseCertificate)?;
 			let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
 			let dn_value = String::from_utf8(value.into())
@@ -510,6 +516,7 @@ impl CertificateSigningRequest {
 	/// On encountering other extensions, this function will return an error.
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(csr :&[u8]) -> Result<Self, RcgenError> {
+		use x509_parser::prelude::FromDer;
 		let csr = x509_parser::certification_request::X509CertificationRequest::from_der(csr)
 			.map_err(|_| RcgenError::CouldNotParseCertificationRequest)?.1;
 		csr.verify_signature().map_err(|_| RcgenError::RingUnspecified)?;
