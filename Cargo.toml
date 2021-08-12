@@ -37,3 +37,11 @@ openssl = "0.10"
 x509-parser = { version = "0.10", features = ["verify"] }
 webpki = { version = "0.22", features = ["std"] }
 botan = { version = "0.8", features = ["vendored"] }
+rand = "0.8"
+rsa = "0.5"
+
+# This greatly speeds up rsa key generation times
+# (only applies to the dev-dependency because cargo
+# ignores profile overrides for non leaf packages)
+[profile.dev.package.num-bigint-dig]
+opt-level = 3
