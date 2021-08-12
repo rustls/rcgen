@@ -1708,6 +1708,8 @@ impl fmt::Debug for SignatureAlgorithm {
 	fn fmt(&self, f :&mut fmt::Formatter) -> fmt::Result {
 		if self == &PKCS_RSA_SHA256 {
 			write!(f, "PKCS_RSA_SHA256")
+		} else if self == &PKCS_RSA_SHA384 {
+			write!(f, "PKCS_RSA_SHA384")
 		} else if self == &PKCS_RSA_SHA512 {
 			write!(f, "PKCS_RSA_SHA512")
 		} else if self == &PKCS_ECDSA_P256_SHA256 {
@@ -1749,6 +1751,7 @@ impl SignatureAlgorithm {
 	fn iter() -> std::slice::Iter<'static, &'static SignatureAlgorithm> {
 		static ALGORITHMS :&[&SignatureAlgorithm] = &[
 			&PKCS_RSA_SHA256,
+			&PKCS_RSA_SHA384,
 			&PKCS_RSA_SHA512,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
@@ -1775,6 +1778,15 @@ pub static PKCS_RSA_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	sign_alg :SignAlgo::Rsa(),
 	// sha256WithRSAEncryption in RFC 4055
 	oid_components : &[1, 2, 840, 113549, 1, 1, 11],
+	write_null_params : true,
+};
+
+/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+pub static PKCS_RSA_SHA384 :SignatureAlgorithm = SignatureAlgorithm {
+	oids_sign_alg :&[&OID_RSA_ENCRYPTION],
+	sign_alg :SignAlgo::Rsa(),
+	// sha384WithRSAEncryption in RFC 4055
+	oid_components : &[1, 2, 840, 113549, 1, 1, 12],
 	write_null_params : true,
 };
 
