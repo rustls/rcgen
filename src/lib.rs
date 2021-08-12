@@ -1941,4 +1941,14 @@ mod tests {
 
 		assert!(found);
 	}
+
+	#[test]
+	fn signature_algos_different() {
+		for (i, alg_i) in SignatureAlgorithm::iter().enumerate() {
+			for (j, alg_j) in SignatureAlgorithm::iter().enumerate() {
+				assert_eq!(alg_i == alg_j, i == j,
+					"Algorighm relationship mismatch for algorithm index pair {} and {}", i, j);
+			}
+		}
+	}
 }
