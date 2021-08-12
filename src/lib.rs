@@ -44,7 +44,7 @@ use yasna::models::ObjectIdentifier;
 use pem::Pem;
 use std::convert::TryInto;
 use ring::digest;
-use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
+use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair, RsaEncoding};
 use ring::rand::SystemRandom;
 use ring::signature::KeyPair as RingKeyPair;
 use ring::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters};
@@ -1331,7 +1331,7 @@ enum KeyPairKind {
 	/// A Ed25519 key pair
 	Ed(Ed25519KeyPair),
 	/// A RSA key pair
-	Rsa(RsaKeyPair),
+	Rsa(RsaKeyPair, &'static dyn RsaEncoding),
 	/// A remote key pair
 	Remote(Box<dyn RemoteKeyPair>),
 }
@@ -1341,7 +1341,7 @@ impl fmt::Debug for KeyPairKind {
 		match self {
 			Self::Ec(key_pair) => write!(f, "{:?}", key_pair),
 			Self::Ed(key_pair) => write!(f, "{:?}", key_pair),
-			Self::Rsa(key_pair) => write!(f, "{:?}", key_pair),
+			Self::Rsa(key_pair, _) => write!(f, "{:?}", key_pair),
 			Self::Remote(_) => write!(f, "Box<dyn RemotePrivateKey>"),
 		}
 	}
@@ -1389,6 +1389,13 @@ impl KeyPair {
 
 	/// Obtains the key pair from a DER formatted key
 	/// using the specified [`SignatureAlgorithm`](SignatureAlgorithm)
+	///
+	/// Usually, calling this function is not neccessary and you can just call
+	/// [`from_der`](Self::from_der) instead. That function will try to figure
+	/// out a fitting [`SignatureAlgorithm`](SignatureAlgorithm) for the given
+	/// key pair. However sometimes multiple signature algorithms fit for the
+	/// same der key. In that instance, you can use this function to precisely
+	/// specify the `SignatureAlgorithm`.
 	pub fn from_der_and_sign_algo(pkcs8 :&[u8], alg :&'static SignatureAlgorithm) -> Result<Self, RcgenError> {
 		let pkcs8_vec = pkcs8.to_vec();
 
@@ -1400,7 +1407,10 @@ impl KeyPair {
 			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8)?)
 		} else if alg == &PKCS_RSA_SHA256 {
 			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
-			KeyPairKind::Rsa(rsakp)
+			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
+		} else if alg == &PKCS_RSA_SHA512 {
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
 		} else {
 			panic!("Unknown SignatureAlgorithm specified!");
 		};
@@ -1524,7 +1534,7 @@ impl TryFrom<&[u8]> for KeyPair {
 		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8) {
 			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
 		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(pkcs8) {
-			(KeyPairKind::Rsa(rsakp), &PKCS_RSA_SHA256)
+			(KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256), &PKCS_RSA_SHA256)
 		} else {
 			return Err(RcgenError::CouldNotParseKeyPair);
 		};
@@ -1601,10 +1611,10 @@ impl KeyPair {
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
-			KeyPairKind::Rsa(kp) => {
+			KeyPairKind::Rsa(kp, padding_alg) => {
 				let system_random = SystemRandom::new();
 				let mut signature = vec![0; kp.public_modulus_len()];
-				kp.sign(&signature::RSA_PKCS1_SHA256, &system_random,
+				kp.sign(*padding_alg, &system_random,
 					msg, &mut signature)?;
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
@@ -1668,7 +1678,7 @@ impl PublicKeyData for KeyPair {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
 			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
-			KeyPairKind::Rsa(kp) => kp.public_key().as_ref(),
+			KeyPairKind::Rsa(kp, _) => kp.public_key().as_ref(),
 			KeyPairKind::Remote(kp) => kp.public_key(),
 		}
 	}
@@ -1698,6 +1708,8 @@ impl fmt::Debug for SignatureAlgorithm {
 	fn fmt(&self, f :&mut fmt::Formatter) -> fmt::Result {
 		if self == &PKCS_RSA_SHA256 {
 			write!(f, "PKCS_RSA_SHA256")
+		} else if self == &PKCS_RSA_SHA512 {
+			write!(f, "PKCS_RSA_SHA512")
 		} else if self == &PKCS_ECDSA_P256_SHA256 {
 			write!(f, "PKCS_ECDSA_P256_SHA256")
 		} else if self == &PKCS_ECDSA_P384_SHA384 {
@@ -1737,6 +1749,7 @@ impl SignatureAlgorithm {
 	fn iter() -> std::slice::Iter<'static, &'static SignatureAlgorithm> {
 		static ALGORITHMS :&[&SignatureAlgorithm] = &[
 			&PKCS_RSA_SHA256,
+			&PKCS_RSA_SHA512,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
 			&PKCS_ED25519
@@ -1762,6 +1775,15 @@ pub static PKCS_RSA_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	sign_alg :SignAlgo::Rsa(),
 	// sha256WithRSAEncryption in RFC 4055
 	oid_components : &[1, 2, 840, 113549, 1, 1, 11],
+	write_null_params : true,
+};
+
+/// RSA signing with PKCS#1 1.5 padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+pub static PKCS_RSA_SHA512 :SignatureAlgorithm = SignatureAlgorithm {
+	oids_sign_alg :&[&OID_RSA_ENCRYPTION],
+	sign_alg :SignAlgo::Rsa(),
+	// sha512WithRSAEncryption in RFC 4055
+	oid_components : &[1, 2, 840, 113549, 1, 1, 13],
 	write_null_params : true,
 };
 
