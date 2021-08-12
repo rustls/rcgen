@@ -1907,7 +1907,7 @@ mod tests {
 		let mut params: CertificateParams = Default::default();
 
 		// Set key_usages
-		params.key_usages = vec![ KeyUsagePurpose::DecipherOnly ];
+		params.key_usages = vec![KeyUsagePurpose::DecipherOnly];
 
 		// This can sign things!
 		params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
