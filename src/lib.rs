@@ -1386,6 +1386,31 @@ impl KeyPair {
 			serialized_der : Vec::new(),
 		})
 	}
+
+	/// Obtains the key pair from a DER formatted key
+	/// using the specified [`SignatureAlgorithm`](SignatureAlgorithm)
+	pub fn from_der_and_sign_algo(pkcs8 :&[u8], alg :&'static SignatureAlgorithm) -> Result<Self, RcgenError> {
+		let pkcs8_vec = pkcs8.to_vec();
+
+		let kind = if alg == &PKCS_ED25519 {
+			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)?)
+		} else if alg == &PKCS_ECDSA_P256_SHA256 {
+			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8)?)
+		} else if alg == &PKCS_ECDSA_P384_SHA384 {
+			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8)?)
+		} else if alg == &PKCS_RSA_SHA256 {
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			KeyPairKind::Rsa(rsakp)
+		} else {
+			panic!("Unknown SignatureAlgorithm specified!");
+		};
+
+		Ok(KeyPair {
+			kind,
+			alg,
+			serialized_der : pkcs8_vec,
+		})
+	}
 }
 
 /// A private key that is not directly accessible, but can be used to sign messages
@@ -1470,6 +1495,12 @@ impl Error for RcgenError {}
 
 impl From<ring::error::Unspecified> for RcgenError {
 	fn from(_unspecified :ring::error::Unspecified) -> Self {
+		RcgenError::RingUnspecified
+	}
+}
+
+impl From<ring::error::KeyRejected> for RcgenError {
+	fn from(_unspecified :ring::error::KeyRejected) -> Self {
 		RcgenError::RingUnspecified
 	}
 }
