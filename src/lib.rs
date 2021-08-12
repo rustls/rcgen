@@ -1726,8 +1726,10 @@ impl fmt::Debug for SignatureAlgorithm {
 
 impl PartialEq for SignatureAlgorithm {
 	fn eq(&self, other :&Self) -> bool {
-		let self_iter = self.oids_sign_alg.iter().map(|s| s.iter()).flatten();
-		let othr_iter = other.oids_sign_alg.iter().map(|s| s.iter()).flatten();
+		let self_iter = self.oids_sign_alg.iter().map(|s| s.iter()).flatten()
+			.chain(self.oid_components.iter());
+		let othr_iter = other.oids_sign_alg.iter().map(|s| s.iter()).flatten()
+			.chain(other.oid_components.iter());
 		for (s, o) in self_iter.zip(othr_iter)  {
 			if s != o {
 				return false;
