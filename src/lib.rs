@@ -729,7 +729,11 @@ impl CertificateParams {
 				writer.write_u8(2);
 			});
 			// Write serialNumber
-			let serial = self.serial_number.unwrap_or(42);
+			let serial = self.serial_number.unwrap_or_else(|| {
+				let hash = digest::digest(&digest::SHA256, pub_key.raw_bytes());
+				let bytes: [u8; 8] = hash.as_ref()[0..8].try_into().unwrap();
+				u64::from_le_bytes(bytes)
+			});
 			writer.next().write_u64(serial);
 			// Write signature
 			ca.params.alg.write_alg_ident(writer.next());
