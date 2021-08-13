@@ -723,7 +723,8 @@ impl CertificateParams {
 			});
 			// Write serialNumber
 			let serial = self.serial_number.unwrap_or_else(|| {
-				let bytes: [u8; 8] = pub_key.raw_bytes()[0..8].try_into().unwrap();
+				let hash = digest::digest(&digest::SHA256, pub_key.raw_bytes());
+				let bytes: [u8; 8] = hash.as_ref()[0..8].try_into().unwrap();
 				u64::from_le_bytes(bytes)
 			});
 			writer.next().write_u64(serial);
