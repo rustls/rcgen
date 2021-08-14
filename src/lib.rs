@@ -1856,15 +1856,18 @@ impl SignatureAlgorithm {
 	fn alg_ident_oid(&self) -> ObjectIdentifier {
 		ObjectIdentifier::from_slice(self.oid_components)
 	}
+	fn write_params(&self, writer :&mut yasna::DERWriterSeq) {
+		match self.params {
+			SignatureAlgorithmParams::None => (),
+			SignatureAlgorithmParams::Null => {
+				writer.next().write_null();
+			},
+		}
+	}
 	fn write_alg_ident(&self, writer :DERWriter) {
 		writer.write_sequence(|writer| {
 			writer.next().write_oid(&self.alg_ident_oid());
-			match self.params {
-				SignatureAlgorithmParams::None => (),
-				SignatureAlgorithmParams::Null => {
-					writer.next().write_null();
-				},
-			}
+			self.write_params(writer);
 		});
 	}
 	fn write_oids_sign_alg(&self, writer :DERWriter) {
@@ -1873,12 +1876,7 @@ impl SignatureAlgorithm {
 				let oid = ObjectIdentifier::from_slice(oid);
 				writer.next().write_oid(&oid);
 			}
-			match self.params {
-				SignatureAlgorithmParams::None => (),
-				SignatureAlgorithmParams::Null => {
-					writer.next().write_null();
-				},
-			}
+			self.write_params(writer);
 		});
 	}
 }
