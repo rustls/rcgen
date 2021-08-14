@@ -269,7 +269,7 @@ fn from_remote() {
 	let sign_fn = move |_, msg| {
 		let system_random = SystemRandom::new();
 		let signature = key_pair.sign(&system_random, msg).unwrap();
-		signature.as_ref().to_vec()		
+		signature.as_ref().to_vec()
 	};
 	check_cert(&cert_der, &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
 }
