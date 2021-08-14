@@ -280,6 +280,28 @@ fn test_openssl_rsa_given() {
 }
 
 #[test]
+fn test_openssl_rsa_combinations_given() {
+	let alg_list = [
+		&rcgen::PKCS_RSA_SHA256,
+		&rcgen::PKCS_RSA_SHA384,
+		&rcgen::PKCS_RSA_SHA512,
+	];
+	for alg in alg_list {
+		let mut params = util::default_params();
+		params.alg = alg;
+
+		let kp = rcgen::KeyPair::from_pem_and_sign_algo(util::RSA_TEST_KEY_PAIR_PEM, alg).unwrap();
+		params.key_pair = Some(kp);
+
+		let cert = Certificate::from_params(params).unwrap();
+
+		// Now verify the certificate.
+		verify_cert(&cert);
+		verify_csr(&cert);
+	}
+}
+
+#[test]
 fn test_openssl_separate_ca() {
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
