@@ -11,9 +11,8 @@ use webpki::SignatureAlgorithm;
 use webpki::{Time, DnsNameRef};
 
 use ring::{rand::SystemRandom};
-use ring::signature;
-use ring::signature::{EcdsaKeyPair, EcdsaSigningAlgorithm,
-	Ed25519KeyPair, KeyPair as _, RSA_PKCS1_SHA256, RsaKeyPair};
+use ring::signature::{self, EcdsaKeyPair, EcdsaSigningAlgorithm,
+	Ed25519KeyPair, KeyPair as _, RsaEncoding, RsaKeyPair};
 
 use std::convert::TryFrom;
 
@@ -34,12 +33,12 @@ fn sign_msg_ed25519(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 	signature.as_ref().to_vec()
 }
 
-fn sign_msg_rsa(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
+fn sign_msg_rsa(cert :&Certificate, msg :&[u8], encoding :&'static dyn RsaEncoding) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
 	let key_pair = RsaKeyPair::from_pkcs8(&pk_der).unwrap();
 	let system_random = SystemRandom::new();
 	let mut signature = vec![0; key_pair.public_modulus_len()];
-	key_pair.sign(&RSA_PKCS1_SHA256, &system_random, &msg,
+	key_pair.sign(encoding, &system_random, &msg,
 		&mut signature).unwrap();
 	signature
 }
@@ -187,7 +186,30 @@ fn test_webpki_rsa_given() {
 	let cert_der = cert.serialize_der().unwrap();
 
 	check_cert(&cert_der, &cert, &webpki::RSA_PKCS1_2048_8192_SHA256,
-		&sign_msg_rsa);
+		|msg, cert| sign_msg_rsa(msg, cert, &signature::RSA_PKCS1_SHA256));
+}
+
+#[test]
+fn test_webpki_rsa_combinations_given() {
+	let configs = [
+		(&rcgen::PKCS_RSA_SHA256, &webpki::RSA_PKCS1_2048_8192_SHA256, &signature::RSA_PKCS1_SHA256),
+		(&rcgen::PKCS_RSA_SHA384, &webpki::RSA_PKCS1_2048_8192_SHA384, &signature::RSA_PKCS1_SHA384),
+		(&rcgen::PKCS_RSA_SHA512, &webpki::RSA_PKCS1_2048_8192_SHA512, &signature::RSA_PKCS1_SHA512),
+	];
+	for c in configs {
+		let mut params = util::default_params();
+		params.alg = c.0;
+		let kp = rcgen::KeyPair::from_pem_and_sign_algo(util::RSA_TEST_KEY_PAIR_PEM, c.0).unwrap();
+		params.key_pair = Some(kp);
+
+		let cert = Certificate::from_params(params).unwrap();
+
+		// Now verify the certificate.
+		let cert_der = cert.serialize_der().unwrap();
+
+		check_cert(&cert_der, &cert, c.1,
+			|msg, cert| sign_msg_rsa(msg, cert, c.2));
+	}
 }
 
 #[test]
