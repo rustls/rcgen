@@ -1391,6 +1391,20 @@ impl KeyPair {
 		})
 	}
 
+
+	/// Obtains the key pair from a DER formatted key
+	/// using the specified [`SignatureAlgorithm`](SignatureAlgorithm)
+	///
+	/// Same as [from_pem_and_sign_algo](Self::from_pem_and_sign_algo).
+	///
+	/// *This constructor is only available if rcgen is built with the "pem" feature*
+	#[cfg(feature = "pem")]
+	pub fn from_pem_and_sign_algo(pem_str :&str, alg :&'static SignatureAlgorithm) -> Result<Self, RcgenError> {
+		let private_key = pem::parse(pem_str)?;
+		let private_key_der :&[_] = &private_key.contents;
+		Ok(Self::from_der_and_sign_algo(private_key_der, alg)?)
+	}
+
 	/// Obtains the key pair from a DER formatted key
 	/// using the specified [`SignatureAlgorithm`](SignatureAlgorithm)
 	///
