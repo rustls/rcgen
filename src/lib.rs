@@ -1717,12 +1717,20 @@ trait PublicKeyData {
 	}
 }
 
+#[derive(PartialEq, Eq)]
+enum SignatureAlgorithmParams {
+	/// Omit the parameters
+	None,
+	/// Write null parameters
+	Null,
+}
+
 /// Signature algorithm type
 pub struct SignatureAlgorithm {
 	oids_sign_alg :&'static [&'static [u64]],
 	sign_alg :SignAlgo,
 	oid_components :&'static [u64],
-	write_null_params :bool,
+	params :SignatureAlgorithmParams,
 }
 
 impl fmt::Debug for SignatureAlgorithm {
@@ -1792,7 +1800,7 @@ pub static PKCS_RSA_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	sign_alg :SignAlgo::Rsa(),
 	// sha256WithRSAEncryption in RFC 4055
 	oid_components : &[1, 2, 840, 113549, 1, 1, 11],
-	write_null_params : true,
+	params : SignatureAlgorithmParams::Null,
 };
 
 /// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
@@ -1801,7 +1809,7 @@ pub static PKCS_RSA_SHA384 :SignatureAlgorithm = SignatureAlgorithm {
 	sign_alg :SignAlgo::Rsa(),
 	// sha384WithRSAEncryption in RFC 4055
 	oid_components : &[1, 2, 840, 113549, 1, 1, 12],
-	write_null_params : true,
+	params : SignatureAlgorithmParams::Null,
 };
 
 /// RSA signing with PKCS#1 1.5 padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
@@ -1810,7 +1818,7 @@ pub static PKCS_RSA_SHA512 :SignatureAlgorithm = SignatureAlgorithm {
 	sign_alg :SignAlgo::Rsa(),
 	// sha512WithRSAEncryption in RFC 4055
 	oid_components : &[1, 2, 840, 113549, 1, 1, 13],
-	write_null_params : true,
+	params : SignatureAlgorithmParams::Null,
 };
 
 /// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
@@ -1819,7 +1827,7 @@ pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	sign_alg :SignAlgo::EcDsa(&signature::ECDSA_P256_SHA256_ASN1_SIGNING),
 	/// ecdsa-with-SHA256 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 2],
-	write_null_params : false,
+	params : SignatureAlgorithmParams::None,
 };
 
 /// ECDSA signing using the P-384 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
@@ -1828,7 +1836,7 @@ pub static PKCS_ECDSA_P384_SHA384 :SignatureAlgorithm = SignatureAlgorithm {
 	sign_alg :SignAlgo::EcDsa(&signature::ECDSA_P384_SHA384_ASN1_SIGNING),
 	/// ecdsa-with-SHA384 in RFC 5758
 	oid_components : &[1, 2, 840, 10045, 4, 3, 3],
-	write_null_params : false,
+	params : SignatureAlgorithmParams::None,
 };
 
 // TODO PKCS_ECDSA_P521_SHA512 https://github.com/briansmith/ring/issues/824
@@ -1840,7 +1848,7 @@ pub static PKCS_ED25519 :SignatureAlgorithm = SignatureAlgorithm {
 	sign_alg :SignAlgo::EdDsa(&signature::ED25519),
 	/// id-Ed25519 in RFC 8410
 	oid_components : &[1, 3, 101, 112],
-	write_null_params : false,
+	params : SignatureAlgorithmParams::None,
 };
 
 // Signature algorithm IDs as per https://tools.ietf.org/html/rfc4055
@@ -1851,8 +1859,11 @@ impl SignatureAlgorithm {
 	fn write_alg_ident(&self, writer :DERWriter) {
 		writer.write_sequence(|writer| {
 			writer.next().write_oid(&self.alg_ident_oid());
-			if self.write_null_params {
-				writer.next().write_null();
+			match self.params {
+				SignatureAlgorithmParams::None => (),
+				SignatureAlgorithmParams::Null => {
+					writer.next().write_null();
+				},
 			}
 		});
 	}
@@ -1862,8 +1873,11 @@ impl SignatureAlgorithm {
 				let oid = ObjectIdentifier::from_slice(oid);
 				writer.next().write_oid(&oid);
 			}
-			if self.write_null_params {
-				writer.next().write_null();
+			match self.params {
+				SignatureAlgorithmParams::None => (),
+				SignatureAlgorithmParams::Null => {
+					writer.next().write_null();
+				},
 			}
 		});
 	}
