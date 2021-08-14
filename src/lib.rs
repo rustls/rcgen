@@ -2023,6 +2023,9 @@ mod tests {
 
 	#[test]
 	fn signature_algos_different() {
+		// TODO unify this with test_key_params_mismatch.
+		// Note that that test doesn't have a full list of signature
+		// algorithms, as it has no access to the iter function.
 		for (i, alg_i) in SignatureAlgorithm::iter().enumerate() {
 			for (j, alg_j) in SignatureAlgorithm::iter().enumerate() {
 				assert_eq!(alg_i == alg_j, i == j,
