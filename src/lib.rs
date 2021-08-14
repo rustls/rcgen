@@ -1426,6 +1426,9 @@ impl KeyPair {
 		} else if alg == &PKCS_RSA_SHA256 {
 			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
+		} else if alg == &PKCS_RSA_SHA384 {
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
 		} else if alg == &PKCS_RSA_SHA512 {
 			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
