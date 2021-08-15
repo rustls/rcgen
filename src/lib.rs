@@ -124,6 +124,9 @@ const OID_EC_SECP_384_R1 :&[u64] = &[1, 3, 132, 0, 34];
 // rsaEncryption in RFC 4055
 const OID_RSA_ENCRYPTION :&[u64] = &[1, 2, 840, 113549, 1, 1, 1];
 
+// id-RSASSA-PSS in RFC 4055
+const OID_RSASSA_PSS :&[u64] = &[1, 2, 840, 113549, 1, 1, 10];
+
 // https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3
 const OID_KEY_USAGE :&[u64] = &[2, 5, 29, 15];
 
@@ -1432,6 +1435,9 @@ impl KeyPair {
 		} else if alg == &PKCS_RSA_SHA512 {
 			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
+		} else if alg == &PKCS_RSA_PSS_SHA256 {
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
 			panic!("Unknown SignatureAlgorithm specified!");
 		};
@@ -1723,6 +1729,11 @@ enum SignatureAlgorithmParams {
 	None,
 	/// Write null parameters
 	Null,
+	/// RSASSA-PSS-params as per RFC 4055
+	RsaPss {
+		hash_algorithm :&'static [u64],
+		salt_length :u64,
+	},
 }
 
 /// Signature algorithm type
@@ -1741,6 +1752,8 @@ impl fmt::Debug for SignatureAlgorithm {
 			write!(f, "PKCS_RSA_SHA384")
 		} else if self == &PKCS_RSA_SHA512 {
 			write!(f, "PKCS_RSA_SHA512")
+		} else if self == &PKCS_RSA_PSS_SHA256 {
+			write!(f, "PKCS_RSA_PSS_SHA256")
 		} else if self == &PKCS_ECDSA_P256_SHA256 {
 			write!(f, "PKCS_ECDSA_P256_SHA256")
 		} else if self == &PKCS_ECDSA_P384_SHA384 {
@@ -1775,6 +1788,7 @@ impl SignatureAlgorithm {
 			&PKCS_RSA_SHA256,
 			&PKCS_RSA_SHA384,
 			&PKCS_RSA_SHA512,
+			&PKCS_RSA_PSS_SHA256,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
 			&PKCS_ED25519
@@ -1821,6 +1835,21 @@ pub static PKCS_RSA_SHA512 :SignatureAlgorithm = SignatureAlgorithm {
 	params : SignatureAlgorithmParams::Null,
 };
 
+/// RSA signing with PKCS#1 2.1 RSASSA-PSS padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+pub static PKCS_RSA_PSS_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
+	// We could also use OID_RSA_ENCRYPTION here, but it's recommended
+	// to use ID-RSASSA-PSS if possible.
+	oids_sign_alg :&[&OID_RSASSA_PSS],
+	sign_alg :SignAlgo::Rsa(),
+	oid_components : &OID_RSASSA_PSS,//&[1, 2, 840, 113549, 1, 1, 13],
+	// rSASSA-PSS-SHA256-Params in RFC 4055
+	params : SignatureAlgorithmParams::RsaPss {
+		// id-sha256 in https://datatracker.ietf.org/doc/html/rfc4055#section-2.1
+		hash_algorithm : &[2, 16, 840, 1, 101, 3, 4, 2, 1],
+		salt_length : 20,
+	},
+};
+
 /// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	oids_sign_alg :&[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_256_R1],
@@ -1862,14 +1891,50 @@ impl SignatureAlgorithm {
 			SignatureAlgorithmParams::Null => {
 				writer.next().write_null();
 			},
+			SignatureAlgorithmParams::RsaPss {
+				hash_algorithm, salt_length,
+			} => {
+				writer.next().write_sequence(|writer| {
+					// https://datatracker.ietf.org/doc/html/rfc4055#section-3.1
+
+					let oid = ObjectIdentifier::from_slice(hash_algorithm);
+					// hashAlgorithm
+					writer.next().write_tagged(Tag::context(0), |writer| {
+						writer.write_sequence(|writer| {
+							writer.next().write_oid(&oid);
+						});
+					});
+					// maskGenAlgorithm
+					writer.next().write_tagged(Tag::context(1), |writer| {
+						writer.write_sequence(|writer| {
+							// id-mgf1 in RFC 4055
+							const ID_MGF1 :&[u64] = &[1, 2, 840, 113549, 1, 1, 8];
+							let oid = ObjectIdentifier::from_slice(ID_MGF1);
+							writer.next().write_oid(&oid);
+							writer.next().write_sequence(|writer| {
+								let oid = ObjectIdentifier::from_slice(hash_algorithm);
+								writer.next().write_oid(&oid);
+								writer.next().write_null();
+							});
+						});
+					});
+					// saltLength
+					writer.next().write_tagged(Tag::context(2), |writer| {
+						writer.write_u64(salt_length);
+					});
+					// We *must* omit the trailerField element as per RFC 4055 section 3.1
+				})
+			},
 		}
 	}
+	/// Writes the algorithm identifier as it appears inside a signature
 	fn write_alg_ident(&self, writer :DERWriter) {
 		writer.write_sequence(|writer| {
 			writer.next().write_oid(&self.alg_ident_oid());
 			self.write_params(writer);
 		});
 	}
+	/// Writes the algorithm identifier as it appears inside subjectPublicKeyInfo
 	fn write_oids_sign_alg(&self, writer :DERWriter) {
 		writer.write_sequence(|writer| {
 			for oid in self.oids_sign_alg {
