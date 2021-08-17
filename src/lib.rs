@@ -1547,8 +1547,8 @@ impl From<ring::error::KeyRejected> for RcgenError {
 
 #[cfg(feature = "pem")]
 impl From<pem::PemError> for RcgenError {
-	fn from(_pem_error :pem::PemError) -> Self {
-		RcgenError::RingUnspecified
+	fn from(e :pem::PemError) -> Self {
+		RcgenError::PemError(e)
 	}
 }
 
