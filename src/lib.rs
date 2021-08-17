@@ -1835,6 +1835,11 @@ pub static PKCS_RSA_SHA512 :SignatureAlgorithm = SignatureAlgorithm {
 	params : SignatureAlgorithmParams::Null,
 };
 
+// TODO: not really sure whether the certs we generate actually work.
+// Both openssl and webpki reject them. It *might* be possible that openssl
+// accepts the certificate if the key is a proper RSA-PSS key, but ring doesn't
+// support those: https://github.com/briansmith/ring/issues/1353
+//
 /// RSA signing with PKCS#1 2.1 RSASSA-PSS padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 static PKCS_RSA_PSS_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	// We could also use OID_RSA_ENCRYPTION here, but it's recommended
