@@ -191,10 +191,11 @@ fn test_webpki_rsa_given() {
 
 #[test]
 fn test_webpki_rsa_combinations_given() {
-	let configs = [
+	let configs :&[(_, _, &'static dyn signature::RsaEncoding)] = &[
 		(&rcgen::PKCS_RSA_SHA256, &webpki::RSA_PKCS1_2048_8192_SHA256, &signature::RSA_PKCS1_SHA256),
 		(&rcgen::PKCS_RSA_SHA384, &webpki::RSA_PKCS1_2048_8192_SHA384, &signature::RSA_PKCS1_SHA384),
 		(&rcgen::PKCS_RSA_SHA512, &webpki::RSA_PKCS1_2048_8192_SHA512, &signature::RSA_PKCS1_SHA512),
+		//(&rcgen::PKCS_RSA_PSS_SHA256, &webpki::RSA_PSS_2048_8192_SHA256_LEGACY_KEY, &signature::RSA_PSS_SHA256),
 	];
 	for c in configs {
 		let mut params = util::default_params();
