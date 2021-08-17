@@ -1788,7 +1788,7 @@ impl SignatureAlgorithm {
 			&PKCS_RSA_SHA256,
 			&PKCS_RSA_SHA384,
 			&PKCS_RSA_SHA512,
-			&PKCS_RSA_PSS_SHA256,
+			//&PKCS_RSA_PSS_SHA256,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
 			&PKCS_ED25519
@@ -1836,7 +1836,7 @@ pub static PKCS_RSA_SHA512 :SignatureAlgorithm = SignatureAlgorithm {
 };
 
 /// RSA signing with PKCS#1 2.1 RSASSA-PSS padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
-pub static PKCS_RSA_PSS_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
+static PKCS_RSA_PSS_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
 	// We could also use OID_RSA_ENCRYPTION here, but it's recommended
 	// to use ID-RSASSA-PSS if possible.
 	oids_sign_alg :&[&OID_RSASSA_PSS],
