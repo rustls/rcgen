@@ -1,5 +1,12 @@
 # Changes
 
+## Release 0.8.12 - August 22, 2021
+
+- Use public key as default serial number. Contributed by [jpastuszek](https://github.com/jpastuszek).
+- Add support for `PKCS_RSA_SHA512` and `PKCS_RSA_SHA384` signature algorithms.
+- Add support for the keyUsage extension. Contributed by [jaredwolff](https://github.com/jaredwolff).
+- Ability to use remote keys. Contributed by [daxpedda](https://github.com/daxpedda).
+
 ## Release 0.8.11 - April 28, 2021
 
 - Add getters for the criticality, content, and `oid_components` of a `CustomExtension`
