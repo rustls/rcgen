@@ -1,5 +1,9 @@
 # Changes
 
+## Release 0.8.13 - August 22, 2021
+
+- Bugfix release to make Certificate `Send` and `Sync` again.
+
 ## Release 0.8.12 - August 22, 2021
 
 - Use public key as default serial number. Contributed by [jpastuszek](https://github.com/jpastuszek).
