@@ -23,7 +23,7 @@ yasna = { version = "0.4", features = ["chrono", "std"] }
 ring = "0.16"
 pem = { version = "0.8", optional = true }
 chrono = { version = "0.4.6", default-features = false }
-x509-parser = { version = "0.10", features = ["verify"], optional = true }
+x509-parser = { version = "0.11", features = ["verify"], optional = true }
 zeroize = { version = "1.2", optional = true }
 
 [features]
@@ -34,7 +34,7 @@ features = ["x509-parser"]
 
 [dev-dependencies]
 openssl = "0.10"
-x509-parser = { version = "0.10", features = ["verify"] }
+x509-parser = { version = "0.11", features = ["verify"] }
 webpki = { version = "0.22", features = ["std"] }
 botan = { version = "0.8", features = ["vendored"] }
 rand = "0.8"
