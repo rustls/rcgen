@@ -1,5 +1,10 @@
 # Changes
 
+## Release 0.8.14 - October 14, 2021
+
+- Update pem to 1.0.
+- Update x509-parser to 0.12.
+
 ## Release 0.8.13 - August 22, 2021
 
 - Bugfix release to make Certificate `Send` and `Sync` again.
