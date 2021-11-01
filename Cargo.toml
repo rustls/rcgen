@@ -19,10 +19,10 @@ path = "src/main.rs"
 required-features = ["pem"]
 
 [dependencies]
-yasna = { version = "0.4", features = ["chrono", "std"] }
+yasna = { version = "0.5", features = ["time", "std"] }
 ring = "0.16"
 pem = { version = "1.0", optional = true }
-chrono = { version = "0.4.6", default-features = false }
+time = { version = "0.3", default-features = false }
 x509-parser = { version = "0.12", features = ["verify"], optional = true }
 zeroize = { version = "1.2", optional = true }
 
