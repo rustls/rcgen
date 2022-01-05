@@ -1580,7 +1580,7 @@ impl From<pem::PemError> for RcgenError {
 impl TryFrom<&[u8]> for KeyPair {
     type Error = RcgenError;
     fn try_from(pkcs8: &[u8]) -> Result<KeyPair, RcgenError> {
-        let (kind, alg) = KeyPair::from_raw(pkcs8).expect("unable to detect the kind and algorithm");
+        let (kind, alg) = KeyPair::from_raw(pkcs8)?;
         Ok(KeyPair {
             kind,
             alg,
@@ -1592,7 +1592,7 @@ impl TryFrom<&[u8]> for KeyPair {
 impl TryFrom<Vec<u8>> for KeyPair {
     type Error = RcgenError;
     fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, RcgenError> {
-        let (kind, alg) = KeyPair::from_raw(pkcs8.as_slice()).expect("unable to detect kind and algorithm");
+        let (kind, alg) = KeyPair::from_raw(pkcs8.as_slice())?;
         Ok(KeyPair {
             kind,
             alg,
