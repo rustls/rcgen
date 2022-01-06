@@ -1448,6 +1448,21 @@ impl KeyPair {
 			serialized_der : pkcs8_vec,
 		})
 	}
+
+	fn from_raw(pkcs8: &[u8]) -> Result<(KeyPairKind, &'static SignatureAlgorithm), RcgenError> {
+		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
+			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
+		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8) {
+			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
+		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8) {
+			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
+		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(pkcs8) {
+			(KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256), &PKCS_RSA_SHA256)
+		} else {
+			return Err(RcgenError::CouldNotParseKeyPair);
+		};
+		Ok((kind, alg))
+	}
 }
 
 /// A private key that is not directly accessible, but can be used to sign messages
@@ -1557,25 +1572,26 @@ impl From<pem::PemError> for RcgenError {
 
 impl TryFrom<&[u8]> for KeyPair {
 	type Error = RcgenError;
-	fn try_from(pkcs8 :&[u8]) -> Result<KeyPair, RcgenError> {
-		let pkcs8_vec = pkcs8.to_vec();
 
-		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
-			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
-		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8) {
-			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
-		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8) {
-			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
-		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(pkcs8) {
-			(KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256), &PKCS_RSA_SHA256)
-		} else {
-			return Err(RcgenError::CouldNotParseKeyPair);
-		};
-
+	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, RcgenError> {
+		let (kind, alg) = KeyPair::from_raw(pkcs8)?;
 		Ok(KeyPair {
 			kind,
 			alg,
-			serialized_der : pkcs8_vec,
+			serialized_der: pkcs8.to_vec(),
+		})
+	}
+}
+
+impl TryFrom<Vec<u8>> for KeyPair {
+	type Error = RcgenError;
+
+	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, RcgenError> {
+		let (kind, alg) = KeyPair::from_raw(pkcs8.as_slice())?;
+		Ok(KeyPair {
+			kind,
+			alg,
+			serialized_der: pkcs8,
 		})
 	}
 }
