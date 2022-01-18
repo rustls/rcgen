@@ -50,6 +50,7 @@ use ring::signature::KeyPair as RingKeyPair;
 use ring::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters};
 use yasna::DERWriter;
 use yasna::models::{GeneralizedTime, UTCTime};
+use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
 use chrono::{DateTime, Timelike, Datelike};
 use chrono::{NaiveDate, Utc};
 use std::collections::HashMap;
@@ -370,6 +371,31 @@ impl DnType {
 	}
 }
 
+/// A distinguished name entry
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[non_exhaustive]
+pub enum DnValue {
+	/// A string of characters from the T.61 character set
+	TeletexString(Vec<u8>),
+	/// An ASCII string containing only A-Z, a-z, 0-9, '()+,-./:=? and <SPACE>
+	PrintableString(String),
+	/// A string encoded using UTF-32
+	UniversalString(Vec<u8>),
+	/// A string encoded using UTF-8
+	Utf8String(String),
+	/// A string encoded using UCS-2
+	BmpString(Vec<u8>),
+}
+
+impl<T> From<T> for DnValue
+where
+	T :Into<String>
+{
+	fn from(t :T) -> Self {
+		DnValue::Utf8String(t.into())
+	}
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 /**
 Distinguished name used e.g. for the issuer and subject fields of a certificate
@@ -382,7 +408,7 @@ See also the RFC 5280 sections on the [issuer](https://tools.ietf.org/html/rfc52
 and [subject](https://tools.ietf.org/html/rfc5280#section-4.1.2.6) fields.
 */
 pub struct DistinguishedName {
-	entries :HashMap<DnType, String>,
+	entries :HashMap<DnType, DnValue>,
 	order :Vec<DnType>,
 }
 
@@ -395,11 +421,8 @@ impl DistinguishedName {
 		}
 	}
 	/// Obtains the attribute value for the given attribute type
-	pub fn get(&self, ty :&DnType) -> Option<&str> {
-		self.entries.get(ty).map(|s| {
-			let s :&str = s;
-			s
-		})
+	pub fn get(&self, ty :&DnType) -> Option<&DnValue> {
+		self.entries.get(ty)
 	}
 	/// Removes the attribute with the specified DnType
 	///
@@ -414,7 +437,7 @@ impl DistinguishedName {
 		removed
 	}
 	/// Inserts or updates an attribute that consists of type and name
-	pub fn push(&mut self, ty :DnType, s :impl Into<String>) {
+	pub fn push(&mut self, ty :DnType, s :impl Into<DnValue>) {
 		if !self.entries.contains_key(&ty) {
 			self.order.push(ty.clone());
 		}
@@ -430,6 +453,8 @@ impl DistinguishedName {
 
 	#[cfg(feature = "x509-parser")]
 	fn from_name(name :&x509_parser::x509::X509Name) -> Result<Self, RcgenError> {
+		use x509_parser::der_parser::der::DerObjectContent;
+
 		let mut dn = DistinguishedName::new();
 		for rdn in name.iter() {
 			let mut rdn_iter = rdn.iter();
@@ -444,14 +469,19 @@ impl DistinguishedName {
 			} else {
 				panic!("x509-parser distinguished name set is empty");
 			};
-			let value = attr.attr_value().as_slice()
-				.or(Err(RcgenError::CouldNotParseCertificate))?;
 
 			let attr_type_oid = attr.attr_type().iter()
 				.ok_or(RcgenError::CouldNotParseCertificate)?;
 			let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
-			let dn_value = String::from_utf8(value.into())
-				.or(Err(RcgenError::CouldNotParseCertificate))?;
+			let dn_value = match attr.attr_value().content {
+				DerObjectContent::T61String(s) => DnValue::TeletexString(s.into()),
+				DerObjectContent::PrintableString(s) => DnValue::PrintableString(s.into()),
+				DerObjectContent::UniversalString(s) => DnValue::UniversalString(s.into()),
+				DerObjectContent::UTF8String(s) => DnValue::Utf8String(s.into()),
+				DerObjectContent::BmpString(s) => DnValue::BmpString(s.into()),
+				_ => return Err(RcgenError::CouldNotParseCertificate),
+			};
+
 			dn.push(dn_type, dn_value);
 		}
 		Ok(dn)
@@ -467,12 +497,12 @@ pub struct DistinguishedNameIterator<'a> {
 }
 
 impl <'a> Iterator for DistinguishedNameIterator<'a> {
-	type Item = (&'a DnType, &'a str);
+	type Item = (&'a DnType, &'a DnValue);
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.iter.next()
 			.and_then(|ty| {
-				self.distinguished_name.entries.get(ty).map(|v| (ty, v.as_str()))
+				self.distinguished_name.entries.get(ty).map(|v| (ty, v))
 			})
 	}
 }
@@ -699,7 +729,19 @@ impl CertificateParams {
 					writer.next().write_set(|writer| {
 						writer.next().write_sequence(|writer| {
 							writer.next().write_oid(&ty.to_oid());
-							writer.next().write_utf8_string(content);
+							match content {
+								DnValue::TeletexString(s) => writer.next().write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
+									writer.write_bytes(s)
+								}),
+								DnValue::PrintableString(s) => writer.next().write_printable_string(s),
+								DnValue::UniversalString(s) => writer.next().write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
+									writer.write_bytes(s)
+								}),
+								DnValue::Utf8String(s) => writer.next().write_utf8_string(s),
+								DnValue::BmpString(s) => writer.next().write_tagged_implicit(TAG_BMPSTRING, |writer| {
+									writer.write_bytes(s)
+								}),
+							}
 						});
 					});
 				}
@@ -1195,7 +1237,19 @@ fn write_distinguished_name(writer :DERWriter, dn :&DistinguishedName) {
 				writer.next().write_set(|writer| {
 					writer.next().write_sequence(|writer| {
 						writer.next().write_oid(&ty.to_oid());
-						writer.next().write_utf8_string(content);
+						match content {
+							DnValue::TeletexString(s) => writer.next().write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
+								writer.write_bytes(s)
+							}),
+							DnValue::PrintableString(s) => writer.next().write_printable_string(s),
+							DnValue::UniversalString(s) => writer.next().write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
+								writer.write_bytes(s)
+							}),
+							DnValue::Utf8String(s) => writer.next().write_utf8_string(s),
+							DnValue::BmpString(s) => writer.next().write_tagged_implicit(TAG_BMPSTRING, |writer| {
+								writer.write_bytes(s)
+							}),
+						}
 					});
 				});
 			}
