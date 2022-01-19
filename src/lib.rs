@@ -437,6 +437,15 @@ impl DistinguishedName {
 		removed
 	}
 	/// Inserts or updates an attribute that consists of type and name
+	///
+	/// ```
+	/// # use rcgen::{DistinguishedName, DnType, DnValue};
+	/// let mut dn = DistinguishedName::new();
+	/// dn.push(DnType::OrganizationName, "Crab widgits SE");
+	/// dn.push(DnType::CommonName, DnValue::PrintableString("Master Cert".to_string()));
+	/// assert_eq!(dn.get(&DnType::OrganizationName), Some(&DnValue::Utf8String("Crab widgits SE".to_string())));
+	/// assert_eq!(dn.get(&DnType::CommonName), Some(&DnValue::PrintableString("Master Cert".to_string())));
+	/// ```
 	pub fn push(&mut self, ty :DnType, s :impl Into<DnValue>) {
 		if !self.entries.contains_key(&ty) {
 			self.order.push(ty.clone());

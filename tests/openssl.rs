@@ -2,7 +2,7 @@ extern crate openssl;
 extern crate rcgen;
 
 use rcgen::{Certificate, NameConstraints, GeneralSubtree, IsCa,
-	BasicConstraints, CertificateParams, DnType};
+	BasicConstraints, CertificateParams, DnType, DnValue};
 use openssl::pkey::PKey;
 use openssl::x509::{X509, X509Req, X509StoreContext};
 use openssl::x509::store::{X509StoreBuilder, X509Store};
@@ -311,6 +311,24 @@ fn test_openssl_rsa_combinations_given() {
 #[test]
 fn test_openssl_separate_ca() {
 	let mut params = util::default_params();
+	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	let ca_cert = Certificate::from_params(params).unwrap();
+	let ca_cert_pem = ca_cert.serialize_pem().unwrap();
+
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	let cert = Certificate::from_params(params).unwrap();
+	let cert_pem = cert.serialize_pem_with_signer(&ca_cert).unwrap();
+	let key = cert.serialize_private_key_der();
+
+	verify_cert_ca(&cert_pem, &key, &ca_cert_pem);
+}
+
+#[test]
+fn test_openssl_separate_ca_with_printable_string() {
+	let mut params = util::default_params();
+	params.distinguished_name.push(DnType::CountryName, DnValue::PrintableString("US".to_string()));
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::from_params(params).unwrap();
 	let ca_cert_pem = ca_cert.serialize_pem().unwrap();
