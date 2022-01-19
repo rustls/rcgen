@@ -1,6 +1,8 @@
 extern crate botan;
 extern crate rcgen;
 
+#[cfg(feature = "x509-parser")]
+use rcgen::DnValue;
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
 
 mod util;
@@ -154,6 +156,33 @@ fn test_botan_separate_ca() {
 fn test_botan_imported_ca() {
 	use std::convert::TryInto;
 	let mut params = default_params();
+	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	let ca_cert = Certificate::from_params(params).unwrap();
+
+	let (ca_cert_der, ca_key_der) = (ca_cert.serialize_der().unwrap(), ca_cert.serialize_private_key_der());
+
+	let ca_key_pair = ca_key_der.as_slice().try_into().unwrap();
+	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der.as_slice(), ca_key_pair)
+		.unwrap();
+	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();
+
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
+	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	// Botan has a sanity check that enforces a maximum expiration date
+	params.not_after = rcgen::date_time_ymd(3016, 01, 01);
+	let cert = Certificate::from_params(params).unwrap();
+	let cert_der = cert.serialize_der_with_signer(&imported_ca_cert).unwrap();
+
+	check_cert_ca(&cert_der, &cert, &ca_cert_der);
+}
+
+#[cfg(feature = "x509-parser")]
+#[test]
+fn test_botan_imported_ca_with_printable_string() {
+	use std::convert::TryInto;
+	let mut params = default_params();
+	params.distinguished_name.push(DnType::CountryName, DnValue::PrintableString("US".to_string()));
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::from_params(params).unwrap();
 
