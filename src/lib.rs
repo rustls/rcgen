@@ -719,7 +719,7 @@ impl CertificateParams {
 					writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
 						match san {
 							SanType::Rfc822Name(name) |
-							SanType::DnsName(name) => writer.write_utf8_string(name),
+							SanType::DnsName(name) => writer.write_ia5_string(name),
 							SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
 							SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
 						}
@@ -1273,7 +1273,7 @@ fn write_general_subtrees(writer :DERWriter, tag :u64, general_subtrees :&[Gener
 					writer.next().write_tagged_implicit(Tag::context(subtree.tag()), |writer| {
 						match subtree {
 							GeneralSubtree::Rfc822Name(name) |
-							GeneralSubtree::DnsName(name) => writer.write_utf8_string(name),
+							GeneralSubtree::DnsName(name) => writer.write_ia5_string(name),
 							GeneralSubtree::DirectoryName(name) => write_distinguished_name(writer, name),
 							GeneralSubtree::IpAddress(subnet) => writer.write_bytes(&subnet.to_bytes()),
 						}
