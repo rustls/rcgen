@@ -6,7 +6,7 @@ description = "Rust X.509 certificate generator"
 repository = "https://github.com/est31/rcgen"
 documentation = "https://docs.rs/rcgen"
 license = "MIT OR Apache-2.0"
-edition = "2015"
+edition = "2021"
 readme = "README.md"
 
 [lib]
