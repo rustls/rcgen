@@ -1,5 +1,12 @@
 # Changes
 
+## Release 0.9.0 - February 2, 2022
+
+- Add RemoteKeyError for usage by remote keys.
+- Support non utf8 strings. Contributed by [omjadas](https://github.com/omjadas).
+- Switch from chrono to time. Contributed by [connec](https://github.com/connec).
+- Update edition to 2021.
+
 ## Release 0.8.14 - October 14, 2021
 
 - Update pem to 1.0.
