@@ -1,8 +1,5 @@
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 
-extern crate rcgen;
-extern crate openssl;
-
 use rcgen::{Certificate, CertificateParams,
 	DistinguishedName, date_time_ymd};
 use std::fs;

@@ -1,7 +1,5 @@
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 
-extern crate rcgen;
-
 use rcgen::{Certificate, CertificateParams,
 	DistinguishedName, DnType, SanType,
 	date_time_ymd};

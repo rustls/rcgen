@@ -1,8 +1,3 @@
-extern crate webpki;
-extern crate rcgen;
-extern crate ring;
-extern crate pem;
-
 #[cfg(feature = "x509-parser")]
 use rcgen::{CertificateSigningRequest, DnValue};
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, KeyPair, RemoteKeyPair};

@@ -1,6 +1,3 @@
-extern crate botan;
-extern crate rcgen;
-
 #[cfg(feature = "x509-parser")]
 use rcgen::DnValue;
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};

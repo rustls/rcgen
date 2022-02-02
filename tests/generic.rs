@@ -1,7 +1,5 @@
 mod util;
 
-extern crate rcgen;
-
 use rcgen::{RcgenError, KeyPair, Certificate};
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;

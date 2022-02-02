@@ -1,9 +1,5 @@
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 
-extern crate rsa;
-extern crate rand;
-extern crate rcgen;
-
 use rsa::RsaPrivateKey;
 use rsa::pkcs8::ToPrivateKey;
 use rand::rngs::OsRng;

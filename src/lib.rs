@@ -30,14 +30,6 @@ println!("{}", cert.serialize_private_key_pem());
 #![deny(missing_docs)]
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 
-extern crate yasna;
-extern crate ring;
-#[cfg(feature = "pem")]
-extern crate pem;
-extern crate time;
-#[cfg(feature = "x509-parser")]
-extern crate x509_parser;
-
 use yasna::Tag;
 use yasna::models::ObjectIdentifier;
 #[cfg(feature = "pem")]

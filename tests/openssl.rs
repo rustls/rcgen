@@ -1,6 +1,3 @@
-extern crate openssl;
-extern crate rcgen;
-
 use rcgen::{Certificate, NameConstraints, GeneralSubtree, IsCa,
 	BasicConstraints, CertificateParams, DnType, DnValue};
 use openssl::pkey::PKey;
