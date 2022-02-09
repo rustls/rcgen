@@ -1,5 +1,9 @@
 # Changes
 
+## Release 0.9.1 - February 9, 2022
+
+- Changed edition to 2018 in order to support Rust 1.53.0.
+
 ## Release 0.9.0 - February 2, 2022
 
 - Add RemoteKeyError for usage by remote keys.
