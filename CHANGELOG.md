@@ -1,8 +1,12 @@
 # Changes
 
+## Release 0.9.2 - February 21, 2022
+
+- Update x509-parser to 0.13. Contributed by [matze](https://github.com/matze).
+
 ## Release 0.9.1 - February 9, 2022
 
-- Changed edition to 2018 in order to support Rust 1.53.0.
+- Change edition to 2018 in order to support Rust 1.53.0.
 
 ## Release 0.9.0 - February 2, 2022
 
