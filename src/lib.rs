@@ -155,6 +155,7 @@ pub enum SanType {
 	/// Also known as E-Mail address
 	Rfc822Name(String),
 	DnsName(String),
+	URI(String),
 	IpAddress(IpAddr),
 }
 
@@ -168,6 +169,9 @@ impl SanType {
 			x509_parser::extensions::GeneralName::DNSName(name) => {
 				SanType::DnsName((*name).into())
 			}
+			x509_parser::extensions::GeneralName::URI(name) => {
+				SanType::URI((*name).into())
+			}
 			_ => return Err(RcgenError::InvalidNameType),
 		})
 	}
@@ -177,11 +181,13 @@ impl SanType {
 		// https://tools.ietf.org/html/rfc5280#page-38
 		const TAG_RFC822_NAME :u64 = 1;
 		const TAG_DNS_NAME :u64 = 2;
+		const TAG_URI :u64 = 6;
 		const TAG_IP_ADDRESS :u64 = 7;
 
 		match self {
 			SanType::Rfc822Name(_name) => TAG_RFC822_NAME,
 			SanType::DnsName(_name) => TAG_DNS_NAME,
+			SanType::URI(_name) => TAG_URI,
 			SanType::IpAddress(_addr) => TAG_IP_ADDRESS,
 		}
 	}
@@ -710,7 +716,8 @@ impl CertificateParams {
 					writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
 						match san {
 							SanType::Rfc822Name(name) |
-							SanType::DnsName(name) => writer.write_ia5_string(name),
+							SanType::DnsName(name) |
+							SanType::URI(name) => writer.write_ia5_string(name),
 							SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
 							SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
 						}
