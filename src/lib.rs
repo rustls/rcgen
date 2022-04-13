@@ -1532,7 +1532,7 @@ impl KeyPair {
 /// Trait objects based on this trait can be passed to the [`KeyPair::from_remote`] function to generating certificates
 /// from a remote and raw private key, for example an HSM.
 pub trait RemoteKeyPair {
-	/// Returns the public key of this key pair in DER format
+	/// Returns the public key of this key pair in raw binary format
 	fn public_key(&self) -> &[u8];
 
 	/// Signs `msg` using the selected algorithm
