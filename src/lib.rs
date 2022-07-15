@@ -911,22 +911,38 @@ impl CertificateParams {
 								});
 							}
 						}
-						if let IsCa::Ca(ref constraint) = self.is_ca {
-							// Write subject_key_identifier
-							Self::write_extension(writer.next(), OID_SUBJECT_KEY_IDENTIFIER, false, |writer| {
-								let key_identifier = self.key_identifier(pub_key);
-								writer.write_bytes(key_identifier.as_ref());
-							});
-							// Write basic_constraints
-							Self::write_extension(writer.next(), OID_BASIC_CONSTRAINTS, true, |writer| {
-								writer.write_sequence(|writer| {
-									writer.next().write_bool(true); // cA flag
-									if let BasicConstraints::Constrained(path_len_constraint) = constraint {
-										writer.next().write_u8(*path_len_constraint);
-									}
+						match self.is_ca {
+							IsCa::Ca(ref constraint) => {
+								// Write subject_key_identifier
+								Self::write_extension(writer.next(), OID_SUBJECT_KEY_IDENTIFIER, false, |writer| {
+									let key_identifier = self.key_identifier(pub_key);
+									writer.write_bytes(key_identifier.as_ref());
 								});
-							});
+								// Write basic_constraints
+								Self::write_extension(writer.next(), OID_BASIC_CONSTRAINTS, true, |writer| {
+									writer.write_sequence(|writer| {
+										writer.next().write_bool(true); // cA flag
+										if let BasicConstraints::Constrained(path_len_constraint) = constraint {
+											writer.next().write_u8(*path_len_constraint);
+										}
+									});
+								});
+							}
+							IsCa::SelfSignedOnly => {
+								// Write subject_key_identifier
+								Self::write_extension(writer.next(), OID_SUBJECT_KEY_IDENTIFIER, false, |writer| {
+									let key_identifier = self.key_identifier(pub_key);
+									writer.write_bytes(key_identifier.as_ref());
+								});
+								// Write basic_constraints
+								Self::write_extension(writer.next(), OID_BASIC_CONSTRAINTS, true, |writer| {
+									writer.write_sequence(|writer| {
+										writer.next().write_bool(false); // cA flag
+									});
+								});
+							}
 						}
+						
 						// Write the custom extensions
 						for ext in &self.custom_extensions {
 							writer.next().write_sequence(|writer| {
