@@ -1768,6 +1768,19 @@ impl KeyPair {
 
 		self.serialized_der.clone()
 	}
+
+	/// Returns a reference to the serialized key pair (including the private key)
+	/// in PKCS#8 format in DER
+	///
+	/// Panics if called on a remote key pair.
+	pub fn serialized_der(&self) -> &[u8] {
+		if let KeyPairKind::Remote(_) = self.kind {
+			panic!("Serializing a remote key pair is not supported")
+		}
+
+		&self.serialized_der
+	}
+
 	/// Serializes the key pair (including the private key) in PKCS#8 format in PEM
 	///
 	/// *This function is only available if rcgen is built with the "pem" feature*
