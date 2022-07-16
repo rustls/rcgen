@@ -1,5 +1,10 @@
 # Changes
 
+## Release 0.9.3 - July 16, 2022
+
+- Add a `KeyPair::serialized_der` function. Contributed by [jean-airoldie](https://github.com/jean-airoldie).
+
+
 ## Release 0.9.2 - February 21, 2022
 
 - Update x509-parser to 0.13. Contributed by [matze](https://github.com/matze).
