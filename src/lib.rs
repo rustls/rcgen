@@ -650,7 +650,7 @@ impl Default for CertificateParams {
 			serial_number : None,
 			subject_alt_names : Vec::new(),
 			distinguished_name,
-			is_ca : IsCa::SelfSignedOnly,
+			is_ca : IsCa::NoCa,
 			key_usages : Vec::new(),
 			extended_key_usages : Vec::new(),
 			name_constraints : None,
@@ -809,6 +809,7 @@ impl CertificateParams {
 				!self.subject_alt_names.is_empty() ||
 				!self.extended_key_usages.is_empty() ||
 				self.name_constraints.iter().any(|c| !c.is_empty()) ||
+				matches!(self.is_ca, IsCa::ExplicitNoCa) ||
 				matches!(self.is_ca, IsCa::Ca(_)) ||
 				!self.custom_extensions.is_empty();
 			if should_write_exts {
@@ -928,7 +929,7 @@ impl CertificateParams {
 									});
 								});
 							}
-							IsCa::SelfSignedOnly => {
+							IsCa::ExplicitNoCa => {
 								// Write subject_key_identifier
 								Self::write_extension(writer.next(), OID_SUBJECT_KEY_IDENTIFIER, false, |writer| {
 									let key_identifier = self.key_identifier(pub_key);
@@ -941,6 +942,7 @@ impl CertificateParams {
 									});
 								});
 							}
+							IsCa::NoCa => {}
 						}
 						
 						// Write the custom extensions
@@ -1025,7 +1027,9 @@ impl CertificateParams {
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum IsCa {
 	/// The certificate can only sign itself
-	SelfSignedOnly,
+	NoCa,
+	/// The certificate can only sign itself, adding the extension and `CA:FALSE`
+	ExplicitNoCa,
 	/// The certificate may be used to sign other certificates
 	Ca(BasicConstraints),
 }
