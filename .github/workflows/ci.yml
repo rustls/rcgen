@@ -8,14 +8,14 @@ jobs:
     strategy:
       matrix:
         os: [macOS-latest, ubuntu-latest]
-        toolchain: [stable, beta, nightly, 1.54]
+        toolchain: [stable, beta, nightly, 1.58.1]
         exclude:
           - os: macOS-latest
             toolchain: beta
           - os: macOS-latest
             toolchain: nightly
           - os: macOS-latest
-            toolchain: 1.54
+            toolchain: 1.58.1
 
     runs-on: ${{ matrix.os }}
 
