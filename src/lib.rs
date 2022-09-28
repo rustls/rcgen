@@ -459,7 +459,7 @@ impl DistinguishedName {
 
 	#[cfg(feature = "x509-parser")]
 	fn from_name(name :&x509_parser::x509::X509Name) -> Result<Self, RcgenError> {
-		use x509_parser::der_parser::der::DerObjectContent;
+		use x509_parser::der_parser::asn1_rs::Tag;
 
 		let mut dn = DistinguishedName::new();
 		for rdn in name.iter() {
@@ -479,12 +479,21 @@ impl DistinguishedName {
 			let attr_type_oid = attr.attr_type().iter()
 				.ok_or(RcgenError::CouldNotParseCertificate)?;
 			let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
-			let dn_value = match attr.attr_value().content {
-				DerObjectContent::T61String(s) => DnValue::TeletexString(s.into()),
-				DerObjectContent::PrintableString(s) => DnValue::PrintableString(s.into()),
-				DerObjectContent::UniversalString(s) => DnValue::UniversalString(s.into()),
-				DerObjectContent::UTF8String(s) => DnValue::Utf8String(s.into()),
-				DerObjectContent::BmpString(s) => DnValue::BmpString(s.into()),
+			let data = attr.attr_value().data;
+			let dn_value = match attr.attr_value().header.tag() {
+				Tag::T61String => DnValue::TeletexString(data.into()),
+				Tag::PrintableString => {
+					let data = std::str::from_utf8(data)
+						.map_err(|_| RcgenError::CouldNotParseCertificate)?;
+					DnValue::PrintableString(data.to_owned())
+				},
+				Tag::UniversalString => DnValue::UniversalString(data.into()),
+				Tag::Utf8String => {
+					let data = std::str::from_utf8(data)
+						.map_err(|_| RcgenError::CouldNotParseCertificate)?;
+					DnValue::Utf8String(data.to_owned())
+				},
+				Tag::BmpString => DnValue::BmpString(data.into()),
 				_ => return Err(RcgenError::CouldNotParseCertificate),
 			};
 
@@ -944,7 +953,7 @@ impl CertificateParams {
 							}
 							IsCa::NoCa => {}
 						}
-						
+
 						// Write the custom extensions
 						for ext in &self.custom_extensions {
 							writer.next().write_sequence(|writer| {
