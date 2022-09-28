@@ -1,7 +1,7 @@
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 
 use rsa::RsaPrivateKey;
-use rsa::pkcs8::ToPrivateKey;
+use rsa::pkcs8::EncodePrivateKey;
 use rand::rngs::OsRng;
 
 use rcgen::{Certificate, CertificateParams,
