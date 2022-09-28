@@ -1423,6 +1423,7 @@ enum SignAlgo {
 }
 
 /// A key pair vairant
+#[allow(clippy::large_enum_variant)]
 enum KeyPairKind {
 	/// A Ecdsa key pair
 	Ec(EcdsaKeyPair),
