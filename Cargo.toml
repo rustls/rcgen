@@ -8,6 +8,7 @@ documentation = "https://docs.rs/rcgen"
 license = "MIT OR Apache-2.0"
 edition = "2021"
 readme = "README.md"
+keywords = ["mkcert", "ca", "certificate"]
 
 [lib]
 name = "rcgen"
