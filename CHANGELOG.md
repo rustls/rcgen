@@ -1,9 +1,13 @@
 # Changes
 
+## Release 0.9.4 - September 28, 2022
+
+- Update x509-parser to 0.14.
+- Increase minimum supported Rust version to 1.54.0
+
 ## Release 0.9.3 - July 16, 2022
 
 - Add a `KeyPair::serialized_der` function. Contributed by [jean-airoldie](https://github.com/jean-airoldie).
-
 
 ## Release 0.9.2 - February 21, 2022
 
