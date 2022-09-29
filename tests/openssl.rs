@@ -15,7 +15,7 @@ mod util;
 
 fn verify_cert_basic(cert :&Certificate) {
 	let cert_pem = cert.serialize_pem().unwrap();
-	println!("{}", cert_pem);
+	println!("{cert_pem}");
 
 	let x509 = X509::from_pem(&cert_pem.as_bytes()).unwrap();
 	let mut builder = X509StoreBuilder::new().unwrap();
@@ -91,8 +91,8 @@ fn verify_cert(cert :&Certificate) {
 }
 
 fn verify_cert_ca(cert_pem :&str, key :&[u8], ca_cert_pem :&str) {
-	println!("{}", cert_pem);
-	println!("{}", ca_cert_pem);
+	println!("{cert_pem}");
+	println!("{ca_cert_pem}");
 
 	let x509 = X509::from_pem(&cert_pem.as_bytes()).unwrap();
 
@@ -158,7 +158,7 @@ fn verify_cert_ca(cert_pem :&str, key :&[u8], ca_cert_pem :&str) {
 
 fn verify_csr(cert :&Certificate) {
 	let csr = cert.serialize_request_pem().unwrap();
-	println!("{}", csr);
+	println!("{csr}");
 	let key = cert.serialize_private_key_der();
 	let pkey = PKey::private_key_from_der(&key).unwrap();
 

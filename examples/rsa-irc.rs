@@ -31,8 +31,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let hash_hex :String = hash.as_ref().iter()
 		.map(|b| format!("{:02x}", b))
 		.collect();
-	println!("sha-512 fingerprint: {}", hash_hex);
-	println!("{}", pem_serialized);
+	println!("sha-512 fingerprint: {hash_tex}");
+	println!("{pem_serialized}");
 	println!("{}", cert.serialize_private_key_pem());
 	std::fs::create_dir_all("certs/")?;
 	fs::write("certs/cert.pem", &pem_serialized.as_bytes())?;

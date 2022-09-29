@@ -23,10 +23,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let der_serialized = pem::parse(&pem_serialized).unwrap().contents;
 	let hash = ring::digest::digest(&ring::digest::SHA512, &der_serialized);
 	let hash_hex :String = hash.as_ref().iter()
-		.map(|b| format!("{:02x}", b))
+		.map(|b| format!("{b:02x}"))
 		.collect();
-	println!("sha-512 fingerprint: {}", hash_hex);
-	println!("{}", pem_serialized);
+	println!("sha-512 fingerprint: {hash_hex}");
+	println!("{pem_serialized}");
 	println!("{}", cert.serialize_private_key_pem());
 	std::fs::create_dir_all("certs/")?;
 	fs::write("certs/cert.pem", &pem_serialized.as_bytes())?;
