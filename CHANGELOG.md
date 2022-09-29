@@ -1,9 +1,16 @@
+
 # Changes
+
+## Release 0.10.0 - September 29, 2022
+
+- Update x509-parser to 0.14.
+- Increase minimum supported Rust version to 1.58.1.
+- Update edition to 2021.
+- Change `IsCa` enum to have `NoCa` and `ExplicitNoCa` and `Ca(...)`. Contributed by [doraneko94](https://github.com/doraneko94).
 
 ## Release 0.9.4 - September 28, 2022
 
-- Update x509-parser to 0.14.
-- Increase minimum supported Rust version to 1.54.0
+* yanked due to breaking API changes, see 0.10.0 instead. *
 
 ## Release 0.9.3 - July 16, 2022
 
