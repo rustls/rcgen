@@ -49,6 +49,8 @@ use std::fmt;
 use std::convert::TryFrom;
 use std::error::Error;
 use std::net::IpAddr;
+#[cfg(feature = "x509-parser")]
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::hash::{Hash, Hasher};
 
@@ -159,6 +161,19 @@ pub enum SanType {
 	IpAddress(IpAddr),
 }
 
+#[cfg(feature = "x509-parser")]
+fn ip_addr_from_octets(octets: &[u8]) -> Result<IpAddr, RcgenError> {
+	if let Ok(ipv6_octets) = <&[u8; 16]>::try_from(octets) {
+		Ok(Ipv6Addr::from(*ipv6_octets).into())
+	}
+	else if let Ok(ipv4_octets) = <&[u8; 4]>::try_from(octets) {
+		Ok(Ipv4Addr::from(*ipv4_octets).into())
+	}
+	else {
+		Err(RcgenError::InvalidIpAddressOctetLength(octets.len()))
+	}
+}
+
 impl SanType {
 	#[cfg(feature = "x509-parser")]
 	fn try_from_general(name :&x509_parser::extensions::GeneralName<'_>) -> Result<Self, RcgenError> {
@@ -171,6 +186,9 @@ impl SanType {
 			}
 			x509_parser::extensions::GeneralName::URI(name) => {
 				SanType::URI((*name).into())
+			}
+			x509_parser::extensions::GeneralName::IPAddress(octets) => {
+				SanType::IpAddress(ip_addr_from_octets(octets)?)
 			}
 			_ => return Err(RcgenError::InvalidNameType),
 		})
@@ -1585,6 +1603,8 @@ pub enum RcgenError {
 	#[cfg(feature = "x509-parser")]
 	/// Invalid subject alternative name type
 	InvalidNameType,
+	/// An IP address was provided as a byte array, but the byte array was an invalid length.
+	InvalidIpAddressOctetLength(usize),
 	/// There is no support for generating
 	/// keys for the given algorithm
 	KeyGenerationUnavailable,
@@ -1621,6 +1641,7 @@ impl fmt::Display for RcgenError {
 			CouldNotParseKeyPair => write!(f, "Could not parse key pair")?,
 			#[cfg(feature = "x509-parser")]
 			InvalidNameType => write!(f, "Invalid subject alternative name type")?,
+			InvalidIpAddressOctetLength(actual) => write!(f, "Invalid IP address octet length of {actual} bytes")?,
 			KeyGenerationUnavailable => write!(f, "There is no support for generating \
 				keys for the given algorithm")?,
 			UnsupportedSignatureAlgorithm => write!(f, "The requested signature algorithm \
@@ -2247,6 +2268,76 @@ mod tests {
 				assert_eq!(alg_i == alg_j, i == j,
 					"Algorighm relationship mismatch for algorithm index pair {} and {}", i, j);
 			}
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	mod test_ip_address_from_octets {
+		use std::net::IpAddr;
+		use super::super::ip_addr_from_octets;
+		use super::super::RcgenError;
+
+		#[test]
+		fn ipv4() {
+			let octets = [10, 20, 30, 40];
+
+			let actual = ip_addr_from_octets(&octets)
+				.unwrap();
+
+			assert_eq!(IpAddr::from(octets), actual)
+		}
+
+		#[test]
+		fn ipv6() {
+			let octets = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+
+			let actual = ip_addr_from_octets(&octets)
+				.unwrap();
+
+			assert_eq!(IpAddr::from(octets), actual)
+		}
+
+		#[test]
+		fn mismatch() {
+			let incorrect: Vec<u8> = (0..10).into_iter().collect();
+			let actual = ip_addr_from_octets(&incorrect)
+				.unwrap_err();
+
+			assert_eq!(RcgenError::InvalidIpAddressOctetLength(10), actual);
+		}
+
+		#[test]
+		fn none() {
+			let actual = ip_addr_from_octets(&[])
+				.unwrap_err();
+
+			assert_eq!(RcgenError::InvalidIpAddressOctetLength(0), actual);
+		}
+
+		#[test]
+		fn too_many() {
+			let incorrect: Vec<u8> = (0..20).into_iter().collect();
+			let actual = ip_addr_from_octets(&incorrect)
+				.unwrap_err();
+
+			assert_eq!(RcgenError::InvalidIpAddressOctetLength(20), actual);
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	mod test_san_type_from_general_name {
+		use std::net::IpAddr;
+		use x509_parser::extensions::GeneralName;
+		use crate::SanType;
+
+		#[test]
+		fn with_ipv4() {
+			let octets = [1, 2, 3, 4];
+			let value = GeneralName::IPAddress(&octets);
+			let actual = SanType::try_from_general(&value)
+				.unwrap();
+
+			assert_eq!(SanType::IpAddress(IpAddr::from(octets)), actual);
 		}
 	}
 }
