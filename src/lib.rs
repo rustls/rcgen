@@ -1515,6 +1515,10 @@ impl Certificate {
 			key_pair,
 		})
 	}
+	/// Returns the certificate parameters
+	pub fn get_params(&self) -> &CertificateParams {
+			&self.params
+	}
 	/// Calculates a subject key identifier for the certificate subject's public key.
 	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
 	pub fn get_key_identifier(&self) -> Vec<u8> {
