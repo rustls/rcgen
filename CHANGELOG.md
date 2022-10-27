@@ -4,6 +4,12 @@
 ## Unreleased
 
 - Remove `TryFrom<[u8]>` and `TryFrom<Vec<u8>>` for `KeyPair` in favor of allowing `KeyPair::from_der` to take `impl Into<Cow<'b, [u8]>>` which allows `Vec<u8>` as well as `[u8]`.
+- Add `ring::rand::SecureRandom` parameter to:
+  - `KeyPair::generate`
+  - `KeyPair::from_der`
+  - `KeyPair::from_der_and_sign_algo`
+  - `KeyPair::from_pem`
+  - `KeyPair::from_pem_and_sign_algo`
 
 ## Release 0.10.0 - September 29, 2022
 
