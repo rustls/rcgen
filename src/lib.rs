@@ -30,6 +30,7 @@ println!("{}", cert.serialize_private_key_pem());
 #![deny(missing_docs)]
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 
+use std::borrow::Cow;
 use yasna::Tag;
 use yasna::models::ObjectIdentifier;
 #[cfg(feature = "pem")]
@@ -1559,14 +1560,16 @@ impl KeyPair {
 		})
 	}
 
-	fn from_raw(pkcs8: &[u8]) -> Result<(KeyPairKind, &'static SignatureAlgorithm), RcgenError> {
-		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
+	fn from_raw<'b>(pkcs8: impl Into<Cow<'b, [u8]>>) -> Result<(KeyPairKind, &'static SignatureAlgorithm), RcgenError> {
+		let pkcs8 = pkcs8.into();
+
+		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(&pkcs8) {
 			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
-		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8) {
+		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &pkcs8) {
 			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
-		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8) {
+		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, &pkcs8) {
 			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
-		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(pkcs8) {
+		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(&pkcs8) {
 			(KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256), &PKCS_RSA_SHA256)
 		} else {
 			return Err(RcgenError::CouldNotParseKeyPair);
