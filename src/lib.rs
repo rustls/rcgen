@@ -1560,7 +1560,7 @@ impl KeyPair {
 		})
 	}
 
-	fn from_raw<'b>(pkcs8: impl Into<Cow<'b, [u8]>>) -> Result<(KeyPairKind, &'static SignatureAlgorithm), RcgenError> {
+	fn from_raw<'b>(pkcs8: impl Into<Cow<'b, [u8]>>) -> Result<KeyPair, RcgenError> {
 		let pkcs8 = pkcs8.into();
 
 		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(&pkcs8) {
@@ -1574,7 +1574,12 @@ impl KeyPair {
 		} else {
 			return Err(RcgenError::CouldNotParseKeyPair);
 		};
-		Ok((kind, alg))
+
+		Ok(KeyPair {
+			kind,
+			alg,
+			serialized_der : pkcs8.into_owned(),
+		})
 	}
 }
 
@@ -1690,12 +1695,7 @@ impl TryFrom<&[u8]> for KeyPair {
 	type Error = RcgenError;
 
 	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, RcgenError> {
-		let (kind, alg) = KeyPair::from_raw(pkcs8)?;
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: pkcs8.to_vec(),
-		})
+		KeyPair::from_raw(pkcs8)
 	}
 }
 
@@ -1703,12 +1703,7 @@ impl TryFrom<Vec<u8>> for KeyPair {
 	type Error = RcgenError;
 
 	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, RcgenError> {
-		let (kind, alg) = KeyPair::from_raw(pkcs8.as_slice())?;
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: pkcs8,
-		})
+		KeyPair::from_raw(pkcs8)
 	}
 }
 
