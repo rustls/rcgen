@@ -1620,7 +1620,7 @@ pub enum RcgenError {
 	/// Unspecified `ring` error
 	RingUnspecified,
 	/// The `ring` library rejected the key upon loading
-	RingKeyRejected(&'static str),
+	RingKeyRejected(String), // TODO: Change this to `ring::error::KeyRejected` once it implements `PartialEq`.
 	/// The provided certificate's signature algorithm
 	/// is incompatible with the given key pair
 	CertificateKeyPairMismatch,
@@ -1653,7 +1653,7 @@ impl fmt::Display for RcgenError {
 			#[cfg(feature = "x509-parser")]
 			UnsupportedExtension => write!(f, "Unsupported extension requested in CSR")?,
 			RingUnspecified => write!(f, "Unspecified ring error")?,
-			RingKeyRejected(e) => write!(f, "Key rejected by ring: {}", e)?,
+			RingKeyRejected(reason) => write!(f, "Key rejected by ring: {}", reason)?,
 			CertificateKeyPairMismatch => write!(f, "The provided certificate's signature \
 				algorithm is incompatible with the given key pair")?,
 
@@ -1698,7 +1698,7 @@ impl From<ring::error::Unspecified> for RcgenError {
 
 impl From<ring::error::KeyRejected> for RcgenError {
 	fn from(err :ring::error::KeyRejected) -> Self {
-		RcgenError::RingKeyRejected(err.description_())
+		RcgenError::RingKeyRejected(err.to_string())
 	}
 }
 
