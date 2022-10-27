@@ -33,7 +33,7 @@ fn test_key_params_mismatch() {
 			if i != 0 {
 				wrong_params.key_pair = Some(KeyPair::generate(kalg_1).unwrap());
 			} else {
-				let kp = KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM).unwrap();
+				let kp = KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM, &ring::rand::SystemRandom::new()).unwrap();
 				wrong_params.key_pair = Some(kp);
 			}
 			wrong_params.alg = *kalg_2;

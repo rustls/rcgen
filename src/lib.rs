@@ -37,8 +37,9 @@ use yasna::models::ObjectIdentifier;
 use pem::Pem;
 use std::convert::TryInto;
 use ring::digest;
-use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair, RsaEncoding};
-use ring::rand::SystemRandom;
+use ring::rsa;
+use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaEncoding};
+use ring::rand::{SecureRandom, SystemRandom};
 use ring::signature::KeyPair as RingKeyPair;
 use ring::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters};
 use yasna::DERWriter;
@@ -1449,7 +1450,7 @@ enum KeyPairKind {
 	/// A Ed25519 key pair
 	Ed(Ed25519KeyPair),
 	/// A RSA key pair
-	Rsa(RsaKeyPair, &'static dyn RsaEncoding),
+	Rsa(rsa::KeyPair, &'static dyn RsaEncoding),
 	/// A remote key pair
 	Remote(Box<dyn RemoteKeyPair + Send + Sync>),
 }
@@ -1481,16 +1482,18 @@ pub struct KeyPair {
 
 impl KeyPair {
 	/// Parses the key pair from the DER format.
-	pub fn from_der<'b>(pkcs8: impl Into<Cow<'b, [u8]>>) -> Result<KeyPair, RcgenError> {
+	///
+	/// The required randomness is only used in the case of an ECDSA keypair.
+	pub fn from_der<'b>(pkcs8: impl Into<Cow<'b, [u8]>>, rng: &dyn SecureRandom) -> Result<KeyPair, RcgenError> {
 		let pkcs8 = pkcs8.into();
 
 		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(&pkcs8) {
 			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
-		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &pkcs8) {
+		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &pkcs8, rng) {
 			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
-		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, &pkcs8) {
+		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, &pkcs8, rng) {
 			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
-		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(&pkcs8) {
+		} else if let Ok(rsakp) = rsa::KeyPair::from_pkcs8(&pkcs8) {
 			(KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256), &PKCS_RSA_SHA256)
 		} else {
 			return Err(RcgenError::CouldNotParseKeyPair);
@@ -1505,11 +1508,12 @@ impl KeyPair {
 
 	/// Parses the key pair from the ASCII PEM format
 	///
+	/// The required randomness is only used in the case of an ECDSA keypair.
 	/// *This constructor is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
-	pub fn from_pem(pem_str :&str) -> Result<Self, RcgenError> {
+	pub fn from_pem(pem_str :&str, rng: &dyn SecureRandom) -> Result<Self, RcgenError> {
 		let private_key = pem::parse(pem_str)?;
-		let key_pair = KeyPair::from_der(&private_key.contents)?;
+		let key_pair = KeyPair::from_der(&private_key.contents, rng)?;
 
 		Ok(key_pair)
 	}
@@ -1531,10 +1535,10 @@ impl KeyPair {
 	///
 	/// *This constructor is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
-	pub fn from_pem_and_sign_algo(pem_str :&str, alg :&'static SignatureAlgorithm) -> Result<Self, RcgenError> {
+	pub fn from_pem_and_sign_algo(pem_str :&str, alg :&'static SignatureAlgorithm, rng: &dyn SecureRandom) -> Result<Self, RcgenError> {
 		let private_key = pem::parse(pem_str)?;
 		let private_key_der :&[_] = &private_key.contents;
-		Ok(Self::from_der_and_sign_algo(private_key_der, alg)?)
+		Ok(Self::from_der_and_sign_algo(private_key_der, alg, rng)?)
 	}
 
 	/// Obtains the key pair from a DER formatted key
@@ -1546,26 +1550,26 @@ impl KeyPair {
 	/// key pair. However sometimes multiple signature algorithms fit for the
 	/// same der key. In that instance, you can use this function to precisely
 	/// specify the `SignatureAlgorithm`.
-	pub fn from_der_and_sign_algo(pkcs8 :&[u8], alg :&'static SignatureAlgorithm) -> Result<Self, RcgenError> {
+	pub fn from_der_and_sign_algo(pkcs8 :&[u8], alg :&'static SignatureAlgorithm, rng: &dyn SecureRandom) -> Result<Self, RcgenError> {
 		let pkcs8_vec = pkcs8.to_vec();
 
 		let kind = if alg == &PKCS_ED25519 {
 			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)?)
 		} else if alg == &PKCS_ECDSA_P256_SHA256 {
-			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8)?)
+			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, rng)?)
 		} else if alg == &PKCS_ECDSA_P384_SHA384 {
-			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8)?)
+			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8, rng)?)
 		} else if alg == &PKCS_RSA_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = rsa::KeyPair::from_pkcs8(pkcs8)?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
 		} else if alg == &PKCS_RSA_SHA384 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = rsa::KeyPair::from_pkcs8(pkcs8)?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
 		} else if alg == &PKCS_RSA_SHA512 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = rsa::KeyPair::from_pkcs8(pkcs8)?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
 		} else if alg == &PKCS_RSA_PSS_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = rsa::KeyPair::from_pkcs8(pkcs8)?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
 			panic!("Unknown SignatureAlgorithm specified!");
@@ -1718,7 +1722,7 @@ impl KeyPair {
 				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, &system_random)?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
-				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, &&key_pair_doc.as_ref()).unwrap();
+				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, &&key_pair_doc.as_ref(), &system_random).unwrap();
 				Ok(KeyPair {
 					kind : KeyPairKind::Ec(key_pair),
 					alg,
@@ -1775,7 +1779,7 @@ impl KeyPair {
 			},
 			KeyPairKind::Rsa(kp, padding_alg) => {
 				let system_random = SystemRandom::new();
-				let mut signature = vec![0; kp.public_modulus_len()];
+				let mut signature = vec![0; kp.public().modulus_len()];
 				kp.sign(*padding_alg, &system_random,
 					msg, &mut signature)?;
 				let sig = &signature.as_ref();

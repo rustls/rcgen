@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let pkey :openssl::pkey::PKey<_> = openssl::rsa::Rsa::generate(2048)?.try_into()?;
 	let key_pair_pem = String::from_utf8(pkey.private_key_to_pem_pkcs8()?)?;
-	let key_pair = rcgen::KeyPair::from_pem(&key_pair_pem)?;
+	let key_pair = rcgen::KeyPair::from_pem(&key_pair_pem, &ring::rand::SystemRandom::new())?;
 	params.key_pair = Some(key_pair);
 
 	let cert = Certificate::from_params(params)?;

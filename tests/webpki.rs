@@ -5,9 +5,9 @@ use webpki::{EndEntityCert, TlsServerTrustAnchors, TrustAnchor};
 use webpki::SignatureAlgorithm;
 use webpki::{Time, DnsNameRef};
 
-use ring::{rand::SystemRandom};
+use ring::{rand::SystemRandom, rsa};
 use ring::signature::{self, EcdsaKeyPair, EcdsaSigningAlgorithm,
-	Ed25519KeyPair, KeyPair as _, RsaEncoding, RsaKeyPair};
+	Ed25519KeyPair, KeyPair as _, RsaEncoding};
 
 use std::convert::TryFrom;
 
@@ -15,7 +15,7 @@ mod util;
 
 fn sign_msg_ecdsa(cert :&Certificate, msg :&[u8], alg :&'static EcdsaSigningAlgorithm) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
-	let key_pair = EcdsaKeyPair::from_pkcs8(&alg, &pk_der).unwrap();
+	let key_pair = EcdsaKeyPair::from_pkcs8(&alg, &pk_der, &SystemRandom::new()).unwrap();
 	let system_random = SystemRandom::new();
 	let signature = key_pair.sign(&system_random, &msg).unwrap();
 	signature.as_ref().to_vec()
@@ -30,9 +30,9 @@ fn sign_msg_ed25519(cert :&Certificate, msg :&[u8]) -> Vec<u8> {
 
 fn sign_msg_rsa(cert :&Certificate, msg :&[u8], encoding :&'static dyn RsaEncoding) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
-	let key_pair = RsaKeyPair::from_pkcs8(&pk_der).unwrap();
+	let key_pair = rsa::KeyPair::from_pkcs8(&pk_der).unwrap();
 	let system_random = SystemRandom::new();
-	let mut signature = vec![0; key_pair.public_modulus_len()];
+	let mut signature = vec![0; key_pair.public().modulus_len()];
 	key_pair.sign(encoding, &system_random, &msg,
 		&mut signature).unwrap();
 	signature
@@ -140,7 +140,7 @@ fn test_webpki_25519_v1_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1).unwrap();
+	let kp = KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1, &SystemRandom::new()).unwrap();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params).unwrap();
@@ -156,7 +156,7 @@ fn test_webpki_25519_v2_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2).unwrap();
+	let kp = KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2, &SystemRandom::new()).unwrap();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params).unwrap();
@@ -172,7 +172,7 @@ fn test_webpki_rsa_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_RSA_SHA256;
 
-	let kp = rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM).unwrap();
+	let kp = KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM, &SystemRandom::new()).unwrap();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params).unwrap();
@@ -186,7 +186,7 @@ fn test_webpki_rsa_given() {
 
 #[test]
 fn test_webpki_rsa_combinations_given() {
-	let configs :&[(_, _, &'static dyn signature::RsaEncoding)] = &[
+	let configs :&[(_, _, &'static dyn RsaEncoding)] = &[
 		(&rcgen::PKCS_RSA_SHA256, &webpki::RSA_PKCS1_2048_8192_SHA256, &signature::RSA_PKCS1_SHA256),
 		(&rcgen::PKCS_RSA_SHA384, &webpki::RSA_PKCS1_2048_8192_SHA384, &signature::RSA_PKCS1_SHA384),
 		(&rcgen::PKCS_RSA_SHA512, &webpki::RSA_PKCS1_2048_8192_SHA512, &signature::RSA_PKCS1_SHA512),
@@ -195,7 +195,7 @@ fn test_webpki_rsa_combinations_given() {
 	for c in configs {
 		let mut params = util::default_params();
 		params.alg = c.0;
-		let kp = rcgen::KeyPair::from_pem_and_sign_algo(util::RSA_TEST_KEY_PAIR_PEM, c.0).unwrap();
+		let kp = KeyPair::from_pem_and_sign_algo(util::RSA_TEST_KEY_PAIR_PEM, c.0, &SystemRandom::new()).unwrap();
 		params.key_pair = Some(kp);
 
 		let cert = Certificate::from_params(params).unwrap();
@@ -272,8 +272,8 @@ fn from_remote() {
 	}
 
 	let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
-	let remote = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &key_pair.serialize_der()).unwrap();
-	let key_pair = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &key_pair.serialize_der()).unwrap();
+	let remote = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &key_pair.serialize_der(), &SystemRandom::new()).unwrap();
+	let key_pair = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &key_pair.serialize_der(), &SystemRandom::new()).unwrap();
 	let remote = KeyPair::from_remote(Box::new(Remote(remote))).unwrap();
 
 	let mut params = util::default_params();
@@ -339,7 +339,7 @@ fn test_webpki_imported_ca() {
 
 	let (ca_cert_der, ca_key_der) = (ca_cert.serialize_der().unwrap(), ca_cert.serialize_private_key_der());
 
-	let ca_key_pair = KeyPair::from_der(ca_key_der).unwrap();
+	let ca_key_pair = KeyPair::from_der(ca_key_der, &SystemRandom::new()).unwrap();
 	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der.as_slice(), ca_key_pair)
 		.unwrap();
 	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();
@@ -366,7 +366,7 @@ fn test_webpki_imported_ca_with_printable_string() {
 
 	let (ca_cert_der, ca_key_der) = (ca_cert.serialize_der().unwrap(), ca_cert.serialize_private_key_der());
 
-	let ca_key_pair = KeyPair::from_der(ca_key_der).unwrap();
+	let ca_key_pair = KeyPair::from_der(ca_key_der, &SystemRandom::new()).unwrap();
 	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der.as_slice(), ca_key_pair)
 		.unwrap();
 	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();

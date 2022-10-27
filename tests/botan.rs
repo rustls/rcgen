@@ -1,6 +1,8 @@
 #[cfg(feature = "x509-parser")]
-use rcgen::DnValue;
-use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, KeyPair};
+use ring::rand::SystemRandom;
+#[cfg(feature = "x509-parser")]
+use rcgen::{DnValue, KeyPair};
+use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
 
 mod util;
 
@@ -85,7 +87,7 @@ fn test_botan_25519_v1_given() {
 	let mut params = default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1).unwrap();
+	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1, &ring::rand::SystemRandom::new()).unwrap();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params).unwrap();
@@ -101,7 +103,7 @@ fn test_botan_25519_v2_given() {
 	let mut params = default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2).unwrap();
+	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2, &ring::rand::SystemRandom::new()).unwrap();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params).unwrap();
@@ -117,7 +119,7 @@ fn test_botan_rsa_given() {
 	let mut params = default_params();
 	params.alg = &rcgen::PKCS_RSA_SHA256;
 
-	let kp = rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM).unwrap();
+	let kp = rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM, &ring::rand::SystemRandom::new()).unwrap();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params).unwrap();
@@ -157,7 +159,7 @@ fn test_botan_imported_ca() {
 
 	let (ca_cert_der, ca_key_der) = (ca_cert.serialize_der().unwrap(), ca_cert.serialize_private_key_der());
 
-	let ca_key_pair = KeyPair::from_der(ca_key_der).unwrap();
+	let ca_key_pair = KeyPair::from_der(ca_key_der, &SystemRandom::new()).unwrap();
 	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der.as_slice(), ca_key_pair)
 		.unwrap();
 	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();
@@ -183,7 +185,7 @@ fn test_botan_imported_ca_with_printable_string() {
 
 	let (ca_cert_der, ca_key_der) = (ca_cert.serialize_der().unwrap(), ca_cert.serialize_private_key_der());
 
-	let ca_key_pair = KeyPair::from_der(ca_key_der).unwrap();
+	let ca_key_pair = KeyPair::from_der(ca_key_der, &SystemRandom::new()).unwrap();
 	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der.as_slice(), ca_key_pair)
 		.unwrap();
 	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();

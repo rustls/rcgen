@@ -227,7 +227,7 @@ fn test_openssl_25519_v1_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1).unwrap();
+	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1, &ring::rand::SystemRandom::new()).unwrap();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params).unwrap();
@@ -248,7 +248,7 @@ fn test_openssl_25519_v2_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2).unwrap();
+	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2, &ring::rand::SystemRandom::new()).unwrap();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params).unwrap();
@@ -266,7 +266,7 @@ fn test_openssl_rsa_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_RSA_SHA256;
 
-	let kp = rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM).unwrap();
+	let kp = rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM, &ring::rand::SystemRandom::new()).unwrap();
 	params.key_pair = Some(kp);
 
 	let cert = Certificate::from_params(params).unwrap();
@@ -288,7 +288,7 @@ fn test_openssl_rsa_combinations_given() {
 		let mut params = util::default_params();
 		params.alg = alg;
 
-		let kp = rcgen::KeyPair::from_pem_and_sign_algo(util::RSA_TEST_KEY_PAIR_PEM, alg).unwrap();
+		let kp = rcgen::KeyPair::from_pem_and_sign_algo(util::RSA_TEST_KEY_PAIR_PEM, alg, &ring::rand::SystemRandom::new()).unwrap();
 		params.key_pair = Some(kp);
 
 		let cert = Certificate::from_params(params).unwrap();

@@ -255,7 +255,7 @@ version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 dependencies = [
- "spin",
+ "spin 0.5.2",
 ]
 
 [[package]]
@@ -530,7 +530,7 @@ dependencies = [
  "openssl",
  "pem",
  "rand",
- "ring",
+ "ring 0.17.0-not-released-yet",
  "rsa",
  "time",
  "webpki",
@@ -548,9 +548,22 @@ dependencies = [
  "cc",
  "libc",
  "once_cell",
- "spin",
- "untrusted",
+ "spin 0.5.2",
+ "untrusted 0.7.1",
  "web-sys",
+ "winapi",
+]
+
+[[package]]
+name = "ring"
+version = "0.17.0-not-released-yet"
+source = "git+https://github.com/briansmith/ring#00fc3f35f3ed9e91fdb6b1e97226dc45cfe2c8f5"
+dependencies = [
+ "cc",
+ "libc",
+ "once_cell",
+ "spin 0.9.4",
+ "untrusted 0.9.0",
  "winapi",
 ]
 
@@ -594,6 +607,12 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
+name = "spin"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f6002a767bff9e83f8eeecf883ecb8011875a21ae8da43bffb817a57e78cc09"
 
 [[package]]
 name = "spki"
@@ -691,6 +710,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
 
 [[package]]
+name = "untrusted"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
+
+[[package]]
 name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -778,8 +803,8 @@ version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f095d78192e208183081cc07bc5515ef55216397af48b873e5edcd72637fa1bd"
 dependencies = [
- "ring",
- "untrusted",
+ "ring 0.16.20",
+ "untrusted 0.7.1",
 ]
 
 [[package]]
@@ -817,7 +842,7 @@ dependencies = [
  "lazy_static",
  "nom",
  "oid-registry",
- "ring",
+ "ring 0.16.20",
  "rusticata-macros",
  "thiserror",
  "time",
