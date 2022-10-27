@@ -1660,13 +1660,35 @@ impl fmt::Display for RcgenError {
 			Time => write!(f, "Time error")?,
 			RemoteKeyError => write!(f, "Remote key error")?,
 			#[cfg(feature = "pem")]
-			PemError(e) => write!(f, "PEM error: {}", e)?,
+			PemError(_) => write!(f, "PEM error")?,
 		};
 		Ok(())
 	}
 }
 
-impl Error for RcgenError {}
+impl Error for RcgenError {
+	fn source(&self) -> Option<&(dyn Error + 'static)> {
+		match self {
+			#[cfg(feature = "pem")]
+			RcgenError::PemError(inner) => Some(inner),
+			RcgenError::RingKeyRejected(_) => None,
+			RcgenError::CouldNotParseCertificate => None,
+			RcgenError::CouldNotParseCertificationRequest => None,
+			RcgenError::CouldNotParseKeyPair => None,
+			#[cfg(feature = "x509-parser")]
+			RcgenError::InvalidNameType => None,
+			RcgenError::InvalidIpAddressOctetLength(_) => None,
+			RcgenError::KeyGenerationUnavailable => None,
+			#[cfg(feature = "x509-parser")]
+			RcgenError::UnsupportedExtension => None,
+			RcgenError::UnsupportedSignatureAlgorithm => None,
+			RcgenError::RingUnspecified => None,
+			RcgenError::CertificateKeyPairMismatch => None,
+			RcgenError::Time => None,
+			RcgenError::RemoteKeyError => None,
+		}
+	}
+}
 
 impl From<ring::error::Unspecified> for RcgenError {
 	fn from(_unspecified :ring::error::Unspecified) -> Self {
