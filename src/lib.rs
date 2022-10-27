@@ -1480,20 +1480,38 @@ pub struct KeyPair {
 }
 
 impl KeyPair {
-	/// Parses the key pair from the DER format
-	///
-	/// Equivalent to using the [`TryFrom`] implementation.
-	pub fn from_der(der :&[u8]) -> Result<Self, RcgenError> {
-		Ok(der.try_into()?)
+	/// Parses the key pair from the DER format.
+	pub fn from_der<'b>(pkcs8: impl Into<Cow<'b, [u8]>>) -> Result<KeyPair, RcgenError> {
+		let pkcs8 = pkcs8.into();
+
+		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(&pkcs8) {
+			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
+		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &pkcs8) {
+			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
+		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, &pkcs8) {
+			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
+		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(&pkcs8) {
+			(KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256), &PKCS_RSA_SHA256)
+		} else {
+			return Err(RcgenError::CouldNotParseKeyPair);
+		};
+
+		Ok(KeyPair {
+			kind,
+			alg,
+			serialized_der : pkcs8.into_owned(),
+		})
 	}
+
 	/// Parses the key pair from the ASCII PEM format
 	///
 	/// *This constructor is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn from_pem(pem_str :&str) -> Result<Self, RcgenError> {
 		let private_key = pem::parse(pem_str)?;
-		let private_key_der :&[_] = &private_key.contents;
-		Ok(private_key_der.try_into()?)
+		let key_pair = KeyPair::from_der(&private_key.contents)?;
+
+		Ok(key_pair)
 	}
 
 	/// Obtains the key pair from a raw public key and a remote private key
@@ -1557,28 +1575,6 @@ impl KeyPair {
 			kind,
 			alg,
 			serialized_der : pkcs8_vec,
-		})
-	}
-
-	fn from_raw<'b>(pkcs8: impl Into<Cow<'b, [u8]>>) -> Result<KeyPair, RcgenError> {
-		let pkcs8 = pkcs8.into();
-
-		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(&pkcs8) {
-			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
-		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &pkcs8) {
-			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
-		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, &pkcs8) {
-			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
-		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(&pkcs8) {
-			(KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256), &PKCS_RSA_SHA256)
-		} else {
-			return Err(RcgenError::CouldNotParseKeyPair);
-		};
-
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der : pkcs8.into_owned(),
 		})
 	}
 }
@@ -1688,22 +1684,6 @@ impl From<ring::error::KeyRejected> for RcgenError {
 impl From<pem::PemError> for RcgenError {
 	fn from(e :pem::PemError) -> Self {
 		RcgenError::PemError(e)
-	}
-}
-
-impl TryFrom<&[u8]> for KeyPair {
-	type Error = RcgenError;
-
-	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, RcgenError> {
-		KeyPair::from_raw(pkcs8)
-	}
-}
-
-impl TryFrom<Vec<u8>> for KeyPair {
-	type Error = RcgenError;
-
-	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, RcgenError> {
-		KeyPair::from_raw(pkcs8)
 	}
 }
 

@@ -1,6 +1,10 @@
 
 # Changes
 
+## Unreleased
+
+- Remove `TryFrom<[u8]>` and `TryFrom<Vec<u8>>` for `KeyPair` in favor of allowing `KeyPair::from_der` to take `impl Into<Cow<'b, [u8]>>` which allows `Vec<u8>` as well as `[u8]`.
+
 ## Release 0.10.0 - September 29, 2022
 
 - Update x509-parser to 0.14.

@@ -7,7 +7,6 @@ use rand::rngs::OsRng;
 use rcgen::{Certificate, CertificateParams,
 	DistinguishedName, date_time_ymd};
 use std::fs;
-use std::convert::TryFrom;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let mut params :CertificateParams = Default::default();
@@ -21,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bits = 2048;
 	let private_key = RsaPrivateKey::new(&mut rng, bits)?;
 	let private_key_der = private_key.to_pkcs8_der()?;
-	let key_pair = rcgen::KeyPair::try_from(private_key_der.as_ref()).unwrap();
+	let key_pair = rcgen::KeyPair::from_der(private_key_der.as_ref()).unwrap();
 	params.key_pair = Some(key_pair);
 
 	let cert = Certificate::from_params(params)?;
