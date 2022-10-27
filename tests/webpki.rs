@@ -271,7 +271,7 @@ fn from_remote() {
 		}
 	}
 
-	let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256, &SystemRandom::new()).unwrap();
 	let remote = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &key_pair.serialize_der(), &SystemRandom::new()).unwrap();
 	let key_pair = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, &key_pair.serialize_der(), &SystemRandom::new()).unwrap();
 	let remote = KeyPair::from_remote(Box::new(Remote(remote))).unwrap();

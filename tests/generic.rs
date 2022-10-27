@@ -31,7 +31,7 @@ fn test_key_params_mismatch() {
 
 			let mut wrong_params = util::default_params();
 			if i != 0 {
-				wrong_params.key_pair = Some(KeyPair::generate(kalg_1).unwrap());
+				wrong_params.key_pair = Some(KeyPair::generate(kalg_1, &ring::rand::SystemRandom::new()).unwrap());
 			} else {
 				let kp = KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM, &ring::rand::SystemRandom::new()).unwrap();
 				wrong_params.key_pair = Some(kp);

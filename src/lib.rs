@@ -1335,6 +1335,9 @@ fn write_general_subtrees(writer :DERWriter, tag :u64, general_subtrees :&[Gener
 
 impl Certificate {
 	/// Generates a new certificate from the given parameters
+	///
+	/// This function will generate a random (using `ring`'s [`SystemRandom`]) [`KeyPair`] if none is provided in the [`CertificateParams`].
+	/// If you need to control the [`KeyPair`], set it ahead of time before calling this function.
 	pub fn from_params(mut params :CertificateParams) -> Result<Self, RcgenError> {
 		let key_pair = if let Some(key_pair) = params.key_pair.take() {
 			if !key_pair.is_compatible(&params.alg) {
@@ -1342,7 +1345,7 @@ impl Certificate {
 			}
 			key_pair
 		} else {
-			KeyPair::generate(&params.alg)?
+			KeyPair::generate(&params.alg, &SystemRandom::new())?
 		};
 
 		Ok(Certificate {
@@ -1715,14 +1718,13 @@ impl From<pem::PemError> for RcgenError {
 
 impl KeyPair {
 	/// Generate a new random key pair for the specified signature algorithm
-	pub fn generate(alg :&'static SignatureAlgorithm) -> Result<Self, RcgenError> {
-		let system_random = SystemRandom::new();
+	pub fn generate(alg :&'static SignatureAlgorithm, rng: &dyn SecureRandom) -> Result<Self, RcgenError> {
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
-				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, &system_random)?;
+				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
-				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, &&key_pair_doc.as_ref(), &system_random).unwrap();
+				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, &&key_pair_doc.as_ref(), rng).unwrap();
 				Ok(KeyPair {
 					kind : KeyPairKind::Ec(key_pair),
 					alg,
@@ -1730,7 +1732,7 @@ impl KeyPair {
 				})
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
-				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(&system_random)?;
+				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(rng)?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(&&key_pair_doc.as_ref()).unwrap();
