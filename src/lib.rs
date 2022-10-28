@@ -729,7 +729,7 @@ impl CertificateParams {
 		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
 		let is_ca = Self::convert_x509_is_ca(&x509)?;
 		let validity = x509.validity();
-		let serial = Self::convert_x509_serial(&x509);
+		let serial = Self::convert_x509_serial(&x509)?;
 		let subject_alt_names = Self::convert_x509_subject_alternative_name(&x509)?;
 		let key_usages = Self::convert_x509_key_usages(&x509)?;
 		let extended_key_usages = Self::convert_x509_extended_key_usages(&x509)?;
@@ -770,19 +770,19 @@ impl CertificateParams {
 		Ok(is_ca)
 	}
 	#[cfg(feature = "x509-parser")]
-	fn convert_x509_serial(x509 :&x509_parser::certificate::X509Certificate<'_>) -> u64 {
+	fn convert_x509_serial(x509 :&x509_parser::certificate::X509Certificate<'_>) -> Result<u64, RcgenError> {
 		const SIZE: usize = std::mem::size_of::<u64>();
 
 		let raw = x509.raw_serial();
 		let len = raw.len();
 
-		if len >= SIZE {
-			return u64::from_be_bytes(raw[(len - SIZE)..].try_into().unwrap())
+		if len > SIZE {
+			return Err(RcgenError::CouldNotParseCertificate);
 		}
 
 		let mut bytes = [0u8; SIZE];
 		bytes[(SIZE - len)..].copy_from_slice(raw);
-		u64::from_be_bytes(bytes)
+		Ok(u64::from_be_bytes(bytes))
 	}
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_subject_alternative_name(x509 :&x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<SanType>, RcgenError> {
