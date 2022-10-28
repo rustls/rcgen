@@ -922,17 +922,13 @@ impl CertificateParams {
 				GeneralName::DNSName(s) => GeneralSubtree::DnsName(s.to_string()),
 				GeneralName::DirectoryName(n) => GeneralSubtree::DirectoryName(DistinguishedName::from_name(&n)?),
 				GeneralName::IPAddress(bytes) if bytes.len() == 8 => {
-					let mut addr = [0u8; 4];
-					addr.copy_from_slice(&bytes[..4]);
-					let mut mask = [0u8; 4];
-					mask.copy_from_slice(&bytes[4..]);
+					let addr: [u8; 4] = bytes[..4].try_into().unwrap();
+					let mask: [u8; 4] = bytes[4..].try_into().unwrap();
 					GeneralSubtree::IpAddress(CidrSubnet::V4(addr, mask))
 				}
 				GeneralName::IPAddress(bytes) if bytes.len() == 32 => {
-					let mut addr = [0u8; 16];
-					addr.copy_from_slice(&bytes[..16]);
-					let mut mask = [0u8; 16];
-					mask.copy_from_slice(&bytes[16..]);
+					let addr: [u8; 16] = bytes[..16].try_into().unwrap();
+					let mask: [u8; 16] = bytes[16..].try_into().unwrap();
 					GeneralSubtree::IpAddress(CidrSubnet::V6(addr, mask))
 				}
 				_ => continue,
