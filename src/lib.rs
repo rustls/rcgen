@@ -760,7 +760,8 @@ impl CertificateParams {
 			.or(Err(RcgenError::CouldNotParseCertificate))?.map(|ext| ext.value);
 
 		let is_ca = match basic_constraints {
-			Some(B { ca: true, path_len_constraint: Some(n) }) => IsCa::Ca(BasicConstraints::Constrained(*n as u8)),
+			Some(B { ca: true, path_len_constraint: Some(n) }) if *n <= u8::MAX as u32 => IsCa::Ca(BasicConstraints::Constrained(*n as u8)),
+			Some(B { ca: true, path_len_constraint: Some(_) }) => return Err(RcgenError::CouldNotParseCertificate),
 			Some(B { ca: true, path_len_constraint: None }) => IsCa::Ca(BasicConstraints::Unconstrained),
 			Some(B { ca: false, .. }) => IsCa::ExplicitNoCa,
 			None => IsCa::NoCa,
