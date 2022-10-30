@@ -33,8 +33,11 @@ default = ["pem"]
 features = ["x509-parser"]
 
 [dev-dependencies]
+native-tls = "0.2"
 openssl = "0.10"
+pipe = { version = "0.4", features = ["bidirectional"] }
 x509-parser = { version = "0.15", features = ["verify"] }
+rustls = "0.21"
 rustls-webpki = { version = "0.101.0", features = ["std"] }
 rand = "0.8"
 rsa = "0.9"
@@ -48,3 +51,11 @@ botan = { version = "0.10", features = ["vendored"] }
 # ignores profile overrides for non leaf packages)
 [profile.dev.package.num-bigint-dig]
 opt-level = 3
+
+[[example]]
+name = "auto-gen-ca-and-server-nativetls"
+required-features = ["x509-parser"]
+
+[[example]]
+name = "auto-gen-ca-and-server-tls"
+required-features = ["x509-parser"]

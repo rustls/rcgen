@@ -1,6 +1,11 @@
 
 # Changes
 
+## Unreleased
+
+- Add [example](./examples/auto-gen-ca-and-server-tls.rs) that creates a new CA and new server certificate signed by it.
+  Contributed by [iamjpotts](https://github.com/iamjpotts).
+
 ## Release 0.11.1 - June 17, 2023
 
 - Make botan a dev-dependency again. Contributed by [mbrubeck](https://github.com/mbrubeck).
