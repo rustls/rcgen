@@ -165,11 +165,9 @@ pub enum SanType {
 fn ip_addr_from_octets(octets: &[u8]) -> Result<IpAddr, RcgenError> {
 	if let Ok(ipv6_octets) = <&[u8; 16]>::try_from(octets) {
 		Ok(Ipv6Addr::from(*ipv6_octets).into())
-	}
-	else if let Ok(ipv4_octets) = <&[u8; 4]>::try_from(octets) {
+	} else if let Ok(ipv4_octets) = <&[u8; 4]>::try_from(octets) {
 		Ok(Ipv4Addr::from(*ipv4_octets).into())
-	}
-	else {
+	} else {
 		Err(RcgenError::InvalidIpAddressOctetLength(octets.len()))
 	}
 }
