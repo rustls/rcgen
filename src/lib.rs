@@ -1999,6 +1999,15 @@ impl KeyPair {
 		&self.serialized_der
 	}
 
+	/// Access the remote key pair if it is a remote one
+	pub fn as_remote(&self) -> Option<&(dyn RemoteKeyPair + Send + Sync)> {
+		if let KeyPairKind::Remote(remote) = &self.kind {
+			Some(remote.as_ref())
+		} else {
+			None
+		}
+	}
+
 	/// Serializes the key pair (including the private key) in PKCS#8 format in PEM
 	///
 	/// *This function is only available if rcgen is built with the "pem" feature*
