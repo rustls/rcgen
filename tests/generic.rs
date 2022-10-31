@@ -45,3 +45,35 @@ fn test_key_params_mismatch() {
 		}
 	}
 }
+
+#[cfg(feature = "x509-parser")]
+mod test_convert_x509_subject_alternative_name {
+	use std::net::{IpAddr, Ipv4Addr};
+	use rcgen::{BasicConstraints, Certificate, CertificateParams, IsCa, KeyPair, PKCS_ECDSA_P256_SHA256, SanType};
+
+	#[test]
+	fn converts_from_ip() {
+		let ip = Ipv4Addr::new(2, 4, 6, 8);
+		let ip_san = SanType::IpAddress(IpAddr::V4(ip));
+
+		let mut params = super::util::default_params();
+
+		// Add the SAN we want to test the parsing for
+		params.subject_alt_names.push(ip_san.clone());
+
+		// Because we're using a function for CA certificates
+		params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+
+		let cert = Certificate::from_params(params).unwrap();
+
+		// Serialize our cert that has our chosen san, so we can testing parsing/deserializing it.
+		let ca_der = cert.serialize_der().unwrap();
+
+		// Arbitrary key pair not used with the test, but required by the parsing function
+		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+
+		let actual = CertificateParams::from_ca_cert_der(&ca_der, key_pair).unwrap();
+
+		assert!(actual.subject_alt_names.contains(&ip_san));
+	}
+}

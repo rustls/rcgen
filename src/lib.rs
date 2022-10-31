@@ -708,7 +708,7 @@ impl CertificateParams {
 	/// [`serialize_pem_with_signer`](Certificate::serialize_pem_with_signer)
 	/// functions.
 	///
-	/// This function only extracts from the given ca cert the informations
+	/// This function only extracts from the given ca cert the information
 	/// needed for signing. Any information beyond that is not extracted
 	/// and left to defaults.
 	///
@@ -774,22 +774,7 @@ impl CertificateParams {
 		if let Some(sans) = sans {
 			let mut subject_alt_names = Vec::with_capacity(sans.len());
 			for san in sans {
-				use x509_parser::extensions::GeneralName;
-				let name = match san {
-					GeneralName::RFC822Name(s) => SanType::Rfc822Name(s.to_string()),
-					GeneralName::DNSName(s) => SanType::DnsName(s.to_string()),
-					GeneralName::URI(s) => SanType::URI(s.to_string()),
-					GeneralName::IPAddress(bytes) if bytes.len() == 4 => {
-						let bytes: [u8; 4] = (*bytes).try_into().unwrap();
-						SanType::IpAddress(IpAddr::from(bytes))
-					}
-					GeneralName::IPAddress(bytes) if bytes.len() == 16 => {
-						let bytes: [u8; 16] = (*bytes).try_into().unwrap();
-						SanType::IpAddress(IpAddr::from(bytes))
-					}
-					_ => continue,
-				};
-				subject_alt_names.push(name);
+				subject_alt_names.push(SanType::try_from_general(san)?);
 			}
 			Ok(subject_alt_names)
 		} else {
