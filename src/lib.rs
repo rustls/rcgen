@@ -725,14 +725,198 @@ impl CertificateParams {
 		let alg = SignatureAlgorithm::from_oid(&alg_oid.collect::<Vec<_>>())?;
 
 		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
+		let is_ca = Self::convert_x509_is_ca(&x509)?;
+		let validity = x509.validity();
+		let subject_alt_names = Self::convert_x509_subject_alternative_name(&x509)?;
+		let key_usages = Self::convert_x509_key_usages(&x509)?;
+		let extended_key_usages = Self::convert_x509_extended_key_usages(&x509)?;
+		let name_constraints = Self::convert_x509_name_constraints(&x509)?;
+
 		Ok(
 			CertificateParams {
 				alg,
+				is_ca,
+				subject_alt_names,
+				key_usages,
+				extended_key_usages,
+				name_constraints,
 				distinguished_name : dn,
 				key_pair : Some(key_pair),
+				not_before : validity.not_before.to_datetime(),
+				not_after : validity.not_after.to_datetime(),
 				.. Default::default()
 			}
 		)
+	}
+	#[cfg(feature = "x509-parser")]
+	fn convert_x509_is_ca(x509 :&x509_parser::certificate::X509Certificate<'_>) -> Result<IsCa, RcgenError> {
+		use x509_parser::extensions::BasicConstraints as B;
+
+		let basic_constraints = x509.basic_constraints()
+			.or(Err(RcgenError::CouldNotParseCertificate))?.map(|ext| ext.value);
+
+		let is_ca = match basic_constraints {
+			Some(B { ca: true, path_len_constraint: Some(n) }) if *n <= u8::MAX as u32 => IsCa::Ca(BasicConstraints::Constrained(*n as u8)),
+			Some(B { ca: true, path_len_constraint: Some(_) }) => return Err(RcgenError::CouldNotParseCertificate),
+			Some(B { ca: true, path_len_constraint: None }) => IsCa::Ca(BasicConstraints::Unconstrained),
+			Some(B { ca: false, .. }) => IsCa::ExplicitNoCa,
+			None => IsCa::NoCa,
+		};
+
+		Ok(is_ca)
+	}
+	#[cfg(feature = "x509-parser")]
+	fn convert_x509_subject_alternative_name(x509 :&x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<SanType>, RcgenError> {
+		let sans = x509.subject_alternative_name()
+			.or(Err(RcgenError::CouldNotParseCertificate))?
+			.map(|ext| &ext.value.general_names);
+
+		if let Some(sans) = sans {
+			let mut subject_alt_names = Vec::with_capacity(sans.len());
+			for san in sans {
+				use x509_parser::extensions::GeneralName;
+				let name = match san {
+					GeneralName::RFC822Name(s) => SanType::Rfc822Name(s.to_string()),
+					GeneralName::DNSName(s) => SanType::DnsName(s.to_string()),
+					GeneralName::URI(s) => SanType::URI(s.to_string()),
+					GeneralName::IPAddress(bytes) if bytes.len() == 4 => {
+						let bytes: [u8; 4] = (*bytes).try_into().unwrap();
+						SanType::IpAddress(IpAddr::from(bytes))
+					}
+					GeneralName::IPAddress(bytes) if bytes.len() == 16 => {
+						let bytes: [u8; 16] = (*bytes).try_into().unwrap();
+						SanType::IpAddress(IpAddr::from(bytes))
+					}
+					_ => continue,
+				};
+				subject_alt_names.push(name);
+			}
+			Ok(subject_alt_names)
+		} else {
+			Ok(Vec::new())
+		}
+	}
+	#[cfg(feature = "x509-parser")]
+	fn convert_x509_key_usages(x509 :&x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<KeyUsagePurpose>, RcgenError> {
+		let key_usage = x509.key_usage()
+			.or(Err(RcgenError::CouldNotParseCertificate))?
+			.map(|ext| ext.value);
+
+		let mut key_usages = Vec::new();
+		if let Some(key_usage) = key_usage {
+			if key_usage.digital_signature() {
+				key_usages.push(KeyUsagePurpose::DigitalSignature);
+			}
+			if key_usage.non_repudiation() {
+				key_usages.push(KeyUsagePurpose::ContentCommitment);
+			}
+			if key_usage.key_encipherment() {
+				key_usages.push(KeyUsagePurpose::KeyEncipherment);
+			}
+			if key_usage.data_encipherment() {
+				key_usages.push(KeyUsagePurpose::DataEncipherment);
+			}
+			if key_usage.key_agreement() {
+				key_usages.push(KeyUsagePurpose::KeyAgreement);
+			}
+			if key_usage.key_cert_sign() {
+				key_usages.push(KeyUsagePurpose::KeyCertSign);
+			}
+			if key_usage.crl_sign() {
+				key_usages.push(KeyUsagePurpose::CrlSign);
+			}
+			if key_usage.encipher_only() {
+				key_usages.push(KeyUsagePurpose::EncipherOnly);
+			}
+			if key_usage.decipher_only() {
+				key_usages.push(KeyUsagePurpose::DecipherOnly);
+			}
+		}
+		Ok(key_usages)
+	}
+	#[cfg(feature = "x509-parser")]
+	fn convert_x509_extended_key_usages(x509 :&x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<ExtendedKeyUsagePurpose>, RcgenError> {
+		let extended_key_usage = x509.extended_key_usage()
+			.or(Err(RcgenError::CouldNotParseCertificate))?
+			.map(|ext| ext.value);
+
+		let mut extended_key_usages = Vec::new();
+		if let Some(extended_key_usage) = extended_key_usage {
+			if extended_key_usage.any {
+				extended_key_usages.push(ExtendedKeyUsagePurpose::Any);
+			}
+			if extended_key_usage.server_auth {
+				extended_key_usages.push(ExtendedKeyUsagePurpose::ServerAuth);
+			}
+			if extended_key_usage.client_auth {
+				extended_key_usages.push(ExtendedKeyUsagePurpose::ClientAuth);
+			}
+			if extended_key_usage.code_signing {
+				extended_key_usages.push(ExtendedKeyUsagePurpose::CodeSigning);
+			}
+			if extended_key_usage.email_protection {
+				extended_key_usages.push(ExtendedKeyUsagePurpose::EmailProtection);
+			}
+			if extended_key_usage.time_stamping {
+				extended_key_usages.push(ExtendedKeyUsagePurpose::TimeStamping);
+			}
+			if extended_key_usage.ocsp_signing {
+				extended_key_usages.push(ExtendedKeyUsagePurpose::OcspSigning);
+			}
+		}
+		Ok(extended_key_usages)
+	}
+	#[cfg(feature = "x509-parser")]
+	fn convert_x509_name_constraints(x509 :&x509_parser::certificate::X509Certificate<'_>) -> Result<Option<NameConstraints>, RcgenError> {
+		let constraints = x509.name_constraints()
+			.or(Err(RcgenError::CouldNotParseCertificate))?
+			.map(|ext| ext.value);
+
+		if let Some(constraints) = constraints {
+			let permitted_subtrees = if let Some(permitted) = &constraints.permitted_subtrees {
+				Self::convert_x509_general_subtrees(&permitted)?
+			} else {
+				Vec::new()
+			};
+
+			let excluded_subtrees = if let Some(excluded) = &constraints.excluded_subtrees {
+				Self::convert_x509_general_subtrees(&excluded)?
+			} else {
+				Vec::new()
+			};
+
+			let name_constraints = NameConstraints { permitted_subtrees, excluded_subtrees };
+
+			Ok(Some(name_constraints))
+		} else {
+			Ok(None)
+		}
+	}
+	#[cfg(feature = "x509-parser")]
+	fn convert_x509_general_subtrees(subtrees :&[x509_parser::extensions::GeneralSubtree<'_>]) -> Result<Vec<GeneralSubtree>, RcgenError> {
+		use x509_parser::extensions::GeneralName;
+
+		let mut result = Vec::new();
+		for subtree in subtrees {
+			let subtree = match &subtree.base {
+				GeneralName::RFC822Name(s) => GeneralSubtree::Rfc822Name(s.to_string()),
+				GeneralName::DNSName(s) => GeneralSubtree::DnsName(s.to_string()),
+				GeneralName::DirectoryName(n) => GeneralSubtree::DirectoryName(DistinguishedName::from_name(&n)?),
+				GeneralName::IPAddress(bytes) if bytes.len() == 8 => {
+					let addr: [u8; 4] = bytes[..4].try_into().unwrap();
+					let mask: [u8; 4] = bytes[4..].try_into().unwrap();
+					GeneralSubtree::IpAddress(CidrSubnet::V4(addr, mask))
+				}
+				GeneralName::IPAddress(bytes) if bytes.len() == 32 => {
+					let addr: [u8; 16] = bytes[..16].try_into().unwrap();
+					let mask: [u8; 16] = bytes[16..].try_into().unwrap();
+					GeneralSubtree::IpAddress(CidrSubnet::V6(addr, mask))
+				}
+				_ => continue,
+			};
+			result.push(subtree);
+		}
+		Ok(result)
 	}
 	fn write_subject_alt_names(&self, writer :DERWriter) {
 		Self::write_extension(writer, OID_SUBJECT_ALT_NAME, false, |writer| {
