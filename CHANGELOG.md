@@ -1,6 +1,10 @@
 
 # Changes
 
+## Unreleased
+
+- Parse IP-address subject alternative names. Contributed by [iamjpotts](https://github.com/iamjpotts).
+
 ## Release 0.10.0 - September 29, 2022
 
 - Update x509-parser to 0.14.
