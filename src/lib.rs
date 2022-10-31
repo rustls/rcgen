@@ -312,6 +312,30 @@ impl CidrSubnet {
 			},
 		}
 	}
+
+	/// Extract the IP address and subnet mask.
+	///
+	/// For IPv4, the source is a four-byte IP and four-byte mask.
+	/// For IPv6, the source is a 16-byte IP and 16-byte mask.
+	#[allow(dead_code)]
+	fn from_addr_and_mask(octets: &[u8]) -> Result<Self, RcgenError> {
+		if let Ok(value) = <&[u8; 32]>::try_from(octets) {
+			if let Ok(addr) = <&[u8; 16]>::try_from(&value[..16]) {
+				if let Ok(mask) = <&[u8; 16]>::try_from(&value[16..]) {
+					return Ok(Self::V6(*addr, *mask));
+				}
+			}
+		} else if let Ok(value) = <&[u8; 8]>::try_from(octets) {
+			if let Ok(addr) = <&[u8; 4]>::try_from(&value[..4]) {
+				if let Ok(mask) = <&[u8; 4]>::try_from(&value[4..]) {
+					return Ok(Self::V4(*addr, *mask));
+				}
+			}
+		}
+
+		Err(RcgenError::InvalidCidrOctetLength(octets.len()))
+	}
+
 	/// Obtains the CidrSubnet from an IPv4 address in network byte order
 	/// as well as the specified prefix.
 	pub fn from_v4_prefix(addr :[u8; 4], prefix :u8) -> Self {
@@ -1605,6 +1629,8 @@ pub enum RcgenError {
 	InvalidNameType,
 	/// An IP address was provided as a byte array, but the byte array was an invalid length.
 	InvalidIpAddressOctetLength(usize),
+	/// An IP address and CIDR mask were provided as a byte array, but the byte array was an invalid length.
+	InvalidCidrOctetLength(usize),
 	/// There is no support for generating
 	/// keys for the given algorithm
 	KeyGenerationUnavailable,
@@ -1642,6 +1668,7 @@ impl fmt::Display for RcgenError {
 			#[cfg(feature = "x509-parser")]
 			InvalidNameType => write!(f, "Invalid subject alternative name type")?,
 			InvalidIpAddressOctetLength(actual) => write!(f, "Invalid IP address octet length of {actual} bytes")?,
+			InvalidCidrOctetLength(actual) => write!(f, "Invalid CIDR address octet length of {actual} bytes")?,
 			KeyGenerationUnavailable => write!(f, "There is no support for generating \
 				keys for the given algorithm")?,
 			UnsupportedSignatureAlgorithm => write!(f, "The requested signature algorithm \
@@ -2268,6 +2295,64 @@ mod tests {
 				assert_eq!(alg_i == alg_j, i == j,
 					"Algorighm relationship mismatch for algorithm index pair {} and {}", i, j);
 			}
+		}
+	}
+
+	mod test_cidr_subnet_from_octets {
+		use crate::{CidrSubnet, RcgenError};
+
+		#[test]
+		fn ipv4() {
+			let input: Vec<u8> = (0..8).collect();
+
+			let actual = CidrSubnet::from_addr_and_mask(&input)
+				.unwrap();
+
+			assert_eq!(
+				CidrSubnet::V4([0, 1, 2, 3], [4, 5, 6, 7]),
+				actual
+			)
+		}
+
+		#[test]
+		fn ipv6() {
+			let input: Vec<u8> = (0..32).collect();
+
+			let actual = CidrSubnet::from_addr_and_mask(&input)
+				.unwrap();
+
+			assert_eq!(
+				CidrSubnet::V6(
+					[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+					[16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+				),
+				actual
+			)
+		}
+
+		fn fails(input: &[u8]) {
+			assert_eq!(
+				Err(RcgenError::InvalidCidrOctetLength(input.len())),
+				CidrSubnet::from_addr_and_mask(input)
+			);
+		}
+
+		#[test]
+		fn too_short() {
+			let input: [u8; 0] = [];
+			fails(&input)
+		}
+
+		#[test]
+		fn too_long() {
+			let input: Vec<u8> = (0..33).collect();
+			fails(&input)
+		}
+
+		#[test]
+		fn wrong_size() {
+			let input: Vec<u8> = (0..10).collect();
+			fails(&input)
 		}
 	}
 
