@@ -643,7 +643,7 @@ pub struct CertificateParams {
 	pub alg :&'static SignatureAlgorithm,
 	pub not_before :OffsetDateTime,
 	pub not_after :OffsetDateTime,
-	pub serial_number :Option<u64>,
+	pub serial_number :Option<SerialNumber>,
 	pub subject_alt_names :Vec<SanType>,
 	pub distinguished_name :DistinguishedName,
 	pub is_ca :IsCa,
@@ -731,6 +731,7 @@ impl CertificateParams {
 		let key_usages = Self::convert_x509_key_usages(&x509)?;
 		let extended_key_usages = Self::convert_x509_extended_key_usages(&x509)?;
 		let name_constraints = Self::convert_x509_name_constraints(&x509)?;
+		let serial_number = Some(x509.serial.to_bytes_be().into());
 
 		Ok(
 			CertificateParams {
@@ -740,6 +741,7 @@ impl CertificateParams {
 				key_usages,
 				extended_key_usages,
 				name_constraints,
+				serial_number,
 				distinguished_name : dn,
 				key_pair : Some(key_pair),
 				not_before : validity.not_before.to_datetime(),
@@ -975,12 +977,14 @@ impl CertificateParams {
 				writer.write_u8(2);
 			});
 			// Write serialNumber
-			let serial = self.serial_number.unwrap_or_else(|| {
+			if let Some(ref serial) = self.serial_number {
+				writer.next().write_bitvec_bytes(serial.as_ref(), serial.len() * 8);
+			} else {
 				let hash = digest::digest(&digest::SHA256, pub_key.raw_bytes());
-				let bytes: [u8; 8] = hash.as_ref()[0..8].try_into().unwrap();
-				u64::from_le_bytes(bytes)
-			});
-			writer.next().write_u64(serial);
+				// RFC 5280 specifies at most 20 bytes for a serial number
+				let serial = SerialNumber::from_slice(&hash.as_ref()[0..20]);
+				writer.next().write_bitvec_bytes(serial.as_ref(), serial.len() * 8);
+			};
 			// Write signature
 			ca.params.alg.write_alg_ident(writer.next());
 			// Write issuer
@@ -2306,6 +2310,56 @@ impl zeroize::Zeroize for CertificateParams {
 	fn zeroize(&mut self) {
 		self.key_pair.zeroize();
 	}
+}
+
+/// A certificate serial number.
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct SerialNumber {
+		inner :Vec<u8>,
+}
+
+impl SerialNumber {
+		/// Create a serial number from the given byte slice.
+		pub fn from_slice(bytes :&[u8]) -> SerialNumber {
+				let inner = bytes.to_vec();
+				SerialNumber { inner }
+		}
+
+		/// Return the byte representation of the serial number.
+		pub fn to_bytes(&self) -> Vec<u8> {
+				self.inner.clone()
+		}
+
+		/// Return the length of the serial number in bytes.
+		pub fn len(&self) -> usize {
+				self.inner.len()
+		}
+}
+
+impl fmt::Display for SerialNumber {
+		fn fmt(&self, f :&mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+				let hex :Vec<_> = self.inner.iter().map(|b| format!("{:02x}", b)).collect();
+				write!(f, "{}", hex.join(":"))
+		}
+}
+
+impl From<Vec<u8>> for SerialNumber {
+		fn from(inner :Vec<u8>) -> SerialNumber {
+				SerialNumber { inner }
+		}
+}
+
+impl From<u64> for SerialNumber {
+		fn from(u :u64) -> SerialNumber {
+				let inner = u.to_be_bytes().into();
+				SerialNumber { inner }
+		}
+}
+
+impl AsRef<[u8]> for SerialNumber {
+		fn as_ref(&self) -> &[u8] {
+				&self.inner
+		}
 }
 
 #[cfg(test)]
