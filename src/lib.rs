@@ -653,7 +653,7 @@ pub struct CertificateParams {
 	pub custom_extensions :Vec<CustomExtension>,
 	/// The certificate's key pair, a new random key pair will be generated if this is `None`
 	pub key_pair :Option<KeyPair>,
-	/// If `true` (and not self-signed), the 'Authority Key Identifier' extension will be added to the generated cert
+	/// If `true`, the 'Authority Key Identifier' extension will be added to the generated cert
 	pub use_authority_key_identifier_extension :bool,
 	/// Method to generate key identifiers from public keys
 	///
@@ -998,8 +998,7 @@ impl CertificateParams {
 			// Write subjectPublicKeyInfo
 			pub_key.serialize_public_key_der(writer.next());
 			// write extensions
-			let not_self_signed = ca.key_pair.public_key_raw() != pub_key.raw_bytes();
-			let should_write_exts = (not_self_signed && self.use_authority_key_identifier_extension) ||
+			let should_write_exts = self.use_authority_key_identifier_extension ||
 				!self.subject_alt_names.is_empty() ||
 				!self.extended_key_usages.is_empty() ||
 				self.name_constraints.iter().any(|c| !c.is_empty()) ||
@@ -1009,7 +1008,7 @@ impl CertificateParams {
 			if should_write_exts {
 				writer.next().write_tagged(Tag::context(3), |writer| {
 					writer.write_sequence(|writer| {
-						if not_self_signed && self.use_authority_key_identifier_extension {
+						if self.use_authority_key_identifier_extension {
 							// Write Authority Key Identifier (when issued by a CA)
 							// RFC 5280 states:
 							//   'The keyIdentifier field of the authorityKeyIdentifier extension MUST
