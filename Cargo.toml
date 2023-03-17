@@ -39,7 +39,7 @@ x509-parser = { version = "0.15", features = ["verify"] }
 webpki = { version = "0.22", features = ["std"] }
 botan = { version = "0.10", features = ["vendored"] }
 rand = "0.8"
-rsa = "0.6"
+rsa = "0.8"
 
 # This greatly speeds up rsa key generation times
 # (only applies to the dev-dependency because cargo
