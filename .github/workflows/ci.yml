@@ -8,21 +8,21 @@ jobs:
     strategy:
       matrix:
         os: [macOS-latest, ubuntu-latest]
-        toolchain: [stable, beta, nightly, 1.58.1]
+        toolchain: [stable, beta, nightly, stable 7 months ago]
         exclude:
           - os: macOS-latest
             toolchain: beta
           - os: macOS-latest
             toolchain: nightly
           - os: macOS-latest
-            toolchain: 1.58.1
+            toolchain: stable 7 months ago
 
     runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@master
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.toolchain }}
         override: true

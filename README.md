@@ -44,7 +44,7 @@ cargo run --example client -- --ca ../rcgen/certs/cert.der https://localhost:443
 
 ## MSRV
 
-The MSRV policy is to strive for supporting 6-month old Rust versions.
+The MSRV policy is to strive for supporting 7-month old Rust versions.
 
 ### License
 [license]: #license
