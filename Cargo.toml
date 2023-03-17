@@ -24,7 +24,7 @@ yasna = { version = "0.5", features = ["time", "std"] }
 ring = "0.16"
 pem = { version = "1.0", optional = true }
 time = { version = "0.3.6", default-features = false }
-x509-parser = { version = "0.14", features = ["verify"], optional = true }
+x509-parser = { version = "0.15", features = ["verify"], optional = true }
 zeroize = { version = "1.2", optional = true }
 
 [features]
