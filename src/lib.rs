@@ -1295,7 +1295,12 @@ impl CertificateParams {
 	pub fn new(subject_alt_names :impl Into<Vec<String>>) -> Self {
 		let subject_alt_names = subject_alt_names.into()
 			.into_iter()
-			.map(|s| SanType::DnsName(s))
+			.map(|s| {
+				match s.parse() {
+					Ok(ip) => SanType::IpAddress(ip),
+					Err(_) => SanType::DnsName(s)
+				}
+			})
 			.collect::<Vec<_>>();
 		CertificateParams {
 			subject_alt_names,
