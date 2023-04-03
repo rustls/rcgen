@@ -1,6 +1,6 @@
 #[cfg(feature = "x509-parser")]
 use rcgen::DnValue;
-use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
+use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, SanType};
 
 mod util;
 
@@ -136,7 +136,7 @@ fn test_botan_separate_ca() {
 
 	let ca_der = ca_cert.serialize_der().unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec![SanType::DnsName("crabs.crabs".to_string())]);
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
 	// Botan has a sanity check that enforces a maximum expiration date
@@ -163,7 +163,7 @@ fn test_botan_imported_ca() {
 		.unwrap();
 	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec![SanType::DnsName("crabs.crabs".to_string())]);
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
 	// Botan has a sanity check that enforces a maximum expiration date
@@ -190,7 +190,7 @@ fn test_botan_imported_ca_with_printable_string() {
 		.unwrap();
 	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec![SanType::DnsName("crabs.crabs".to_string())]);
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
 	// Botan has a sanity check that enforces a maximum expiration date

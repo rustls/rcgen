@@ -12,11 +12,11 @@ For more customization abilities, we provide the lower level
 
 ```
 extern crate rcgen;
-use rcgen::generate_simple_self_signed;
+use rcgen::{generate_simple_self_signed, SanType};
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
-let subject_alt_names = vec!["hello.world.example".to_string(),
-	"localhost".to_string()];
+let subject_alt_names = vec![SanType::DnsName("hello.world.example".to_string()),
+	SanType::DnsName("localhost".to_string())];
 
 let cert = generate_simple_self_signed(subject_alt_names).unwrap();
 println!("{}", cert.serialize_pem().unwrap());
@@ -73,10 +73,10 @@ as output.
 
 ```
 extern crate rcgen;
-use rcgen::generate_simple_self_signed;
+use rcgen::{generate_simple_self_signed, SanType};
 # fn main () {
-let subject_alt_names :&[_] = &["hello.world.example".to_string(),
-	"localhost".to_string()];
+let subject_alt_names :&[_] = &[SanType::DnsName("hello.world.example".to_string()),
+	SanType::DnsName("localhost".to_string())];
 
 let cert = generate_simple_self_signed(subject_alt_names).unwrap();
 // The certificate is now valid for localhost and the domain "hello.world.example"
@@ -85,7 +85,7 @@ println!("{}", cert.serialize_private_key_pem());
 # }
 ```
 */
-pub fn generate_simple_self_signed(subject_alt_names :impl Into<Vec<String>>) -> Result<Certificate, RcgenError> {
+pub fn generate_simple_self_signed(subject_alt_names :impl Into<Vec<SanType>>) -> Result<Certificate, RcgenError> {
 	Certificate::from_params(CertificateParams::new(subject_alt_names))
 }
 
@@ -1292,13 +1292,9 @@ pub enum BasicConstraints {
 
 impl CertificateParams {
 	/// Generate certificate parameters with reasonable defaults
-	pub fn new(subject_alt_names :impl Into<Vec<String>>) -> Self {
-		let subject_alt_names = subject_alt_names.into()
-			.into_iter()
-			.map(|s| SanType::DnsName(s))
-			.collect::<Vec<_>>();
+	pub fn new(subject_alt_names :impl Into<Vec<SanType>>) -> Self {
 		CertificateParams {
-			subject_alt_names,
+			subject_alt_names: subject_alt_names.into(),
 			.. Default::default()
 		}
 	}

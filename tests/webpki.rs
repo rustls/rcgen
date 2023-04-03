@@ -1,6 +1,6 @@
 #[cfg(feature = "x509-parser")]
 use rcgen::{CertificateSigningRequest, DnValue};
-use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, KeyPair, RemoteKeyPair};
+use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, KeyPair, RemoteKeyPair, SanType};
 use webpki::{EndEntityCert, TlsServerTrustAnchors, TrustAnchor};
 use webpki::SignatureAlgorithm;
 use webpki::{Time, DnsNameRef};
@@ -216,7 +216,7 @@ fn test_webpki_separate_ca() {
 
 	let ca_der = ca_cert.serialize_der().unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec![SanType::DnsName("crabs.crabs".to_string())]);
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
 
@@ -238,7 +238,7 @@ fn test_webpki_separate_ca_with_other_signing_alg() {
 
 	let ca_der = ca_cert.serialize_der().unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec![SanType::DnsName("crabs.crabs".to_string())]);
 	params.alg = &rcgen::PKCS_ED25519;
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
@@ -345,7 +345,7 @@ fn test_webpki_imported_ca() {
 		.unwrap();
 	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec![SanType::DnsName("crabs.crabs".to_string())]);
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap();
@@ -373,7 +373,7 @@ fn test_webpki_imported_ca_with_printable_string() {
 		.unwrap();
 	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec![SanType::DnsName("crabs.crabs".to_string())]);
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap();
@@ -388,7 +388,7 @@ fn test_webpki_imported_ca_with_printable_string() {
 #[cfg(feature = "x509-parser")]
 #[test]
 fn test_certificate_from_csr() {
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec![SanType::DnsName("crabs.crabs".to_string())]);
 	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
 	params.distinguished_name.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap();
