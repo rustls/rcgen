@@ -18,7 +18,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let cert = Certificate::from_params(params)?;
 
 	let pem_serialized = cert.serialize_pem()?;
-	let der_serialized = pem::parse(&pem_serialized).unwrap().contents;
+	let pem = pem::parse(&pem_serialized)?;
+	let der_serialized = pem.contents();
 	println!("{pem_serialized}");
 	println!("{}", cert.serialize_private_key_pem());
 	std::fs::create_dir_all("certs/")?;

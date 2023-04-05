@@ -34,7 +34,6 @@ use yasna::Tag;
 use yasna::models::ObjectIdentifier;
 #[cfg(feature = "pem")]
 use pem::Pem;
-use std::convert::TryInto;
 use ring::digest;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair, RsaEncoding};
 use ring::rand::SystemRandom;
@@ -571,7 +570,7 @@ impl CertificateSigningRequest {
 	pub fn from_pem(pem_str :&str) -> Result<Self, RcgenError> {
 		let csr = pem::parse(pem_str)
 			.or(Err(RcgenError::CouldNotParseCertificationRequest))?;
-		Self::from_der(&csr.contents)
+		Self::from_der(csr.contents())
 	}
 
 	/// Parse a certificate signing request from DER-encoded bytes
@@ -628,10 +627,8 @@ impl CertificateSigningRequest {
 	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem_with_signer(&self, ca :&Certificate) -> Result<String, RcgenError> {
-		let p = Pem {
-			tag : "CERTIFICATE".to_string(),
-			contents : self.params.serialize_der_with_signer(&self.public_key, ca)?,
-		};
+		let contents = self.params.serialize_der_with_signer(&self.public_key, ca)?;
+		let p = Pem::new("CERTIFICATE", contents);
 		Ok(pem::encode(&p))
 	}
 }
@@ -697,7 +694,7 @@ impl CertificateParams {
 	pub fn from_ca_cert_pem(pem_str :&str, key_pair :KeyPair) -> Result<Self, RcgenError> {
 		let certificate = pem::parse(pem_str)
 			.or(Err(RcgenError::CouldNotParseCertificate))?;
-		Self::from_ca_cert_der(&certificate.contents, key_pair)
+		Self::from_ca_cert_der(certificate.contents(), key_pair)
 	}
 
 	/// Parses a ca certificate from the DER format for signing
@@ -1615,10 +1612,8 @@ impl Certificate {
 	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem(&self) -> Result<String, RcgenError> {
-		let p = Pem {
-			tag : "CERTIFICATE".to_string(),
-			contents : self.serialize_der()?,
-		};
+		let contents =  self.serialize_der()?;
+		let p = Pem::new("CERTIFICATE", contents);
 		Ok(pem::encode(&p))
 	}
 	/// Serializes the certificate, signed with another certificate's key, to the ASCII PEM format
@@ -1626,10 +1621,8 @@ impl Certificate {
 	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem_with_signer(&self, ca :&Certificate) -> Result<String, RcgenError> {
-		let p = Pem {
-			tag : "CERTIFICATE".to_string(),
-			contents : self.serialize_der_with_signer(ca)?,
-		};
+		let contents = self.serialize_der_with_signer(ca)?;
+		let p = Pem::new("CERTIFICATE", contents);
 		Ok(pem::encode(&p))
 	}
 	/// Serializes the certificate signing request to the ASCII PEM format
@@ -1637,10 +1630,8 @@ impl Certificate {
 	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_request_pem(&self) -> Result<String, RcgenError> {
-		let p = Pem {
-			tag : "CERTIFICATE REQUEST".to_string(),
-			contents : self.serialize_request_der()?,
-		};
+		let contents = self.serialize_request_der()?;
+		let p = Pem::new("CERTIFICATE REQUEST", contents);
 		Ok(pem::encode(&p))
 	}
 	/// Serializes the private key in PKCS#8 format
@@ -1717,7 +1708,7 @@ impl KeyPair {
 	#[cfg(feature = "pem")]
 	pub fn from_pem(pem_str :&str) -> Result<Self, RcgenError> {
 		let private_key = pem::parse(pem_str)?;
-		let private_key_der :&[_] = &private_key.contents;
+		let private_key_der :&[_] = private_key.contents();
 		Ok(private_key_der.try_into()?)
 	}
 
@@ -1740,7 +1731,7 @@ impl KeyPair {
 	#[cfg(feature = "pem")]
 	pub fn from_pem_and_sign_algo(pem_str :&str, alg :&'static SignatureAlgorithm) -> Result<Self, RcgenError> {
 		let private_key = pem::parse(pem_str)?;
-		let private_key_der :&[_] = &private_key.contents;
+		let private_key_der :&[_] = private_key.contents();
 		Ok(Self::from_der_and_sign_algo(private_key_der, alg)?)
 	}
 
@@ -2032,10 +2023,8 @@ impl KeyPair {
 	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn public_key_pem(&self) -> String {
-		let p = Pem {
-			tag : "PUBLIC KEY".to_string(),
-			contents : self.public_key_der(),
-		};
+		let contents = self.public_key_der();
+		let p = Pem::new("PUBLIC KEY", contents);
 		pem::encode(&p)
 	}
 	/// Serializes the key pair (including the private key) in PKCS#8 format in DER
@@ -2075,10 +2064,8 @@ impl KeyPair {
 	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem(&self) -> String {
-		let p = Pem {
-			tag : "PRIVATE KEY".to_string(),
-			contents : self.serialize_der(),
-		};
+		let contents = self.serialize_der();
+		let p = Pem::new("PRIVATE KEY", contents);
 		pem::encode(&p)
 	}
 }
