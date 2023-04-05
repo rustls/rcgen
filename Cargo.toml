@@ -20,7 +20,7 @@ path = "src/main.rs"
 required-features = ["pem"]
 
 [dependencies]
-yasna = { version = "0.5", features = ["time", "std"] }
+yasna = { version = "0.5.1", features = ["time", "std"] }
 ring = "0.16"
 pem = { version = "2.0.1", optional = true }
 time = { version = "0.3.6", default-features = false }

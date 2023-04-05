@@ -1026,12 +1026,12 @@ impl CertificateParams {
 			});
 			// Write serialNumber
 			if let Some(ref serial) = self.serial_number {
-				writer.next().write_bitvec_bytes(serial.as_ref(), serial.len() * 8);
+				writer.next().write_bigint_bytes(serial.as_ref(), true);
 			} else {
 				let hash = digest::digest(&digest::SHA256, pub_key.raw_bytes());
 				// RFC 5280 specifies at most 20 bytes for a serial number
-				let serial = SerialNumber::from_slice(&hash.as_ref()[0..20]);
-				writer.next().write_bitvec_bytes(serial.as_ref(), serial.len() * 8);
+				let sl = &hash.as_ref()[0..20];
+				writer.next().write_bigint_bytes(sl, true);
 			};
 			// Write signature
 			ca.params.alg.write_alg_ident(writer.next());
@@ -2360,7 +2360,7 @@ impl zeroize::Zeroize for CertificateParams {
 /// A certificate serial number.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct SerialNumber {
-		inner :Vec<u8>,
+	inner :Vec<u8>,
 }
 
 impl SerialNumber {
