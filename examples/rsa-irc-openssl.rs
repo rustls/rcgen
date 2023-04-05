@@ -20,7 +20,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let cert = Certificate::from_params(params)?;
 	let pem_serialized = cert.serialize_pem()?;
-	let der_serialized = pem::parse(&pem_serialized).unwrap().contents;
+	let pem = pem::parse(&pem_serialized)?;
+	let der_serialized = pem.contents();
 	let hash = ring::digest::digest(&ring::digest::SHA512, &der_serialized);
 	let hash_hex :String = hash.as_ref().iter()
 		.map(|b| format!("{b:02x}"))
