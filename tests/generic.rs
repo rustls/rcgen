@@ -1,8 +1,8 @@
 mod util;
 
-use rcgen::{RcgenError, KeyPair, Certificate};
-use std::hash::{Hash, Hasher};
+use rcgen::{Certificate, KeyPair, RcgenError};
 use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 fn generate_hash<T: Hash>(subject: &T) -> u64 {
 	let mut hasher = DefaultHasher::new();
@@ -41,15 +41,21 @@ fn test_key_params_mismatch() {
 			assert_eq!(
 				Certificate::from_params(wrong_params).err(),
 				Some(RcgenError::CertificateKeyPairMismatch),
-				"i: {} j: {}", i, j);
+				"i: {} j: {}",
+				i,
+				j
+			);
 		}
 	}
 }
 
 #[cfg(feature = "x509-parser")]
 mod test_convert_x509_subject_alternative_name {
+	use rcgen::{
+		BasicConstraints, Certificate, CertificateParams, IsCa, KeyPair, SanType,
+		PKCS_ECDSA_P256_SHA256,
+	};
 	use std::net::{IpAddr, Ipv4Addr};
-	use rcgen::{BasicConstraints, Certificate, CertificateParams, IsCa, KeyPair, PKCS_ECDSA_P256_SHA256, SanType};
 
 	#[test]
 	fn converts_from_ip() {

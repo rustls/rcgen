@@ -1,34 +1,35 @@
-use rcgen::{Certificate, NameConstraints, GeneralSubtree, IsCa,
-	BasicConstraints, CertificateParams, DnType, DnValue};
 use openssl::pkey::PKey;
-use openssl::x509::{X509, X509Req, X509StoreContext};
-use openssl::x509::store::{X509StoreBuilder, X509Store};
-use openssl::ssl::{SslMethod, SslConnector,
-	SslAcceptor, HandshakeError};
+use openssl::ssl::{HandshakeError, SslAcceptor, SslConnector, SslMethod};
 use openssl::stack::Stack;
-use std::io::{Write, Read, Result as ioResult, ErrorKind,
-	Error};
+use openssl::x509::store::{X509Store, X509StoreBuilder};
+use openssl::x509::{X509Req, X509StoreContext, X509};
+use rcgen::{
+	BasicConstraints, Certificate, CertificateParams, DnType, DnValue, GeneralSubtree, IsCa,
+	NameConstraints,
+};
 use std::cell::RefCell;
+use std::io::{Error, ErrorKind, Read, Result as ioResult, Write};
 use std::rc::Rc;
 
 mod util;
 
-fn verify_cert_basic(cert :&Certificate) {
+fn verify_cert_basic(cert: &Certificate) {
 	let cert_pem = cert.serialize_pem().unwrap();
 	println!("{cert_pem}");
 
-	let x509 = X509::from_pem(&cert_pem.as_bytes()).unwrap();
+	let x509 = X509::from_pem(cert_pem.as_bytes()).unwrap();
 	let mut builder = X509StoreBuilder::new().unwrap();
 	builder.add_cert(x509.clone()).unwrap();
 
-	let store :X509Store = builder.build();
+	let store: X509Store = builder.build();
 	let mut ctx = X509StoreContext::new().unwrap();
 	let mut stack = Stack::new().unwrap();
 	stack.push(x509.clone()).unwrap();
-	ctx.init(&store, &x509, &stack.as_ref(), |ctx| {
+	ctx.init(&store, &x509, stack.as_ref(), |ctx| {
 		ctx.verify_cert().unwrap();
 		Ok(())
-	}).unwrap();
+	})
+	.unwrap();
 }
 
 // TODO implement Debug manually instead of
@@ -38,24 +39,27 @@ struct PipeInner([Vec<u8>; 2]);
 
 #[derive(Debug)]
 struct PipeEnd {
-	read_pos :usize,
+	read_pos: usize,
 	/// Which end of the pipe
-	end_idx :usize,
-	inner :Rc<RefCell<PipeInner>>,
+	end_idx: usize,
+	inner: Rc<RefCell<PipeInner>>,
 }
 
 fn create_pipe() -> (PipeEnd, PipeEnd) {
 	let pipe_inner = PipeInner([Vec::new(), Vec::new()]);
 	let inner = Rc::new(RefCell::new(pipe_inner));
-	(PipeEnd {
-		read_pos : 0,
-		end_idx : 0,
-		inner : inner.clone(),
-	},	PipeEnd {
-		read_pos : 0,
-		end_idx : 1,
-		inner,
-	})
+	(
+		PipeEnd {
+			read_pos: 0,
+			end_idx: 0,
+			inner: inner.clone(),
+		},
+		PipeEnd {
+			read_pos: 0,
+			end_idx: 1,
+			inner,
+		},
+	)
 }
 
 impl Write for PipeEnd {
@@ -71,8 +75,8 @@ impl Write for PipeEnd {
 impl Read for PipeEnd {
 	fn read(&mut self, mut buf: &mut [u8]) -> ioResult<usize> {
 		let inner = self.inner.borrow_mut();
-		let r_sl = &inner.0[1-self.end_idx][self.read_pos..];
-		if r_sl.len() == 0 {
+		let r_sl = &inner.0[1 - self.end_idx][self.read_pos..];
+		if r_sl.is_empty() {
 			return Err(Error::new(ErrorKind::WouldBlock, "oh no!"));
 		}
 		let r = buf.len().min(r_sl.len());
@@ -82,7 +86,7 @@ impl Read for PipeEnd {
 	}
 }
 
-fn verify_cert(cert :&Certificate) {
+fn verify_cert(cert: &Certificate) {
 	verify_cert_basic(cert);
 	let cert_pem = cert.serialize_pem().unwrap();
 	let key = cert.serialize_private_key_der();
@@ -90,24 +94,23 @@ fn verify_cert(cert :&Certificate) {
 	verify_cert_ca(&cert_pem, &key, &cert_pem);
 }
 
-fn verify_cert_ca(cert_pem :&str, key :&[u8], ca_cert_pem :&str) {
+fn verify_cert_ca(cert_pem: &str, key: &[u8], ca_cert_pem: &str) {
 	println!("{cert_pem}");
 	println!("{ca_cert_pem}");
 
-	let x509 = X509::from_pem(&cert_pem.as_bytes()).unwrap();
+	let x509 = X509::from_pem(cert_pem.as_bytes()).unwrap();
 
-	let ca_x509 = X509::from_pem(&ca_cert_pem.as_bytes()).unwrap();
-
+	let ca_x509 = X509::from_pem(ca_cert_pem.as_bytes()).unwrap();
 
 	let mut builder = X509StoreBuilder::new().unwrap();
 	builder.add_cert(ca_x509).unwrap();
 
-	let store :X509Store = builder.build();
+	let store: X509Store = builder.build();
 
 	let srv = SslMethod::tls_server();
 	let mut ssl_srv_ctx = SslAcceptor::mozilla_modern(srv).unwrap();
 	//let key = cert.serialize_private_key_der();
-	let pkey = PKey::private_key_from_der(&key).unwrap();
+	let pkey = PKey::private_key_from_der(key).unwrap();
 	ssl_srv_ctx.set_private_key(&pkey).unwrap();
 
 	ssl_srv_ctx.set_certificate(&x509).unwrap();
@@ -147,8 +150,8 @@ fn verify_cert_ca(cert_pem :&str, key :&[u8], ca_cert_pem :&str) {
 		}
 	};
 
-	const HELLO_FROM_SRV :&[u8] = b"hello from server";
-	const HELLO_FROM_CLN :&[u8] = b"hello from client";
+	const HELLO_FROM_SRV: &[u8] = b"hello from server";
+	const HELLO_FROM_CLN: &[u8] = b"hello from client";
 
 	ssl_srv_stream.ssl_write(HELLO_FROM_SRV).unwrap();
 	ssl_cln_stream.ssl_write(HELLO_FROM_CLN).unwrap();
@@ -156,13 +159,13 @@ fn verify_cert_ca(cert_pem :&str, key :&[u8], ca_cert_pem :&str) {
 	// TODO read the data we just wrote from the streams
 }
 
-fn verify_csr(cert :&Certificate) {
+fn verify_csr(cert: &Certificate) {
 	let csr = cert.serialize_request_pem().unwrap();
 	println!("{csr}");
 	let key = cert.serialize_private_key_der();
 	let pkey = PKey::private_key_from_der(&key).unwrap();
 
-	let req = X509Req::from_pem(&csr.as_bytes()).unwrap();
+	let req = X509Req::from_pem(csr.as_bytes()).unwrap();
 	req.verify(&pkey).unwrap();
 }
 
@@ -235,6 +238,7 @@ fn test_openssl_25519_v1_given() {
 	// Now verify the certificate as well as CSR,
 	// but only on OpenSSL >= 1.1.1
 	// On prior versions, only do basic verification
+	#[allow(clippy::unusual_byte_groupings)]
 	if openssl::version::number() >= 0x1_01_01_00_f {
 		verify_cert(&cert);
 		verify_csr(&cert);
@@ -313,8 +317,12 @@ fn test_openssl_separate_ca() {
 	let ca_cert_pem = ca_cert.serialize_pem().unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	params
+		.distinguished_name
+		.push(DnType::OrganizationName, "Crab widgits SE");
+	params
+		.distinguished_name
+		.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap();
 	let cert_pem = cert.serialize_pem_with_signer(&ca_cert).unwrap();
 	let key = cert.serialize_private_key_der();
@@ -325,14 +333,21 @@ fn test_openssl_separate_ca() {
 #[test]
 fn test_openssl_separate_ca_with_printable_string() {
 	let mut params = util::default_params();
-	params.distinguished_name.push(DnType::CountryName, DnValue::PrintableString("US".to_string()));
+	params.distinguished_name.push(
+		DnType::CountryName,
+		DnValue::PrintableString("US".to_string()),
+	);
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::from_params(params).unwrap();
 	let ca_cert_pem = ca_cert.serialize_pem().unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	params
+		.distinguished_name
+		.push(DnType::OrganizationName, "Crab widgits SE");
+	params
+		.distinguished_name
+		.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap();
 	let cert_pem = cert.serialize_pem_with_signer(&ca_cert).unwrap();
 	let key = cert.serialize_private_key_der();
@@ -350,8 +365,12 @@ fn test_openssl_separate_ca_with_other_signing_alg() {
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
 	params.alg = &rcgen::PKCS_ECDSA_P384_SHA384;
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	params
+		.distinguished_name
+		.push(DnType::OrganizationName, "Crab widgits SE");
+	params
+		.distinguished_name
+		.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap();
 	let cert_pem = cert.serialize_pem_with_signer(&ca_cert).unwrap();
 	let key = cert.serialize_private_key_der();
@@ -367,18 +386,22 @@ fn test_openssl_separate_ca_name_constraints() {
 	println!("openssl version: {:x}", openssl::version::number());
 
 	params.name_constraints = Some(NameConstraints {
-		permitted_subtrees : vec![GeneralSubtree::DnsName("crabs.crabs".to_string())],
+		permitted_subtrees: vec![GeneralSubtree::DnsName("crabs.crabs".to_string())],
 		//permitted_subtrees : vec![GeneralSubtree::DnsName("".to_string())],
 		//permitted_subtrees : Vec::new(),
 		//excluded_subtrees : vec![GeneralSubtree::DnsName(".v".to_string())],
-		excluded_subtrees : Vec::new(),
+		excluded_subtrees: Vec::new(),
 	});
 	let ca_cert = Certificate::from_params(params).unwrap();
 	let ca_cert_pem = ca_cert.serialize_pem().unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	params
+		.distinguished_name
+		.push(DnType::OrganizationName, "Crab widgits SE");
+	params
+		.distinguished_name
+		.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap();
 	let cert_pem = cert.serialize_pem_with_signer(&ca_cert).unwrap();
 	let key = cert.serialize_private_key_der();
