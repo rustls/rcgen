@@ -406,3 +406,17 @@ fn test_certificate_from_csr() {
 	check_cert_ca(&cert_der, &cert, &ca_cert_der,
 		&webpki::ECDSA_P256_SHA256, &webpki::ECDSA_P256_SHA256, sign_fn);
 }
+
+#[test]
+fn test_webpki_serial_number() {
+	let mut params = util::default_params();
+	params.serial_number = Some(vec![0,1,2].into());
+	let cert = Certificate::from_params(params).unwrap();
+
+	// Now verify the certificate.
+	let cert_der = cert.serialize_der().unwrap();
+
+	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
+		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	check_cert(&cert_der, &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
+}
