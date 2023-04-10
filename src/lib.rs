@@ -148,6 +148,12 @@ const OID_NAME_CONSTRAINTS :&[u64] = &[2, 5, 29, 30];
 // https://www.iana.org/assignments/smi-numbers/smi-numbers.xhtml#smi-numbers-1.3.6.1.5.5.7.1
 const OID_PE_ACME :&[u64] = &[1, 3, 6, 1, 5, 5, 7, 1, 31];
 
+#[cfg(feature = "pem")]
+const ENCODE_CONFIG: pem::EncodeConfig = match cfg!(target_family = "windows") {
+	true => pem::EncodeConfig { line_ending: pem::LineEnding::CRLF },
+	false => pem::EncodeConfig { line_ending: pem::LineEnding::LF },
+};
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[allow(missing_docs)]
 #[non_exhaustive]
@@ -629,7 +635,7 @@ impl CertificateSigningRequest {
 	pub fn serialize_pem_with_signer(&self, ca :&Certificate) -> Result<String, RcgenError> {
 		let contents = self.params.serialize_der_with_signer(&self.public_key, ca)?;
 		let p = Pem::new("CERTIFICATE", contents);
-		Ok(pem::encode(&p))
+		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}
 }
 
@@ -1620,7 +1626,7 @@ impl Certificate {
 	pub fn serialize_pem(&self) -> Result<String, RcgenError> {
 		let contents =  self.serialize_der()?;
 		let p = Pem::new("CERTIFICATE", contents);
-		Ok(pem::encode(&p))
+		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}
 	/// Serializes the certificate, signed with another certificate's key, to the ASCII PEM format
 	///
@@ -1629,7 +1635,7 @@ impl Certificate {
 	pub fn serialize_pem_with_signer(&self, ca :&Certificate) -> Result<String, RcgenError> {
 		let contents = self.serialize_der_with_signer(ca)?;
 		let p = Pem::new("CERTIFICATE", contents);
-		Ok(pem::encode(&p))
+		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}
 	/// Serializes the certificate signing request to the ASCII PEM format
 	///
@@ -1638,7 +1644,7 @@ impl Certificate {
 	pub fn serialize_request_pem(&self) -> Result<String, RcgenError> {
 		let contents = self.serialize_request_der()?;
 		let p = Pem::new("CERTIFICATE REQUEST", contents);
-		Ok(pem::encode(&p))
+		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}
 	/// Serializes the private key in PKCS#8 format
 	///
@@ -2031,7 +2037,7 @@ impl KeyPair {
 	pub fn public_key_pem(&self) -> String {
 		let contents = self.public_key_der();
 		let p = Pem::new("PUBLIC KEY", contents);
-		pem::encode(&p)
+		pem::encode_config(&p, ENCODE_CONFIG)
 	}
 	/// Serializes the key pair (including the private key) in PKCS#8 format in DER
 	///
@@ -2072,7 +2078,7 @@ impl KeyPair {
 	pub fn serialize_pem(&self) -> String {
 		let contents = self.serialize_der();
 		let p = Pem::new("PRIVATE KEY", contents);
-		pem::encode(&p)
+		pem::encode_config(&p, ENCODE_CONFIG)
 	}
 }
 
@@ -2549,6 +2555,28 @@ mod tests {
 				assert_eq!(alg_i == alg_j, i == j,
 					"Algorighm relationship mismatch for algorithm index pair {} and {}", i, j);
 			}
+		}
+	}
+
+	#[cfg(feature = "pem")]
+	mod test_pem_serialization {
+    use crate::CertificateParams;
+    use crate::Certificate;
+
+		#[test]
+		#[cfg(windows)]
+		fn test_windows_line_endings() {
+			let cert = Certificate::from_params(CertificateParams::default()).unwrap();
+			let pem = cert.serialize_pem().expect("Failed to serialize pem");
+			assert!(pem.contains("\r\n"));
+		}
+
+		#[test]
+		#[cfg(not(windows))]
+		fn test_not_windows_line_endings() {
+			let cert = Certificate::from_params(CertificateParams::default()).unwrap();
+			let pem = cert.serialize_pem().expect("Failed to serialize pem");
+			assert!(!pem.contains("\r"));
 		}
 	}
 
