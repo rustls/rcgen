@@ -2,9 +2,33 @@ name: ci
 
 on: [push, pull_request]
 
-jobs:
-  build:
+env:
+  RUSTFLAGS: -D warnings
 
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
+        override: true
+    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - uses: ilammy/msvc-dev-cmd@v1
+    - run: vcpkg install openssl:x64-windows-static-md
+    - name: Run cargo check --all
+      run: cargo check --all
+    - name: Run the tests
+      run: cargo test --all
+    - name: Run the tests with x509-parser enabled
+      run: cargo test --verbose --features x509-parser
+    - name: Run cargo doc
+      run: cargo doc --all --all-features
+
+
+  build:
     strategy:
       matrix:
         os: [macOS-latest, ubuntu-latest]
@@ -27,20 +51,10 @@ jobs:
         toolchain: ${{ matrix.toolchain }}
         override: true
     - name: Run cargo check --all
-      env:
-        RUSTFLAGS: -D warnings
-      run: |
-        cargo check --all
+      run: cargo check --all
     - name: Run the tests
-      env:
-        RUSTFLAGS: -D warnings
-      run: |
-         cargo test --all
+      run: cargo test --all
     - name: Run the tests with x509-parser enabled
-      env:
-        RUSTFLAGS: -D warnings
-      run: |
-         cargo test --verbose --features x509-parser
+      run: cargo test --verbose --features x509-parser
     - name: Run cargo doc
-      run: |
-        cargo doc --all --all-features
+      run: cargo doc --all --all-features
