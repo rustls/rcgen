@@ -648,6 +648,7 @@ pub struct CertificateParams {
 	pub extended_key_usages :Vec<ExtendedKeyUsagePurpose>,
 	pub name_constraints :Option<NameConstraints>,
 	pub custom_extensions :Vec<CustomExtension>,
+	/// The certificate's key pair, a new random key pair will be generated if this is `None`
 	pub key_pair :Option<KeyPair>,
 	/// If `true`, the 'Authority Key Identifier' extension will be added to the generated cert
 	pub use_authority_key_identifier_extension :bool,
@@ -1554,8 +1555,9 @@ fn write_general_subtrees(writer :DERWriter, tag :u64, general_subtrees :&[Gener
 }
 
 impl Certificate {
-	/// Generates a new certificate from the given parameters. If there is no key pair included,
-	/// then a new key pair will be generated and used.
+	/// Generates a new certificate from the given parameters.
+	/// 
+	/// If there is no key pair included, then a new key pair will be generated and used.
 	pub fn from_params(mut params :CertificateParams) -> Result<Self, RcgenError> {
 		let key_pair = if let Some(key_pair) = params.key_pair.take() {
 			if !key_pair.is_compatible(&params.alg) {
