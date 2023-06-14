@@ -1,4 +1,4 @@
-#[cfg(feature = "x509-parser")]
+#![cfg(all(feature = "x509-parser", not(windows)))]
 use rcgen::DnValue;
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
 
