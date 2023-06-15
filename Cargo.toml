@@ -38,7 +38,7 @@ openssl = "0.10"
 x509-parser = { version = "0.15", features = ["verify"] }
 webpki = { version = "0.22", features = ["std"] }
 rand = "0.8"
-rsa = "0.8"
+rsa = "0.9"
 
 [target.'cfg(not(windows))'.dependencies]
 botan = { version = "0.10", features = ["vendored"] }
