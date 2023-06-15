@@ -495,7 +495,7 @@ dependencies = [
 
 [[package]]
 name = "rcgen"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "botan",
  "openssl",
