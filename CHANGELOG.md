@@ -1,9 +1,14 @@
 
 # Changes
 
-## Unreleased
+## Release 0.11.0 - June 15, 2023
 
 - Parse IP-address subject alternative names. Contributed by [iamjpotts](https://github.com/iamjpotts).
+- Emit platform-apropriate line endings. Contributed by [frjonsen](https://github.com/frjonsen).
+- Support larger serial numbers. Contributed by [andrenth](https://github.com/andrenth).
+- Parse more certificate parameters. Contributed by [andrenth](https://github.com/andrenth).
+- Output `SanType::IpAddress` when calling `CertificateParams::new` or `generate_simple_self_signed`. Contributed by [rukai](https://github.com/rukai).
+- Update pem to 2.0. Contributed by [koushiro](https://github.com/koushiro).
 
 ## Release 0.10.0 - September 29, 2022
 
@@ -14,7 +19,7 @@
 
 ## Release 0.9.4 - September 28, 2022
 
-* yanked due to breaking API changes, see 0.10.0 instead. *
+* yanked due to breaking API changes, see 0.10.0 instead.
 
 ## Release 0.9.3 - July 16, 2022
 
