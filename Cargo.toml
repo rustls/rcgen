@@ -40,7 +40,7 @@ webpki = { version = "0.22", features = ["std"] }
 rand = "0.8"
 rsa = "0.9"
 
-[target.'cfg(not(windows))'.dependencies]
+[target.'cfg(not(windows))'.dev-dependencies]
 botan = { version = "0.10", features = ["vendored"] }
 
 
