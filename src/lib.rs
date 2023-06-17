@@ -909,7 +909,7 @@ impl CertificateParams {
 		Ok(result)
 	}
 	fn write_subject_alt_names(&self, writer :DERWriter) {
-		Self::write_extension(writer, OID_SUBJECT_ALT_NAME, false, |writer| {
+		write_x509_extension(writer, OID_SUBJECT_ALT_NAME, false, |writer| {
 			writer.write_sequence(|writer| {
 				for san in self.subject_alt_names.iter() {
 					writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
@@ -1074,7 +1074,7 @@ impl CertificateParams {
 							//    facilitate certification path construction.  There is one exception;
 							//    where a CA distributes its public key in the form of a "self-signed"
 							//    certificate, the authority key identifier MAY be omitted.'
-							Self::write_extension(writer.next(), OID_AUTHORITY_KEY_IDENTIFIER, false, |writer| {
+							write_x509_extension(writer.next(), OID_AUTHORITY_KEY_IDENTIFIER, false, |writer| {
 								writer.write_sequence(|writer| {
 									writer.next().write_tagged_implicit(Tag::context(0), |writer| {
 										writer.write_bytes(ca.get_key_identifier().as_ref())
@@ -1139,7 +1139,7 @@ impl CertificateParams {
 
 						// Write extended key usage
 						if !self.extended_key_usages.is_empty() {
-							Self::write_extension(writer.next(), OID_EXT_KEY_USAGE, false, |writer| {
+							write_x509_extension(writer.next(), OID_EXT_KEY_USAGE, false, |writer| {
 								writer.write_sequence(|writer| {
 									for usage in self.extended_key_usages.iter() {
 										let oid = ObjectIdentifier::from_slice(usage.oid());
@@ -1151,7 +1151,7 @@ impl CertificateParams {
 						if let Some(name_constraints) = &self.name_constraints {
 							// If both trees are empty, the extension must be omitted.
 							if !name_constraints.is_empty() {
-								Self::write_extension(writer.next(), OID_NAME_CONSTRAINTS, true, |writer| {
+								write_x509_extension(writer.next(), OID_NAME_CONSTRAINTS, true, |writer| {
 									writer.write_sequence(|writer| {
 										if !name_constraints.permitted_subtrees.is_empty() {
 											write_general_subtrees(writer.next(), 0, &name_constraints.permitted_subtrees);
@@ -1166,12 +1166,12 @@ impl CertificateParams {
 						match self.is_ca {
 							IsCa::Ca(ref constraint) => {
 								// Write subject_key_identifier
-								Self::write_extension(writer.next(), OID_SUBJECT_KEY_IDENTIFIER, false, |writer| {
+								write_x509_extension(writer.next(), OID_SUBJECT_KEY_IDENTIFIER, false, |writer| {
 									let key_identifier = self.key_identifier(pub_key);
 									writer.write_bytes(key_identifier.as_ref());
 								});
 								// Write basic_constraints
-								Self::write_extension(writer.next(), OID_BASIC_CONSTRAINTS, true, |writer| {
+								write_x509_extension(writer.next(), OID_BASIC_CONSTRAINTS, true, |writer| {
 									writer.write_sequence(|writer| {
 										writer.next().write_bool(true); // cA flag
 										if let BasicConstraints::Constrained(path_len_constraint) = constraint {
@@ -1182,12 +1182,12 @@ impl CertificateParams {
 							}
 							IsCa::ExplicitNoCa => {
 								// Write subject_key_identifier
-								Self::write_extension(writer.next(), OID_SUBJECT_KEY_IDENTIFIER, false, |writer| {
+								write_x509_extension(writer.next(), OID_SUBJECT_KEY_IDENTIFIER, false, |writer| {
 									let key_identifier = self.key_identifier(pub_key);
 									writer.write_bytes(key_identifier.as_ref());
 								});
 								// Write basic_constraints
-								Self::write_extension(writer.next(), OID_BASIC_CONSTRAINTS, true, |writer| {
+								write_x509_extension(writer.next(), OID_BASIC_CONSTRAINTS, true, |writer| {
 									writer.write_sequence(|writer| {
 										writer.next().write_bool(false); // cA flag
 									});
@@ -1214,28 +1214,6 @@ impl CertificateParams {
 				});
 			}
 			Ok(())
-		})
-	}
-	/// Serializes an X.509v3 extension according to RFC 5280
-	fn write_extension(writer :DERWriter, extension_oid :&[u64], is_critical :bool, value_serializer :impl FnOnce(DERWriter)) {
-		// Extension specification:
-		//    Extension  ::=  SEQUENCE  {
-		//         extnID      OBJECT IDENTIFIER,
-		//         critical    BOOLEAN DEFAULT FALSE,
-		//         extnValue   OCTET STRING
-		//                     -- contains the DER encoding of an ASN.1 value
-		//                     -- corresponding to the extension type identified
-		//                     -- by extnID
-		//         }
-
-		writer.write_sequence(|writer| {
-			let oid = ObjectIdentifier::from_slice(extension_oid);
-			writer.next().write_oid(&oid);
-			if is_critical {
-				writer.next().write_bool(true);
-			}
-			let bytes = yasna::construct_der(value_serializer);
-			writer.next().write_bytes(&bytes);
 		})
 	}
 	/// Calculates a subject key identifier for the certificate subject's public key.
@@ -1661,6 +1639,29 @@ impl Certificate {
 	pub fn serialize_private_key_pem(&self) -> String {
 		self.key_pair.serialize_pem()
 	}
+}
+
+/// Serializes an X.509v3 extension according to RFC 5280
+fn write_x509_extension(writer :DERWriter, extension_oid :&[u64], is_critical :bool, value_serializer :impl FnOnce(DERWriter)) {
+	// Extension specification:
+	//    Extension  ::=  SEQUENCE  {
+	//         extnID      OBJECT IDENTIFIER,
+	//         critical    BOOLEAN DEFAULT FALSE,
+	//         extnValue   OCTET STRING
+	//                     -- contains the DER encoding of an ASN.1 value
+	//                     -- corresponding to the extension type identified
+	//                     -- by extnID
+	//         }
+
+	writer.write_sequence(|writer| {
+		let oid = ObjectIdentifier::from_slice(extension_oid);
+		writer.next().write_oid(&oid);
+		if is_critical {
+			writer.next().write_bool(true);
+		}
+		let bytes = yasna::construct_der(value_serializer);
+		writer.next().write_bytes(&bytes);
+	})
 }
 
 enum SignAlgo {
