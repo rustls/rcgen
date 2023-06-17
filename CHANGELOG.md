@@ -1,6 +1,10 @@
 
 # Changes
 
+## Release 0.11.1 - June 17, 2023
+
+- Make botan a dev-dependency again. Contributed by [mbrubeck](https://github.com/mbrubeck).
+
 ## Release 0.11.0 - June 15, 2023
 
 - Parse IP-address subject alternative names. Contributed by [iamjpotts](https://github.com/iamjpotts).
