@@ -77,3 +77,50 @@ mod test_convert_x509_subject_alternative_name {
 		assert!(actual.subject_alt_names.contains(&ip_san));
 	}
 }
+
+#[cfg(feature = "x509-parser")]
+mod test_x509_parser_crl {
+	use x509_parser::num_bigint::BigUint;
+	use x509_parser::prelude::{FromDer, X509Certificate};
+	use x509_parser::revocation_list::CertificateRevocationList;
+	use x509_parser::x509::X509Version;
+	use crate::util;
+
+	#[test]
+	fn parse_crl() {
+		// Create a CRL with one revoked cert, and an issuer to sign the CRL.
+		let (crl, issuer) = util::test_crl();
+		let revoked_cert = crl.get_params().revoked_certs.first().unwrap();
+		let revoked_cert_serial = BigUint::from_bytes_be(revoked_cert.serial_number.as_ref());
+		let issuer_der = issuer.serialize_der().unwrap();
+		let (_, x509_issuer) = X509Certificate::from_der(&issuer_der).unwrap();
+
+		// Serialize the CRL signed by the issuer in DER form.
+		let crl_der = crl.serialize_der_with_signer(&issuer).unwrap();
+
+		// We should be able to parse the CRL with x509-parser without error.
+		let (_, x509_crl) = CertificateRevocationList::from_der(&crl_der)
+			.expect("failed to parse CRL DER");
+
+		// The properties of the CRL should match expected.
+		assert_eq!(x509_crl.version().unwrap(), X509Version(1));
+		assert_eq!(x509_crl.issuer(), x509_issuer.subject());
+		assert_eq!(x509_crl.last_update().to_datetime().unix_timestamp(),
+				   crl.get_params().this_update.unix_timestamp());
+		assert_eq!(x509_crl.next_update().unwrap().to_datetime().unix_timestamp(),
+				   crl.get_params().next_update.unix_timestamp());
+		// TODO(XXX): Waiting on https://github.com/rusticata/x509-parser/pull/144
+		// let crl_number = BigUint::from_bytes_be(crl.get_params().crl_number.as_ref());
+		// assert_eq!(x509_crl.crl_number().unwrap(), &crl_number);
+
+		// We should find the expected revoked certificate serial with the correct reason code.
+		let x509_revoked_cert = x509_crl.iter_revoked_certificates().next()
+			.expect("failed to find revoked cert in CRL");
+		assert_eq!(x509_revoked_cert.user_certificate, revoked_cert_serial);
+		let (_, reason_code) = x509_revoked_cert.reason_code().unwrap();
+	 	assert_eq!(reason_code.0, revoked_cert.reason_code.unwrap() as u8);
+
+		// We should be able to verify the CRL signature with the issuer.
+		assert!(x509_crl.verify_signature(&x509_issuer.public_key()).is_ok());
+	}
+}

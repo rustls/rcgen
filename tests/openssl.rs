@@ -1,11 +1,13 @@
 use rcgen::{Certificate, NameConstraints, GeneralSubtree, IsCa,
 	BasicConstraints, CertificateParams, DnType, DnValue};
 use openssl::pkey::PKey;
-use openssl::x509::{X509, X509Req, X509StoreContext};
+use openssl::x509::{CrlStatus, X509, X509Crl, X509Req, X509StoreContext};
 use openssl::x509::store::{X509StoreBuilder, X509Store};
 use openssl::ssl::{SslMethod, SslConnector,
 	SslAcceptor, HandshakeError};
 use openssl::stack::Stack;
+use openssl::asn1::{Asn1Integer, Asn1Time};
+use openssl::bn::BigNum;
 use std::io::{Write, Read, Result as ioResult, ErrorKind,
 	Error};
 use std::cell::RefCell;
@@ -384,4 +386,44 @@ fn test_openssl_separate_ca_name_constraints() {
 	let key = cert.serialize_private_key_der();
 
 	verify_cert_ca(&cert_pem, &key, &ca_cert_pem);
+}
+
+#[test]
+fn test_openssl_crl_parse() {
+	// Create a CRL with one revoked cert, and an issuer to sign the CRL.
+	let (crl, issuer) = util::test_crl();
+	let revoked_cert = crl.get_params().revoked_certs.first().unwrap();
+	let revoked_cert_serial = &revoked_cert.serial_number;
+
+	// Serialize the CRL signed by the issuer in both PEM and DER.
+	let crl_pem = crl.serialize_pem_with_signer(&issuer).unwrap();
+	let crl_der = crl.serialize_der_with_signer(&issuer).unwrap();
+
+	// We should be able to parse the PEM form without error.
+	assert!(X509Crl::from_pem(crl_pem.as_bytes()).is_ok());
+
+	// We should also be able to parse the DER form without error.
+	let openssl_crl = X509Crl::from_der(&crl_der).expect("failed to parse CRL DER");
+
+	// The properties of the CRL should match expected.
+	let openssl_issuer = X509::from_der(&issuer.serialize_der().unwrap()).unwrap();
+	let expected_last_update = Asn1Time::from_unix(crl.get_params().this_update.unix_timestamp())
+		.unwrap();
+	assert!(openssl_crl.last_update().eq(&expected_last_update));
+	let expected_next_update = Asn1Time::from_unix(crl.get_params().next_update.unix_timestamp())
+		.unwrap();
+	assert!(openssl_crl.next_update().unwrap().eq(&expected_next_update));
+	assert!(matches!(
+		openssl_crl.issuer_name().try_cmp(openssl_issuer.issuer_name()).unwrap(),
+		core::cmp::Ordering::Equal));
+
+	// We should find the revoked certificate is revoked.
+	let openssl_serial = BigNum::from_slice(revoked_cert_serial.as_ref()).unwrap();
+	let openssl_serial = Asn1Integer::from_bn(&openssl_serial).unwrap();
+	let openssl_crl_status = openssl_crl.get_by_serial(&openssl_serial);
+	assert!(matches!(openssl_crl_status, CrlStatus::Revoked(_)));
+
+	// We should be able to verify the CRL signature with the issuer's public key.
+	let issuer_pkey = openssl_issuer.public_key().unwrap();
+	assert!(openssl_crl.verify(&issuer_pkey).expect("failed to verify CRL signature"));
 }
