@@ -1428,7 +1428,7 @@ impl ExtendedKeyUsagePurpose {
 		use ExtendedKeyUsagePurpose::*;
 		match self {
 			// anyExtendedKeyUsage
-			Any => &[2, 5, 29, 37],
+			Any => &[2, 5, 29, 37, 0],
 			// id-kp-*
 			ServerAuth => &[1, 3, 6, 1, 5, 5, 7, 3, 1],
 			ClientAuth => &[1, 3, 6, 1, 5, 5, 7, 3, 2],
@@ -2830,6 +2830,28 @@ mod tests {
 		}
 
 		assert!(found);
+	}
+
+	#[test]
+	fn test_with_extended_key_usages_any() {
+		let mut params: CertificateParams = Default::default();
+
+		// Set extended_key_usages
+		params.extended_key_usages = vec![ExtendedKeyUsagePurpose::Any];
+
+		// Make the cert
+		let cert = Certificate::from_params(params).unwrap();
+
+		// Serialize it
+		let der = cert.serialize_der().unwrap();
+
+		// Parse it
+		let (_rem, cert) = x509_parser::parse_x509_certificate(&der).unwrap();
+
+		// Ensure we found it.
+		let maybe_extension = cert.extended_key_usage().unwrap();
+		let extension = maybe_extension.unwrap();
+		assert!(extension.value.any);
 	}
 
 	#[test]
