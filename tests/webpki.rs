@@ -65,8 +65,8 @@ fn check_cert_ca<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, ca_der :&[u8],
 
 	// (2/3) Check that the cert is valid for the given DNS name
 	let dns_name = DnsNameRef::try_from_ascii_str("crabs.crabs").unwrap();
-	end_entity_cert.verify_is_valid_for_dns_name(
-		dns_name,
+	end_entity_cert.verify_is_valid_for_subject_name(
+		webpki::SubjectNameRef::from(dns_name)
 	).expect("valid for DNS name");
 
 	// (3/3) Check that a message signed by the cert is valid.
