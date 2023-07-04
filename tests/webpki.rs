@@ -1,7 +1,9 @@
 #[cfg(feature = "x509-parser")]
 use rcgen::{CertificateSigningRequest, DnValue};
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, KeyPair, RemoteKeyPair};
-use webpki::{EndEntityCert, TlsServerTrustAnchors, TrustAnchor};
+use rcgen::{KeyUsagePurpose, ExtendedKeyUsagePurpose, SerialNumber};
+use rcgen::{CertificateRevocationList, CertificateRevocationListParams, RevocationReason, RevokedCertParams};
+use webpki::{EndEntityCert, TlsServerTrustAnchors, TrustAnchor, BorrowedCertRevocationList, CertRevocationList, TlsClientTrustAnchors};
 use webpki::SignatureAlgorithm;
 use webpki::{Time, DnsNameRef};
 
@@ -10,6 +12,7 @@ use ring::signature::{self, EcdsaKeyPair, EcdsaSigningAlgorithm,
 	Ed25519KeyPair, KeyPair as _, RsaEncoding, RsaKeyPair};
 
 use std::convert::TryFrom;
+use time::{OffsetDateTime, Duration};
 
 mod util;
 
@@ -419,4 +422,107 @@ fn test_webpki_serial_number() {
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
 		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert(&cert_der, &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
+}
+
+#[test]
+fn test_webpki_crl_parse() {
+	// Create a CRL with one revoked cert, and an issuer to sign the CRL.
+	let (crl, issuer) = util::test_crl();
+	let revoked_cert = crl.get_params().revoked_certs.first().unwrap();
+
+	// Serialize the CRL signed by the issuer to DER.
+	let der = crl.serialize_der_with_signer(&issuer).unwrap();
+
+	// We should be able to parse the CRL DER without error.
+	let webpki_crl = BorrowedCertRevocationList::from_der(&der)
+		.expect("failed to parse CRL DER");
+
+	// Webpki represents certificate SPKIs internally without the outer SEQUENCE.
+	// We remove that here before calling verify_signature.
+	let issuer_spki = issuer.get_key_pair().public_key_der();
+	let raw_spki = yasna::parse_der(&issuer_spki, |reader|reader.read_tagged_der()).unwrap();
+
+	// We should be able to verify the CRL signature with the issuer's raw SPKI.
+	webpki_crl.verify_signature(
+		&[&webpki::ECDSA_P256_SHA256],
+		&raw_spki.value(),
+	).expect("failed to validate CRL signature");
+
+	// We should be able to find the revoked cert with the expected properties.
+	let webpki_revoked_cert = webpki_crl.find_serial(&revoked_cert.serial_number.as_ref())
+		.expect("failed to parse revoked certs in CRL")
+		.expect("failed to find expected revoked cert in CRL");
+	assert_eq!(webpki_revoked_cert.serial_number.as_ref(), revoked_cert.serial_number.as_ref());
+	assert_eq!(webpki_revoked_cert.reason_code.unwrap() as u64, revoked_cert.reason_code.unwrap() as u64);
+	assert_eq!(
+		webpki_revoked_cert.revocation_date,
+		Time::from_seconds_since_unix_epoch(revoked_cert.revocation_time.unix_timestamp() as u64)
+	);
+}
+
+#[test]
+fn test_webpki_crl_revoke() {
+	// Create an issuer CA.
+	let alg= &rcgen::PKCS_ECDSA_P256_SHA256;
+	let mut issuer = util::default_params();
+	issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	issuer.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::CrlSign];
+	issuer.alg = alg;
+	let issuer = Certificate::from_params(issuer).unwrap();
+	let issuer_der = issuer.serialize_der().unwrap();
+
+	// Create an end entity cert issued by the issuer.
+	let mut ee = util::default_params();
+	ee.is_ca = IsCa::NoCa;
+	ee.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
+	ee.alg = alg;
+	ee.serial_number = Some(SerialNumber::from(99999));
+	let ee = Certificate::from_params(ee).unwrap();
+	let ee_der = ee.serialize_der_with_signer(&issuer).unwrap();
+
+	// Set up webpki's verification requirements.
+	let trust_anchor = TrustAnchor::try_from_cert_der(issuer_der.as_ref()).unwrap();
+	let trust_anchor_list = &[trust_anchor];
+	let trust_anchors = TlsClientTrustAnchors(trust_anchor_list);
+	let end_entity_cert = EndEntityCert::try_from(ee_der.as_ref()).unwrap();
+	let unix_time = 0x40_00_00_00;
+	let time = Time::from_seconds_since_unix_epoch(unix_time);
+
+	// The end entity cert should validate with the issuer without error.
+	end_entity_cert.verify_is_valid_tls_client_cert(
+		&[&webpki::ECDSA_P256_SHA256],
+		&trust_anchors,
+		&[],
+		time,
+		&[],
+	).expect("failed to validate ee cert with issuer");
+
+	// Generate a CRL with the issuer that revokes the EE cert.
+	let now = OffsetDateTime::from_unix_timestamp(unix_time as i64).unwrap();
+	let crl = CertificateRevocationListParams{
+		this_update: now,
+		next_update: now + Duration::weeks(1),
+		crl_number: rcgen::SerialNumber::from(1234),
+		revoked_certs: vec![RevokedCertParams{
+			serial_number: ee.get_params().serial_number.clone().unwrap(),
+			revocation_time: now,
+			reason_code: Some(RevocationReason::KeyCompromise),
+			invalidity_date: None,
+		}],
+		key_identifier_method: rcgen::KeyIdMethod::Sha256,
+		alg,
+	};
+	let crl = CertificateRevocationList::from_params(crl).unwrap();
+	let crl_der = crl.serialize_der_with_signer(&issuer).unwrap();
+	let crl = BorrowedCertRevocationList::from_der(&crl_der).unwrap();
+
+	// The end entity cert should **not** validate when we provide a CRL that revokes the EE cert.
+	let result = end_entity_cert.verify_is_valid_tls_client_cert(
+		&[&webpki::ECDSA_P256_SHA256],
+		&trust_anchors,
+		&[],
+		time,
+		&[&crl],
+	);
+	assert!(matches!(result, Err(webpki::Error::CertRevoked)));
 }
