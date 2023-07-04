@@ -81,7 +81,7 @@ pub fn test_crl() -> (CertificateRevocationList, Certificate) {
 	let now = OffsetDateTime::now_utc();
 	let next_week = now + Duration::weeks(1);
 	let revoked_cert = RevokedCertParams{
-		serial_number: SerialNumber::from(9999),
+		serial_number: SerialNumber::from_slice(&[0xC0, 0xFF, 0xEE]),
 		revocation_time: now,
 		reason_code: Some(RevocationReason::KeyCompromise),
 		invalidity_date: None,
