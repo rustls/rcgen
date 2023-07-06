@@ -1,6 +1,10 @@
 #![cfg(all(feature = "x509-parser", not(windows)))]
+
+use time::{Duration, OffsetDateTime};
 use rcgen::DnValue;
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
+use rcgen::{KeyUsagePurpose, SerialNumber};
+use rcgen::{CertificateRevocationList, CertificateRevocationListParams, RevokedCertParams, RevocationReason};
 
 mod util;
 
@@ -199,4 +203,54 @@ fn test_botan_imported_ca_with_printable_string() {
 	let cert_der = cert.serialize_der_with_signer(&imported_ca_cert).unwrap();
 
 	check_cert_ca(&cert_der, &cert, &ca_cert_der);
+}
+
+#[test]
+fn test_botan_crl_parse() {
+	// Create an issuer CA.
+	let alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+	let mut issuer = util::default_params();
+	issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	issuer.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::CrlSign];
+	issuer.alg = alg;
+	let issuer = Certificate::from_params(issuer).unwrap();
+
+	// Create an end entity cert issued by the issuer.
+	let mut ee = util::default_params();
+	ee.alg = alg;
+	ee.is_ca = IsCa::NoCa;
+	ee.serial_number = Some(SerialNumber::from(99999));
+	// Botan has a sanity check that enforces a maximum expiration date
+	ee.not_after = rcgen::date_time_ymd(3016, 01, 01);
+	let ee = Certificate::from_params(ee).unwrap();
+	let ee_der = ee.serialize_der_with_signer(&issuer).unwrap();
+	let botan_ee = botan::Certificate::load(ee_der.as_ref()).unwrap();
+
+	// Generate a CRL with the issuer that revokes the EE cert.
+	let now = OffsetDateTime::now_utc();
+	let crl = CertificateRevocationListParams{
+		this_update: now,
+		next_update: now + Duration::weeks(1),
+		crl_number: rcgen::SerialNumber::from(1234),
+		revoked_certs: vec![RevokedCertParams{
+			serial_number: ee.get_params().serial_number.clone().unwrap(),
+			revocation_time: now,
+			reason_code: Some(RevocationReason::KeyCompromise),
+			invalidity_date: None,
+		}],
+		key_identifier_method: rcgen::KeyIdMethod::Sha256,
+		alg,
+	};
+	let crl = CertificateRevocationList::from_params(crl).unwrap();
+
+	// Serialize to both DER and PEM.
+	let crl_der = crl.serialize_der_with_signer(&issuer).unwrap();
+	let crl_pem = crl.serialize_pem_with_signer(&issuer).unwrap();
+
+	// We should be able to load the CRL in both serializations.
+	botan::CRL::load(crl_pem.as_ref()).unwrap();
+	let crl = botan::CRL::load(crl_der.as_ref()).unwrap();
+
+	// We should find the EE cert revoked.
+	assert!(crl.is_revoked(&botan_ee).unwrap());
 }
