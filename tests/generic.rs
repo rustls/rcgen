@@ -124,3 +124,57 @@ mod test_x509_parser_crl {
 		assert!(x509_crl.verify_signature(&x509_issuer.public_key()).is_ok());
 	}
 }
+
+#[cfg(feature = "x509-parser")]
+mod test_parse_crl_dps {
+	use x509_parser::extensions::{DistributionPointName, ParsedExtension};
+	use crate::util;
+
+	#[test]
+	fn parse_crl_dps() {
+		// Generate and parse a certificate that includes two CRL distribution points.
+		let der = util::cert_with_crl_dps();
+		let (_, parsed_cert) = x509_parser::parse_x509_certificate(&der).unwrap();
+
+		// We should find a CRL DP extension was parsed.
+		let crl_dps = parsed_cert.get_extension_unique(&x509_parser::oid_registry::OID_X509_EXT_CRL_DISTRIBUTION_POINTS)
+			.expect("malformed CRL distribution points extension")
+			.expect("missing CRL distribution points extension");
+
+		// The extension should not be critical.
+		assert!(!crl_dps.critical);
+
+		// We should be able to parse the definition.
+		let crl_dps = match crl_dps.parsed_extension() {
+			ParsedExtension::CRLDistributionPoints(crl_dps) => crl_dps,
+			_ => panic!("unexpected parsed extension type")
+		};
+
+		// There should be two DPs.
+		assert_eq!(crl_dps.points.len(), 2);
+
+		// Each distribution point should only include a distribution point name holding a sequence
+		// of general names.
+		let general_names = crl_dps.points.iter().flat_map(|dp| {
+			// We shouldn't find a cRLIssuer or onlySomeReasons field.
+			assert!(dp.crl_issuer.is_none());
+			assert!(dp.reasons.is_none());
+
+			match dp.distribution_point.as_ref().expect("missing distribution point name") {
+				DistributionPointName::FullName(general_names) => general_names.iter(),
+				DistributionPointName::NameRelativeToCRLIssuer(_) => panic!("unexpected name relative to cRL issuer")
+			}
+		}).collect::<Vec<_>>();
+
+		// All of the general names should be URIs.
+		let uris = general_names.iter().map(|general_name| {
+			match general_name {
+				x509_parser::extensions::GeneralName::URI(uri) => *uri,
+				_ => panic!("unexpected general name type")
+			}
+		}).collect::<Vec<_>>();
+
+		// We should find the expected URIs.
+		assert_eq!(uris, &["http://example.com/crl.der", "http://crls.example.com/1234", "ldap://example.com/crl.der"]);
+	}
+}

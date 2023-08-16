@@ -526,3 +526,11 @@ fn test_webpki_crl_revoke() {
 	);
 	assert!(matches!(result, Err(webpki::Error::CertRevoked)));
 }
+
+#[test]
+fn test_webpki_cert_crl_dps() {
+	let der = util::cert_with_crl_dps();
+	webpki::EndEntityCert::try_from(der.as_ref()).expect("failed to parse cert with CRL DPs ext");
+	// Webpki doesn't expose the parsed CRL distribution extension, so we can't interrogate that
+	// it matches the expected form. See `openssl.rs` for more extensive coverage.
+}

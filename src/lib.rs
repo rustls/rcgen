@@ -140,8 +140,12 @@ const OID_AUTHORITY_KEY_IDENTIFIER :&[u64] = &[2, 5, 29, 35];
 const OID_EXT_KEY_USAGE :&[u64] = &[2, 5, 29, 37];
 
 // id-ce-nameConstraints in
-/// https://tools.ietf.org/html/rfc5280#section-4.2.1.10
+// https://tools.ietf.org/html/rfc5280#section-4.2.1.10
 const OID_NAME_CONSTRAINTS :&[u64] = &[2, 5, 29, 30];
+
+// id-ce-cRLDistributionPoints in
+// https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13
+const OID_CRL_DISTRIBUTION_POINTS :&[u64] = &[2, 5, 29, 31];
 
 // id-pe-acmeIdentifier in
 // https://www.iana.org/assignments/smi-numbers/smi-numbers.xhtml#smi-numbers-1.3.6.1.5.5.7.1
@@ -733,6 +737,12 @@ pub struct CertificateParams {
 	pub key_usages :Vec<KeyUsagePurpose>,
 	pub extended_key_usages :Vec<ExtendedKeyUsagePurpose>,
 	pub name_constraints :Option<NameConstraints>,
+	/// An optional list of certificate revocation list (CRL) distribution points as described
+	/// in RFC 5280 Section 4.2.1.13[^1]. Each distribution point contains one or more URIs where
+	/// an up-to-date CRL with scope including this certificate can be retrieved.
+	///
+	/// [^1]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13>
+	pub crl_distribution_points :Vec<CrlDistributionPoint>,
 	pub custom_extensions :Vec<CustomExtension>,
 	/// The certificate's key pair, a new random key pair will be generated if this is `None`
 	pub key_pair :Option<KeyPair>,
@@ -762,6 +772,7 @@ impl Default for CertificateParams {
 			key_usages : Vec::new(),
 			extended_key_usages : Vec::new(),
 			name_constraints : None,
+			crl_distribution_points : Vec::new(),
 			custom_extensions : Vec::new(),
 			key_pair : None,
 			use_authority_key_identifier_extension : false,
@@ -1020,6 +1031,7 @@ impl CertificateParams {
 			key_usages,
 			extended_key_usages,
 			name_constraints,
+			crl_distribution_points,
 			custom_extensions,
 			key_pair,
 			use_authority_key_identifier_extension,
@@ -1037,6 +1049,7 @@ impl CertificateParams {
 			|| !key_usages.is_empty()
 			|| !extended_key_usages.is_empty()
 			|| name_constraints.is_some()
+			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
 		{
 			return Err(RcgenError::UnsupportedInCsr);
@@ -1230,6 +1243,15 @@ impl CertificateParams {
 								});
 							}
 						}
+						if !self.crl_distribution_points.is_empty() {
+							write_x509_extension(writer.next(), OID_CRL_DISTRIBUTION_POINTS, false, |writer| {
+								writer.write_sequence(|writer| {
+									for distribution_point in &self.crl_distribution_points {
+										distribution_point.write_der(writer.next());
+									}
+								})
+							});
+						}
 						match self.is_ca {
 							IsCa::Ca(ref constraint) => {
 								// Write subject_key_identifier
@@ -1379,6 +1401,44 @@ impl NameConstraints {
 	fn is_empty(&self) -> bool {
 		self.permitted_subtrees.is_empty() && self.excluded_subtrees.is_empty()
 	}
+}
+
+/// A certificate revocation list (CRL) distribution point, to be included in a certificate's
+/// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13).
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CrlDistributionPoint {
+	/// One or more URI distribution point names, indicating a place the current CRL can
+	/// be retrieved. When present, SHOULD include at least one LDAP or HTTP URI.
+	pub uris :Vec<String>,
+}
+
+impl CrlDistributionPoint {
+	fn write_der(&self, writer :DERWriter) {
+		// DistributionPoint SEQUENCE
+		writer.write_sequence(|writer| {
+			write_distribution_point_name_uris(writer.next(), &self.uris);
+		});
+	}
+}
+
+fn write_distribution_point_name_uris<'a>(writer :DERWriter, uris: impl IntoIterator<Item = &'a String>) {
+	// distributionPoint DistributionPointName
+	writer.write_tagged_implicit(Tag::context(0), |writer| {
+		writer.write_sequence(|writer| {
+			// fullName GeneralNames
+			writer.next().write_tagged_implicit(Tag::context(0), | writer| {
+				// GeneralNames
+				writer.write_sequence(|writer| {
+					for uri in uris.into_iter() {
+						// uniformResourceIdentifier [6] IA5String,
+						writer.next().write_tagged_implicit(Tag::context(6), |writer| {
+							writer.write_ia5_string(uri)
+						});
+					}
+				})
+			});
+		});
+	});
 }
 
 /// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension

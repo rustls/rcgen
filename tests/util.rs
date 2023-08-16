@@ -1,5 +1,5 @@
 use time::{Duration, OffsetDateTime};
-use rcgen::{BasicConstraints, Certificate, CertificateParams, CertificateRevocationList};
+use rcgen::{BasicConstraints, Certificate, CertificateParams, CertificateRevocationList, CrlDistributionPoint};
 use rcgen::{CertificateRevocationListParams, DnType, IsCa, KeyIdMethod};
 use rcgen::{KeyUsagePurpose, PKCS_ECDSA_P256_SHA256, RevocationReason, RevokedCertParams, SerialNumber};
 
@@ -98,4 +98,20 @@ pub fn test_crl() -> (CertificateRevocationList, Certificate) {
 	let crl = CertificateRevocationList::from_params(crl).unwrap();
 
 	(crl, issuer)
+}
+
+#[allow(unused)] // Used by openssl + x509-parser features.
+pub fn cert_with_crl_dps() -> Vec<u8> {
+	let mut params = default_params();
+	params.crl_distribution_points = vec![
+		CrlDistributionPoint{
+			uris: vec!["http://example.com/crl.der".to_string(), "http://crls.example.com/1234".to_string()],
+		},
+		CrlDistributionPoint{
+			uris: vec!["ldap://example.com/crl.der".to_string()],
+		}
+	];
+
+	let cert = Certificate::from_params(params).unwrap();
+	cert.serialize_der().unwrap()
 }
