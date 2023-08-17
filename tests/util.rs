@@ -1,5 +1,6 @@
 use time::{Duration, OffsetDateTime};
-use rcgen::{BasicConstraints, Certificate, CertificateParams, CertificateRevocationList, CrlDistributionPoint};
+use rcgen::{BasicConstraints, Certificate, CertificateParams};
+use rcgen::{CertificateRevocationList, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope};
 use rcgen::{CertificateRevocationListParams, DnType, IsCa, KeyIdMethod};
 use rcgen::{KeyUsagePurpose, PKCS_ECDSA_P256_SHA256, RevocationReason, RevokedCertParams, SerialNumber};
 
@@ -91,6 +92,10 @@ pub fn test_crl() -> (CertificateRevocationList, Certificate) {
 		this_update: now,
 		next_update: next_week,
 		crl_number: SerialNumber::from(1234),
+		issuing_distribution_point: Some(CrlIssuingDistributionPoint{
+			distribution_point: CrlDistributionPoint { uris: vec!["http://example.com/crl".to_string()] },
+			scope: Some(CrlScope::UserCertsOnly),
+		}),
 		revoked_certs: vec![revoked_cert],
 		alg: &PKCS_ECDSA_P256_SHA256,
 		key_identifier_method: KeyIdMethod::Sha256,

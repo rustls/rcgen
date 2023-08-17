@@ -109,7 +109,7 @@ mod test_x509_parser_crl {
 				   crl.get_params().this_update.unix_timestamp());
 		assert_eq!(x509_crl.next_update().unwrap().to_datetime().unix_timestamp(),
 				   crl.get_params().next_update.unix_timestamp());
-		// TODO(XXX): Waiting on https://github.com/rusticata/x509-parser/pull/144
+		// TODO: Waiting on x509-parser 0.15.1 to be released.
 		// let crl_number = BigUint::from_bytes_be(crl.get_params().crl_number.as_ref());
 		// assert_eq!(x509_crl.crl_number().unwrap(), &crl_number);
 
@@ -119,6 +119,13 @@ mod test_x509_parser_crl {
 		assert_eq!(x509_revoked_cert.user_certificate, revoked_cert_serial);
 		let (_, reason_code) = x509_revoked_cert.reason_code().unwrap();
 	 	assert_eq!(reason_code.0, revoked_cert.reason_code.unwrap() as u8);
+
+		// The issuing distribution point extension should be present and marked critical.
+		let issuing_dp_ext = x509_crl.extensions().iter()
+			.find(|ext| ext.oid == x509_parser::oid_registry::OID_X509_EXT_ISSUER_DISTRIBUTION_POINT)
+			.expect("failed to find issuing distribution point extension");
+		assert!(issuing_dp_ext.critical);
+		// TODO: x509-parser does not yet parse the CRL issuing DP extension for further examination.
 
 		// We should be able to verify the CRL signature with the issuer.
 		assert!(x509_crl.verify_signature(&x509_issuer.public_key()).is_ok());

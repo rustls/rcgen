@@ -163,6 +163,10 @@ const OID_CRL_REASONS :&[u64] = &[2, 5, 29, 21];
 // https://www.rfc-editor.org/rfc/rfc5280#section-5.3.2
 const OID_CRL_INVALIDITY_DATE :&[u64] = &[2, 5, 29, 24];
 
+// id-ce-issuingDistributionPoint
+// https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5
+const OID_CRL_ISSUING_DISTRIBUTION_POINT :&[u64] = &[2, 5, 29, 28];
+
 #[cfg(feature = "pem")]
 const ENCODE_CONFIG: pem::EncodeConfig = match cfg!(target_family = "windows") {
 	true => pem::EncodeConfig { line_ending: pem::LineEnding::CRLF },
@@ -680,6 +684,7 @@ impl CertificateSigningRequest {
 ///   this_update: date_time_ymd(2023, 06, 17),
 ///   next_update: date_time_ymd(2024, 06, 17),
 ///   crl_number: SerialNumber::from(1234),
+///   issuing_distribution_point: None,
 ///   revoked_certs: vec![revoked_cert],
 ///   alg: &PKCS_ECDSA_P256_SHA256,
 ///   key_identifier_method: KeyIdMethod::Sha256,
@@ -1404,7 +1409,8 @@ impl NameConstraints {
 }
 
 /// A certificate revocation list (CRL) distribution point, to be included in a certificate's
-/// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13).
+/// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13) or
+/// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5)
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CrlDistributionPoint {
 	/// One or more URI distribution point names, indicating a place the current CRL can
@@ -1596,6 +1602,11 @@ pub struct CertificateRevocationListParams {
 	pub next_update :OffsetDateTime,
 	/// A monotonically increasing sequence number for a given CRL scope and issuer.
 	pub crl_number :SerialNumber,
+	/// An optional CRL extension identifying the CRL distribution point and scope for a
+	/// particular CRL as described in RFC 5280 Section 5.2.5[^1].
+	///
+	/// [^1]: <https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5>
+	pub issuing_distribution_point :Option<CrlIssuingDistributionPoint>,
 	/// A list of zero or more parameters describing revoked certificates included in the CRL.
 	pub revoked_certs :Vec<RevokedCertParams>,
 	/// Signature algorithm to use when signing the serialized CRL.
@@ -1693,12 +1704,62 @@ impl CertificateRevocationListParams {
 					write_x509_extension(writer.next(), OID_CRL_NUMBER, false, |writer| {
 						writer.write_bigint_bytes(self.crl_number.as_ref(), true);
 					});
+
+					// Write issuing distribution point (if present).
+					if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
+						write_x509_extension(writer.next(), OID_CRL_ISSUING_DISTRIBUTION_POINT, true, |writer| {
+							issuing_distribution_point.write_der(writer);
+						});
+					}
 				});
 			});
 
 			Ok(())
 		})
 	}
+}
+
+/// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
+/// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
+pub struct CrlIssuingDistributionPoint {
+	/// The CRL's distribution point, containing a sequence of URIs the CRL can be retrieved from.
+	pub distribution_point :CrlDistributionPoint,
+	/// An optional description of the CRL's scope. If omitted, the CRL may contain
+	/// both user certs and CA certs.
+	pub scope :Option<CrlScope>,
+}
+
+impl CrlIssuingDistributionPoint {
+	fn write_der(&self, writer :DERWriter) {
+		// IssuingDistributionPoint SEQUENCE
+		writer.write_sequence(|writer| {
+			// distributionPoint [0] DistributionPointName OPTIONAL
+			write_distribution_point_name_uris(writer.next(), &self.distribution_point.uris);
+
+			// -- at most one of onlyContainsUserCerts, onlyContainsCACerts,
+			// -- and onlyContainsAttributeCerts may be set to TRUE.
+			if let Some(scope) = self.scope {
+				let tag = match scope {
+					// onlyContainsUserCerts [1] BOOLEAN DEFAULT FALSE,
+					CrlScope::UserCertsOnly => Tag::context(1),
+					// onlyContainsCACerts [2] BOOLEAN DEFAULT FALSE,
+					CrlScope::CaCertsOnly => Tag::context(2),
+				};
+				writer.next().write_tagged_implicit(tag, |writer| {
+					writer.write_bool(true);
+				});
+			}
+		});
+	}
+}
+
+/// Describes the scope of a CRL for an issuing distribution point extension.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum CrlScope {
+	/// The CRL contains only end-entity user certificates.
+	UserCertsOnly,
+	/// The CRL contains only CA certificates.
+	CaCertsOnly,
 }
 
 /// Parameters used for describing a revoked certificate included in a [`CertificateRevocationList`].
