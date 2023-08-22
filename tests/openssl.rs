@@ -1,5 +1,4 @@
-use rcgen::{Certificate, NameConstraints, GeneralSubtree, IsCa,
-	BasicConstraints, CertificateParams, DnType, DnValue};
+use rcgen::{Certificate, NameConstraints, GeneralSubtree, IsCa, BasicConstraints, CertificateParams, DnType, DnValue};
 use openssl::pkey::PKey;
 use openssl::x509::{CrlStatus, X509, X509Crl, X509Req, X509StoreContext};
 use openssl::x509::store::{X509StoreBuilder, X509Store};
@@ -426,4 +425,35 @@ fn test_openssl_crl_parse() {
 	// We should be able to verify the CRL signature with the issuer's public key.
 	let issuer_pkey = openssl_issuer.public_key().unwrap();
 	assert!(openssl_crl.verify(&issuer_pkey).expect("failed to verify CRL signature"));
+}
+
+#[test]
+fn test_openssl_crl_dps_parse() {
+	// Generate and parse a certificate that includes two CRL distribution points.
+	let der = util::cert_with_crl_dps();
+	let cert = X509::from_der(&der).expect("failed to parse cert DER");
+
+	// We should find the CRL DPs extension.
+	let dps = cert.crl_distribution_points().expect("missing crl distribution points extension");
+	assert!(!dps.is_empty());
+
+	// We should find two distribution points, each with a distribution point name containing
+	// a full name sequence of general names.
+	let general_names = dps.iter().flat_map(|dp|
+		dp.distpoint()
+			.expect("distribution point missing distribution point name")
+			.fullname()
+			.expect("distribution point name missing general names")
+			.iter()
+	)
+	.collect::<Vec<_>>();
+
+	// Each general name should be a URI name.
+	let uris = general_names.iter().map(|general_name|
+		general_name.uri().expect("general name is not a directory name")
+	)
+	.collect::<Vec<_>>();
+
+	// We should find the expected URIs.
+	assert_eq!(uris, &["http://example.com/crl.der", "http://crls.example.com/1234", "ldap://example.com/crl.der"]);
 }

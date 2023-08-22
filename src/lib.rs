@@ -140,8 +140,12 @@ const OID_AUTHORITY_KEY_IDENTIFIER :&[u64] = &[2, 5, 29, 35];
 const OID_EXT_KEY_USAGE :&[u64] = &[2, 5, 29, 37];
 
 // id-ce-nameConstraints in
-/// https://tools.ietf.org/html/rfc5280#section-4.2.1.10
+// https://tools.ietf.org/html/rfc5280#section-4.2.1.10
 const OID_NAME_CONSTRAINTS :&[u64] = &[2, 5, 29, 30];
+
+// id-ce-cRLDistributionPoints in
+// https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13
+const OID_CRL_DISTRIBUTION_POINTS :&[u64] = &[2, 5, 29, 31];
 
 // id-pe-acmeIdentifier in
 // https://www.iana.org/assignments/smi-numbers/smi-numbers.xhtml#smi-numbers-1.3.6.1.5.5.7.1
@@ -158,6 +162,10 @@ const OID_CRL_REASONS :&[u64] = &[2, 5, 29, 21];
 // id-ce-invalidityDate
 // https://www.rfc-editor.org/rfc/rfc5280#section-5.3.2
 const OID_CRL_INVALIDITY_DATE :&[u64] = &[2, 5, 29, 24];
+
+// id-ce-issuingDistributionPoint
+// https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5
+const OID_CRL_ISSUING_DISTRIBUTION_POINT :&[u64] = &[2, 5, 29, 28];
 
 #[cfg(feature = "pem")]
 const ENCODE_CONFIG: pem::EncodeConfig = match cfg!(target_family = "windows") {
@@ -676,6 +684,7 @@ impl CertificateSigningRequest {
 ///   this_update: date_time_ymd(2023, 06, 17),
 ///   next_update: date_time_ymd(2024, 06, 17),
 ///   crl_number: SerialNumber::from(1234),
+///   issuing_distribution_point: None,
 ///   revoked_certs: vec![revoked_cert],
 ///   alg: &PKCS_ECDSA_P256_SHA256,
 ///   key_identifier_method: KeyIdMethod::Sha256,
@@ -733,6 +742,12 @@ pub struct CertificateParams {
 	pub key_usages :Vec<KeyUsagePurpose>,
 	pub extended_key_usages :Vec<ExtendedKeyUsagePurpose>,
 	pub name_constraints :Option<NameConstraints>,
+	/// An optional list of certificate revocation list (CRL) distribution points as described
+	/// in RFC 5280 Section 4.2.1.13[^1]. Each distribution point contains one or more URIs where
+	/// an up-to-date CRL with scope including this certificate can be retrieved.
+	///
+	/// [^1]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13>
+	pub crl_distribution_points :Vec<CrlDistributionPoint>,
 	pub custom_extensions :Vec<CustomExtension>,
 	/// The certificate's key pair, a new random key pair will be generated if this is `None`
 	pub key_pair :Option<KeyPair>,
@@ -762,6 +777,7 @@ impl Default for CertificateParams {
 			key_usages : Vec::new(),
 			extended_key_usages : Vec::new(),
 			name_constraints : None,
+			crl_distribution_points : Vec::new(),
 			custom_extensions : Vec::new(),
 			key_pair : None,
 			use_authority_key_identifier_extension : false,
@@ -1020,6 +1036,7 @@ impl CertificateParams {
 			key_usages,
 			extended_key_usages,
 			name_constraints,
+			crl_distribution_points,
 			custom_extensions,
 			key_pair,
 			use_authority_key_identifier_extension,
@@ -1037,6 +1054,7 @@ impl CertificateParams {
 			|| !key_usages.is_empty()
 			|| !extended_key_usages.is_empty()
 			|| name_constraints.is_some()
+			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
 		{
 			return Err(RcgenError::UnsupportedInCsr);
@@ -1230,6 +1248,15 @@ impl CertificateParams {
 								});
 							}
 						}
+						if !self.crl_distribution_points.is_empty() {
+							write_x509_extension(writer.next(), OID_CRL_DISTRIBUTION_POINTS, false, |writer| {
+								writer.write_sequence(|writer| {
+									for distribution_point in &self.crl_distribution_points {
+										distribution_point.write_der(writer.next());
+									}
+								})
+							});
+						}
 						match self.is_ca {
 							IsCa::Ca(ref constraint) => {
 								// Write subject_key_identifier
@@ -1379,6 +1406,45 @@ impl NameConstraints {
 	fn is_empty(&self) -> bool {
 		self.permitted_subtrees.is_empty() && self.excluded_subtrees.is_empty()
 	}
+}
+
+/// A certificate revocation list (CRL) distribution point, to be included in a certificate's
+/// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13) or
+/// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5)
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CrlDistributionPoint {
+	/// One or more URI distribution point names, indicating a place the current CRL can
+	/// be retrieved. When present, SHOULD include at least one LDAP or HTTP URI.
+	pub uris :Vec<String>,
+}
+
+impl CrlDistributionPoint {
+	fn write_der(&self, writer :DERWriter) {
+		// DistributionPoint SEQUENCE
+		writer.write_sequence(|writer| {
+			write_distribution_point_name_uris(writer.next(), &self.uris);
+		});
+	}
+}
+
+fn write_distribution_point_name_uris<'a>(writer :DERWriter, uris: impl IntoIterator<Item = &'a String>) {
+	// distributionPoint DistributionPointName
+	writer.write_tagged_implicit(Tag::context(0), |writer| {
+		writer.write_sequence(|writer| {
+			// fullName GeneralNames
+			writer.next().write_tagged_implicit(Tag::context(0), | writer| {
+				// GeneralNames
+				writer.write_sequence(|writer| {
+					for uri in uris.into_iter() {
+						// uniformResourceIdentifier [6] IA5String,
+						writer.next().write_tagged_implicit(Tag::context(6), |writer| {
+							writer.write_ia5_string(uri)
+						});
+					}
+				})
+			});
+		});
+	});
 }
 
 /// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension
@@ -1536,6 +1602,11 @@ pub struct CertificateRevocationListParams {
 	pub next_update :OffsetDateTime,
 	/// A monotonically increasing sequence number for a given CRL scope and issuer.
 	pub crl_number :SerialNumber,
+	/// An optional CRL extension identifying the CRL distribution point and scope for a
+	/// particular CRL as described in RFC 5280 Section 5.2.5[^1].
+	///
+	/// [^1]: <https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5>
+	pub issuing_distribution_point :Option<CrlIssuingDistributionPoint>,
 	/// A list of zero or more parameters describing revoked certificates included in the CRL.
 	pub revoked_certs :Vec<RevokedCertParams>,
 	/// Signature algorithm to use when signing the serialized CRL.
@@ -1633,12 +1704,62 @@ impl CertificateRevocationListParams {
 					write_x509_extension(writer.next(), OID_CRL_NUMBER, false, |writer| {
 						writer.write_bigint_bytes(self.crl_number.as_ref(), true);
 					});
+
+					// Write issuing distribution point (if present).
+					if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
+						write_x509_extension(writer.next(), OID_CRL_ISSUING_DISTRIBUTION_POINT, true, |writer| {
+							issuing_distribution_point.write_der(writer);
+						});
+					}
 				});
 			});
 
 			Ok(())
 		})
 	}
+}
+
+/// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
+/// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
+pub struct CrlIssuingDistributionPoint {
+	/// The CRL's distribution point, containing a sequence of URIs the CRL can be retrieved from.
+	pub distribution_point :CrlDistributionPoint,
+	/// An optional description of the CRL's scope. If omitted, the CRL may contain
+	/// both user certs and CA certs.
+	pub scope :Option<CrlScope>,
+}
+
+impl CrlIssuingDistributionPoint {
+	fn write_der(&self, writer :DERWriter) {
+		// IssuingDistributionPoint SEQUENCE
+		writer.write_sequence(|writer| {
+			// distributionPoint [0] DistributionPointName OPTIONAL
+			write_distribution_point_name_uris(writer.next(), &self.distribution_point.uris);
+
+			// -- at most one of onlyContainsUserCerts, onlyContainsCACerts,
+			// -- and onlyContainsAttributeCerts may be set to TRUE.
+			if let Some(scope) = self.scope {
+				let tag = match scope {
+					// onlyContainsUserCerts [1] BOOLEAN DEFAULT FALSE,
+					CrlScope::UserCertsOnly => Tag::context(1),
+					// onlyContainsCACerts [2] BOOLEAN DEFAULT FALSE,
+					CrlScope::CaCertsOnly => Tag::context(2),
+				};
+				writer.next().write_tagged_implicit(tag, |writer| {
+					writer.write_bool(true);
+				});
+			}
+		});
+	}
+}
+
+/// Describes the scope of a CRL for an issuing distribution point extension.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum CrlScope {
+	/// The CRL contains only end-entity user certificates.
+	UserCertsOnly,
+	/// The CRL contains only CA certificates.
+	CaCertsOnly,
 }
 
 /// Parameters used for describing a revoked certificate included in a [`CertificateRevocationList`].

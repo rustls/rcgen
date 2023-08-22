@@ -232,6 +232,7 @@ fn test_botan_crl_parse() {
 		this_update: now,
 		next_update: now + Duration::weeks(1),
 		crl_number: rcgen::SerialNumber::from(1234),
+		issuing_distribution_point: None,
 		revoked_certs: vec![RevokedCertParams{
 			serial_number: ee.get_params().serial_number.clone().unwrap(),
 			revocation_time: now,
