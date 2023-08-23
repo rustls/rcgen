@@ -7,12 +7,9 @@ use yasna::DERWriter;
 use std::fmt;
 use std::convert::TryFrom;
 
-use crate::{ENCODE_CONFIG, RcgenError, SignatureAlgorithm, SignAlgo};
-use crate::{
-	PKCS_ECDSA_P256_SHA256, PKCS_ECDSA_P384_SHA384,
-	PKCS_RSA_PSS_SHA256, PKCS_ED25519,
-	PKCS_RSA_SHA256, PKCS_RSA_SHA512, PKCS_RSA_SHA384
-};
+use crate::{ENCODE_CONFIG, RcgenError, SignatureAlgorithm};
+use crate::sign_algo::SignAlgo;
+use crate::sign_algo::algo::*;
 
 /// A key pair vairant
 #[allow(clippy::large_enum_variant)]
