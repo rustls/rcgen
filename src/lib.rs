@@ -54,6 +54,7 @@ use std::str::FromStr;
 use std::hash::{Hash, Hasher};
 
 use crate::oid::*;
+pub use crate::csr::{PublicKey, CertificateSigningRequest};
 
 /// A self signed certificate together with signing keys
 pub struct Certificate {
@@ -91,6 +92,7 @@ pub fn generate_simple_self_signed(subject_alt_names :impl Into<Vec<String>>) ->
 
 // https://tools.ietf.org/html/rfc5280#section-4.1.1
 
+mod csr;
 mod oid;
 
 // Example certs usable as reference:
@@ -488,102 +490,6 @@ impl <'a> Iterator for DistinguishedNameIterator<'a> {
 			.and_then(|ty| {
 				self.distinguished_name.entries.get(ty).map(|v| (ty, v))
 			})
-	}
-}
-
-
-/// A public key, extracted from a CSR
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub struct PublicKey {
-	raw: Vec<u8>,
-	alg: &'static SignatureAlgorithm,
-}
-
-impl PublicKeyData for PublicKey {
-	fn alg(&self) -> &SignatureAlgorithm {
-		self.alg
-	}
-
-	fn raw_bytes(&self) -> &[u8] {
-		&self.raw
-	}
-}
-
-/// Data for a certificate signing request
-#[allow(missing_docs)]
-pub struct CertificateSigningRequest {
-	pub params :CertificateParams,
-	pub public_key :PublicKey,
-}
-
-impl CertificateSigningRequest {
-	/// Parse a certificate signing request from the ASCII PEM format
-	///
-	/// See [`from_der`](Self::from_der) for more details.
-	#[cfg(all(feature = "pem", feature = "x509-parser"))]
-	pub fn from_pem(pem_str :&str) -> Result<Self, RcgenError> {
-		let csr = pem::parse(pem_str)
-			.or(Err(RcgenError::CouldNotParseCertificationRequest))?;
-		Self::from_der(csr.contents())
-	}
-
-	/// Parse a certificate signing request from DER-encoded bytes
-	///
-	/// Currently, this only supports the `Subject Alternative Name` extension.
-	/// On encountering other extensions, this function will return an error.
-	#[cfg(feature = "x509-parser")]
-	pub fn from_der(csr :&[u8]) -> Result<Self, RcgenError> {
-		use x509_parser::prelude::FromDer;
-		let csr = x509_parser::certification_request::X509CertificationRequest::from_der(csr)
-			.map_err(|_| RcgenError::CouldNotParseCertificationRequest)?.1;
-		csr.verify_signature().map_err(|_| RcgenError::RingUnspecified)?;
-		let alg_oid = csr.signature_algorithm.algorithm.iter()
-			.ok_or(RcgenError::CouldNotParseCertificationRequest)?
-			.collect::<Vec<_>>();
-		let alg = SignatureAlgorithm::from_oid(&alg_oid)?;
-
-		let info = &csr.certification_request_info;
-		let mut params = CertificateParams::default();
-		params.alg = alg;
-		params.distinguished_name = DistinguishedName::from_name(&info.subject)?;
-		let raw = info.subject_pki.subject_public_key.data.to_vec();
-
-		if let Some(extensions) = csr.requested_extensions() {
-			for ext in extensions {
-				match ext {
-					x509_parser::extensions::ParsedExtension::SubjectAlternativeName(san) => {
-						for name in &san.general_names {
-							params.subject_alt_names.push(SanType::try_from_general(name)?);
-						}
-					}
-					_ => return Err(RcgenError::UnsupportedExtension),
-				}
-			}
-		}
-
-		// Not yet handled:
-		// * is_ca
-		// * extended_key_usages
-		// * name_constraints
-		// and any other extensions.
-
-		Ok(Self {
-			params,
-			public_key: PublicKey { alg, raw },
-		})
-	}
-	/// Serializes the requested certificate, signed with another certificate's key, in binary DER format
-	pub fn serialize_der_with_signer(&self, ca :&Certificate) -> Result<Vec<u8>, RcgenError> {
-		self.params.serialize_der_with_signer(&self.public_key, ca)
-	}
-	/// Serializes the requested certificate, signed with another certificate's key, to the ASCII PEM format
-	///
-	/// *This function is only available if rcgen is built with the "pem" feature*
-	#[cfg(feature = "pem")]
-	pub fn serialize_pem_with_signer(&self, ca :&Certificate) -> Result<String, RcgenError> {
-		let contents = self.params.serialize_der_with_signer(&self.public_key, ca)?;
-		let p = Pem::new("CERTIFICATE", contents);
-		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}
 }
 
