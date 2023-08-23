@@ -1,3 +1,5 @@
+// TODO: we import deprecated webpki items here, get rid of them and allow this
+#![allow(deprecated)]
 #[cfg(feature = "x509-parser")]
 use rcgen::{CertificateSigningRequest, DnValue};
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, KeyPair, RemoteKeyPair};
