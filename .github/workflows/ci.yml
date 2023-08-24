@@ -26,7 +26,6 @@ jobs:
     - name: Run cargo doc
       run: cargo doc --all --all-features
 
-
   build:
     strategy:
       matrix:
@@ -39,9 +38,7 @@ jobs:
             toolchain: nightly
           - os: macOS-latest
             toolchain: stable 7 months ago
-
     runs-on: ${{ matrix.os }}
-
     steps:
     - uses: actions/checkout@master
     - name: Install Rust
