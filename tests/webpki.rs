@@ -1,11 +1,9 @@
-// TODO: we import deprecated webpki items here, get rid of them and allow this
-#![allow(deprecated)]
 #[cfg(feature = "x509-parser")]
 use rcgen::{CertificateSigningRequest, DnValue};
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, KeyPair, RemoteKeyPair};
 use rcgen::{KeyUsagePurpose, ExtendedKeyUsagePurpose, SerialNumber};
 use rcgen::{CertificateRevocationList, CertificateRevocationListParams, RevocationReason, RevokedCertParams};
-use webpki::{EndEntityCert, TlsServerTrustAnchors, TrustAnchor, BorrowedCertRevocationList, CertRevocationList, TlsClientTrustAnchors};
+use webpki::{EndEntityCert, TrustAnchor, BorrowedCertRevocationList, CertRevocationList, KeyUsage};
 use webpki::SignatureAlgorithm;
 use webpki::{Time, DnsNameRef};
 
@@ -54,18 +52,19 @@ fn check_cert_ca<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, ca_der :&[u8],
 		sign_fn :impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>) {
 	let trust_anchor = TrustAnchor::try_from_cert_der(&ca_der).unwrap();
 	let trust_anchor_list = &[trust_anchor];
-	let trust_anchors = TlsServerTrustAnchors(trust_anchor_list);
 	let end_entity_cert = EndEntityCert::try_from(cert_der).unwrap();
 
 	// Set time to Jan 10, 2004
 	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
 
 	// (1/3) Check whether the cert is valid
-	end_entity_cert.verify_is_valid_tls_server_cert(
+	end_entity_cert.verify_for_usage(
 		&[&cert_alg, &ca_alg],
-		&trust_anchors,
+		&trust_anchor_list[..],
 		&[],
 		time,
+		KeyUsage::server_auth(),
+		&[],
 	).expect("valid TLS server cert");
 
 	// (2/3) Check that the cert is valid for the given DNS name
@@ -485,17 +484,17 @@ fn test_webpki_crl_revoke() {
 	// Set up webpki's verification requirements.
 	let trust_anchor = TrustAnchor::try_from_cert_der(issuer_der.as_ref()).unwrap();
 	let trust_anchor_list = &[trust_anchor];
-	let trust_anchors = TlsClientTrustAnchors(trust_anchor_list);
 	let end_entity_cert = EndEntityCert::try_from(ee_der.as_ref()).unwrap();
 	let unix_time = 0x40_00_00_00;
 	let time = Time::from_seconds_since_unix_epoch(unix_time);
 
 	// The end entity cert should validate with the issuer without error.
-	end_entity_cert.verify_is_valid_tls_client_cert(
+	end_entity_cert.verify_for_usage(
 		&[&webpki::ECDSA_P256_SHA256],
-		&trust_anchors,
+		&trust_anchor_list[..],
 		&[],
 		time,
+		KeyUsage::client_auth(),
 		&[],
 	).expect("failed to validate ee cert with issuer");
 
@@ -520,11 +519,12 @@ fn test_webpki_crl_revoke() {
 	let crl = BorrowedCertRevocationList::from_der(&crl_der).unwrap();
 
 	// The end entity cert should **not** validate when we provide a CRL that revokes the EE cert.
-	let result = end_entity_cert.verify_is_valid_tls_client_cert(
+	let result = end_entity_cert.verify_for_usage(
 		&[&webpki::ECDSA_P256_SHA256],
-		&trust_anchors,
+		&trust_anchor_list[..],
 		&[],
 		time,
+		KeyUsage::client_auth(),
 		&[&crl],
 	);
 	assert!(matches!(result, Err(webpki::Error::CertRevoked)));
