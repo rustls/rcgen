@@ -356,7 +356,7 @@ impl DnType {
 pub enum DnValue {
 	/// A string of characters from the T.61 character set
 	TeletexString(Vec<u8>),
-	/// An ASCII string containing only A-Z, a-z, 0-9, '()+,-./:=? and <SPACE>
+	/// An ASCII string containing only A-Z, a-z, 0-9, '()+,-./:=? and `<SPACE>`
 	PrintableString(String),
 	/// A string encoded using UTF-32
 	UniversalString(Vec<u8>),
