@@ -9,7 +9,7 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v3
       with:
         persist-credentials: false
     - name: Install Rust
@@ -42,7 +42,7 @@ jobs:
             toolchain: stable 7 months ago
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v3
       with:
         persist-credentials: false
     - name: Install Rust
