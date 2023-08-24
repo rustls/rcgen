@@ -75,3 +75,27 @@ jobs:
       run: cargo test --verbose --features x509-parser
     - name: Run cargo doc
       run: cargo doc --all --all-features
+
+  coverage:
+    name: Measure coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools
+      - name: Measure coverage
+        run: cargo llvm-cov --all-features --lcov --output-path ./lcov.info
+      - name: Report to codecov.io
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./lcov.info
+          fail_ci_if_error: false
+          verbose: true
