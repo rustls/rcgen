@@ -107,9 +107,12 @@ mod sign_algo;
 // Uses ECDSA: https://crt.sh/?asn1=607203242
 
 #[cfg(feature = "pem")]
-const ENCODE_CONFIG: pem::EncodeConfig = match cfg!(target_family = "windows") {
-	true => pem::EncodeConfig { line_ending: pem::LineEnding::CRLF },
-	false => pem::EncodeConfig { line_ending: pem::LineEnding::LF },
+const ENCODE_CONFIG: pem::EncodeConfig = {
+	let line_ending = match cfg!(target_family = "windows") {
+		true => pem::LineEnding::CRLF,
+		false => pem::LineEnding::LF,
+	};
+	pem::EncodeConfig::new().set_line_ending(line_ending)
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
