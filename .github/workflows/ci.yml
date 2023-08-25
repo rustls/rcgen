@@ -12,6 +12,21 @@ env:
   RUSTDOCFLAGS: -D warnings
 
 jobs:
+  rustfmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt -- --check
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
