@@ -22,7 +22,7 @@ required-features = ["pem"]
 yasna = { version = "0.5.2", features = ["time", "std"] }
 ring = "0.16"
 pem = { version = "3.0.2", optional = true }
-time = { version = ">=0.3.6, <=0.3.23", default-features = false }
+time = { version = "0.3.6", default-features = false }
 x509-parser = { version = "0.15", features = ["verify"], optional = true }
 zeroize = { version = "1.2", optional = true }
 
