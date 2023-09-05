@@ -155,7 +155,7 @@ pub mod algo {
     pub static PKCS_ECDSA_P256_SHA256 :SignatureAlgorithm = SignatureAlgorithm {
         oids_sign_alg :&[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_256_R1],
         sign_alg :SignAlgo::EcDsa(&signature::ECDSA_P256_SHA256_ASN1_SIGNING),
-        /// ecdsa-with-SHA256 in RFC 5758
+        // ecdsa-with-SHA256 in RFC 5758
         oid_components : &[1, 2, 840, 10045, 4, 3, 2],
         params : SignatureAlgorithmParams::None,
     };
@@ -164,7 +164,7 @@ pub mod algo {
     pub static PKCS_ECDSA_P384_SHA384 :SignatureAlgorithm = SignatureAlgorithm {
         oids_sign_alg :&[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_384_R1],
         sign_alg :SignAlgo::EcDsa(&signature::ECDSA_P384_SHA384_ASN1_SIGNING),
-        /// ecdsa-with-SHA384 in RFC 5758
+        // ecdsa-with-SHA384 in RFC 5758
         oid_components : &[1, 2, 840, 10045, 4, 3, 3],
         params : SignatureAlgorithmParams::None,
     };
@@ -173,10 +173,10 @@ pub mod algo {
 
     /// ED25519 curve signing as per [RFC 8410](https://tools.ietf.org/html/rfc8410)
     pub static PKCS_ED25519 :SignatureAlgorithm = SignatureAlgorithm {
-        /// id-Ed25519 in RFC 8410
+        // id-Ed25519 in RFC 8410
         oids_sign_alg :&[&[1, 3, 101, 112]],
         sign_alg :SignAlgo::EdDsa(&signature::ED25519),
-        /// id-Ed25519 in RFC 8410
+        // id-Ed25519 in RFC 8410
         oid_components : &[1, 3, 101, 112],
         params : SignatureAlgorithmParams::None,
     };
