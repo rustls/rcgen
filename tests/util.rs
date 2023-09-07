@@ -1,10 +1,10 @@
 use rcgen::{BasicConstraints, Certificate, CertificateParams};
 use rcgen::{
-    CertificateRevocationList, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope,
+	CertificateRevocationList, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope,
 };
 use rcgen::{CertificateRevocationListParams, DnType, IsCa, KeyIdMethod};
 use rcgen::{
-    KeyUsagePurpose, RevocationReason, RevokedCertParams, SerialNumber, PKCS_ECDSA_P256_SHA256,
+	KeyUsagePurpose, RevocationReason, RevokedCertParams, SerialNumber, PKCS_ECDSA_P256_SHA256,
 };
 use time::{Duration, OffsetDateTime};
 
@@ -68,71 +68,71 @@ YPTHy8SWRA2sMII3ArhHJ8A=
 "#;
 
 pub fn default_params() -> CertificateParams {
-    let mut params =
-        CertificateParams::new(vec!["crabs.crabs".to_string(), "localhost".to_string()]);
-    params
-        .distinguished_name
-        .push(DnType::OrganizationName, "Crab widgits SE");
-    params
-        .distinguished_name
-        .push(DnType::CommonName, "Master CA");
-    params
+	let mut params =
+		CertificateParams::new(vec!["crabs.crabs".to_string(), "localhost".to_string()]);
+	params
+		.distinguished_name
+		.push(DnType::OrganizationName, "Crab widgits SE");
+	params
+		.distinguished_name
+		.push(DnType::CommonName, "Master CA");
+	params
 }
 
 #[allow(unused)] // Used by openssl + x509-parser features.
 pub fn test_crl() -> (CertificateRevocationList, Certificate) {
-    let mut issuer = default_params();
-    issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-    issuer.key_usages = vec![
-        KeyUsagePurpose::KeyCertSign,
-        KeyUsagePurpose::DigitalSignature,
-        KeyUsagePurpose::CrlSign,
-    ];
-    let issuer = Certificate::from_params(issuer).unwrap();
+	let mut issuer = default_params();
+	issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	issuer.key_usages = vec![
+		KeyUsagePurpose::KeyCertSign,
+		KeyUsagePurpose::DigitalSignature,
+		KeyUsagePurpose::CrlSign,
+	];
+	let issuer = Certificate::from_params(issuer).unwrap();
 
-    let now = OffsetDateTime::now_utc();
-    let next_week = now + Duration::weeks(1);
-    let revoked_cert = RevokedCertParams {
-        serial_number: SerialNumber::from_slice(&[0x00, 0xC0, 0xFF, 0xEE]),
-        revocation_time: now,
-        reason_code: Some(RevocationReason::KeyCompromise),
-        invalidity_date: None,
-    };
+	let now = OffsetDateTime::now_utc();
+	let next_week = now + Duration::weeks(1);
+	let revoked_cert = RevokedCertParams {
+		serial_number: SerialNumber::from_slice(&[0x00, 0xC0, 0xFF, 0xEE]),
+		revocation_time: now,
+		reason_code: Some(RevocationReason::KeyCompromise),
+		invalidity_date: None,
+	};
 
-    let crl = CertificateRevocationListParams {
-        this_update: now,
-        next_update: next_week,
-        crl_number: SerialNumber::from(1234),
-        issuing_distribution_point: Some(CrlIssuingDistributionPoint {
-            distribution_point: CrlDistributionPoint {
-                uris: vec!["http://example.com/crl".to_string()],
-            },
-            scope: Some(CrlScope::UserCertsOnly),
-        }),
-        revoked_certs: vec![revoked_cert],
-        alg: &PKCS_ECDSA_P256_SHA256,
-        key_identifier_method: KeyIdMethod::Sha256,
-    };
-    let crl = CertificateRevocationList::from_params(crl).unwrap();
+	let crl = CertificateRevocationListParams {
+		this_update: now,
+		next_update: next_week,
+		crl_number: SerialNumber::from(1234),
+		issuing_distribution_point: Some(CrlIssuingDistributionPoint {
+			distribution_point: CrlDistributionPoint {
+				uris: vec!["http://example.com/crl".to_string()],
+			},
+			scope: Some(CrlScope::UserCertsOnly),
+		}),
+		revoked_certs: vec![revoked_cert],
+		alg: &PKCS_ECDSA_P256_SHA256,
+		key_identifier_method: KeyIdMethod::Sha256,
+	};
+	let crl = CertificateRevocationList::from_params(crl).unwrap();
 
-    (crl, issuer)
+	(crl, issuer)
 }
 
 #[allow(unused)] // Used by openssl + x509-parser features.
 pub fn cert_with_crl_dps() -> Vec<u8> {
-    let mut params = default_params();
-    params.crl_distribution_points = vec![
-        CrlDistributionPoint {
-            uris: vec![
-                "http://example.com/crl.der".to_string(),
-                "http://crls.example.com/1234".to_string(),
-            ],
-        },
-        CrlDistributionPoint {
-            uris: vec!["ldap://example.com/crl.der".to_string()],
-        },
-    ];
+	let mut params = default_params();
+	params.crl_distribution_points = vec![
+		CrlDistributionPoint {
+			uris: vec![
+				"http://example.com/crl.der".to_string(),
+				"http://crls.example.com/1234".to_string(),
+			],
+		},
+		CrlDistributionPoint {
+			uris: vec!["ldap://example.com/crl.der".to_string()],
+		},
+	];
 
-    let cert = Certificate::from_params(params).unwrap();
-    cert.serialize_der().unwrap()
+	let cert = Certificate::from_params(params).unwrap();
+	cert.serialize_der().unwrap()
 }
