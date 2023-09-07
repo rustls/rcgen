@@ -492,9 +492,12 @@ fn test_openssl_crl_dps_parse() {
 		.collect::<Vec<_>>();
 
 	// We should find the expected URIs.
-	assert_eq!(uris, &[
-		"http://example.com/crl.der",
-		"http://crls.example.com/1234",
-		"ldap://example.com/crl.der"
-	]);
+	assert_eq!(
+		uris,
+		&[
+			"http://example.com/crl.der",
+			"http://crls.example.com/1234",
+			"ldap://example.com/crl.der"
+		]
+	);
 }
