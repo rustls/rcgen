@@ -1,15 +1,15 @@
 #[cfg(feature = "pem")]
 use pem::Pem;
-use ring::signature::{self, EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair, RsaEncoding};
 use ring::rand::SystemRandom;
 use ring::signature::KeyPair as RingKeyPair;
-use yasna::DERWriter;
-use std::fmt;
+use ring::signature::{self, EcdsaKeyPair, Ed25519KeyPair, RsaEncoding, RsaKeyPair};
 use std::convert::TryFrom;
+use std::fmt;
+use yasna::DERWriter;
 
-use crate::{ENCODE_CONFIG, RcgenError, SignatureAlgorithm};
-use crate::sign_algo::SignAlgo;
 use crate::sign_algo::algo::*;
+use crate::sign_algo::SignAlgo;
+use crate::{RcgenError, SignatureAlgorithm, ENCODE_CONFIG};
 
 /// A key pair vairant
 #[allow(clippy::large_enum_variant)]
@@ -25,7 +25,7 @@ pub(crate) enum KeyPairKind {
 }
 
 impl fmt::Debug for KeyPairKind {
-	fn fmt(&self, f :&mut fmt::Formatter) -> fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Self::Ec(key_pair) => write!(f, "{:?}", key_pair),
 			Self::Ed(key_pair) => write!(f, "{:?}", key_pair),
@@ -44,37 +44,36 @@ impl fmt::Debug for KeyPairKind {
 /// and conversion between the formats.
 #[derive(Debug)]
 pub struct KeyPair {
-	pub(crate) kind :KeyPairKind,
-	pub(crate) alg :&'static SignatureAlgorithm,
-	pub(crate) serialized_der :Vec<u8>,
+	pub(crate) kind: KeyPairKind,
+	pub(crate) alg: &'static SignatureAlgorithm,
+	pub(crate) serialized_der: Vec<u8>,
 }
 
 impl KeyPair {
 	/// Parses the key pair from the DER format
 	///
 	/// Equivalent to using the [`TryFrom`] implementation.
-	pub fn from_der(der :&[u8]) -> Result<Self, RcgenError> {
+	pub fn from_der(der: &[u8]) -> Result<Self, RcgenError> {
 		Ok(der.try_into()?)
 	}
 	/// Parses the key pair from the ASCII PEM format
 	///
 	/// *This constructor is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
-	pub fn from_pem(pem_str :&str) -> Result<Self, RcgenError> {
+	pub fn from_pem(pem_str: &str) -> Result<Self, RcgenError> {
 		let private_key = pem::parse(pem_str)?;
-		let private_key_der :&[_] = private_key.contents();
+		let private_key_der: &[_] = private_key.contents();
 		Ok(private_key_der.try_into()?)
 	}
 
 	/// Obtains the key pair from a raw public key and a remote private key
-	pub fn from_remote(key_pair :Box<dyn RemoteKeyPair + Send + Sync>) -> Result<Self, RcgenError> {
+	pub fn from_remote(key_pair: Box<dyn RemoteKeyPair + Send + Sync>) -> Result<Self, RcgenError> {
 		Ok(Self {
-			alg : key_pair.algorithm(),
-			kind : KeyPairKind::Remote(key_pair),
-			serialized_der : Vec::new(),
+			alg: key_pair.algorithm(),
+			kind: KeyPairKind::Remote(key_pair),
+			serialized_der: Vec::new(),
 		})
 	}
-
 
 	/// Obtains the key pair from a DER formatted key
 	/// using the specified [`SignatureAlgorithm`](SignatureAlgorithm)
@@ -83,9 +82,12 @@ impl KeyPair {
 	///
 	/// *This constructor is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
-	pub fn from_pem_and_sign_algo(pem_str :&str, alg :&'static SignatureAlgorithm) -> Result<Self, RcgenError> {
+	pub fn from_pem_and_sign_algo(
+		pem_str: &str,
+		alg: &'static SignatureAlgorithm,
+	) -> Result<Self, RcgenError> {
 		let private_key = pem::parse(pem_str)?;
-		let private_key_der :&[_] = private_key.contents();
+		let private_key_der: &[_] = private_key.contents();
 		Ok(Self::from_der_and_sign_algo(private_key_der, alg)?)
 	}
 
@@ -98,15 +100,24 @@ impl KeyPair {
 	/// key pair. However sometimes multiple signature algorithms fit for the
 	/// same der key. In that instance, you can use this function to precisely
 	/// specify the `SignatureAlgorithm`.
-	pub fn from_der_and_sign_algo(pkcs8 :&[u8], alg :&'static SignatureAlgorithm) -> Result<Self, RcgenError> {
+	pub fn from_der_and_sign_algo(
+		pkcs8: &[u8],
+		alg: &'static SignatureAlgorithm,
+	) -> Result<Self, RcgenError> {
 		let pkcs8_vec = pkcs8.to_vec();
 
 		let kind = if alg == &PKCS_ED25519 {
 			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)?)
 		} else if alg == &PKCS_ECDSA_P256_SHA256 {
-			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8)?)
+			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
+				&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+				pkcs8,
+			)?)
 		} else if alg == &PKCS_ECDSA_P384_SHA384 {
-			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8)?)
+			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
+				&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
+				pkcs8,
+			)?)
 		} else if alg == &PKCS_RSA_SHA256 {
 			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
@@ -126,19 +137,28 @@ impl KeyPair {
 		Ok(KeyPair {
 			kind,
 			alg,
-			serialized_der : pkcs8_vec,
+			serialized_der: pkcs8_vec,
 		})
 	}
 
-	pub(crate) fn from_raw(pkcs8: &[u8]) -> Result<(KeyPairKind, &'static SignatureAlgorithm), RcgenError> {
+	pub(crate) fn from_raw(
+		pkcs8: &[u8],
+	) -> Result<(KeyPairKind, &'static SignatureAlgorithm), RcgenError> {
 		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
 			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
-		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8) {
+		} else if let Ok(eckp) =
+			EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8)
+		{
 			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
-		} else if let Ok(eckp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8) {
+		} else if let Ok(eckp) =
+			EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8)
+		{
 			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
 		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(pkcs8) {
-			(KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256), &PKCS_RSA_SHA256)
+			(
+				KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256),
+				&PKCS_RSA_SHA256,
+			)
 		} else {
 			return Err(RcgenError::CouldNotParseKeyPair);
 		};
@@ -155,7 +175,7 @@ pub trait RemoteKeyPair {
 	fn public_key(&self) -> &[u8];
 
 	/// Signs `msg` using the selected algorithm
-	fn sign(&self, msg :&[u8]) -> Result<Vec<u8>, RcgenError>;
+	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, RcgenError>;
 
 	/// Reveals which algorithm will be used when you call `sign()`
 	fn algorithm(&self) -> &'static SignatureAlgorithm;
@@ -189,18 +209,19 @@ impl TryFrom<Vec<u8>> for KeyPair {
 
 impl KeyPair {
 	/// Generate a new random key pair for the specified signature algorithm
-	pub fn generate(alg :&'static SignatureAlgorithm) -> Result<Self, RcgenError> {
+	pub fn generate(alg: &'static SignatureAlgorithm) -> Result<Self, RcgenError> {
 		let system_random = SystemRandom::new();
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
 				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, &system_random)?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
-				let key_pair = EcdsaKeyPair::from_pkcs8(&sign_alg, &&key_pair_doc.as_ref()).unwrap();
+				let key_pair =
+					EcdsaKeyPair::from_pkcs8(&sign_alg, &&key_pair_doc.as_ref()).unwrap();
 				Ok(KeyPair {
-					kind : KeyPairKind::Ec(key_pair),
+					kind: KeyPairKind::Ec(key_pair),
 					alg,
-					serialized_der : key_pair_serialized,
+					serialized_der: key_pair_serialized,
 				})
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
@@ -209,9 +230,9 @@ impl KeyPair {
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(&&key_pair_doc.as_ref()).unwrap();
 				Ok(KeyPair {
-					kind : KeyPairKind::Ed(key_pair),
+					kind: KeyPairKind::Ed(key_pair),
 					alg,
-					serialized_der : key_pair_serialized,
+					serialized_der: key_pair_serialized,
 				})
 			},
 			// Ring doesn't have RSA key generation yet:
@@ -229,16 +250,15 @@ impl KeyPair {
 		self.raw_bytes()
 	}
 	/// Check if this key pair can be used with the given signature algorithm
-	pub fn is_compatible(&self, signature_algorithm :&SignatureAlgorithm) -> bool {
+	pub fn is_compatible(&self, signature_algorithm: &SignatureAlgorithm) -> bool {
 		self.alg == signature_algorithm
 	}
 	/// Returns (possibly multiple) compatible [`SignatureAlgorithm`]'s
 	/// that the key can be used with
-	pub fn compatible_algs(&self)
-			-> impl Iterator<Item=&'static SignatureAlgorithm> {
+	pub fn compatible_algs(&self) -> impl Iterator<Item = &'static SignatureAlgorithm> {
 		std::iter::once(self.alg)
 	}
-	pub(crate) fn sign(&self, msg :&[u8], writer :DERWriter) -> Result<(), RcgenError> {
+	pub(crate) fn sign(&self, msg: &[u8], writer: DERWriter) -> Result<(), RcgenError> {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => {
 				let system_random = SystemRandom::new();
@@ -254,8 +274,7 @@ impl KeyPair {
 			KeyPairKind::Rsa(kp, padding_alg) => {
 				let system_random = SystemRandom::new();
 				let mut signature = vec![0; kp.public_modulus_len()];
-				kp.sign(*padding_alg, &system_random,
-					msg, &mut signature)?;
+				kp.sign(*padding_alg, &system_random, msg, &mut signature)?;
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
@@ -345,7 +364,7 @@ impl PublicKeyData for KeyPair {
 pub(crate) trait PublicKeyData {
 	fn alg(&self) -> &SignatureAlgorithm;
 	fn raw_bytes(&self) -> &[u8];
-	fn serialize_public_key_der(&self, writer :DERWriter) {
+	fn serialize_public_key_der(&self, writer: DERWriter) {
 		writer.write_sequence(|writer| {
 			self.alg().write_oids_sign_alg(writer.next());
 			let pk = self.raw_bytes();

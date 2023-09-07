@@ -30,40 +30,40 @@ println!("{}", cert.serialize_private_key_pem());
 #![deny(missing_docs)]
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 
-use yasna::Tag;
-use yasna::models::ObjectIdentifier;
 #[cfg(feature = "pem")]
 use pem::Pem;
 use ring::digest;
-use yasna::DERWriter;
-use yasna::models::{GeneralizedTime, UTCTime};
-use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
-use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
 use std::collections::HashMap;
-use std::fmt;
 use std::convert::TryFrom;
+use std::fmt;
+use std::hash::Hash;
 use std::net::IpAddr;
 #[cfg(feature = "x509-parser")]
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
-use std::hash::Hash;
+use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
+use yasna::models::ObjectIdentifier;
+use yasna::models::{GeneralizedTime, UTCTime};
+use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
+use yasna::DERWriter;
+use yasna::Tag;
 
+pub use crate::crl::{
+	CertificateRevocationList, CertificateRevocationListParams, CrlDistributionPoint,
+	CrlIssuingDistributionPoint, CrlScope, RevocationReason, RevokedCertParams,
+};
+pub use crate::csr::{CertificateSigningRequest, PublicKey};
 pub use crate::error::RcgenError;
-use crate::oid::*;
 use crate::key_pair::PublicKeyData;
 pub use crate::key_pair::{KeyPair, RemoteKeyPair};
-pub use crate::csr::{PublicKey, CertificateSigningRequest};
-pub use crate::crl::{
-	CertificateRevocationList, CrlDistributionPoint, CertificateRevocationListParams,
-	CrlIssuingDistributionPoint, CrlScope, RevocationReason, RevokedCertParams
-};
-pub use crate::sign_algo::SignatureAlgorithm;
+use crate::oid::*;
 pub use crate::sign_algo::algo::*;
+pub use crate::sign_algo::SignatureAlgorithm;
 
 /// A self signed certificate together with signing keys
 pub struct Certificate {
-	params :CertificateParams,
-	key_pair :KeyPair,
+	params: CertificateParams,
+	key_pair: KeyPair,
 }
 
 /**
@@ -90,7 +90,9 @@ println!("{}", cert.serialize_private_key_pem());
 # }
 ```
 */
-pub fn generate_simple_self_signed(subject_alt_names :impl Into<Vec<String>>) -> Result<Certificate, RcgenError> {
+pub fn generate_simple_self_signed(
+	subject_alt_names: impl Into<Vec<String>>,
+) -> Result<Certificate, RcgenError> {
 	Certificate::from_params(CertificateParams::new(subject_alt_names))
 }
 
@@ -140,20 +142,18 @@ fn ip_addr_from_octets(octets: &[u8]) -> Result<IpAddr, RcgenError> {
 
 impl SanType {
 	#[cfg(feature = "x509-parser")]
-	fn try_from_general(name :&x509_parser::extensions::GeneralName<'_>) -> Result<Self, RcgenError> {
+	fn try_from_general(
+		name: &x509_parser::extensions::GeneralName<'_>,
+	) -> Result<Self, RcgenError> {
 		Ok(match name {
 			x509_parser::extensions::GeneralName::RFC822Name(name) => {
 				SanType::Rfc822Name((*name).into())
-			}
-			x509_parser::extensions::GeneralName::DNSName(name) => {
-				SanType::DnsName((*name).into())
-			}
-			x509_parser::extensions::GeneralName::URI(name) => {
-				SanType::URI((*name).into())
-			}
+			},
+			x509_parser::extensions::GeneralName::DNSName(name) => SanType::DnsName((*name).into()),
+			x509_parser::extensions::GeneralName::URI(name) => SanType::URI((*name).into()),
 			x509_parser::extensions::GeneralName::IPAddress(octets) => {
 				SanType::IpAddress(ip_addr_from_octets(octets)?)
-			}
+			},
 			_ => return Err(RcgenError::InvalidNameType),
 		})
 	}
@@ -161,10 +161,10 @@ impl SanType {
 	fn tag(&self) -> u64 {
 		// Defined in the GeneralName list in
 		// https://tools.ietf.org/html/rfc5280#page-38
-		const TAG_RFC822_NAME :u64 = 1;
-		const TAG_DNS_NAME :u64 = 2;
-		const TAG_URI :u64 = 6;
-		const TAG_IP_ADDRESS :u64 = 7;
+		const TAG_RFC822_NAME: u64 = 1;
+		const TAG_DNS_NAME: u64 = 2;
+		const TAG_URI: u64 = 6;
+		const TAG_IP_ADDRESS: u64 = 7;
 
 		match self {
 			SanType::Rfc822Name(_name) => TAG_RFC822_NAME,
@@ -195,10 +195,10 @@ impl GeneralSubtree {
 	fn tag(&self) -> u64 {
 		// Defined in the GeneralName list in
 		// https://tools.ietf.org/html/rfc5280#page-38
-		const TAG_RFC822_NAME :u64 = 1;
-		const TAG_DNS_NAME :u64 = 2;
-		const TAG_DIRECTORY_NAME :u64 = 4;
-		const TAG_IP_ADDRESS :u64 = 7;
+		const TAG_RFC822_NAME: u64 = 1;
+		const TAG_DNS_NAME: u64 = 2;
+		const TAG_DIRECTORY_NAME: u64 = 4;
+		const TAG_IP_ADDRESS: u64 = 7;
 
 		match self {
 			GeneralSubtree::Rfc822Name(_name) => TAG_RFC822_NAME,
@@ -243,7 +243,7 @@ impl CidrSubnet {
 	/// let subnet = CidrSubnet::from_str("192.0.2.0/24").unwrap();
 	/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
 	/// ```
-	pub fn from_str(s :&str) -> Result<Self, ()> {
+	pub fn from_str(s: &str) -> Result<Self, ()> {
 		let mut iter = s.split('/');
 		if let (Some(addr_s), Some(prefix_s)) = (iter.next(), iter.next()) {
 			let addr = IpAddr::from_str(addr_s).map_err(|_| ())?;
@@ -266,24 +266,20 @@ impl CidrSubnet {
 	/// let subnet = CidrSubnet::from_addr_prefix(addr, 24);
 	/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
 	/// ```
-	pub fn from_addr_prefix(addr :IpAddr, prefix :u8) -> Self {
+	pub fn from_addr_prefix(addr: IpAddr, prefix: u8) -> Self {
 		match addr {
-			IpAddr::V4(addr) => {
-				Self::from_v4_prefix(addr.octets(), prefix)
-			},
-			IpAddr::V6(addr) => {
-				Self::from_v6_prefix(addr.octets(), prefix)
-			},
+			IpAddr::V4(addr) => Self::from_v4_prefix(addr.octets(), prefix),
+			IpAddr::V6(addr) => Self::from_v6_prefix(addr.octets(), prefix),
 		}
 	}
 	/// Obtains the CidrSubnet from an IPv4 address in network byte order
 	/// as well as the specified prefix.
-	pub fn from_v4_prefix(addr :[u8; 4], prefix :u8) -> Self {
+	pub fn from_v4_prefix(addr: [u8; 4], prefix: u8) -> Self {
 		CidrSubnet::V4(addr, mask!(u32, prefix))
 	}
 	/// Obtains the CidrSubnet from an IPv6 address in network byte order
 	/// as well as the specified prefix.
-	pub fn from_v6_prefix(addr :[u8; 16], prefix :u8) -> Self {
+	pub fn from_v6_prefix(addr: [u8; 16], prefix: u8) -> Self {
 		CidrSubnet::V6(addr, mask!(u128, prefix))
 	}
 	fn to_bytes(&self) -> Vec<u8> {
@@ -337,7 +333,7 @@ impl DnType {
 	}
 
 	/// Generate a DnType for the provided OID
-	pub fn from_oid(slice :&[u64]) -> Self {
+	pub fn from_oid(slice: &[u64]) -> Self {
 		match slice {
 			OID_COUNTRY_NAME => DnType::CountryName,
 			OID_LOCALITY_NAME => DnType::LocalityName,
@@ -345,7 +341,7 @@ impl DnType {
 			OID_ORG_NAME => DnType::OrganizationName,
 			OID_ORG_UNIT_NAME => DnType::OrganizationalUnitName,
 			OID_COMMON_NAME => DnType::CommonName,
-			oid => DnType::CustomDnType(oid.into())
+			oid => DnType::CustomDnType(oid.into()),
 		}
 	}
 }
@@ -368,9 +364,9 @@ pub enum DnValue {
 
 impl<T> From<T> for DnValue
 where
-	T :Into<String>
+	T: Into<String>,
 {
-	fn from(t :T) -> Self {
+	fn from(t: T) -> Self {
 		DnValue::Utf8String(t.into())
 	}
 }
@@ -387,20 +383,20 @@ See also the RFC 5280 sections on the [issuer](https://tools.ietf.org/html/rfc52
 and [subject](https://tools.ietf.org/html/rfc5280#section-4.1.2.6) fields.
 */
 pub struct DistinguishedName {
-	entries :HashMap<DnType, DnValue>,
-	order :Vec<DnType>,
+	entries: HashMap<DnType, DnValue>,
+	order: Vec<DnType>,
 }
 
 impl DistinguishedName {
 	/// Creates a new, empty distinguished name
 	pub fn new() -> Self {
 		Self {
-			entries : HashMap::new(),
-			order : Vec::new(),
+			entries: HashMap::new(),
+			order: Vec::new(),
 		}
 	}
 	/// Obtains the attribute value for the given attribute type
-	pub fn get(&self, ty :&DnType) -> Option<&DnValue> {
+	pub fn get(&self, ty: &DnType) -> Option<&DnValue> {
 		self.entries.get(ty)
 	}
 	/// Removes the attribute with the specified DnType
@@ -408,7 +404,7 @@ impl DistinguishedName {
 	/// Returns true when an actual removal happened, false
 	/// when no attribute with the specified DnType was
 	/// found.
-	pub fn remove(&mut self, ty :DnType) -> bool {
+	pub fn remove(&mut self, ty: DnType) -> bool {
 		let removed = self.entries.remove(&ty).is_some();
 		if removed {
 			self.order.retain(|ty_o| &ty != ty_o);
@@ -425,7 +421,7 @@ impl DistinguishedName {
 	/// assert_eq!(dn.get(&DnType::OrganizationName), Some(&DnValue::Utf8String("Crab widgits SE".to_string())));
 	/// assert_eq!(dn.get(&DnType::CommonName), Some(&DnValue::PrintableString("Master Cert".to_string())));
 	/// ```
-	pub fn push(&mut self, ty :DnType, s :impl Into<DnValue>) {
+	pub fn push(&mut self, ty: DnType, s: impl Into<DnValue>) {
 		if !self.entries.contains_key(&ty) {
 			self.order.push(ty.clone());
 		}
@@ -434,13 +430,13 @@ impl DistinguishedName {
 	/// Iterate over the entries
 	pub fn iter(&self) -> DistinguishedNameIterator<'_> {
 		DistinguishedNameIterator {
-			distinguished_name :self,
-			iter :self.order.iter()
+			distinguished_name: self,
+			iter: self.order.iter(),
 		}
 	}
 
 	#[cfg(feature = "x509-parser")]
-	fn from_name(name :&x509_parser::x509::X509Name) -> Result<Self, RcgenError> {
+	fn from_name(name: &x509_parser::x509::X509Name) -> Result<Self, RcgenError> {
 		use x509_parser::der_parser::asn1_rs::Tag;
 
 		let mut dn = DistinguishedName::new();
@@ -458,7 +454,9 @@ impl DistinguishedName {
 				panic!("x509-parser distinguished name set is empty");
 			};
 
-			let attr_type_oid = attr.attr_type().iter()
+			let attr_type_oid = attr
+				.attr_type()
+				.iter()
 				.ok_or(RcgenError::CouldNotParseCertificate)?;
 			let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
 			let data = attr.attr_value().data;
@@ -489,18 +487,17 @@ impl DistinguishedName {
 Iterator over [`DistinguishedName`] entries
 */
 pub struct DistinguishedNameIterator<'a> {
-	distinguished_name :&'a DistinguishedName,
-	iter :std::slice::Iter<'a, DnType>,
+	distinguished_name: &'a DistinguishedName,
+	iter: std::slice::Iter<'a, DnType>,
 }
 
-impl <'a> Iterator for DistinguishedNameIterator<'a> {
+impl<'a> Iterator for DistinguishedNameIterator<'a> {
 	type Item = (&'a DnType, &'a DnValue);
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.iter.next()
-			.and_then(|ty| {
-				self.distinguished_name.entries.get(ty).map(|v| (ty, v))
-			})
+		self.iter
+			.next()
+			.and_then(|ty| self.distinguished_name.entries.get(ty).map(|v| (ty, v)))
 	}
 }
 
@@ -508,31 +505,31 @@ impl <'a> Iterator for DistinguishedNameIterator<'a> {
 #[allow(missing_docs)]
 #[non_exhaustive]
 pub struct CertificateParams {
-	pub alg :&'static SignatureAlgorithm,
-	pub not_before :OffsetDateTime,
-	pub not_after :OffsetDateTime,
-	pub serial_number :Option<SerialNumber>,
-	pub subject_alt_names :Vec<SanType>,
-	pub distinguished_name :DistinguishedName,
-	pub is_ca :IsCa,
-	pub key_usages :Vec<KeyUsagePurpose>,
-	pub extended_key_usages :Vec<ExtendedKeyUsagePurpose>,
-	pub name_constraints :Option<NameConstraints>,
+	pub alg: &'static SignatureAlgorithm,
+	pub not_before: OffsetDateTime,
+	pub not_after: OffsetDateTime,
+	pub serial_number: Option<SerialNumber>,
+	pub subject_alt_names: Vec<SanType>,
+	pub distinguished_name: DistinguishedName,
+	pub is_ca: IsCa,
+	pub key_usages: Vec<KeyUsagePurpose>,
+	pub extended_key_usages: Vec<ExtendedKeyUsagePurpose>,
+	pub name_constraints: Option<NameConstraints>,
 	/// An optional list of certificate revocation list (CRL) distribution points as described
 	/// in RFC 5280 Section 4.2.1.13[^1]. Each distribution point contains one or more URIs where
 	/// an up-to-date CRL with scope including this certificate can be retrieved.
 	///
 	/// [^1]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13>
-	pub crl_distribution_points :Vec<CrlDistributionPoint>,
-	pub custom_extensions :Vec<CustomExtension>,
+	pub crl_distribution_points: Vec<CrlDistributionPoint>,
+	pub custom_extensions: Vec<CustomExtension>,
 	/// The certificate's key pair, a new random key pair will be generated if this is `None`
-	pub key_pair :Option<KeyPair>,
+	pub key_pair: Option<KeyPair>,
 	/// If `true`, the 'Authority Key Identifier' extension will be added to the generated cert
-	pub use_authority_key_identifier_extension :bool,
+	pub use_authority_key_identifier_extension: bool,
 	/// Method to generate key identifiers from public keys
 	///
 	/// Defaults to SHA-256.
-	pub key_identifier_method :KeyIdMethod,
+	pub key_identifier_method: KeyIdMethod,
 }
 
 impl Default for CertificateParams {
@@ -543,21 +540,21 @@ impl Default for CertificateParams {
 		let mut distinguished_name = DistinguishedName::new();
 		distinguished_name.push(DnType::CommonName, "rcgen self signed cert");
 		CertificateParams {
-			alg : &PKCS_ECDSA_P256_SHA256,
+			alg: &PKCS_ECDSA_P256_SHA256,
 			not_before,
 			not_after,
-			serial_number : None,
-			subject_alt_names : Vec::new(),
+			serial_number: None,
+			subject_alt_names: Vec::new(),
 			distinguished_name,
-			is_ca : IsCa::NoCa,
-			key_usages : Vec::new(),
-			extended_key_usages : Vec::new(),
-			name_constraints : None,
-			crl_distribution_points : Vec::new(),
-			custom_extensions : Vec::new(),
-			key_pair : None,
-			use_authority_key_identifier_extension : false,
-			key_identifier_method : KeyIdMethod::Sha256,
+			is_ca: IsCa::NoCa,
+			key_usages: Vec::new(),
+			extended_key_usages: Vec::new(),
+			name_constraints: None,
+			crl_distribution_points: Vec::new(),
+			custom_extensions: Vec::new(),
+			key_pair: None,
+			use_authority_key_identifier_extension: false,
+			key_identifier_method: KeyIdMethod::Sha256,
 		}
 	}
 }
@@ -569,9 +566,8 @@ impl CertificateParams {
 	///
 	/// *This constructor is only available if rcgen is built with the "pem" and "x509-parser" features*
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
-	pub fn from_ca_cert_pem(pem_str :&str, key_pair :KeyPair) -> Result<Self, RcgenError> {
-		let certificate = pem::parse(pem_str)
-			.or(Err(RcgenError::CouldNotParseCertificate))?;
+	pub fn from_ca_cert_pem(pem_str: &str, key_pair: KeyPair) -> Result<Self, RcgenError> {
+		let certificate = pem::parse(pem_str).or(Err(RcgenError::CouldNotParseCertificate))?;
 		Self::from_ca_cert_der(certificate.contents(), key_pair)
 	}
 
@@ -591,11 +587,14 @@ impl CertificateParams {
 	///
 	/// *This constructor is only available if rcgen is built with the "x509-parser" feature*
 	#[cfg(feature = "x509-parser")]
-	pub fn from_ca_cert_der(ca_cert :&[u8], key_pair :KeyPair) -> Result<Self, RcgenError> {
+	pub fn from_ca_cert_der(ca_cert: &[u8], key_pair: KeyPair) -> Result<Self, RcgenError> {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
 			.or(Err(RcgenError::CouldNotParseCertificate))?;
 
-		let alg_oid = x509.signature_algorithm.algorithm.iter()
+		let alg_oid = x509
+			.signature_algorithm
+			.algorithm
+			.iter()
 			.ok_or(RcgenError::CouldNotParseCertificate)?;
 		let alg = SignatureAlgorithm::from_oid(&alg_oid.collect::<Vec<_>>())?;
 
@@ -608,34 +607,45 @@ impl CertificateParams {
 		let name_constraints = Self::convert_x509_name_constraints(&x509)?;
 		let serial_number = Some(x509.serial.to_bytes_be().into());
 
-		Ok(
-			CertificateParams {
-				alg,
-				is_ca,
-				subject_alt_names,
-				key_usages,
-				extended_key_usages,
-				name_constraints,
-				serial_number,
-				distinguished_name : dn,
-				key_pair : Some(key_pair),
-				not_before : validity.not_before.to_datetime(),
-				not_after : validity.not_after.to_datetime(),
-				.. Default::default()
-			}
-		)
+		Ok(CertificateParams {
+			alg,
+			is_ca,
+			subject_alt_names,
+			key_usages,
+			extended_key_usages,
+			name_constraints,
+			serial_number,
+			distinguished_name: dn,
+			key_pair: Some(key_pair),
+			not_before: validity.not_before.to_datetime(),
+			not_after: validity.not_after.to_datetime(),
+			..Default::default()
+		})
 	}
 	#[cfg(feature = "x509-parser")]
-	fn convert_x509_is_ca(x509 :&x509_parser::certificate::X509Certificate<'_>) -> Result<IsCa, RcgenError> {
+	fn convert_x509_is_ca(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<IsCa, RcgenError> {
 		use x509_parser::extensions::BasicConstraints as B;
 
-		let basic_constraints = x509.basic_constraints()
-			.or(Err(RcgenError::CouldNotParseCertificate))?.map(|ext| ext.value);
+		let basic_constraints = x509
+			.basic_constraints()
+			.or(Err(RcgenError::CouldNotParseCertificate))?
+			.map(|ext| ext.value);
 
 		let is_ca = match basic_constraints {
-			Some(B { ca: true, path_len_constraint: Some(n) }) if *n <= u8::MAX as u32 => IsCa::Ca(BasicConstraints::Constrained(*n as u8)),
-			Some(B { ca: true, path_len_constraint: Some(_) }) => return Err(RcgenError::CouldNotParseCertificate),
-			Some(B { ca: true, path_len_constraint: None }) => IsCa::Ca(BasicConstraints::Unconstrained),
+			Some(B {
+				ca: true,
+				path_len_constraint: Some(n),
+			}) if *n <= u8::MAX as u32 => IsCa::Ca(BasicConstraints::Constrained(*n as u8)),
+			Some(B {
+				ca: true,
+				path_len_constraint: Some(_),
+			}) => return Err(RcgenError::CouldNotParseCertificate),
+			Some(B {
+				ca: true,
+				path_len_constraint: None,
+			}) => IsCa::Ca(BasicConstraints::Unconstrained),
 			Some(B { ca: false, .. }) => IsCa::ExplicitNoCa,
 			None => IsCa::NoCa,
 		};
@@ -643,8 +653,11 @@ impl CertificateParams {
 		Ok(is_ca)
 	}
 	#[cfg(feature = "x509-parser")]
-	fn convert_x509_subject_alternative_name(x509 :&x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<SanType>, RcgenError> {
-		let sans = x509.subject_alternative_name()
+	fn convert_x509_subject_alternative_name(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Vec<SanType>, RcgenError> {
+		let sans = x509
+			.subject_alternative_name()
 			.or(Err(RcgenError::CouldNotParseCertificate))?
 			.map(|ext| &ext.value.general_names);
 
@@ -659,8 +672,11 @@ impl CertificateParams {
 		}
 	}
 	#[cfg(feature = "x509-parser")]
-	fn convert_x509_key_usages(x509 :&x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<KeyUsagePurpose>, RcgenError> {
-		let key_usage = x509.key_usage()
+	fn convert_x509_key_usages(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Vec<KeyUsagePurpose>, RcgenError> {
+		let key_usage = x509
+			.key_usage()
 			.or(Err(RcgenError::CouldNotParseCertificate))?
 			.map(|ext| ext.value);
 
@@ -697,8 +713,11 @@ impl CertificateParams {
 		Ok(key_usages)
 	}
 	#[cfg(feature = "x509-parser")]
-	fn convert_x509_extended_key_usages(x509 :&x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<ExtendedKeyUsagePurpose>, RcgenError> {
-		let extended_key_usage = x509.extended_key_usage()
+	fn convert_x509_extended_key_usages(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Vec<ExtendedKeyUsagePurpose>, RcgenError> {
+		let extended_key_usage = x509
+			.extended_key_usage()
 			.or(Err(RcgenError::CouldNotParseCertificate))?
 			.map(|ext| ext.value);
 
@@ -729,8 +748,11 @@ impl CertificateParams {
 		Ok(extended_key_usages)
 	}
 	#[cfg(feature = "x509-parser")]
-	fn convert_x509_name_constraints(x509 :&x509_parser::certificate::X509Certificate<'_>) -> Result<Option<NameConstraints>, RcgenError> {
-		let constraints = x509.name_constraints()
+	fn convert_x509_name_constraints(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Option<NameConstraints>, RcgenError> {
+		let constraints = x509
+			.name_constraints()
 			.or(Err(RcgenError::CouldNotParseCertificate))?
 			.map(|ext| ext.value);
 
@@ -747,7 +769,10 @@ impl CertificateParams {
 				Vec::new()
 			};
 
-			let name_constraints = NameConstraints { permitted_subtrees, excluded_subtrees };
+			let name_constraints = NameConstraints {
+				permitted_subtrees,
+				excluded_subtrees,
+			};
 
 			Ok(Some(name_constraints))
 		} else {
@@ -755,7 +780,9 @@ impl CertificateParams {
 		}
 	}
 	#[cfg(feature = "x509-parser")]
-	fn convert_x509_general_subtrees(subtrees :&[x509_parser::extensions::GeneralSubtree<'_>]) -> Result<Vec<GeneralSubtree>, RcgenError> {
+	fn convert_x509_general_subtrees(
+		subtrees: &[x509_parser::extensions::GeneralSubtree<'_>],
+	) -> Result<Vec<GeneralSubtree>, RcgenError> {
 		use x509_parser::extensions::GeneralName;
 
 		let mut result = Vec::new();
@@ -763,42 +790,52 @@ impl CertificateParams {
 			let subtree = match &subtree.base {
 				GeneralName::RFC822Name(s) => GeneralSubtree::Rfc822Name(s.to_string()),
 				GeneralName::DNSName(s) => GeneralSubtree::DnsName(s.to_string()),
-				GeneralName::DirectoryName(n) => GeneralSubtree::DirectoryName(DistinguishedName::from_name(&n)?),
+				GeneralName::DirectoryName(n) => {
+					GeneralSubtree::DirectoryName(DistinguishedName::from_name(&n)?)
+				},
 				GeneralName::IPAddress(bytes) if bytes.len() == 8 => {
 					let addr: [u8; 4] = bytes[..4].try_into().unwrap();
 					let mask: [u8; 4] = bytes[4..].try_into().unwrap();
 					GeneralSubtree::IpAddress(CidrSubnet::V4(addr, mask))
-				}
+				},
 				GeneralName::IPAddress(bytes) if bytes.len() == 32 => {
 					let addr: [u8; 16] = bytes[..16].try_into().unwrap();
 					let mask: [u8; 16] = bytes[16..].try_into().unwrap();
 					GeneralSubtree::IpAddress(CidrSubnet::V6(addr, mask))
-				}
+				},
 				_ => continue,
 			};
 			result.push(subtree);
 		}
 		Ok(result)
 	}
-	fn write_subject_alt_names(&self, writer :DERWriter) {
+	fn write_subject_alt_names(&self, writer: DERWriter) {
 		write_x509_extension(writer, OID_SUBJECT_ALT_NAME, false, |writer| {
 			writer.write_sequence(|writer| {
 				for san in self.subject_alt_names.iter() {
-					writer.next().write_tagged_implicit(Tag::context(san.tag()), |writer| {
-						match san {
-							SanType::Rfc822Name(name) |
-							SanType::DnsName(name) |
-							SanType::URI(name) => writer.write_ia5_string(name),
-							SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
-							SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
-						}
-					});
+					writer.next().write_tagged_implicit(
+						Tag::context(san.tag()),
+						|writer| match san {
+							SanType::Rfc822Name(name)
+							| SanType::DnsName(name)
+							| SanType::URI(name) => writer.write_ia5_string(name),
+							SanType::IpAddress(IpAddr::V4(addr)) => {
+								writer.write_bytes(&addr.octets())
+							},
+							SanType::IpAddress(IpAddr::V6(addr)) => {
+								writer.write_bytes(&addr.octets())
+							},
+						},
+					);
 				}
 			});
 		});
 	}
-	fn write_request<K: PublicKeyData>(&self, pub_key: &K, writer :DERWriter)
-	 -> Result<(), RcgenError> {
+	fn write_request<K: PublicKeyData>(
+		&self,
+		pub_key: &K,
+		writer: DERWriter,
+	) -> Result<(), RcgenError> {
 		// No .. pattern, we use this to ensure every field is used
 		#[deny(unused)]
 		let Self {
@@ -845,17 +882,25 @@ impl CertificateParams {
 						writer.next().write_sequence(|writer| {
 							writer.next().write_oid(&ty.to_oid());
 							match content {
-								DnValue::TeletexString(s) => writer.next().write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
-									writer.write_bytes(s)
-								}),
-								DnValue::PrintableString(s) => writer.next().write_printable_string(s),
-								DnValue::UniversalString(s) => writer.next().write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
-									writer.write_bytes(s)
-								}),
+								DnValue::TeletexString(s) => writer
+									.next()
+									.write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
+										writer.write_bytes(s)
+									}),
+								DnValue::PrintableString(s) => {
+									writer.next().write_printable_string(s)
+								},
+								DnValue::UniversalString(s) => writer
+									.next()
+									.write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
+										writer.write_bytes(s)
+									}),
 								DnValue::Utf8String(s) => writer.next().write_utf8_string(s),
-								DnValue::BmpString(s) => writer.next().write_tagged_implicit(TAG_BMPSTRING, |writer| {
-									writer.write_bytes(s)
-								}),
+								DnValue::BmpString(s) => writer
+									.next()
+									.write_tagged_implicit(TAG_BMPSTRING, |writer| {
+										writer.write_bytes(s)
+									}),
 							}
 						});
 					});
@@ -894,11 +939,15 @@ impl CertificateParams {
 					});
 				}
 			});
-
 		});
 		Ok(())
 	}
-	fn write_cert<K: PublicKeyData>(&self, writer :DERWriter, pub_key: &K, ca :&Certificate) -> Result<(), RcgenError> {
+	fn write_cert<K: PublicKeyData>(
+		&self,
+		writer: DERWriter,
+		pub_key: &K,
+		ca: &Certificate,
+	) -> Result<(), RcgenError> {
 		writer.write_sequence(|writer| {
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
@@ -930,13 +979,13 @@ impl CertificateParams {
 			// Write subjectPublicKeyInfo
 			pub_key.serialize_public_key_der(writer.next());
 			// write extensions
-			let should_write_exts = self.use_authority_key_identifier_extension ||
-				!self.subject_alt_names.is_empty() ||
-				!self.extended_key_usages.is_empty() ||
-				self.name_constraints.iter().any(|c| !c.is_empty()) ||
-				matches!(self.is_ca, IsCa::ExplicitNoCa) ||
-				matches!(self.is_ca, IsCa::Ca(_)) ||
-				!self.custom_extensions.is_empty();
+			let should_write_exts = self.use_authority_key_identifier_extension
+				|| !self.subject_alt_names.is_empty()
+				|| !self.extended_key_usages.is_empty()
+				|| self.name_constraints.iter().any(|c| !c.is_empty())
+				|| matches!(self.is_ca, IsCa::ExplicitNoCa)
+				|| matches!(self.is_ca, IsCa::Ca(_))
+				|| !self.custom_extensions.is_empty();
 			if should_write_exts {
 				writer.next().write_tagged(Tag::context(3), |writer| {
 					writer.write_sequence(|writer| {
@@ -951,12 +1000,11 @@ impl CertificateParams {
 						// Write standard key usage
 						if !self.key_usages.is_empty() {
 							writer.next().write_sequence(|writer| {
-
 								let oid = ObjectIdentifier::from_slice(OID_KEY_USAGE);
 								writer.next().write_oid(&oid);
 								writer.next().write_bool(true);
 
-								let mut bits :u16 = 0;
+								let mut bits: u16 = 0;
 
 								for entry in self.key_usages.iter() {
 									// Map the index to a value
@@ -977,11 +1025,7 @@ impl CertificateParams {
 
 								// Compute the 1-based most significant bit
 								let msb = 16 - bits.leading_zeros();
-								let nb = if msb <= 8 {
-									1
-								} else {
-									2
-								};
+								let nb = if msb <= 8 { 1 } else { 2 };
 
 								let bits = bits.reverse_bits().to_be_bytes();
 
@@ -994,76 +1038,121 @@ impl CertificateParams {
 
 								// Write them
 								writer.next().write_bytes(&der);
-
 							});
 						}
 
 						// Write extended key usage
 						if !self.extended_key_usages.is_empty() {
-							write_x509_extension(writer.next(), OID_EXT_KEY_USAGE, false, |writer| {
-								writer.write_sequence(|writer| {
-									for usage in self.extended_key_usages.iter() {
-										let oid = ObjectIdentifier::from_slice(usage.oid());
-										writer.next().write_oid(&oid);
-									}
-								});
-							});
+							write_x509_extension(
+								writer.next(),
+								OID_EXT_KEY_USAGE,
+								false,
+								|writer| {
+									writer.write_sequence(|writer| {
+										for usage in self.extended_key_usages.iter() {
+											let oid = ObjectIdentifier::from_slice(usage.oid());
+											writer.next().write_oid(&oid);
+										}
+									});
+								},
+							);
 						}
 						if let Some(name_constraints) = &self.name_constraints {
 							// If both trees are empty, the extension must be omitted.
 							if !name_constraints.is_empty() {
-								write_x509_extension(writer.next(), OID_NAME_CONSTRAINTS, true, |writer| {
-									writer.write_sequence(|writer| {
-										if !name_constraints.permitted_subtrees.is_empty() {
-											write_general_subtrees(writer.next(), 0, &name_constraints.permitted_subtrees);
-										}
-										if !name_constraints.excluded_subtrees.is_empty() {
-											write_general_subtrees(writer.next(), 1, &name_constraints.excluded_subtrees);
-										}
-									});
-								});
+								write_x509_extension(
+									writer.next(),
+									OID_NAME_CONSTRAINTS,
+									true,
+									|writer| {
+										writer.write_sequence(|writer| {
+											if !name_constraints.permitted_subtrees.is_empty() {
+												write_general_subtrees(
+													writer.next(),
+													0,
+													&name_constraints.permitted_subtrees,
+												);
+											}
+											if !name_constraints.excluded_subtrees.is_empty() {
+												write_general_subtrees(
+													writer.next(),
+													1,
+													&name_constraints.excluded_subtrees,
+												);
+											}
+										});
+									},
+								);
 							}
 						}
 						if !self.crl_distribution_points.is_empty() {
-							write_x509_extension(writer.next(), OID_CRL_DISTRIBUTION_POINTS, false, |writer| {
-								writer.write_sequence(|writer| {
-									for distribution_point in &self.crl_distribution_points {
-										distribution_point.write_der(writer.next());
-									}
-								})
-							});
+							write_x509_extension(
+								writer.next(),
+								OID_CRL_DISTRIBUTION_POINTS,
+								false,
+								|writer| {
+									writer.write_sequence(|writer| {
+										for distribution_point in &self.crl_distribution_points {
+											distribution_point.write_der(writer.next());
+										}
+									})
+								},
+							);
 						}
 						match self.is_ca {
 							IsCa::Ca(ref constraint) => {
 								// Write subject_key_identifier
-								write_x509_extension(writer.next(), OID_SUBJECT_KEY_IDENTIFIER, false, |writer| {
-									let key_identifier = self.key_identifier(pub_key);
-									writer.write_bytes(key_identifier.as_ref());
-								});
+								write_x509_extension(
+									writer.next(),
+									OID_SUBJECT_KEY_IDENTIFIER,
+									false,
+									|writer| {
+										let key_identifier = self.key_identifier(pub_key);
+										writer.write_bytes(key_identifier.as_ref());
+									},
+								);
 								// Write basic_constraints
-								write_x509_extension(writer.next(), OID_BASIC_CONSTRAINTS, true, |writer| {
-									writer.write_sequence(|writer| {
-										writer.next().write_bool(true); // cA flag
-										if let BasicConstraints::Constrained(path_len_constraint) = constraint {
-											writer.next().write_u8(*path_len_constraint);
-										}
-									});
-								});
-							}
+								write_x509_extension(
+									writer.next(),
+									OID_BASIC_CONSTRAINTS,
+									true,
+									|writer| {
+										writer.write_sequence(|writer| {
+											writer.next().write_bool(true); // cA flag
+											if let BasicConstraints::Constrained(
+												path_len_constraint,
+											) = constraint
+											{
+												writer.next().write_u8(*path_len_constraint);
+											}
+										});
+									},
+								);
+							},
 							IsCa::ExplicitNoCa => {
 								// Write subject_key_identifier
-								write_x509_extension(writer.next(), OID_SUBJECT_KEY_IDENTIFIER, false, |writer| {
-									let key_identifier = self.key_identifier(pub_key);
-									writer.write_bytes(key_identifier.as_ref());
-								});
+								write_x509_extension(
+									writer.next(),
+									OID_SUBJECT_KEY_IDENTIFIER,
+									false,
+									|writer| {
+										let key_identifier = self.key_identifier(pub_key);
+										writer.write_bytes(key_identifier.as_ref());
+									},
+								);
 								// Write basic_constraints
-								write_x509_extension(writer.next(), OID_BASIC_CONSTRAINTS, true, |writer| {
-									writer.write_sequence(|writer| {
-										writer.next().write_bool(false); // cA flag
-									});
-								});
-							}
-							IsCa::NoCa => {}
+								write_x509_extension(
+									writer.next(),
+									OID_BASIC_CONSTRAINTS,
+									true,
+									|writer| {
+										writer.write_sequence(|writer| {
+											writer.next().write_bool(false); // cA flag
+										});
+									},
+								);
+							},
+							IsCa::NoCa => {},
 						}
 
 						// Write the custom extensions
@@ -1099,10 +1188,13 @@ impl CertificateParams {
 		let truncated_digest = &digest.as_ref()[0..20];
 		truncated_digest.to_vec()
 	}
-	fn serialize_der_with_signer<K: PublicKeyData>(&self, pub_key: &K, ca :&Certificate) -> Result<Vec<u8>, RcgenError> {
+	fn serialize_der_with_signer<K: PublicKeyData>(
+		&self,
+		pub_key: &K,
+		ca: &Certificate,
+	) -> Result<Vec<u8>, RcgenError> {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
-
 				let tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
 					self.write_cert(writer, pub_key, ca)?;
 					Ok::<(), RcgenError>(())
@@ -1147,19 +1239,18 @@ pub enum BasicConstraints {
 
 impl CertificateParams {
 	/// Generate certificate parameters with reasonable defaults
-	pub fn new(subject_alt_names :impl Into<Vec<String>>) -> Self {
-		let subject_alt_names = subject_alt_names.into()
+	pub fn new(subject_alt_names: impl Into<Vec<String>>) -> Self {
+		let subject_alt_names = subject_alt_names
+			.into()
 			.into_iter()
-			.map(|s| {
-				match s.parse() {
-					Ok(ip) => SanType::IpAddress(ip),
-					Err(_) => SanType::DnsName(s)
-				}
+			.map(|s| match s.parse() {
+				Ok(ip) => SanType::IpAddress(ip),
+				Err(_) => SanType::DnsName(s),
 			})
 			.collect::<Vec<_>>();
 		CertificateParams {
 			subject_alt_names,
-			.. Default::default()
+			..Default::default()
 		}
 	}
 }
@@ -1170,12 +1261,12 @@ impl CertificateParams {
 pub struct NameConstraints {
 	/// If non-empty, a whitelist of subtrees that the
 	/// domain has to match.
-	pub permitted_subtrees :Vec<GeneralSubtree>,
+	pub permitted_subtrees: Vec<GeneralSubtree>,
 	/// A list of excluded subtrees.
 	///
 	/// Any name matching an excluded subtree is invalid
 	/// even if it also matches a permitted subtree.
-	pub excluded_subtrees :Vec<GeneralSubtree>,
+	pub excluded_subtrees: Vec<GeneralSubtree>,
 }
 
 impl NameConstraints {
@@ -1247,11 +1338,11 @@ impl ExtendedKeyUsagePurpose {
 /// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct CustomExtension {
-	oid :Vec<u64>,
-	critical :bool,
+	oid: Vec<u64>,
+	critical: bool,
 
 	/// The content must be DER-encoded
-	content :Vec<u8>,
+	content: Vec<u8>,
 }
 
 impl CustomExtension {
@@ -1259,27 +1350,27 @@ impl CustomExtension {
 	/// as specified in [RFC 8737](https://tools.ietf.org/html/rfc8737#section-3)
 	///
 	/// Panics if the passed `sha_digest` parameter doesn't hold 32 bytes (256 bits).
-	pub fn new_acme_identifier(sha_digest :&[u8]) -> Self {
+	pub fn new_acme_identifier(sha_digest: &[u8]) -> Self {
 		assert_eq!(sha_digest.len(), 32, "wrong size of sha_digest");
 		let content = yasna::construct_der(|writer| {
 			writer.write_bytes(sha_digest);
 		});
 		Self {
-			oid : OID_PE_ACME.to_owned(),
-			critical : true,
+			oid: OID_PE_ACME.to_owned(),
+			critical: true,
 			content,
 		}
 	}
 	/// Create a new custom extension with the specified content
-	pub fn from_oid_content(oid :&[u64], content :Vec<u8>) -> Self {
+	pub fn from_oid_content(oid: &[u64], content: Vec<u8>) -> Self {
 		Self {
-			oid : oid.to_owned(),
-			critical : false,
+			oid: oid.to_owned(),
+			critical: false,
 			content,
 		}
 	}
 	/// Sets the criticality flag of the extension.
-	pub fn set_criticality(&mut self, criticality :bool) {
+	pub fn set_criticality(&mut self, criticality: bool) {
 		self.critical = criticality;
 	}
 	/// Obtains the criticality flag of the extension.
@@ -1319,16 +1410,16 @@ pub enum KeyIdMethod {
 /// have to import the time crate yourself in order to specify date
 /// information, second so that users don't have to type unproportionately
 /// long code just to generate an instance of [`OffsetDateTime`].
-pub fn date_time_ymd(year :i32, month :u8, day :u8) -> OffsetDateTime {
+pub fn date_time_ymd(year: i32, month: u8, day: u8) -> OffsetDateTime {
 	let month = Month::try_from(month).expect("out-of-range month");
 	let primitive_dt = PrimitiveDateTime::new(
 		Date::from_calendar_date(year, month, day).expect("invalid or out-of-range date"),
-		Time::MIDNIGHT
+		Time::MIDNIGHT,
 	);
 	primitive_dt.assume_utc()
 }
 
-fn dt_strip_nanos(dt :OffsetDateTime) -> OffsetDateTime {
+fn dt_strip_nanos(dt: OffsetDateTime) -> OffsetDateTime {
 	// Set nanoseconds to zero
 	// This is needed because the GeneralizedTime serializer would otherwise
 	// output fractional values which RFC 5280 explicitly forbode [1].
@@ -1336,17 +1427,17 @@ fn dt_strip_nanos(dt :OffsetDateTime) -> OffsetDateTime {
 	// therefore, it needs to be stripped of nanoseconds fully.
 	// [1]: https://tools.ietf.org/html/rfc5280#section-4.1.2.5.2
 	// TODO: handle leap seconds if dt becomes leap second aware
-	let time = Time::from_hms(dt.hour(), dt.minute(), dt.second())
-		.expect("invalid or out-of-range time");
+	let time =
+		Time::from_hms(dt.hour(), dt.minute(), dt.second()).expect("invalid or out-of-range time");
 	dt.replace_time(time)
 }
 
-fn dt_to_generalized(dt :OffsetDateTime) -> GeneralizedTime {
+fn dt_to_generalized(dt: OffsetDateTime) -> GeneralizedTime {
 	let date_time = dt_strip_nanos(dt);
 	GeneralizedTime::from_datetime(date_time)
 }
 
-fn write_dt_utc_or_generalized(writer :DERWriter, dt :OffsetDateTime) {
+fn write_dt_utc_or_generalized(writer: DERWriter, dt: OffsetDateTime) {
 	// RFC 5280 requires CAs to write certificate validity dates
 	// below 2050 as UTCTime, and anything starting from 2050
 	// as GeneralizedTime [1]. The RFC doesn't say anything
@@ -1363,44 +1454,55 @@ fn write_dt_utc_or_generalized(writer :DERWriter, dt :OffsetDateTime) {
 	}
 }
 
-fn write_distinguished_name(writer :DERWriter, dn :&DistinguishedName) {
-		writer.write_sequence(|writer| {
-			for (ty, content) in dn.iter() {
-				writer.next().write_set(|writer| {
-					writer.next().write_sequence(|writer| {
-						writer.next().write_oid(&ty.to_oid());
-						match content {
-							DnValue::TeletexString(s) => writer.next().write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
+fn write_distinguished_name(writer: DERWriter, dn: &DistinguishedName) {
+	writer.write_sequence(|writer| {
+		for (ty, content) in dn.iter() {
+			writer.next().write_set(|writer| {
+				writer.next().write_sequence(|writer| {
+					writer.next().write_oid(&ty.to_oid());
+					match content {
+						DnValue::TeletexString(s) => writer
+							.next()
+							.write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
 								writer.write_bytes(s)
 							}),
-							DnValue::PrintableString(s) => writer.next().write_printable_string(s),
-							DnValue::UniversalString(s) => writer.next().write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
+						DnValue::PrintableString(s) => writer.next().write_printable_string(s),
+						DnValue::UniversalString(s) => writer
+							.next()
+							.write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
 								writer.write_bytes(s)
 							}),
-							DnValue::Utf8String(s) => writer.next().write_utf8_string(s),
-							DnValue::BmpString(s) => writer.next().write_tagged_implicit(TAG_BMPSTRING, |writer| {
-								writer.write_bytes(s)
-							}),
-						}
-					});
+						DnValue::Utf8String(s) => writer.next().write_utf8_string(s),
+						DnValue::BmpString(s) => writer
+							.next()
+							.write_tagged_implicit(TAG_BMPSTRING, |writer| writer.write_bytes(s)),
+					}
 				});
-			}
-		});
+			});
+		}
+	});
 }
 
-fn write_general_subtrees(writer :DERWriter, tag :u64, general_subtrees :&[GeneralSubtree]) {
+fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
 	writer.write_tagged_implicit(Tag::context(tag), |writer| {
 		writer.write_sequence(|writer| {
 			for subtree in general_subtrees.iter() {
 				writer.next().write_sequence(|writer| {
-					writer.next().write_tagged_implicit(Tag::context(subtree.tag()), |writer| {
-						match subtree {
-							GeneralSubtree::Rfc822Name(name) |
-							GeneralSubtree::DnsName(name) => writer.write_ia5_string(name),
-							GeneralSubtree::DirectoryName(name) => write_distinguished_name(writer, name),
-							GeneralSubtree::IpAddress(subnet) => writer.write_bytes(&subnet.to_bytes()),
-						}
-					});
+					writer
+						.next()
+						.write_tagged_implicit(
+							Tag::context(subtree.tag()),
+							|writer| match subtree {
+								GeneralSubtree::Rfc822Name(name)
+								| GeneralSubtree::DnsName(name) => writer.write_ia5_string(name),
+								GeneralSubtree::DirectoryName(name) => {
+									write_distinguished_name(writer, name)
+								},
+								GeneralSubtree::IpAddress(subnet) => {
+									writer.write_bytes(&subnet.to_bytes())
+								},
+							},
+						);
 					// minimum must be 0 (the default) and maximum must be absent
 				});
 			}
@@ -1412,7 +1514,7 @@ impl Certificate {
 	/// Generates a new certificate from the given parameters.
 	///
 	/// If there is no key pair included, then a new key pair will be generated and used.
-	pub fn from_params(mut params :CertificateParams) -> Result<Self, RcgenError> {
+	pub fn from_params(mut params: CertificateParams) -> Result<Self, RcgenError> {
 		let key_pair = if let Some(key_pair) = params.key_pair.take() {
 			if !key_pair.is_compatible(&params.alg) {
 				return Err(RcgenError::CertificateKeyPairMismatch);
@@ -1422,14 +1524,11 @@ impl Certificate {
 			KeyPair::generate(&params.alg)?
 		};
 
-		Ok(Certificate {
-			params,
-			key_pair,
-		})
+		Ok(Certificate { params, key_pair })
 	}
 	/// Returns the certificate parameters
 	pub fn get_params(&self) -> &CertificateParams {
-			&self.params
+		&self.params
 	}
 	/// Calculates a subject key identifier for the certificate subject's public key.
 	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
@@ -1441,7 +1540,7 @@ impl Certificate {
 		self.serialize_der_with_signer(&self)
 	}
 	/// Serializes the certificate, signed with another certificate's key, in binary DER format
-	pub fn serialize_der_with_signer(&self, ca :&Certificate) -> Result<Vec<u8>, RcgenError> {
+	pub fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, RcgenError> {
 		self.params.serialize_der_with_signer(&self.key_pair, ca)
 	}
 	/// Serializes a certificate signing request in binary DER format
@@ -1472,7 +1571,7 @@ impl Certificate {
 	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem(&self) -> Result<String, RcgenError> {
-		let contents =  self.serialize_der()?;
+		let contents = self.serialize_der()?;
 		let p = Pem::new("CERTIFICATE", contents);
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}
@@ -1480,7 +1579,7 @@ impl Certificate {
 	///
 	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
-	pub fn serialize_pem_with_signer(&self, ca :&Certificate) -> Result<String, RcgenError> {
+	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, RcgenError> {
 		let contents = self.serialize_der_with_signer(ca)?;
 		let p = Pem::new("CERTIFICATE", contents);
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
@@ -1512,7 +1611,12 @@ impl Certificate {
 }
 
 /// Serializes an X.509v3 extension according to RFC 5280
-fn write_x509_extension(writer :DERWriter, extension_oid :&[u64], is_critical :bool, value_serializer :impl FnOnce(DERWriter)) {
+fn write_x509_extension(
+	writer: DERWriter,
+	extension_oid: &[u64],
+	is_critical: bool,
+	value_serializer: impl FnOnce(DERWriter),
+) {
 	// Extension specification:
 	//    Extension  ::=  SEQUENCE  {
 	//         extnID      OBJECT IDENTIFIER,
@@ -1535,7 +1639,7 @@ fn write_x509_extension(writer :DERWriter, extension_oid :&[u64], is_critical :b
 }
 
 /// Serializes an X.509v3 authority key identifier extension according to RFC 5280.
-fn write_x509_authority_key_identifier(writer :DERWriter, ca :&Certificate) {
+fn write_x509_authority_key_identifier(writer: DERWriter, ca: &Certificate) {
 	// Write Authority Key Identifier
 	// RFC 5280 states:
 	//   'The keyIdentifier field of the authorityKeyIdentifier extension MUST
@@ -1548,9 +1652,11 @@ fn write_x509_authority_key_identifier(writer :DERWriter, ca :&Certificate) {
 	//     include this extension in all CRLs issued.'
 	write_x509_extension(writer, OID_AUTHORITY_KEY_IDENTIFIER, false, |writer| {
 		writer.write_sequence(|writer| {
-			writer.next().write_tagged_implicit(Tag::context(0), |writer| {
-				writer.write_bytes(ca.get_key_identifier().as_ref())
-			})
+			writer
+				.next()
+				.write_tagged_implicit(Tag::context(0), |writer| {
+					writer.write_bytes(ca.get_key_identifier().as_ref())
+				})
 		});
 	});
 }
@@ -1587,51 +1693,51 @@ impl zeroize::Zeroize for CertificateParams {
 /// A certificate serial number.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct SerialNumber {
-	inner :Vec<u8>,
+	inner: Vec<u8>,
 }
 
 impl SerialNumber {
-		/// Create a serial number from the given byte slice.
-		pub fn from_slice(bytes :&[u8]) -> SerialNumber {
-				let inner = bytes.to_vec();
-				SerialNumber { inner }
-		}
+	/// Create a serial number from the given byte slice.
+	pub fn from_slice(bytes: &[u8]) -> SerialNumber {
+		let inner = bytes.to_vec();
+		SerialNumber { inner }
+	}
 
-		/// Return the byte representation of the serial number.
-		pub fn to_bytes(&self) -> Vec<u8> {
-				self.inner.clone()
-		}
+	/// Return the byte representation of the serial number.
+	pub fn to_bytes(&self) -> Vec<u8> {
+		self.inner.clone()
+	}
 
-		/// Return the length of the serial number in bytes.
-		pub fn len(&self) -> usize {
-				self.inner.len()
-		}
+	/// Return the length of the serial number in bytes.
+	pub fn len(&self) -> usize {
+		self.inner.len()
+	}
 }
 
 impl fmt::Display for SerialNumber {
-		fn fmt(&self, f :&mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-				let hex :Vec<_> = self.inner.iter().map(|b| format!("{:02x}", b)).collect();
-				write!(f, "{}", hex.join(":"))
-		}
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+		let hex: Vec<_> = self.inner.iter().map(|b| format!("{:02x}", b)).collect();
+		write!(f, "{}", hex.join(":"))
+	}
 }
 
 impl From<Vec<u8>> for SerialNumber {
-		fn from(inner :Vec<u8>) -> SerialNumber {
-				SerialNumber { inner }
-		}
+	fn from(inner: Vec<u8>) -> SerialNumber {
+		SerialNumber { inner }
+	}
 }
 
 impl From<u64> for SerialNumber {
-		fn from(u :u64) -> SerialNumber {
-				let inner = u.to_be_bytes().into();
-				SerialNumber { inner }
-		}
+	fn from(u: u64) -> SerialNumber {
+		let inner = u.to_be_bytes().into();
+		SerialNumber { inner }
+	}
 }
 
 impl AsRef<[u8]> for SerialNumber {
-		fn as_ref(&self) -> &[u8] {
-				&self.inner
-		}
+	fn as_ref(&self) -> &[u8] {
+		&self.inner
+	}
 }
 
 #[cfg(test)]
@@ -1704,7 +1810,7 @@ mod tests {
 		let (_rem, cert) = x509_parser::parse_x509_certificate(&der).unwrap();
 
 		// Check oid
-		let key_usage_oid_str= "2.5.29.15";
+		let key_usage_oid_str = "2.5.29.15";
 
 		// Found flag
 		let mut found = false;
@@ -1712,11 +1818,11 @@ mod tests {
 		for ext in cert.extensions() {
 			if key_usage_oid_str == ext.oid.to_id_string() {
 				match ext.parsed_extension() {
-					x509_parser::extensions::ParsedExtension::KeyUsage(usage) =>{
+					x509_parser::extensions::ParsedExtension::KeyUsage(usage) => {
 						assert!(usage.flags == 7);
 						found = true;
-					}
-					_ => {}
+					},
+					_ => {},
 				}
 			}
 		}
@@ -1744,7 +1850,7 @@ mod tests {
 		let (_rem, cert) = x509_parser::parse_x509_certificate(&der).unwrap();
 
 		// Check oid
-		let key_usage_oid_str= "2.5.29.15";
+		let key_usage_oid_str = "2.5.29.15";
 
 		// Found flag
 		let mut found = false;
@@ -1752,11 +1858,11 @@ mod tests {
 		for ext in cert.extensions() {
 			if key_usage_oid_str == ext.oid.to_id_string() {
 				match ext.parsed_extension() {
-					x509_parser::extensions::ParsedExtension::KeyUsage(usage) =>{
+					x509_parser::extensions::ParsedExtension::KeyUsage(usage) => {
 						assert!(usage.flags == 256);
 						found = true;
-					}
-					_ => {}
+					},
+					_ => {},
 				}
 			}
 		}
@@ -1793,16 +1899,21 @@ mod tests {
 		// algorithms, as it has no access to the iter function.
 		for (i, alg_i) in SignatureAlgorithm::iter().enumerate() {
 			for (j, alg_j) in SignatureAlgorithm::iter().enumerate() {
-				assert_eq!(alg_i == alg_j, i == j,
-					"Algorighm relationship mismatch for algorithm index pair {} and {}", i, j);
+				assert_eq!(
+					alg_i == alg_j,
+					i == j,
+					"Algorighm relationship mismatch for algorithm index pair {} and {}",
+					i,
+					j
+				);
 			}
 		}
 	}
 
 	#[cfg(feature = "pem")]
 	mod test_pem_serialization {
-    use crate::CertificateParams;
-    use crate::Certificate;
+		use crate::Certificate;
+		use crate::CertificateParams;
 
 		#[test]
 		#[cfg(windows)]
@@ -1823,16 +1934,15 @@ mod tests {
 
 	#[cfg(feature = "x509-parser")]
 	mod test_ip_address_from_octets {
-		use std::net::IpAddr;
 		use super::super::ip_addr_from_octets;
 		use super::super::RcgenError;
+		use std::net::IpAddr;
 
 		#[test]
 		fn ipv4() {
 			let octets = [10, 20, 30, 40];
 
-			let actual = ip_addr_from_octets(&octets)
-				.unwrap();
+			let actual = ip_addr_from_octets(&octets).unwrap();
 
 			assert_eq!(IpAddr::from(octets), actual)
 		}
@@ -1841,8 +1951,7 @@ mod tests {
 		fn ipv6() {
 			let octets = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
 
-			let actual = ip_addr_from_octets(&octets)
-				.unwrap();
+			let actual = ip_addr_from_octets(&octets).unwrap();
 
 			assert_eq!(IpAddr::from(octets), actual)
 		}
@@ -1850,16 +1959,14 @@ mod tests {
 		#[test]
 		fn mismatch() {
 			let incorrect: Vec<u8> = (0..10).into_iter().collect();
-			let actual = ip_addr_from_octets(&incorrect)
-				.unwrap_err();
+			let actual = ip_addr_from_octets(&incorrect).unwrap_err();
 
 			assert_eq!(RcgenError::InvalidIpAddressOctetLength(10), actual);
 		}
 
 		#[test]
 		fn none() {
-			let actual = ip_addr_from_octets(&[])
-				.unwrap_err();
+			let actual = ip_addr_from_octets(&[]).unwrap_err();
 
 			assert_eq!(RcgenError::InvalidIpAddressOctetLength(0), actual);
 		}
@@ -1867,8 +1974,7 @@ mod tests {
 		#[test]
 		fn too_many() {
 			let incorrect: Vec<u8> = (0..20).into_iter().collect();
-			let actual = ip_addr_from_octets(&incorrect)
-				.unwrap_err();
+			let actual = ip_addr_from_octets(&incorrect).unwrap_err();
 
 			assert_eq!(RcgenError::InvalidIpAddressOctetLength(20), actual);
 		}
@@ -1876,16 +1982,15 @@ mod tests {
 
 	#[cfg(feature = "x509-parser")]
 	mod test_san_type_from_general_name {
+		use crate::SanType;
 		use std::net::IpAddr;
 		use x509_parser::extensions::GeneralName;
-		use crate::SanType;
 
 		#[test]
 		fn with_ipv4() {
 			let octets = [1, 2, 3, 4];
 			let value = GeneralName::IPAddress(&octets);
-			let actual = SanType::try_from_general(&value)
-				.unwrap();
+			let actual = SanType::try_from_general(&value).unwrap();
 
 			assert_eq!(SanType::IpAddress(IpAddr::from(octets)), actual);
 		}

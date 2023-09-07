@@ -1,13 +1,18 @@
-use yasna::Tag;
 #[cfg(feature = "pem")]
 use pem::Pem;
-use yasna::DERWriter;
 use time::OffsetDateTime;
+use yasna::DERWriter;
+use yasna::Tag;
 
-use crate::{write_dt_utc_or_generalized, write_x509_extension, write_x509_authority_key_identifier, write_distinguished_name};
 use crate::oid::*;
-use crate::{Certificate, RcgenError, SerialNumber, SignatureAlgorithm, KeyIdMethod, KeyUsagePurpose};
 use crate::ENCODE_CONFIG;
+use crate::{
+	write_distinguished_name, write_dt_utc_or_generalized, write_x509_authority_key_identifier,
+	write_x509_extension,
+};
+use crate::{
+	Certificate, KeyIdMethod, KeyUsagePurpose, RcgenError, SerialNumber, SignatureAlgorithm,
+};
 
 /// A certificate revocation list (CRL)
 ///
@@ -44,12 +49,12 @@ use crate::ENCODE_CONFIG;
 /// println!("{}", crl.serialize_pem_with_signer(&issuer).unwrap());
 ///# }
 pub struct CertificateRevocationList {
-	params :CertificateRevocationListParams,
+	params: CertificateRevocationListParams,
 }
 
 impl CertificateRevocationList {
 	/// Generates a new certificate revocation list (CRL) from the given parameters.
-	pub fn from_params(params :CertificateRevocationListParams) -> Result<Self, RcgenError> {
+	pub fn from_params(params: CertificateRevocationListParams) -> Result<Self, RcgenError> {
 		if params.next_update.le(&params.this_update) {
 			return Err(RcgenError::InvalidCrlNextUpdate);
 		}
@@ -61,8 +66,10 @@ impl CertificateRevocationList {
 	}
 	/// Serializes the certificate revocation list (CRL) in binary DER format, signed with
 	/// the issuing certificate authority's key.
-	pub fn serialize_der_with_signer(&self, ca :&Certificate) -> Result<Vec<u8>, RcgenError> {
-		if !ca.params.key_usages.is_empty() && !ca.params.key_usages.contains(&KeyUsagePurpose::CrlSign) {
+	pub fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, RcgenError> {
+		if !ca.params.key_usages.is_empty()
+			&& !ca.params.key_usages.contains(&KeyUsagePurpose::CrlSign)
+		{
 			return Err(RcgenError::IssuerNotCrlSigner);
 		}
 		self.params.serialize_der_with_signer(ca)
@@ -72,7 +79,7 @@ impl CertificateRevocationList {
 	///
 	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
-	pub fn serialize_pem_with_signer(&self, ca :&Certificate) -> Result<String, RcgenError> {
+	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, RcgenError> {
 		let contents = self.serialize_der_with_signer(ca)?;
 		let p = Pem::new("X509 CRL", contents);
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
@@ -86,11 +93,11 @@ impl CertificateRevocationList {
 pub struct CrlDistributionPoint {
 	/// One or more URI distribution point names, indicating a place the current CRL can
 	/// be retrieved. When present, SHOULD include at least one LDAP or HTTP URI.
-	pub uris :Vec<String>,
+	pub uris: Vec<String>,
 }
 
 impl CrlDistributionPoint {
-	pub(crate) fn write_der(&self, writer :DERWriter) {
+	pub(crate) fn write_der(&self, writer: DERWriter) {
 		// DistributionPoint SEQUENCE
 		writer.write_sequence(|writer| {
 			write_distribution_point_name_uris(writer.next(), &self.uris);
@@ -98,22 +105,29 @@ impl CrlDistributionPoint {
 	}
 }
 
-fn write_distribution_point_name_uris<'a>(writer :DERWriter, uris: impl IntoIterator<Item = &'a String>) {
+fn write_distribution_point_name_uris<'a>(
+	writer: DERWriter,
+	uris: impl IntoIterator<Item = &'a String>,
+) {
 	// distributionPoint DistributionPointName
 	writer.write_tagged_implicit(Tag::context(0), |writer| {
 		writer.write_sequence(|writer| {
 			// fullName GeneralNames
-			writer.next().write_tagged_implicit(Tag::context(0), | writer| {
-				// GeneralNames
-				writer.write_sequence(|writer| {
-					for uri in uris.into_iter() {
-						// uniformResourceIdentifier [6] IA5String,
-						writer.next().write_tagged_implicit(Tag::context(6), |writer| {
-							writer.write_ia5_string(uri)
-						});
-					}
-				})
-			});
+			writer
+				.next()
+				.write_tagged_implicit(Tag::context(0), |writer| {
+					// GeneralNames
+					writer.write_sequence(|writer| {
+						for uri in uris.into_iter() {
+							// uniformResourceIdentifier [6] IA5String,
+							writer
+								.next()
+								.write_tagged_implicit(Tag::context(6), |writer| {
+									writer.write_ia5_string(uri)
+								});
+						}
+					})
+				});
 		});
 	});
 }
@@ -141,28 +155,28 @@ pub enum RevocationReason {
 /// Parameters used for certificate revocation list (CRL) generation
 pub struct CertificateRevocationListParams {
 	/// Issue date of the CRL.
-	pub this_update :OffsetDateTime,
+	pub this_update: OffsetDateTime,
 	/// The date by which the next CRL will be issued.
-	pub next_update :OffsetDateTime,
+	pub next_update: OffsetDateTime,
 	/// A monotonically increasing sequence number for a given CRL scope and issuer.
-	pub crl_number :SerialNumber,
+	pub crl_number: SerialNumber,
 	/// An optional CRL extension identifying the CRL distribution point and scope for a
 	/// particular CRL as described in RFC 5280 Section 5.2.5[^1].
 	///
 	/// [^1]: <https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5>
-	pub issuing_distribution_point :Option<CrlIssuingDistributionPoint>,
+	pub issuing_distribution_point: Option<CrlIssuingDistributionPoint>,
 	/// A list of zero or more parameters describing revoked certificates included in the CRL.
-	pub revoked_certs :Vec<RevokedCertParams>,
+	pub revoked_certs: Vec<RevokedCertParams>,
 	/// Signature algorithm to use when signing the serialized CRL.
-	pub alg :&'static SignatureAlgorithm,
+	pub alg: &'static SignatureAlgorithm,
 	/// Method to generate key identifiers from public keys
 	///
 	/// Defaults to SHA-256.
-	pub key_identifier_method :KeyIdMethod,
+	pub key_identifier_method: KeyIdMethod,
 }
 
 impl CertificateRevocationListParams {
-	fn serialize_der_with_signer(&self, ca :&Certificate) -> Result<Vec<u8>, RcgenError> {
+	fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, RcgenError> {
 		yasna::try_construct_der(|writer| {
 			// https://www.rfc-editor.org/rfc/rfc5280#section-5.1
 			writer.write_sequence(|writer| {
@@ -184,7 +198,7 @@ impl CertificateRevocationListParams {
 			})
 		})
 	}
-	fn write_crl(&self, writer :DERWriter, ca :&Certificate) -> Result<(), RcgenError> {
+	fn write_crl(&self, writer: DERWriter, ca: &Certificate) -> Result<(), RcgenError> {
 		writer.write_sequence(|writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
@@ -251,9 +265,14 @@ impl CertificateRevocationListParams {
 
 					// Write issuing distribution point (if present).
 					if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
-						write_x509_extension(writer.next(), OID_CRL_ISSUING_DISTRIBUTION_POINT, true, |writer| {
-							issuing_distribution_point.write_der(writer);
-						});
+						write_x509_extension(
+							writer.next(),
+							OID_CRL_ISSUING_DISTRIBUTION_POINT,
+							true,
+							|writer| {
+								issuing_distribution_point.write_der(writer);
+							},
+						);
 					}
 				});
 			});
@@ -267,14 +286,14 @@ impl CertificateRevocationListParams {
 /// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
 pub struct CrlIssuingDistributionPoint {
 	/// The CRL's distribution point, containing a sequence of URIs the CRL can be retrieved from.
-	pub distribution_point :CrlDistributionPoint,
+	pub distribution_point: CrlDistributionPoint,
 	/// An optional description of the CRL's scope. If omitted, the CRL may contain
 	/// both user certs and CA certs.
-	pub scope :Option<CrlScope>,
+	pub scope: Option<CrlScope>,
 }
 
 impl CrlIssuingDistributionPoint {
-	fn write_der(&self, writer :DERWriter) {
+	fn write_der(&self, writer: DERWriter) {
 		// IssuingDistributionPoint SEQUENCE
 		writer.write_sequence(|writer| {
 			// distributionPoint [0] DistributionPointName OPTIONAL
@@ -309,19 +328,19 @@ pub enum CrlScope {
 /// Parameters used for describing a revoked certificate included in a [`CertificateRevocationList`].
 pub struct RevokedCertParams {
 	/// Serial number identifying the revoked certificate.
-	pub serial_number :SerialNumber,
+	pub serial_number: SerialNumber,
 	/// The date at which the CA processed the revocation.
-	pub revocation_time :OffsetDateTime,
+	pub revocation_time: OffsetDateTime,
 	/// An optional reason code identifying why the certificate was revoked.
-	pub reason_code :Option<RevocationReason>,
+	pub reason_code: Option<RevocationReason>,
 	/// An optional field describing the date on which it was known or suspected that the
 	/// private key was compromised or the certificate otherwise became invalid. This date
 	/// may be earlier than the [`RevokedCertParams::revocation_time`].
-	pub invalidity_date :Option<OffsetDateTime>,
+	pub invalidity_date: Option<OffsetDateTime>,
 }
 
 impl RevokedCertParams {
-	fn write_der(&self, writer :DERWriter) {
+	fn write_der(&self, writer: DERWriter) {
 		writer.write_sequence(|writer| {
 			// Write serial number.
 			// RFC 5280 §4.1.2.2:
@@ -331,7 +350,9 @@ impl RevokedCertParams {
 			//    Note: Non-conforming CAs may issue certificates with serial numbers
 			//    that are negative or zero.  Certificate users SHOULD be prepared to
 			//    gracefully handle such certificates.
-			writer.next().write_bigint_bytes(self.serial_number.as_ref(), true);
+			writer
+				.next()
+				.write_bigint_bytes(self.serial_number.as_ref(), true);
 
 			// Write revocation date.
 			write_dt_utc_or_generalized(writer.next(), self.revocation_time);
@@ -342,7 +363,8 @@ impl RevokedCertParams {
 			//   optional for conforming CRL issuers and applications.  However, CRL
 			//   issuers SHOULD include reason codes (Section 5.3.1) and invalidity
 			//   dates (Section 5.3.2) whenever this information is available.
-			let has_reason_code = matches!(self.reason_code, Some(reason) if reason != RevocationReason::Unspecified);
+			let has_reason_code =
+				matches!(self.reason_code, Some(reason) if reason != RevocationReason::Unspecified);
 			let has_invalidity_date = self.invalidity_date.is_some();
 			if has_reason_code || has_invalidity_date {
 				writer.next().write_sequence(|writer| {
@@ -355,9 +377,14 @@ impl RevokedCertParams {
 
 					// Write invalidity date if present.
 					self.invalidity_date.map(|invalidity_date| {
-						write_x509_extension(writer.next(), OID_CRL_INVALIDITY_DATE, false, |writer| {
-							write_dt_utc_or_generalized(writer, invalidity_date);
-						})
+						write_x509_extension(
+							writer.next(),
+							OID_CRL_INVALIDITY_DATE,
+							false,
+							|writer| {
+								write_dt_utc_or_generalized(writer, invalidity_date);
+							},
+						)
 					});
 				});
 			}

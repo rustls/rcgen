@@ -1,5 +1,5 @@
-use std::fmt;
 use std::error::Error;
+use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -49,26 +49,40 @@ pub enum RcgenError {
 }
 
 impl fmt::Display for RcgenError {
-	fn fmt(&self, f :&mut fmt::Formatter) -> fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use self::RcgenError::*;
 		match self {
 			CouldNotParseCertificate => write!(f, "Could not parse certificate")?,
-			CouldNotParseCertificationRequest => write!(f, "Could not parse certificate signing \
-				request")?,
+			CouldNotParseCertificationRequest => write!(
+				f,
+				"Could not parse certificate signing \
+				request"
+			)?,
 			CouldNotParseKeyPair => write!(f, "Could not parse key pair")?,
 			#[cfg(feature = "x509-parser")]
 			InvalidNameType => write!(f, "Invalid subject alternative name type")?,
-			InvalidIpAddressOctetLength(actual) => write!(f, "Invalid IP address octet length of {actual} bytes")?,
-			KeyGenerationUnavailable => write!(f, "There is no support for generating \
-				keys for the given algorithm")?,
-			UnsupportedSignatureAlgorithm => write!(f, "The requested signature algorithm \
-				is not supported")?,
+			InvalidIpAddressOctetLength(actual) => {
+				write!(f, "Invalid IP address octet length of {actual} bytes")?
+			},
+			KeyGenerationUnavailable => write!(
+				f,
+				"There is no support for generating \
+				keys for the given algorithm"
+			)?,
+			UnsupportedSignatureAlgorithm => write!(
+				f,
+				"The requested signature algorithm \
+				is not supported"
+			)?,
 			#[cfg(feature = "x509-parser")]
 			UnsupportedExtension => write!(f, "Unsupported extension requested in CSR")?,
 			RingUnspecified => write!(f, "Unspecified ring error")?,
 			RingKeyRejected(e) => write!(f, "Key rejected by ring: {}", e)?,
-			CertificateKeyPairMismatch => write!(f, "The provided certificate's signature \
-				algorithm is incompatible with the given key pair")?,
+			CertificateKeyPairMismatch => write!(
+				f,
+				"The provided certificate's signature \
+				algorithm is incompatible with the given key pair"
+			)?,
 
 			Time => write!(f, "Time error")?,
 			RemoteKeyError => write!(f, "Remote key error")?,
@@ -76,7 +90,10 @@ impl fmt::Display for RcgenError {
 			PemError(e) => write!(f, "PEM error: {}", e)?,
 			UnsupportedInCsr => write!(f, "Certificate parameter unsupported in CSR")?,
 			InvalidCrlNextUpdate => write!(f, "Invalid CRL next update parameter")?,
-			IssuerNotCrlSigner => write!(f, "CRL issuer must specify no key usage, or key usage including cRLSign")?,
+			IssuerNotCrlSigner => write!(
+				f,
+				"CRL issuer must specify no key usage, or key usage including cRLSign"
+			)?,
 		};
 		Ok(())
 	}
@@ -85,20 +102,20 @@ impl fmt::Display for RcgenError {
 impl Error for RcgenError {}
 
 impl From<ring::error::Unspecified> for RcgenError {
-	fn from(_unspecified :ring::error::Unspecified) -> Self {
+	fn from(_unspecified: ring::error::Unspecified) -> Self {
 		RcgenError::RingUnspecified
 	}
 }
 
 impl From<ring::error::KeyRejected> for RcgenError {
-	fn from(err :ring::error::KeyRejected) -> Self {
+	fn from(err: ring::error::KeyRejected) -> Self {
 		RcgenError::RingKeyRejected(err.description_())
 	}
 }
 
 #[cfg(feature = "pem")]
 impl From<pem::PemError> for RcgenError {
-	fn from(e :pem::PemError) -> Self {
+	fn from(e: pem::PemError) -> Self {
 		RcgenError::PemError(e)
 	}
 }

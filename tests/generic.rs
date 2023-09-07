@@ -1,8 +1,8 @@
 mod util;
 
-use rcgen::{RcgenError, KeyPair, Certificate};
-use std::hash::{Hash, Hasher};
+use rcgen::{Certificate, KeyPair, RcgenError};
 use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 fn generate_hash<T: Hash>(subject: &T) -> u64 {
 	let mut hasher = DefaultHasher::new();
@@ -41,15 +41,21 @@ fn test_key_params_mismatch() {
 			assert_eq!(
 				Certificate::from_params(wrong_params).err(),
 				Some(RcgenError::CertificateKeyPairMismatch),
-				"i: {} j: {}", i, j);
+				"i: {} j: {}",
+				i,
+				j
+			);
 		}
 	}
 }
 
 #[cfg(feature = "x509-parser")]
 mod test_convert_x509_subject_alternative_name {
+	use rcgen::{
+		BasicConstraints, Certificate, CertificateParams, IsCa, KeyPair, SanType,
+		PKCS_ECDSA_P256_SHA256,
+	};
 	use std::net::{IpAddr, Ipv4Addr};
-	use rcgen::{BasicConstraints, Certificate, CertificateParams, IsCa, KeyPair, PKCS_ECDSA_P256_SHA256, SanType};
 
 	#[test]
 	fn converts_from_ip() {
@@ -80,11 +86,11 @@ mod test_convert_x509_subject_alternative_name {
 
 #[cfg(feature = "x509-parser")]
 mod test_x509_parser_crl {
+	use crate::util;
 	use x509_parser::num_bigint::BigUint;
 	use x509_parser::prelude::{FromDer, X509Certificate};
 	use x509_parser::revocation_list::CertificateRevocationList;
 	use x509_parser::x509::X509Version;
-	use crate::util;
 
 	#[test]
 	fn parse_crl() {
@@ -99,30 +105,44 @@ mod test_x509_parser_crl {
 		let crl_der = crl.serialize_der_with_signer(&issuer).unwrap();
 
 		// We should be able to parse the CRL with x509-parser without error.
-		let (_, x509_crl) = CertificateRevocationList::from_der(&crl_der)
-			.expect("failed to parse CRL DER");
+		let (_, x509_crl) =
+			CertificateRevocationList::from_der(&crl_der).expect("failed to parse CRL DER");
 
 		// The properties of the CRL should match expected.
 		assert_eq!(x509_crl.version().unwrap(), X509Version(1));
 		assert_eq!(x509_crl.issuer(), x509_issuer.subject());
-		assert_eq!(x509_crl.last_update().to_datetime().unix_timestamp(),
-				   crl.get_params().this_update.unix_timestamp());
-		assert_eq!(x509_crl.next_update().unwrap().to_datetime().unix_timestamp(),
-				   crl.get_params().next_update.unix_timestamp());
+		assert_eq!(
+			x509_crl.last_update().to_datetime().unix_timestamp(),
+			crl.get_params().this_update.unix_timestamp()
+		);
+		assert_eq!(
+			x509_crl
+				.next_update()
+				.unwrap()
+				.to_datetime()
+				.unix_timestamp(),
+			crl.get_params().next_update.unix_timestamp()
+		);
 		// TODO: Waiting on x509-parser 0.15.1 to be released.
 		// let crl_number = BigUint::from_bytes_be(crl.get_params().crl_number.as_ref());
 		// assert_eq!(x509_crl.crl_number().unwrap(), &crl_number);
 
 		// We should find the expected revoked certificate serial with the correct reason code.
-		let x509_revoked_cert = x509_crl.iter_revoked_certificates().next()
+		let x509_revoked_cert = x509_crl
+			.iter_revoked_certificates()
+			.next()
 			.expect("failed to find revoked cert in CRL");
 		assert_eq!(x509_revoked_cert.user_certificate, revoked_cert_serial);
 		let (_, reason_code) = x509_revoked_cert.reason_code().unwrap();
-	 	assert_eq!(reason_code.0, revoked_cert.reason_code.unwrap() as u8);
+		assert_eq!(reason_code.0, revoked_cert.reason_code.unwrap() as u8);
 
 		// The issuing distribution point extension should be present and marked critical.
-		let issuing_dp_ext = x509_crl.extensions().iter()
-			.find(|ext| ext.oid == x509_parser::oid_registry::OID_X509_EXT_ISSUER_DISTRIBUTION_POINT)
+		let issuing_dp_ext = x509_crl
+			.extensions()
+			.iter()
+			.find(|ext| {
+				ext.oid == x509_parser::oid_registry::OID_X509_EXT_ISSUER_DISTRIBUTION_POINT
+			})
 			.expect("failed to find issuing distribution point extension");
 		assert!(issuing_dp_ext.critical);
 		// TODO: x509-parser does not yet parse the CRL issuing DP extension for further examination.
@@ -134,8 +154,8 @@ mod test_x509_parser_crl {
 
 #[cfg(feature = "x509-parser")]
 mod test_parse_crl_dps {
-	use x509_parser::extensions::{DistributionPointName, ParsedExtension};
 	use crate::util;
+	use x509_parser::extensions::{DistributionPointName, ParsedExtension};
 
 	#[test]
 	fn parse_crl_dps() {
@@ -144,7 +164,8 @@ mod test_parse_crl_dps {
 		let (_, parsed_cert) = x509_parser::parse_x509_certificate(&der).unwrap();
 
 		// We should find a CRL DP extension was parsed.
-		let crl_dps = parsed_cert.get_extension_unique(&x509_parser::oid_registry::OID_X509_EXT_CRL_DISTRIBUTION_POINTS)
+		let crl_dps = parsed_cert
+			.get_extension_unique(&x509_parser::oid_registry::OID_X509_EXT_CRL_DISTRIBUTION_POINTS)
 			.expect("malformed CRL distribution points extension")
 			.expect("missing CRL distribution points extension");
 
@@ -154,7 +175,7 @@ mod test_parse_crl_dps {
 		// We should be able to parse the definition.
 		let crl_dps = match crl_dps.parsed_extension() {
 			ParsedExtension::CRLDistributionPoints(crl_dps) => crl_dps,
-			_ => panic!("unexpected parsed extension type")
+			_ => panic!("unexpected parsed extension type"),
 		};
 
 		// There should be two DPs.
@@ -162,26 +183,44 @@ mod test_parse_crl_dps {
 
 		// Each distribution point should only include a distribution point name holding a sequence
 		// of general names.
-		let general_names = crl_dps.points.iter().flat_map(|dp| {
-			// We shouldn't find a cRLIssuer or onlySomeReasons field.
-			assert!(dp.crl_issuer.is_none());
-			assert!(dp.reasons.is_none());
+		let general_names = crl_dps
+			.points
+			.iter()
+			.flat_map(|dp| {
+				// We shouldn't find a cRLIssuer or onlySomeReasons field.
+				assert!(dp.crl_issuer.is_none());
+				assert!(dp.reasons.is_none());
 
-			match dp.distribution_point.as_ref().expect("missing distribution point name") {
-				DistributionPointName::FullName(general_names) => general_names.iter(),
-				DistributionPointName::NameRelativeToCRLIssuer(_) => panic!("unexpected name relative to cRL issuer")
-			}
-		}).collect::<Vec<_>>();
+				match dp
+					.distribution_point
+					.as_ref()
+					.expect("missing distribution point name")
+				{
+					DistributionPointName::FullName(general_names) => general_names.iter(),
+					DistributionPointName::NameRelativeToCRLIssuer(_) => {
+						panic!("unexpected name relative to cRL issuer")
+					},
+				}
+			})
+			.collect::<Vec<_>>();
 
 		// All of the general names should be URIs.
-		let uris = general_names.iter().map(|general_name| {
-			match general_name {
+		let uris = general_names
+			.iter()
+			.map(|general_name| match general_name {
 				x509_parser::extensions::GeneralName::URI(uri) => *uri,
-				_ => panic!("unexpected general name type")
-			}
-		}).collect::<Vec<_>>();
+				_ => panic!("unexpected general name type"),
+			})
+			.collect::<Vec<_>>();
 
 		// We should find the expected URIs.
-		assert_eq!(uris, &["http://example.com/crl.der", "http://crls.example.com/1234", "ldap://example.com/crl.der"]);
+		assert_eq!(
+			uris,
+			&[
+				"http://example.com/crl.der",
+				"http://crls.example.com/1234",
+				"ldap://example.com/crl.der"
+			]
+		);
 	}
 }

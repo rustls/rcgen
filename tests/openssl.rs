@@ -1,20 +1,21 @@
-use rcgen::{Certificate, NameConstraints, GeneralSubtree, IsCa, BasicConstraints, CertificateParams, DnType, DnValue};
-use openssl::pkey::PKey;
-use openssl::x509::{CrlStatus, X509, X509Crl, X509Req, X509StoreContext};
-use openssl::x509::store::{X509StoreBuilder, X509Store};
-use openssl::ssl::{SslMethod, SslConnector,
-	SslAcceptor, HandshakeError};
-use openssl::stack::Stack;
 use openssl::asn1::{Asn1Integer, Asn1Time};
 use openssl::bn::BigNum;
-use std::io::{Write, Read, Result as ioResult, ErrorKind,
-	Error};
+use openssl::pkey::PKey;
+use openssl::ssl::{HandshakeError, SslAcceptor, SslConnector, SslMethod};
+use openssl::stack::Stack;
+use openssl::x509::store::{X509Store, X509StoreBuilder};
+use openssl::x509::{CrlStatus, X509Crl, X509Req, X509StoreContext, X509};
+use rcgen::{
+	BasicConstraints, Certificate, CertificateParams, DnType, DnValue, GeneralSubtree, IsCa,
+	NameConstraints,
+};
 use std::cell::RefCell;
+use std::io::{Error, ErrorKind, Read, Result as ioResult, Write};
 use std::rc::Rc;
 
 mod util;
 
-fn verify_cert_basic(cert :&Certificate) {
+fn verify_cert_basic(cert: &Certificate) {
 	let cert_pem = cert.serialize_pem().unwrap();
 	println!("{cert_pem}");
 
@@ -22,14 +23,15 @@ fn verify_cert_basic(cert :&Certificate) {
 	let mut builder = X509StoreBuilder::new().unwrap();
 	builder.add_cert(x509.clone()).unwrap();
 
-	let store :X509Store = builder.build();
+	let store: X509Store = builder.build();
 	let mut ctx = X509StoreContext::new().unwrap();
 	let mut stack = Stack::new().unwrap();
 	stack.push(x509.clone()).unwrap();
 	ctx.init(&store, &x509, &stack.as_ref(), |ctx| {
 		ctx.verify_cert().unwrap();
 		Ok(())
-	}).unwrap();
+	})
+	.unwrap();
 }
 
 // TODO implement Debug manually instead of
@@ -39,24 +41,27 @@ struct PipeInner([Vec<u8>; 2]);
 
 #[derive(Debug)]
 struct PipeEnd {
-	read_pos :usize,
+	read_pos: usize,
 	/// Which end of the pipe
-	end_idx :usize,
-	inner :Rc<RefCell<PipeInner>>,
+	end_idx: usize,
+	inner: Rc<RefCell<PipeInner>>,
 }
 
 fn create_pipe() -> (PipeEnd, PipeEnd) {
 	let pipe_inner = PipeInner([Vec::new(), Vec::new()]);
 	let inner = Rc::new(RefCell::new(pipe_inner));
-	(PipeEnd {
-		read_pos : 0,
-		end_idx : 0,
-		inner : inner.clone(),
-	},	PipeEnd {
-		read_pos : 0,
-		end_idx : 1,
-		inner,
-	})
+	(
+		PipeEnd {
+			read_pos: 0,
+			end_idx: 0,
+			inner: inner.clone(),
+		},
+		PipeEnd {
+			read_pos: 0,
+			end_idx: 1,
+			inner,
+		},
+	)
 }
 
 impl Write for PipeEnd {
@@ -72,7 +77,7 @@ impl Write for PipeEnd {
 impl Read for PipeEnd {
 	fn read(&mut self, mut buf: &mut [u8]) -> ioResult<usize> {
 		let inner = self.inner.borrow_mut();
-		let r_sl = &inner.0[1-self.end_idx][self.read_pos..];
+		let r_sl = &inner.0[1 - self.end_idx][self.read_pos..];
 		if r_sl.len() == 0 {
 			return Err(Error::new(ErrorKind::WouldBlock, "oh no!"));
 		}
@@ -83,7 +88,7 @@ impl Read for PipeEnd {
 	}
 }
 
-fn verify_cert(cert :&Certificate) {
+fn verify_cert(cert: &Certificate) {
 	verify_cert_basic(cert);
 	let cert_pem = cert.serialize_pem().unwrap();
 	let key = cert.serialize_private_key_der();
@@ -91,7 +96,7 @@ fn verify_cert(cert :&Certificate) {
 	verify_cert_ca(&cert_pem, &key, &cert_pem);
 }
 
-fn verify_cert_ca(cert_pem :&str, key :&[u8], ca_cert_pem :&str) {
+fn verify_cert_ca(cert_pem: &str, key: &[u8], ca_cert_pem: &str) {
 	println!("{cert_pem}");
 	println!("{ca_cert_pem}");
 
@@ -99,11 +104,10 @@ fn verify_cert_ca(cert_pem :&str, key :&[u8], ca_cert_pem :&str) {
 
 	let ca_x509 = X509::from_pem(&ca_cert_pem.as_bytes()).unwrap();
 
-
 	let mut builder = X509StoreBuilder::new().unwrap();
 	builder.add_cert(ca_x509).unwrap();
 
-	let store :X509Store = builder.build();
+	let store: X509Store = builder.build();
 
 	let srv = SslMethod::tls_server();
 	let mut ssl_srv_ctx = SslAcceptor::mozilla_modern(srv).unwrap();
@@ -148,8 +152,8 @@ fn verify_cert_ca(cert_pem :&str, key :&[u8], ca_cert_pem :&str) {
 		}
 	};
 
-	const HELLO_FROM_SRV :&[u8] = b"hello from server";
-	const HELLO_FROM_CLN :&[u8] = b"hello from client";
+	const HELLO_FROM_SRV: &[u8] = b"hello from server";
+	const HELLO_FROM_CLN: &[u8] = b"hello from client";
 
 	ssl_srv_stream.ssl_write(HELLO_FROM_SRV).unwrap();
 	ssl_cln_stream.ssl_write(HELLO_FROM_CLN).unwrap();
@@ -157,7 +161,7 @@ fn verify_cert_ca(cert_pem :&str, key :&[u8], ca_cert_pem :&str) {
 	// TODO read the data we just wrote from the streams
 }
 
-fn verify_csr(cert :&Certificate) {
+fn verify_csr(cert: &Certificate) {
 	let csr = cert.serialize_request_pem().unwrap();
 	println!("{csr}");
 	let key = cert.serialize_private_key_der();
@@ -314,8 +318,12 @@ fn test_openssl_separate_ca() {
 	let ca_cert_pem = ca_cert.serialize_pem().unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	params
+		.distinguished_name
+		.push(DnType::OrganizationName, "Crab widgits SE");
+	params
+		.distinguished_name
+		.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap();
 	let cert_pem = cert.serialize_pem_with_signer(&ca_cert).unwrap();
 	let key = cert.serialize_private_key_der();
@@ -326,14 +334,21 @@ fn test_openssl_separate_ca() {
 #[test]
 fn test_openssl_separate_ca_with_printable_string() {
 	let mut params = util::default_params();
-	params.distinguished_name.push(DnType::CountryName, DnValue::PrintableString("US".to_string()));
+	params.distinguished_name.push(
+		DnType::CountryName,
+		DnValue::PrintableString("US".to_string()),
+	);
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::from_params(params).unwrap();
 	let ca_cert_pem = ca_cert.serialize_pem().unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	params
+		.distinguished_name
+		.push(DnType::OrganizationName, "Crab widgits SE");
+	params
+		.distinguished_name
+		.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap();
 	let cert_pem = cert.serialize_pem_with_signer(&ca_cert).unwrap();
 	let key = cert.serialize_private_key_der();
@@ -351,8 +366,12 @@ fn test_openssl_separate_ca_with_other_signing_alg() {
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
 	params.alg = &rcgen::PKCS_ECDSA_P384_SHA384;
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	params
+		.distinguished_name
+		.push(DnType::OrganizationName, "Crab widgits SE");
+	params
+		.distinguished_name
+		.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap();
 	let cert_pem = cert.serialize_pem_with_signer(&ca_cert).unwrap();
 	let key = cert.serialize_private_key_der();
@@ -368,18 +387,22 @@ fn test_openssl_separate_ca_name_constraints() {
 	println!("openssl version: {:x}", openssl::version::number());
 
 	params.name_constraints = Some(NameConstraints {
-		permitted_subtrees : vec![GeneralSubtree::DnsName("crabs.crabs".to_string())],
+		permitted_subtrees: vec![GeneralSubtree::DnsName("crabs.crabs".to_string())],
 		//permitted_subtrees : vec![GeneralSubtree::DnsName("".to_string())],
 		//permitted_subtrees : Vec::new(),
 		//excluded_subtrees : vec![GeneralSubtree::DnsName(".v".to_string())],
-		excluded_subtrees : Vec::new(),
+		excluded_subtrees: Vec::new(),
 	});
 	let ca_cert = Certificate::from_params(params).unwrap();
 	let ca_cert_pem = ca_cert.serialize_pem().unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
-	params.distinguished_name.push(DnType::OrganizationName, "Crab widgits SE");
-	params.distinguished_name.push(DnType::CommonName, "Dev domain");
+	params
+		.distinguished_name
+		.push(DnType::OrganizationName, "Crab widgits SE");
+	params
+		.distinguished_name
+		.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::from_params(params).unwrap();
 	let cert_pem = cert.serialize_pem_with_signer(&ca_cert).unwrap();
 	let key = cert.serialize_private_key_der();
@@ -406,15 +429,19 @@ fn test_openssl_crl_parse() {
 
 	// The properties of the CRL should match expected.
 	let openssl_issuer = X509::from_der(&issuer.serialize_der().unwrap()).unwrap();
-	let expected_last_update = Asn1Time::from_unix(crl.get_params().this_update.unix_timestamp())
-		.unwrap();
+	let expected_last_update =
+		Asn1Time::from_unix(crl.get_params().this_update.unix_timestamp()).unwrap();
 	assert!(openssl_crl.last_update().eq(&expected_last_update));
-	let expected_next_update = Asn1Time::from_unix(crl.get_params().next_update.unix_timestamp())
-		.unwrap();
+	let expected_next_update =
+		Asn1Time::from_unix(crl.get_params().next_update.unix_timestamp()).unwrap();
 	assert!(openssl_crl.next_update().unwrap().eq(&expected_next_update));
 	assert!(matches!(
-		openssl_crl.issuer_name().try_cmp(openssl_issuer.issuer_name()).unwrap(),
-		core::cmp::Ordering::Equal));
+		openssl_crl
+			.issuer_name()
+			.try_cmp(openssl_issuer.issuer_name())
+			.unwrap(),
+		core::cmp::Ordering::Equal
+	));
 
 	// We should find the revoked certificate is revoked.
 	let openssl_serial = BigNum::from_slice(revoked_cert_serial.as_ref()).unwrap();
@@ -424,7 +451,9 @@ fn test_openssl_crl_parse() {
 
 	// We should be able to verify the CRL signature with the issuer's public key.
 	let issuer_pkey = openssl_issuer.public_key().unwrap();
-	assert!(openssl_crl.verify(&issuer_pkey).expect("failed to verify CRL signature"));
+	assert!(openssl_crl
+		.verify(&issuer_pkey)
+		.expect("failed to verify CRL signature"));
 }
 
 #[test]
@@ -434,26 +463,41 @@ fn test_openssl_crl_dps_parse() {
 	let cert = X509::from_der(&der).expect("failed to parse cert DER");
 
 	// We should find the CRL DPs extension.
-	let dps = cert.crl_distribution_points().expect("missing crl distribution points extension");
+	let dps = cert
+		.crl_distribution_points()
+		.expect("missing crl distribution points extension");
 	assert!(!dps.is_empty());
 
 	// We should find two distribution points, each with a distribution point name containing
 	// a full name sequence of general names.
-	let general_names = dps.iter().flat_map(|dp|
-		dp.distpoint()
-			.expect("distribution point missing distribution point name")
-			.fullname()
-			.expect("distribution point name missing general names")
-			.iter()
-	)
-	.collect::<Vec<_>>();
+	let general_names = dps
+		.iter()
+		.flat_map(|dp| {
+			dp.distpoint()
+				.expect("distribution point missing distribution point name")
+				.fullname()
+				.expect("distribution point name missing general names")
+				.iter()
+		})
+		.collect::<Vec<_>>();
 
 	// Each general name should be a URI name.
-	let uris = general_names.iter().map(|general_name|
-		general_name.uri().expect("general name is not a directory name")
-	)
-	.collect::<Vec<_>>();
+	let uris = general_names
+		.iter()
+		.map(|general_name| {
+			general_name
+				.uri()
+				.expect("general name is not a directory name")
+		})
+		.collect::<Vec<_>>();
 
 	// We should find the expected URIs.
-	assert_eq!(uris, &["http://example.com/crl.der", "http://crls.example.com/1234", "ldap://example.com/crl.der"]);
+	assert_eq!(
+		uris,
+		&[
+			"http://example.com/crl.der",
+			"http://crls.example.com/1234",
+			"ldap://example.com/crl.der"
+		]
+	);
 }
