@@ -76,7 +76,7 @@ impl KeyPair {
 	}
 
 	/// Obtains the key pair from a DER formatted key
-	/// using the specified [`SignatureAlgorithm`](SignatureAlgorithm)
+	/// using the specified [`SignatureAlgorithm`]
 	///
 	/// Same as [from_pem_and_sign_algo](Self::from_pem_and_sign_algo).
 	///
@@ -92,11 +92,11 @@ impl KeyPair {
 	}
 
 	/// Obtains the key pair from a DER formatted key
-	/// using the specified [`SignatureAlgorithm`](SignatureAlgorithm)
+	/// using the specified [`SignatureAlgorithm`]
 	///
 	/// Usually, calling this function is not neccessary and you can just call
 	/// [`from_der`](Self::from_der) instead. That function will try to figure
-	/// out a fitting [`SignatureAlgorithm`](SignatureAlgorithm) for the given
+	/// out a fitting [`SignatureAlgorithm`] for the given
 	/// key pair. However sometimes multiple signature algorithms fit for the
 	/// same der key. In that instance, you can use this function to precisely
 	/// specify the `SignatureAlgorithm`.
