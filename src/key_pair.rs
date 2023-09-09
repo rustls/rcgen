@@ -57,8 +57,6 @@ impl KeyPair {
 		Ok(der.try_into()?)
 	}
 	/// Parses the key pair from the ASCII PEM format
-	///
-	/// *This constructor is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn from_pem(pem_str: &str) -> Result<Self, RcgenError> {
 		let private_key = pem::parse(pem_str)?;
@@ -79,8 +77,6 @@ impl KeyPair {
 	/// using the specified [`SignatureAlgorithm`]
 	///
 	/// Same as [from_pem_and_sign_algo](Self::from_pem_and_sign_algo).
-	///
-	/// *This constructor is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn from_pem_and_sign_algo(
 		pem_str: &str,
@@ -296,8 +292,6 @@ impl KeyPair {
 	/// Return the key pair's public key in PEM format
 	///
 	/// The returned string can be interpreted with `openssl pkey --inform PEM -pubout -pubin -text`
-	///
-	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn public_key_pem(&self) -> String {
 		let contents = self.public_key_der();
@@ -337,8 +331,6 @@ impl KeyPair {
 	}
 
 	/// Serializes the key pair (including the private key) in PKCS#8 format in PEM
-	///
-	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem(&self) -> String {
 		let contents = self.serialize_der();

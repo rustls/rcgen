@@ -564,8 +564,6 @@ impl CertificateParams {
 	/// Parses a ca certificate from the ASCII PEM format for signing
 	///
 	/// See [`from_ca_cert_der`](Self::from_ca_cert_der) for more details.
-	///
-	/// *This constructor is only available if rcgen is built with the "pem" and "x509-parser" features*
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
 	pub fn from_ca_cert_pem(pem_str: &str, key_pair: KeyPair) -> Result<Self, RcgenError> {
 		let certificate = pem::parse(pem_str).or(Err(RcgenError::CouldNotParseCertificate))?;
@@ -585,8 +583,6 @@ impl CertificateParams {
 	/// and left to defaults.
 	///
 	/// Will not check if certificate is a ca certificate!
-	///
-	/// *This constructor is only available if rcgen is built with the "x509-parser" feature*
 	#[cfg(feature = "x509-parser")]
 	pub fn from_ca_cert_der(ca_cert: &[u8], key_pair: KeyPair) -> Result<Self, RcgenError> {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
@@ -1566,8 +1562,6 @@ impl Certificate {
 		&self.key_pair
 	}
 	/// Serializes the certificate to the ASCII PEM format
-	///
-	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem(&self) -> Result<String, RcgenError> {
 		let contents = self.serialize_der()?;
@@ -1575,8 +1569,6 @@ impl Certificate {
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}
 	/// Serializes the certificate, signed with another certificate's key, to the ASCII PEM format
-	///
-	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, RcgenError> {
 		let contents = self.serialize_der_with_signer(ca)?;
@@ -1584,8 +1576,6 @@ impl Certificate {
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}
 	/// Serializes the certificate signing request to the ASCII PEM format
-	///
-	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_request_pem(&self) -> Result<String, RcgenError> {
 		let contents = self.serialize_request_der()?;
@@ -1601,8 +1591,6 @@ impl Certificate {
 	/// Serializes the private key in PEM format
 	///
 	/// Panics if called on a remote key pair.
-	///
-	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_private_key_pem(&self) -> String {
 		self.key_pair.serialize_pem()
