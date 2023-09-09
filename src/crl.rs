@@ -76,8 +76,6 @@ impl CertificateRevocationList {
 	}
 	/// Serializes the certificate revocation list (CRL) in ASCII PEM format, signed with
 	/// the issuing certificate authority's key.
-	///
-	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, RcgenError> {
 		let contents = self.serialize_der_with_signer(ca)?;

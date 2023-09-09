@@ -98,8 +98,6 @@ impl CertificateSigningRequest {
 		self.params.serialize_der_with_signer(&self.public_key, ca)
 	}
 	/// Serializes the requested certificate, signed with another certificate's key, to the ASCII PEM format
-	///
-	/// *This function is only available if rcgen is built with the "pem" feature*
 	#[cfg(feature = "pem")]
 	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, RcgenError> {
 		let contents = self
