@@ -1237,13 +1237,11 @@ impl CertificateParams {
 /// (only relevant for CA certificates)
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct NameConstraints {
-	/// If non-empty, a whitelist of subtrees that the
-	/// domain has to match.
+	/// A list of subtrees that the domain has to match.
 	pub permitted_subtrees: Vec<GeneralSubtree>,
-	/// A list of excluded subtrees.
+	/// A list of subtrees that the domain must not match.
 	///
-	/// Any name matching an excluded subtree is invalid
-	/// even if it also matches a permitted subtree.
+	/// Any name matching an excluded subtree is invalid even if it also matches a permitted subtree.
 	pub excluded_subtrees: Vec<GeneralSubtree>,
 }
 
