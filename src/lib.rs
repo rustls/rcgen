@@ -29,6 +29,7 @@ println!("{}", cert.serialize_private_key_pem());
 #![forbid(non_ascii_idents)]
 #![deny(missing_docs)]
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 #[cfg(feature = "pem")]
 use pem::Pem;

@@ -58,7 +58,7 @@ jobs:
       - name: cargo doc (all features)
         run: cargo doc --all --all-features --document-private-items
         env:
-          RUSTDOCFLAGS: '-Dwarnings'
+          RUSTDOCFLAGS: ${{ matrix.rust_channel == 'nightly' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
 
   build-windows:
     runs-on: windows-latest
