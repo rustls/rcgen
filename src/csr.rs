@@ -24,9 +24,10 @@ impl PublicKeyData for PublicKey {
 }
 
 /// Data for a certificate signing request
-#[allow(missing_docs)]
 pub struct CertificateSigningRequest {
+	/// Parameters for the certificate to be signed.
 	pub params: CertificateParams,
+	/// Public key to include in the certificate signing request.
 	pub public_key: PublicKey,
 }
 
