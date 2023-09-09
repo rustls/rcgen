@@ -56,7 +56,7 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
       - name: cargo doc (all features)
-        run: cargo doc --all --all-features
+        run: cargo doc --all --all-features --document-private-items
         env:
           RUSTDOCFLAGS: '-Dwarnings'
 
