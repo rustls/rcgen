@@ -9,7 +9,6 @@ on:
 
 env:
   RUSTFLAGS: -D warnings
-  RUSTDOCFLAGS: -D warnings
 
 jobs:
   rustfmt:
@@ -41,6 +40,26 @@ jobs:
           components: clippy
       - run: cargo clippy --all-features
 
+  rustdoc:
+    name: Documentation
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain: [stable, beta, nightly, stable 7 months ago]
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - name: cargo doc (all features)
+        run: cargo doc --all --all-features
+        env:
+          RUSTDOCFLAGS: '-Dwarnings'
+
   build-windows:
     runs-on: windows-latest
     steps:
@@ -59,8 +78,6 @@ jobs:
       run: cargo test --all
     - name: Run the tests with x509-parser enabled
       run: cargo test --verbose --features x509-parser
-    - name: Run cargo doc
-      run: cargo doc --all --all-features
 
   build:
     strategy:
@@ -89,8 +106,6 @@ jobs:
       run: cargo test --all
     - name: Run the tests with x509-parser enabled
       run: cargo test --verbose --features x509-parser
-    - name: Run cargo doc
-      run: cargo doc --all --all-features
 
   coverage:
     name: Measure coverage
