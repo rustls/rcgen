@@ -4,6 +4,7 @@ use time::OffsetDateTime;
 use yasna::DERWriter;
 use yasna::Tag;
 
+use crate::ext::Extensions;
 use crate::oid::*;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
@@ -251,6 +252,13 @@ impl CertificateRevocationListParams {
 			//   extensions in all CRLs issued.
 			writer.next().write_tagged(Tag::context(0), |writer| {
 				writer.write_sequence(|writer| {
+					// TODO: have the Extensions type write the outer sequence and each
+					// 		 contained extension once we've ported each of the below
+					//       extensions to self.extensions().
+					for ext in self.extensions(Some(ca)).iter() {
+						Extensions::write_extension(writer, ext);
+					}
+
 					// Write authority key identifier.
 					write_x509_authority_key_identifier(writer.next(), ca);
 
@@ -275,6 +283,19 @@ impl CertificateRevocationListParams {
 
 			Ok(())
 		})
+	}
+	/// Returns the X.509 extensions that the [CertificateRevocationListParams] describe.
+	///
+	/// If an issuer [Certificate] is provided, additional extensions specific to the issuer will
+	/// be included (e.g. the authority key identifier).
+	fn extensions(&self, _issuer: Option<&Certificate>) -> Extensions {
+		let exts = Extensions::default();
+
+		// TODO: AKI.
+		// TODO: CRL number.
+		// TODO: issuing distribution point.
+
+		exts
 	}
 }
 
@@ -364,6 +385,13 @@ impl RevokedCertParams {
 			let has_invalidity_date = self.invalidity_date.is_some();
 			if has_reason_code || has_invalidity_date {
 				writer.next().write_sequence(|writer| {
+					// TODO: have the Extensions type write the outer sequence and each
+					// 		 contained extension once we've ported each of the below
+					//       extensions to self.extensions().
+					for ext in self.extensions().iter() {
+						Extensions::write_extension(writer, ext);
+					}
+
 					// Write reason code if present.
 					self.reason_code.map(|reason_code| {
 						write_x509_extension(writer.next(), OID_CRL_REASONS, false, |writer| {
@@ -385,5 +413,14 @@ impl RevokedCertParams {
 				});
 			}
 		})
+	}
+	/// Returns the X.509 extensions that the [RevokedCertParams] describe.
+	fn extensions(&self) -> Extensions {
+		let exts = Extensions::default();
+
+		// TODO: reason code.
+		// TODO: invalidity date.
+
+		exts
 	}
 }

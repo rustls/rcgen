@@ -57,6 +57,7 @@ pub use crate::crl::{
 };
 pub use crate::csr::{CertificateSigningRequest, PublicKey};
 pub use crate::error::Error;
+use crate::ext::Extensions;
 use crate::key_pair::PublicKeyData;
 pub use crate::key_pair::{KeyPair, RemoteKeyPair};
 use crate::oid::*;
@@ -114,6 +115,7 @@ pub fn generate_simple_self_signed(
 mod crl;
 mod csr;
 mod error;
+mod ext;
 mod key_pair;
 mod oid;
 mod sign_algo;
@@ -893,12 +895,20 @@ impl CertificateParams {
 			// Write extensions
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
 			writer.next().write_tagged(Tag::context(0), |writer| {
+				let extensions = self.extensions(None)?;
 				if !subject_alt_names.is_empty() || !custom_extensions.is_empty() {
 					writer.write_sequence(|writer| {
 						let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
 						writer.next().write_oid(&oid);
 						writer.next().write_set(|writer| {
 							writer.next().write_sequence(|writer| {
+								// TODO: have the Extensions type write the outer sequence and each
+								// 		 contained extension once we've ported each of the below
+								//       extensions to self.extensions().
+								for ext in extensions.iter() {
+									Extensions::write_extension(writer, ext);
+								}
+
 								// Write subject_alt_names
 								self.write_subject_alt_names(writer.next());
 
@@ -915,9 +925,9 @@ impl CertificateParams {
 						});
 					});
 				}
-			});
-		});
-		Ok(())
+				Ok(())
+			})
+		})
 	}
 	fn write_cert<K: PublicKeyData>(
 		&self,
@@ -956,6 +966,7 @@ impl CertificateParams {
 			// Write subjectPublicKeyInfo
 			pub_key.serialize_public_key_der(writer.next());
 			// write extensions
+			let extensions = self.extensions(Some(ca))?;
 			let should_write_exts = self.use_authority_key_identifier_extension
 				|| !self.subject_alt_names.is_empty()
 				|| !self.extended_key_usages.is_empty()
@@ -966,6 +977,13 @@ impl CertificateParams {
 			if should_write_exts {
 				writer.next().write_tagged(Tag::context(3), |writer| {
 					writer.write_sequence(|writer| {
+						// TODO: have the Extensions type write the outer sequence and each
+						// 		 contained extension once we've ported each of the below
+						//       extensions to self.extensions().
+						for ext in extensions.iter() {
+							Extensions::write_extension(writer, ext);
+						}
+
 						if self.use_authority_key_identifier_extension {
 							write_x509_authority_key_identifier(writer.next(), ca)
 						}
@@ -1174,6 +1192,26 @@ impl CertificateParams {
 				Ok(())
 			})
 		})
+	}
+	/// Returns the X.509 extensions that the [CertificateParams] describe, or an [Error]
+	/// if the described extensions are invalid.
+	///
+	/// If an issuer [Certificate] is provided, additional extensions specific to the issuer will
+	/// be included (e.g. the authority key identifier).
+	fn extensions(&self, _issuer: Option<&Certificate>) -> Result<Extensions, Error> {
+		let exts = Extensions::default();
+
+		// TODO: AKI.
+		// TODO: SAN.
+		// TODO: KU.
+		// TODO: EKU.
+		// TODO: name constraints.
+		// TODO: crl distribution points.
+		// TODO: basic constraints.
+		// TODO: subject key identifier.
+		// TODO: custom extensions
+
+		Ok(exts)
 	}
 }
 

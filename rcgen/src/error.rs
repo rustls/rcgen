@@ -13,6 +13,8 @@ pub enum Error {
 	CouldNotParseCertificationRequest,
 	/// The given key pair couldn't be parsed
 	CouldNotParseKeyPair,
+	/// Duplicate extension OID
+	DuplicateExtension(String),
 	/// Invalid certificate revocation list (CRL) next update.
 	InvalidCrlNextUpdate,
 	/// An IP address was provided as a byte array, but the byte array was an invalid length.
@@ -91,6 +93,9 @@ impl fmt::Display for Error {
 				f,
 				"CRL issuer must specify no key usage, or key usage including cRLSign"
 			)?,
+			DuplicateExtension(oid) => {
+				write!(f, "Extension with OID {oid} present multiple times")?
+			},
 		};
 		Ok(())
 	}
