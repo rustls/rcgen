@@ -43,10 +43,18 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    env:
+      # botan doesn't build on windows if the source is
+      # on a different drive than the artifacts
+      # https://github.com/randombit/botan-rs/issues/82
+      BOTAN_CONFIGURE_LINK_METHOD: copy
     steps:
     - uses: actions/checkout@v4
       with:
         persist-credentials: false
+    - uses: egor-tensin/vs-shell@v2
+      with:
+        arch: amd64
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
