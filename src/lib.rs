@@ -999,11 +999,7 @@ impl CertificateParams {
 
 						// Write standard key usage
 						if !self.key_usages.is_empty() {
-							writer.next().write_sequence(|writer| {
-								let oid = ObjectIdentifier::from_slice(OID_KEY_USAGE);
-								writer.next().write_oid(&oid);
-								writer.next().write_bool(true);
-
+							write_x509_extension(writer.next(), OID_KEY_USAGE, true, |writer| {
 								let mut bits: u16 = 0;
 
 								for entry in self.key_usages.iter() {
@@ -1032,12 +1028,7 @@ impl CertificateParams {
 								// Finally take only the bytes != 0
 								let bits = &bits[..nb];
 
-								let der = yasna::construct_der(|writer| {
-									writer.write_bitvec_bytes(&bits, msb as usize)
-								});
-
-								// Write them
-								writer.next().write_bytes(&der);
+								writer.write_bitvec_bytes(&bits, msb as usize)
 							});
 						}
 
