@@ -111,6 +111,9 @@ mod test_x509_custom_ext {
 		// Generate a certificate with the custom extension, parse it with x509-parser.
 		let mut params = util::default_params();
 		params.custom_extensions = vec![custom_ext];
+		// Ensure the custom exts. being omitted into a CSR doesn't require SAN ext being present.
+		// See https://github.com/rustls/rcgen/issues/122
+		params.subject_alt_names = Vec::default();
 		let test_cert = Certificate::from_params(params).unwrap();
 		let test_cert_der = test_cert.serialize_der().unwrap();
 		let (_, x509_test_cert) = X509Certificate::from_der(&test_cert_der).unwrap();

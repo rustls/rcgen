@@ -911,7 +911,7 @@ impl CertificateParams {
 			// Write extensions
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
 			writer.next().write_tagged(Tag::context(0), |writer| {
-				if !subject_alt_names.is_empty() {
+				if !subject_alt_names.is_empty() || !custom_extensions.is_empty() {
 					writer.write_sequence(|writer| {
 						let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
 						writer.next().write_oid(&oid);
