@@ -85,6 +85,74 @@ mod test_convert_x509_subject_alternative_name {
 }
 
 #[cfg(feature = "x509-parser")]
+mod test_x509_custom_ext {
+	use crate::util;
+	use crate::Certificate;
+
+	use rcgen::CustomExtension;
+	use x509_parser::oid_registry::asn1_rs;
+	use x509_parser::prelude::{
+		FromDer, ParsedCriAttribute, X509Certificate, X509CertificationRequest,
+	};
+
+	#[test]
+	fn custom_ext() {
+		// Create an imaginary critical custom extension for testing.
+		let test_oid = asn1_rs::Oid::from(&[2, 5, 29, 999999]).unwrap();
+		let test_ext = yasna::construct_der(|writer| {
+			writer.write_utf8_string("🦀 greetz to ferris 🦀");
+		});
+		let mut custom_ext = CustomExtension::from_oid_content(
+			test_oid.iter().unwrap().collect::<Vec<u64>>().as_slice(),
+			test_ext.clone(),
+		);
+		custom_ext.set_criticality(true);
+
+		// Generate a certificate with the custom extension, parse it with x509-parser.
+		let mut params = util::default_params();
+		params.custom_extensions = vec![custom_ext];
+		let test_cert = Certificate::from_params(params).unwrap();
+		let test_cert_der = test_cert.serialize_der().unwrap();
+		let (_, x509_test_cert) = X509Certificate::from_der(&test_cert_der).unwrap();
+
+		// We should be able to find the extension by OID, with expected criticality and value.
+		let favorite_drink_ext = x509_test_cert
+			.get_extension_unique(&test_oid)
+			.expect("invalid extensions")
+			.expect("missing custom extension");
+		assert_eq!(favorite_drink_ext.critical, true);
+		assert_eq!(favorite_drink_ext.value, test_ext);
+
+		// Generate a CSR with the custom extension, parse it with x509-parser.
+		let test_cert_csr_der = test_cert.serialize_request_der().unwrap();
+		let (_, x509_csr) = X509CertificationRequest::from_der(&test_cert_csr_der).unwrap();
+
+		// We should find that the CSR contains requested extensions.
+		// Note: we can't use `x509_csr.requested_extensions()` here because it maps the raw extension
+		// request extensions to their parsed form, and of course x509-parser doesn't parse our custom extension.
+		let exts = x509_csr
+			.certification_request_info
+			.iter_attributes()
+			.find_map(|attr| {
+				if let ParsedCriAttribute::ExtensionRequest(requested) = &attr.parsed_attribute() {
+					Some(requested.extensions.iter().collect::<Vec<_>>())
+				} else {
+					None
+				}
+			})
+			.expect("missing requested extensions");
+
+		// We should find the custom extension with expected criticality and value.
+		let custom_ext = exts
+			.iter()
+			.find(|ext| ext.oid == test_oid)
+			.expect("missing requested custom extension");
+		assert_eq!(custom_ext.critical, true);
+		assert_eq!(custom_ext.value, test_ext);
+	}
+}
+
+#[cfg(feature = "x509-parser")]
 mod test_x509_parser_crl {
 	use crate::util;
 	use x509_parser::num_bigint::BigUint;
