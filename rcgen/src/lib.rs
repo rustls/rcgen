@@ -852,7 +852,25 @@ impl CertificateParams {
 		}
 		Ok(result)
 	}
+	fn write_extended_key_usages(&self, writer: DERWriter) {
+		if self.extended_key_usages.is_empty() {
+			return;
+		}
+
+		write_x509_extension(writer, OID_EXT_KEY_USAGE, false, |writer| {
+			writer.write_sequence(|writer| {
+				for usage in self.extended_key_usages.iter() {
+					let oid = ObjectIdentifier::from_slice(usage.oid());
+					writer.next().write_oid(&oid);
+				}
+			});
+		});
+	}
 	fn write_subject_alt_names(&self, writer: DERWriter) {
+		if self.subject_alt_names.is_empty() {
+			return;
+		}
+
 		write_x509_extension(writer, OID_SUBJECT_ALT_NAME, false, |writer| {
 			writer.write_sequence(|writer| {
 				for san in self.subject_alt_names.iter() {
@@ -904,7 +922,6 @@ impl CertificateParams {
 		if serial_number.is_some()
 			|| *is_ca != IsCa::NoCa
 			|| !key_usages.is_empty()
-			|| !extended_key_usages.is_empty()
 			|| name_constraints.is_some()
 			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
@@ -921,14 +938,17 @@ impl CertificateParams {
 			// Write extensions
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
 			writer.next().write_tagged(Tag::context(0), |writer| {
-				if !subject_alt_names.is_empty() || !custom_extensions.is_empty() {
+				if !subject_alt_names.is_empty()
+					|| !extended_key_usages.is_empty()
+					|| !custom_extensions.is_empty()
+				{
 					writer.write_sequence(|writer| {
 						let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
 						writer.next().write_oid(&oid);
 						writer.next().write_set(|writer| {
 							writer.next().write_sequence(|writer| {
-								// Write subject_alt_names
 								self.write_subject_alt_names(writer.next());
+								self.write_extended_key_usages(writer.next());
 
 								// Write custom extensions
 								for ext in custom_extensions {
@@ -1004,10 +1024,8 @@ impl CertificateParams {
 								self.key_identifier_method.derive(issuer.public_key_der()),
 							);
 						}
-						// Write subject_alt_names
-						if !self.subject_alt_names.is_empty() {
-							self.write_subject_alt_names(writer.next());
-						}
+
+						self.write_subject_alt_names(writer.next());
 
 						// Write standard key usage
 						if !self.key_usages.is_empty() {
@@ -1044,22 +1062,8 @@ impl CertificateParams {
 							});
 						}
 
-						// Write extended key usage
-						if !self.extended_key_usages.is_empty() {
-							write_x509_extension(
-								writer.next(),
-								OID_EXT_KEY_USAGE,
-								false,
-								|writer| {
-									writer.write_sequence(|writer| {
-										for usage in self.extended_key_usages.iter() {
-											let oid = ObjectIdentifier::from_slice(usage.oid());
-											writer.next().write_oid(&oid);
-										}
-									});
-								},
-							);
-						}
+						self.write_extended_key_usages(writer.next());
+
 						if let Some(name_constraints) = &self.name_constraints {
 							// If both trees are empty, the extension must be omitted.
 							if !name_constraints.is_empty() {
@@ -1871,7 +1875,7 @@ mod tests {
 			if key_usage_oid_str == ext.oid.to_id_string() {
 				match ext.parsed_extension() {
 					x509_parser::extensions::ParsedExtension::KeyUsage(usage) => {
-						assert!(usage.flags == 7);
+						assert_eq!(usage.flags, 7);
 						found = true;
 					},
 					_ => {},
@@ -1966,6 +1970,42 @@ mod tests {
 	}
 
 	#[test]
+	fn test_csr_with_extended_key_usage() {
+		use x509_parser::certification_request::X509CertificationRequest;
+		use x509_parser::extensions::ParsedExtension;
+		use x509_parser::prelude::FromDer;
+
+		let mut dn = DistinguishedName::new();
+		dn.push(DnType::CommonName, "Example Corp");
+
+		let mut params = CertificateParams::default();
+
+		params.is_ca = IsCa::NoCa;
+		params.alg = &PKCS_ECDSA_P256_SHA256;
+		params.distinguished_name = dn;
+		params.subject_alt_names = vec![SanType::DnsName("test.local".to_string())];
+		params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
+
+		let cert = Certificate::generate_self_signed(params).unwrap().cert;
+
+		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+		let der = cert.serialize_request_der(&key_pair).unwrap();
+
+		let (_, x509_csr) = X509CertificationRequest::from_der(&der).unwrap();
+
+		let mut attributes = x509_csr.requested_extensions().unwrap();
+		let extended_key_usage = attributes
+			.find_map(|e| match e {
+				ParsedExtension::ExtendedKeyUsage(e) => Some(e),
+				_ => None,
+			})
+			.unwrap();
+
+		assert_eq!(extended_key_usage.client_auth, false);
+		assert_eq!(extended_key_usage.server_auth, true);
+	}
+
+	#[test]
 	fn signature_algos_different() {
 		// TODO unify this with test_key_params_mismatch.
 		// Note that that test doesn't have a full list of signature
@@ -1975,7 +2015,7 @@ mod tests {
 				assert_eq!(
 					alg_i == alg_j,
 					i == j,
-					"Algorighm relationship mismatch for algorithm index pair {} and {}",
+					"Algorithm relationship mismatch for algorithm index pair {} and {}",
 					i,
 					j
 				);
