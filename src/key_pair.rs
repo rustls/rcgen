@@ -56,6 +56,10 @@ impl KeyPair {
 	pub fn from_der(der: &[u8]) -> Result<Self, RcgenError> {
 		Ok(der.try_into()?)
 	}
+	/// Returns the key pair's signature algorithm
+	pub fn algorithm(&self) -> &'static SignatureAlgorithm {
+		self.alg
+	}
 	/// Parses the key pair from the ASCII PEM format
 	#[cfg(feature = "pem")]
 	pub fn from_pem(pem_str: &str) -> Result<Self, RcgenError> {
@@ -93,7 +97,7 @@ impl KeyPair {
 	/// Usually, calling this function is not neccessary and you can just call
 	/// [`from_der`](Self::from_der) instead. That function will try to figure
 	/// out a fitting [`SignatureAlgorithm`] for the given
-	/// key pair. However sometimes multiple signature algorithms fit for the
+	/// key pair. However, sometimes multiple signature algorithms fit for the
 	/// same der key. In that instance, you can use this function to precisely
 	/// specify the `SignatureAlgorithm`.
 	pub fn from_der_and_sign_algo(
@@ -173,7 +177,7 @@ pub trait RemoteKeyPair {
 	/// Signs `msg` using the selected algorithm
 	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, RcgenError>;
 
-	/// Reveals which algorithm will be used when you call `sign()`
+	/// Reveals the algorithm to be used when calling `sign()`
 	fn algorithm(&self) -> &'static SignatureAlgorithm;
 }
 
@@ -362,5 +366,23 @@ pub(crate) trait PublicKeyData {
 			let pk = self.raw_bytes();
 			writer.next().write_bitvec_bytes(&pk, pk.len() * 8);
 		})
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	use ring::rand::SystemRandom;
+	use ring::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
+
+	#[test]
+	fn test_algorithm() {
+		let rng = SystemRandom::new();
+		let pkcs8 = EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &rng).unwrap();
+		let der = pkcs8.as_ref().to_vec();
+
+		let key_pair = KeyPair::from_der(&der).unwrap();
+		assert_eq!(key_pair.algorithm(), &PKCS_ECDSA_P256_SHA256);
 	}
 }
