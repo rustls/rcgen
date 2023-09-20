@@ -1,6 +1,15 @@
 
 # Changes
 
+## Release 0.11.2 - Pending Release
+
+- Project repository is now part of the [rustls](https://github.com/rustls) organization.
+- Support for retrieving signature algorithm from `KeyPair`s. Contributed by [tindzk](https://github.com/tindzk).
+- Fix for writing certificate signing requests (CSRs) with custom extensions from parameters without subject alternative names.
+- Support for certificate CRL distribution points extension.
+- Corrected OID for `ExtendedKeyUsagePurpose::Any`. Contributed by [jgallagher](https://github.com/jgallagher).
+- Support for creating certificate revocation lists (CRLs).
+
 ## Release 0.11.1 - June 17, 2023
 
 - Make botan a dev-dependency again. Contributed by [mbrubeck](https://github.com/mbrubeck).
