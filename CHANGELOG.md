@@ -1,9 +1,9 @@
 
 # Changes
 
-## Release 0.11.2 - Pending Release
+## Release 0.11.2 - September 21, 2023
 
-- Project repository is now part of the [rustls](https://github.com/rustls) organization.
+- `rcgen` has joined the umbrella of the [rustls](https://github.com/rustls) organization.
 - Support for retrieving signature algorithm from `KeyPair`s. Contributed by [tindzk](https://github.com/tindzk).
 - Fix for writing certificate signing requests (CSRs) with custom extensions from parameters without subject alternative names.
 - Support for certificate CRL distribution points extension.
