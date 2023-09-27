@@ -47,7 +47,6 @@ use crate::{
 ///   key_identifier_method: KeyIdMethod::Sha256,
 /// };
 /// let crl = CertificateRevocationList::from_params(crl).unwrap();
-/// println!("{}", crl.serialize_pem_with_signer(&issuer).unwrap());
 ///# }
 pub struct CertificateRevocationList {
 	params: CertificateRevocationListParams,

@@ -14,10 +14,9 @@ use webpki::{
 use webpki::{DnsNameRef, Time};
 
 use ring::rand::SystemRandom;
-use ring::signature::{
-	self, EcdsaKeyPair, EcdsaSigningAlgorithm, Ed25519KeyPair, KeyPair as _, RsaEncoding,
-	RsaKeyPair,
-};
+use ring::signature::{self, EcdsaKeyPair, EcdsaSigningAlgorithm, Ed25519KeyPair, KeyPair as _};
+#[cfg(feature = "pem")]
+use ring::signature::{RsaEncoding, RsaKeyPair};
 
 use std::convert::TryFrom;
 use time::{Duration, OffsetDateTime};
@@ -39,6 +38,7 @@ fn sign_msg_ed25519(cert: &Certificate, msg: &[u8]) -> Vec<u8> {
 	signature.as_ref().to_vec()
 }
 
+#[cfg(feature = "pem")]
 fn sign_msg_rsa(cert: &Certificate, msg: &[u8], encoding: &'static dyn RsaEncoding) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
 	let key_pair = RsaKeyPair::from_pkcs8(&pk_der).unwrap();
@@ -56,7 +56,10 @@ fn check_cert<'a, 'b>(
 	alg: &SignatureAlgorithm,
 	sign_fn: impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>,
 ) {
-	println!("{}", cert.serialize_pem().unwrap());
+	#[cfg(feature = "pem")]
+	{
+		println!("{}", cert.serialize_pem().unwrap());
+	}
 	check_cert_ca(cert_der, cert, cert_der, alg, alg, sign_fn);
 }
 
@@ -154,6 +157,7 @@ fn test_webpki_25519() {
 	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
 }
 
+#[cfg(feature = "pem")]
 #[test]
 fn test_webpki_25519_v1_given() {
 	let mut params = util::default_params();
@@ -170,6 +174,7 @@ fn test_webpki_25519_v1_given() {
 	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
 }
 
+#[cfg(feature = "pem")]
 #[test]
 fn test_webpki_25519_v2_given() {
 	let mut params = util::default_params();
@@ -186,6 +191,7 @@ fn test_webpki_25519_v2_given() {
 	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
 }
 
+#[cfg(feature = "pem")]
 #[test]
 fn test_webpki_rsa_given() {
 	let mut params = util::default_params();
@@ -207,6 +213,7 @@ fn test_webpki_rsa_given() {
 	);
 }
 
+#[cfg(feature = "pem")]
 #[test]
 fn test_webpki_rsa_combinations_given() {
 	let configs: &[(_, _, &'static dyn signature::RsaEncoding)] = &[

@@ -1,10 +1,9 @@
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 
-use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName};
-use std::convert::TryInto;
-use std::fs;
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+	use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName};
+	use std::fs;
+
 	let mut params: CertificateParams = Default::default();
 	params.not_before = date_time_ymd(2021, 05, 19);
 	params.not_after = date_time_ymd(4096, 01, 01);

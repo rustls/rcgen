@@ -7,7 +7,10 @@ The most simple way of using this crate is by calling the
 [`generate_simple_self_signed`] function.
 For more customization abilities, we provide the lower level
 [`Certificate::from_params`] function.
-
+*/
+#![cfg_attr(
+	feature = "pem",
+	doc = r##"
 ## Example
 
 ```
@@ -22,9 +25,8 @@ let cert = generate_simple_self_signed(subject_alt_names).unwrap();
 println!("{}", cert.serialize_pem().unwrap());
 println!("{}", cert.serialize_private_key_pem());
 # }
-```
-*/
-
+```"##
+)]
 #![forbid(unsafe_code)]
 #![forbid(non_ascii_idents)]
 #![deny(missing_docs)]
@@ -74,7 +76,10 @@ Given a set of domain names you want your certificate to be valid for,
 this function fills in the other generation parameters with
 reasonable defaults and generates a self signed certificate
 as output.
-
+*/
+#[cfg_attr(
+	feature = "pem",
+	doc = r##"
 ## Example
 
 ```
@@ -90,7 +95,8 @@ println!("{}", cert.serialize_pem().unwrap());
 println!("{}", cert.serialize_private_key_pem());
 # }
 ```
-*/
+"##
+)]
 pub fn generate_simple_self_signed(
 	subject_alt_names: impl Into<Vec<String>>,
 ) -> Result<Certificate, RcgenError> {
