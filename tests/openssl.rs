@@ -1,3 +1,4 @@
+#![cfg(feature = "pem")]
 use openssl::asn1::{Asn1Integer, Asn1Time};
 use openssl::bn::BigNum;
 use openssl::pkey::PKey;

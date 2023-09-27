@@ -18,6 +18,14 @@ name = "rcgen"
 path = "src/main.rs"
 required-features = ["pem"]
 
+[[example]]
+name = "rsa-irc"
+required-features = ["pem"]
+
+[[example]]
+name = "rsa-irc-openssl"
+required-features = ["pem"]
+
 [dependencies]
 yasna = { version = "0.5.2", features = ["time", "std"] }
 ring = "0.16"
