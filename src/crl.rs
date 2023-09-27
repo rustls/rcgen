@@ -5,6 +5,7 @@ use yasna::DERWriter;
 use yasna::Tag;
 
 use crate::oid::*;
+#[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
 	write_distinguished_name, write_dt_utc_or_generalized, write_x509_authority_key_identifier,
