@@ -9,7 +9,9 @@ use yasna::DERWriter;
 
 use crate::sign_algo::algo::*;
 use crate::sign_algo::SignAlgo;
-use crate::{RcgenError, SignatureAlgorithm, ENCODE_CONFIG};
+#[cfg(feature = "pem")]
+use crate::ENCODE_CONFIG;
+use crate::{RcgenError, SignatureAlgorithm};
 
 /// A key pair vairant
 #[allow(clippy::large_enum_variant)]
