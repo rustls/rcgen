@@ -1,6 +1,10 @@
 
 # Changes
 
+## Release 0.11.3 - Pending
+
+- Fix for import errors building without the optional `pem` feature.
+
 ## Release 0.11.2 - September 21, 2023
 
 - `rcgen` has joined the umbrella of the [rustls](https://github.com/rustls) organization.
