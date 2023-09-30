@@ -1,7 +1,7 @@
 
 # Changes
 
-## Release 0.11.3 - Pending
+## Release 0.11.3 - October 1, 2023
 
 - Fix for import errors building without the optional `pem` feature.
 
