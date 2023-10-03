@@ -26,7 +26,7 @@ pub enum Error {
 	/// Unspecified `ring` error
 	RingUnspecified,
 	/// The `ring` library rejected the key upon loading
-	RingKeyRejected(&'static str),
+	RingKeyRejected(String),
 	/// The provided certificate's signature algorithm
 	/// is incompatible with the given key pair
 	CertificateKeyPairMismatch,
@@ -106,7 +106,7 @@ impl From<ring::error::Unspecified> for Error {
 
 impl From<ring::error::KeyRejected> for Error {
 	fn from(err: ring::error::KeyRejected) -> Self {
-		Error::RingKeyRejected(err.description_())
+		Error::RingKeyRejected(err.to_string())
 	}
 }
 
