@@ -25,7 +25,8 @@ mod util;
 
 fn sign_msg_ecdsa(cert: &Certificate, msg: &[u8], alg: &'static EcdsaSigningAlgorithm) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
-	let key_pair = EcdsaKeyPair::from_pkcs8(&alg, &pk_der).unwrap();
+	let key_pair =
+		EcdsaKeyPair::from_pkcs8(&alg, &pk_der, &ring::rand::SystemRandom::new()).unwrap();
 	let system_random = SystemRandom::new();
 	let signature = key_pair.sign(&system_random, &msg).unwrap();
 	signature.as_ref().to_vec()
@@ -43,7 +44,7 @@ fn sign_msg_rsa(cert: &Certificate, msg: &[u8], encoding: &'static dyn RsaEncodi
 	let pk_der = cert.serialize_private_key_der();
 	let key_pair = RsaKeyPair::from_pkcs8(&pk_der).unwrap();
 	let system_random = SystemRandom::new();
-	let mut signature = vec![0; key_pair.public_modulus_len()];
+	let mut signature = vec![0; key_pair.public().modulus_len()];
 	key_pair
 		.sign(encoding, &system_random, &msg, &mut signature)
 		.unwrap();
@@ -334,15 +335,18 @@ fn from_remote() {
 		}
 	}
 
+	let rng = ring::rand::SystemRandom::new();
 	let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
 	let remote = EcdsaKeyPair::from_pkcs8(
 		&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
 		&key_pair.serialize_der(),
+		&rng,
 	)
 	.unwrap();
 	let key_pair = EcdsaKeyPair::from_pkcs8(
 		&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
 		&key_pair.serialize_der(),
+		&rng,
 	)
 	.unwrap();
 	let remote = KeyPair::from_remote(Box::new(Remote(remote))).unwrap();

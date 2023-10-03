@@ -106,6 +106,7 @@ impl KeyPair {
 		pkcs8: &[u8],
 		alg: &'static SignatureAlgorithm,
 	) -> Result<Self, Error> {
+		let rng = &SystemRandom::new();
 		let pkcs8_vec = pkcs8.to_vec();
 
 		let kind = if alg == &PKCS_ED25519 {
@@ -114,11 +115,13 @@ impl KeyPair {
 			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
 				&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
 				pkcs8,
+				rng,
 			)?)
 		} else if alg == &PKCS_ECDSA_P384_SHA384 {
 			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
 				&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
 				pkcs8,
+				rng,
 			)?)
 		} else if alg == &PKCS_RSA_SHA256 {
 			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
@@ -146,14 +149,15 @@ impl KeyPair {
 	pub(crate) fn from_raw(
 		pkcs8: &[u8],
 	) -> Result<(KeyPairKind, &'static SignatureAlgorithm), Error> {
+		let rng = SystemRandom::new();
 		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
 			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
 		} else if let Ok(eckp) =
-			EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8)
+			EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, &rng)
 		{
 			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
 		} else if let Ok(eckp) =
-			EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8)
+			EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8, &rng)
 		{
 			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
 		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(pkcs8) {
@@ -212,14 +216,15 @@ impl TryFrom<Vec<u8>> for KeyPair {
 impl KeyPair {
 	/// Generate a new random key pair for the specified signature algorithm
 	pub fn generate(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
-		let system_random = SystemRandom::new();
+		let rng = &SystemRandom::new();
+
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
-				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, &system_random)?;
+				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair =
-					EcdsaKeyPair::from_pkcs8(&sign_alg, &&key_pair_doc.as_ref()).unwrap();
+					EcdsaKeyPair::from_pkcs8(&sign_alg, &&key_pair_doc.as_ref(), rng).unwrap();
 				Ok(KeyPair {
 					kind: KeyPairKind::Ec(key_pair),
 					alg,
@@ -227,7 +232,7 @@ impl KeyPair {
 				})
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
-				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(&system_random)?;
+				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(rng)?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(&&key_pair_doc.as_ref()).unwrap();
@@ -275,7 +280,7 @@ impl KeyPair {
 			},
 			KeyPairKind::Rsa(kp, padding_alg) => {
 				let system_random = SystemRandom::new();
-				let mut signature = vec![0; kp.public_modulus_len()];
+				let mut signature = vec![0; kp.public().modulus_len()];
 				kp.sign(*padding_alg, &system_random, msg, &mut signature)?;
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
