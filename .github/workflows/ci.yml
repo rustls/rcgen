@@ -79,6 +79,7 @@ jobs:
       uses: dtolnay/rust-toolchain@master
       with:
         toolchain: stable
+    - uses: Swatinem/rust-cache@v2
     - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
     - run: vcpkg install openssl:x64-windows-static-md
     - name: Run cargo check --all
@@ -111,6 +112,7 @@ jobs:
       uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.toolchain }}
+    - uses: Swatinem/rust-cache@v2
     - name: Run cargo check --all
       run: cargo check --all
     - name: Run the tests
@@ -134,6 +136,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools
+      - uses: Swatinem/rust-cache@v2
       - name: Measure coverage
         run: cargo llvm-cov --all-features --lcov --output-path ./lcov.info
       - name: Report to codecov.io
