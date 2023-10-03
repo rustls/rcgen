@@ -4,7 +4,7 @@ mod util;
 mod test_key_params_mismatch {
 	use crate::util;
 
-	use rcgen::{Certificate, KeyPair, RcgenError};
+	use rcgen::{Certificate, Error, KeyPair};
 	use std::collections::hash_map::DefaultHasher;
 	use std::hash::{Hash, Hasher};
 
@@ -44,7 +44,7 @@ mod test_key_params_mismatch {
 
 				assert_eq!(
 					Certificate::from_params(wrong_params).err(),
-					Some(RcgenError::CertificateKeyPairMismatch),
+					Some(Error::CertificateKeyPairMismatch),
 					"i: {} j: {}",
 					i,
 					j

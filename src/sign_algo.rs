@@ -6,7 +6,7 @@ use yasna::DERWriter;
 use yasna::Tag;
 
 use crate::oid::*;
-use crate::RcgenError;
+use crate::Error;
 
 pub(crate) enum SignAlgo {
 	EcDsa(&'static EcdsaSigningAlgorithm),
@@ -90,13 +90,13 @@ impl SignatureAlgorithm {
 	}
 
 	/// Retrieve the SignatureAlgorithm for the provided OID
-	pub fn from_oid(oid: &[u64]) -> Result<&'static SignatureAlgorithm, RcgenError> {
+	pub fn from_oid(oid: &[u64]) -> Result<&'static SignatureAlgorithm, Error> {
 		for algo in Self::iter() {
 			if algo.oid_components == oid {
 				return Ok(algo);
 			}
 		}
-		Err(RcgenError::UnsupportedSignatureAlgorithm)
+		Err(Error::UnsupportedSignatureAlgorithm)
 	}
 }
 

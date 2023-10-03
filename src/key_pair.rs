@@ -11,7 +11,7 @@ use crate::sign_algo::algo::*;
 use crate::sign_algo::SignAlgo;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
-use crate::{RcgenError, SignatureAlgorithm};
+use crate::{Error, SignatureAlgorithm};
 
 /// A key pair vairant
 #[allow(clippy::large_enum_variant)]
@@ -55,7 +55,7 @@ impl KeyPair {
 	/// Parses the key pair from the DER format
 	///
 	/// Equivalent to using the [`TryFrom`] implementation.
-	pub fn from_der(der: &[u8]) -> Result<Self, RcgenError> {
+	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
 		Ok(der.try_into()?)
 	}
 	/// Returns the key pair's signature algorithm
@@ -64,14 +64,14 @@ impl KeyPair {
 	}
 	/// Parses the key pair from the ASCII PEM format
 	#[cfg(feature = "pem")]
-	pub fn from_pem(pem_str: &str) -> Result<Self, RcgenError> {
+	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)?;
 		let private_key_der: &[_] = private_key.contents();
 		Ok(private_key_der.try_into()?)
 	}
 
 	/// Obtains the key pair from a raw public key and a remote private key
-	pub fn from_remote(key_pair: Box<dyn RemoteKeyPair + Send + Sync>) -> Result<Self, RcgenError> {
+	pub fn from_remote(key_pair: Box<dyn RemoteKeyPair + Send + Sync>) -> Result<Self, Error> {
 		Ok(Self {
 			alg: key_pair.algorithm(),
 			kind: KeyPairKind::Remote(key_pair),
@@ -87,7 +87,7 @@ impl KeyPair {
 	pub fn from_pem_and_sign_algo(
 		pem_str: &str,
 		alg: &'static SignatureAlgorithm,
-	) -> Result<Self, RcgenError> {
+	) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)?;
 		let private_key_der: &[_] = private_key.contents();
 		Ok(Self::from_der_and_sign_algo(private_key_der, alg)?)
@@ -105,7 +105,7 @@ impl KeyPair {
 	pub fn from_der_and_sign_algo(
 		pkcs8: &[u8],
 		alg: &'static SignatureAlgorithm,
-	) -> Result<Self, RcgenError> {
+	) -> Result<Self, Error> {
 		let pkcs8_vec = pkcs8.to_vec();
 
 		let kind = if alg == &PKCS_ED25519 {
@@ -145,7 +145,7 @@ impl KeyPair {
 
 	pub(crate) fn from_raw(
 		pkcs8: &[u8],
-	) -> Result<(KeyPairKind, &'static SignatureAlgorithm), RcgenError> {
+	) -> Result<(KeyPairKind, &'static SignatureAlgorithm), Error> {
 		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
 			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
 		} else if let Ok(eckp) =
@@ -162,7 +162,7 @@ impl KeyPair {
 				&PKCS_RSA_SHA256,
 			)
 		} else {
-			return Err(RcgenError::CouldNotParseKeyPair);
+			return Err(Error::CouldNotParseKeyPair);
 		};
 		Ok((kind, alg))
 	}
@@ -177,16 +177,16 @@ pub trait RemoteKeyPair {
 	fn public_key(&self) -> &[u8];
 
 	/// Signs `msg` using the selected algorithm
-	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, RcgenError>;
+	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
 
 	/// Reveals the algorithm to be used when calling `sign()`
 	fn algorithm(&self) -> &'static SignatureAlgorithm;
 }
 
 impl TryFrom<&[u8]> for KeyPair {
-	type Error = RcgenError;
+	type Error = Error;
 
-	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, RcgenError> {
+	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, Error> {
 		let (kind, alg) = KeyPair::from_raw(pkcs8)?;
 		Ok(KeyPair {
 			kind,
@@ -197,9 +197,9 @@ impl TryFrom<&[u8]> for KeyPair {
 }
 
 impl TryFrom<Vec<u8>> for KeyPair {
-	type Error = RcgenError;
+	type Error = Error;
 
-	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, RcgenError> {
+	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, Error> {
 		let (kind, alg) = KeyPair::from_raw(pkcs8.as_slice())?;
 		Ok(KeyPair {
 			kind,
@@ -211,7 +211,7 @@ impl TryFrom<Vec<u8>> for KeyPair {
 
 impl KeyPair {
 	/// Generate a new random key pair for the specified signature algorithm
-	pub fn generate(alg: &'static SignatureAlgorithm) -> Result<Self, RcgenError> {
+	pub fn generate(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
 		let system_random = SystemRandom::new();
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
@@ -240,7 +240,7 @@ impl KeyPair {
 			// Ring doesn't have RSA key generation yet:
 			// https://github.com/briansmith/ring/issues/219
 			// https://github.com/briansmith/ring/pull/733
-			SignAlgo::Rsa() => Err(RcgenError::KeyGenerationUnavailable),
+			SignAlgo::Rsa() => Err(Error::KeyGenerationUnavailable),
 		}
 	}
 	/// Get the raw public key of this key pair
@@ -260,7 +260,7 @@ impl KeyPair {
 	pub fn compatible_algs(&self) -> impl Iterator<Item = &'static SignatureAlgorithm> {
 		std::iter::once(self.alg)
 	}
-	pub(crate) fn sign(&self, msg: &[u8], writer: DERWriter) -> Result<(), RcgenError> {
+	pub(crate) fn sign(&self, msg: &[u8], writer: DERWriter) -> Result<(), Error> {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => {
 				let system_random = SystemRandom::new();

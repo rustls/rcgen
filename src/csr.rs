@@ -4,7 +4,7 @@ use crate::{DistinguishedName, SanType};
 use pem::Pem;
 use std::hash::Hash;
 
-use crate::{Certificate, CertificateParams, PublicKeyData, RcgenError, SignatureAlgorithm};
+use crate::{Certificate, CertificateParams, Error, PublicKeyData, SignatureAlgorithm};
 
 /// A public key, extracted from a CSR
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -36,8 +36,8 @@ impl CertificateSigningRequest {
 	///
 	/// See [`from_der`](Self::from_der) for more details.
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
-	pub fn from_pem(pem_str: &str) -> Result<Self, RcgenError> {
-		let csr = pem::parse(pem_str).or(Err(RcgenError::CouldNotParseCertificationRequest))?;
+	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
+		let csr = pem::parse(pem_str).or(Err(Error::CouldNotParseCertificationRequest))?;
 		Self::from_der(csr.contents())
 	}
 
@@ -46,18 +46,17 @@ impl CertificateSigningRequest {
 	/// Currently, this only supports the `Subject Alternative Name` extension.
 	/// On encountering other extensions, this function will return an error.
 	#[cfg(feature = "x509-parser")]
-	pub fn from_der(csr: &[u8]) -> Result<Self, RcgenError> {
+	pub fn from_der(csr: &[u8]) -> Result<Self, Error> {
 		use x509_parser::prelude::FromDer;
 		let csr = x509_parser::certification_request::X509CertificationRequest::from_der(csr)
-			.map_err(|_| RcgenError::CouldNotParseCertificationRequest)?
+			.map_err(|_| Error::CouldNotParseCertificationRequest)?
 			.1;
-		csr.verify_signature()
-			.map_err(|_| RcgenError::RingUnspecified)?;
+		csr.verify_signature().map_err(|_| Error::RingUnspecified)?;
 		let alg_oid = csr
 			.signature_algorithm
 			.algorithm
 			.iter()
-			.ok_or(RcgenError::CouldNotParseCertificationRequest)?
+			.ok_or(Error::CouldNotParseCertificationRequest)?
 			.collect::<Vec<_>>();
 		let alg = SignatureAlgorithm::from_oid(&alg_oid)?;
 
@@ -77,7 +76,7 @@ impl CertificateSigningRequest {
 								.push(SanType::try_from_general(name)?);
 						}
 					},
-					_ => return Err(RcgenError::UnsupportedExtension),
+					_ => return Err(Error::UnsupportedExtension),
 				}
 			}
 		}
@@ -94,12 +93,12 @@ impl CertificateSigningRequest {
 		})
 	}
 	/// Serializes the requested certificate, signed with another certificate's key, in binary DER format
-	pub fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, RcgenError> {
+	pub fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, Error> {
 		self.params.serialize_der_with_signer(&self.public_key, ca)
 	}
 	/// Serializes the requested certificate, signed with another certificate's key, to the ASCII PEM format
 	#[cfg(feature = "pem")]
-	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, RcgenError> {
+	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, Error> {
 		let contents = self
 			.params
 			.serialize_der_with_signer(&self.public_key, ca)?;

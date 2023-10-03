@@ -1,10 +1,9 @@
-use std::error::Error;
 use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
 /// The error type of the rcgen crate
-pub enum RcgenError {
+pub enum Error {
 	/// The given certificate couldn't be parsed
 	CouldNotParseCertificate,
 	/// The given certificate signing request couldn't be parsed
@@ -46,9 +45,9 @@ pub enum RcgenError {
 	IssuerNotCrlSigner,
 }
 
-impl fmt::Display for RcgenError {
+impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		use self::RcgenError::*;
+		use self::Error::*;
 		match self {
 			CouldNotParseCertificate => write!(f, "Could not parse certificate")?,
 			CouldNotParseCertificationRequest => write!(
@@ -97,23 +96,23 @@ impl fmt::Display for RcgenError {
 	}
 }
 
-impl Error for RcgenError {}
+impl std::error::Error for Error {}
 
-impl From<ring::error::Unspecified> for RcgenError {
+impl From<ring::error::Unspecified> for Error {
 	fn from(_unspecified: ring::error::Unspecified) -> Self {
-		RcgenError::RingUnspecified
+		Error::RingUnspecified
 	}
 }
 
-impl From<ring::error::KeyRejected> for RcgenError {
+impl From<ring::error::KeyRejected> for Error {
 	fn from(err: ring::error::KeyRejected) -> Self {
-		RcgenError::RingKeyRejected(err.description_())
+		Error::RingKeyRejected(err.description_())
 	}
 }
 
 #[cfg(feature = "pem")]
-impl From<pem::PemError> for RcgenError {
+impl From<pem::PemError> for Error {
 	fn from(e: pem::PemError) -> Self {
-		RcgenError::PemError(e)
+		Error::PemError(e)
 	}
 }

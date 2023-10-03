@@ -321,12 +321,12 @@ fn from_remote() {
 			self.0.public_key().as_ref()
 		}
 
-		fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, rcgen::RcgenError> {
+		fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, rcgen::Error> {
 			let system_random = SystemRandom::new();
 			self.0
 				.sign(&system_random, msg)
 				.map(|s| s.as_ref().to_owned())
-				.map_err(rcgen::RcgenError::from)
+				.map_err(rcgen::Error::from)
 		}
 
 		fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
