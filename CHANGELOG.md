@@ -1,6 +1,10 @@
 
 # Changes
 
+## Unreleased
+
+- Rename `RcGenError` to `Error` to avoid stuttering when used fully-qualified via `rcgen::`.
+
 ## Release 0.11.3 - October 1, 2023
 
 - Fix for import errors building without the optional `pem` feature.

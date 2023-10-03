@@ -56,12 +56,18 @@ pub use crate::crl::{
 	CrlIssuingDistributionPoint, CrlScope, RevocationReason, RevokedCertParams,
 };
 pub use crate::csr::{CertificateSigningRequest, PublicKey};
-pub use crate::error::RcgenError;
+pub use crate::error::Error;
 use crate::key_pair::PublicKeyData;
 pub use crate::key_pair::{KeyPair, RemoteKeyPair};
 use crate::oid::*;
 pub use crate::sign_algo::algo::*;
 pub use crate::sign_algo::SignatureAlgorithm;
+
+/// Type-alias for the old name of [`Error`].
+#[deprecated(
+	note = "Renamed to `Error`. We recommend to refer to it by fully-qualifying the crate: `rcgen::Error`."
+)]
+pub type RcGenError = Error;
 
 /// A self signed certificate together with signing keys
 pub struct Certificate {
@@ -99,7 +105,7 @@ println!("{}", cert.serialize_private_key_pem());
 )]
 pub fn generate_simple_self_signed(
 	subject_alt_names: impl Into<Vec<String>>,
-) -> Result<Certificate, RcgenError> {
+) -> Result<Certificate, Error> {
 	Certificate::from_params(CertificateParams::new(subject_alt_names))
 }
 
@@ -137,21 +143,19 @@ pub enum SanType {
 }
 
 #[cfg(feature = "x509-parser")]
-fn ip_addr_from_octets(octets: &[u8]) -> Result<IpAddr, RcgenError> {
+fn ip_addr_from_octets(octets: &[u8]) -> Result<IpAddr, Error> {
 	if let Ok(ipv6_octets) = <&[u8; 16]>::try_from(octets) {
 		Ok(Ipv6Addr::from(*ipv6_octets).into())
 	} else if let Ok(ipv4_octets) = <&[u8; 4]>::try_from(octets) {
 		Ok(Ipv4Addr::from(*ipv4_octets).into())
 	} else {
-		Err(RcgenError::InvalidIpAddressOctetLength(octets.len()))
+		Err(Error::InvalidIpAddressOctetLength(octets.len()))
 	}
 }
 
 impl SanType {
 	#[cfg(feature = "x509-parser")]
-	fn try_from_general(
-		name: &x509_parser::extensions::GeneralName<'_>,
-	) -> Result<Self, RcgenError> {
+	fn try_from_general(name: &x509_parser::extensions::GeneralName<'_>) -> Result<Self, Error> {
 		Ok(match name {
 			x509_parser::extensions::GeneralName::RFC822Name(name) => {
 				SanType::Rfc822Name((*name).into())
@@ -161,7 +165,7 @@ impl SanType {
 			x509_parser::extensions::GeneralName::IPAddress(octets) => {
 				SanType::IpAddress(ip_addr_from_octets(octets)?)
 			},
-			_ => return Err(RcgenError::InvalidNameType),
+			_ => return Err(Error::InvalidNameType),
 		})
 	}
 
@@ -443,7 +447,7 @@ impl DistinguishedName {
 	}
 
 	#[cfg(feature = "x509-parser")]
-	fn from_name(name: &x509_parser::x509::X509Name) -> Result<Self, RcgenError> {
+	fn from_name(name: &x509_parser::x509::X509Name) -> Result<Self, Error> {
 		use x509_parser::der_parser::asn1_rs::Tag;
 
 		let mut dn = DistinguishedName::new();
@@ -453,7 +457,7 @@ impl DistinguishedName {
 			let attr = if let Some(dn) = dn_opt {
 				if rdn_iter.next().is_some() {
 					// no support for distinguished names with more than one attribute
-					return Err(RcgenError::CouldNotParseCertificate);
+					return Err(Error::CouldNotParseCertificate);
 				} else {
 					dn
 				}
@@ -464,24 +468,24 @@ impl DistinguishedName {
 			let attr_type_oid = attr
 				.attr_type()
 				.iter()
-				.ok_or(RcgenError::CouldNotParseCertificate)?;
+				.ok_or(Error::CouldNotParseCertificate)?;
 			let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
 			let data = attr.attr_value().data;
 			let dn_value = match attr.attr_value().header.tag() {
 				Tag::T61String => DnValue::TeletexString(data.into()),
 				Tag::PrintableString => {
-					let data = std::str::from_utf8(data)
-						.map_err(|_| RcgenError::CouldNotParseCertificate)?;
+					let data =
+						std::str::from_utf8(data).map_err(|_| Error::CouldNotParseCertificate)?;
 					DnValue::PrintableString(data.to_owned())
 				},
 				Tag::UniversalString => DnValue::UniversalString(data.into()),
 				Tag::Utf8String => {
-					let data = std::str::from_utf8(data)
-						.map_err(|_| RcgenError::CouldNotParseCertificate)?;
+					let data =
+						std::str::from_utf8(data).map_err(|_| Error::CouldNotParseCertificate)?;
 					DnValue::Utf8String(data.to_owned())
 				},
 				Tag::BmpString => DnValue::BmpString(data.into()),
-				_ => return Err(RcgenError::CouldNotParseCertificate),
+				_ => return Err(Error::CouldNotParseCertificate),
 			};
 
 			dn.push(dn_type, dn_value);
@@ -571,8 +575,8 @@ impl CertificateParams {
 	///
 	/// See [`from_ca_cert_der`](Self::from_ca_cert_der) for more details.
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
-	pub fn from_ca_cert_pem(pem_str: &str, key_pair: KeyPair) -> Result<Self, RcgenError> {
-		let certificate = pem::parse(pem_str).or(Err(RcgenError::CouldNotParseCertificate))?;
+	pub fn from_ca_cert_pem(pem_str: &str, key_pair: KeyPair) -> Result<Self, Error> {
+		let certificate = pem::parse(pem_str).or(Err(Error::CouldNotParseCertificate))?;
 		Self::from_ca_cert_der(certificate.contents(), key_pair)
 	}
 
@@ -590,15 +594,15 @@ impl CertificateParams {
 	///
 	/// Will not check if certificate is a ca certificate!
 	#[cfg(feature = "x509-parser")]
-	pub fn from_ca_cert_der(ca_cert: &[u8], key_pair: KeyPair) -> Result<Self, RcgenError> {
+	pub fn from_ca_cert_der(ca_cert: &[u8], key_pair: KeyPair) -> Result<Self, Error> {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
-			.or(Err(RcgenError::CouldNotParseCertificate))?;
+			.or(Err(Error::CouldNotParseCertificate))?;
 
 		let alg_oid = x509
 			.signature_algorithm
 			.algorithm
 			.iter()
-			.ok_or(RcgenError::CouldNotParseCertificate)?;
+			.ok_or(Error::CouldNotParseCertificate)?;
 		let alg = SignatureAlgorithm::from_oid(&alg_oid.collect::<Vec<_>>())?;
 
 		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
@@ -628,12 +632,12 @@ impl CertificateParams {
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_is_ca(
 		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<IsCa, RcgenError> {
+	) -> Result<IsCa, Error> {
 		use x509_parser::extensions::BasicConstraints as B;
 
 		let basic_constraints = x509
 			.basic_constraints()
-			.or(Err(RcgenError::CouldNotParseCertificate))?
+			.or(Err(Error::CouldNotParseCertificate))?
 			.map(|ext| ext.value);
 
 		let is_ca = match basic_constraints {
@@ -644,7 +648,7 @@ impl CertificateParams {
 			Some(B {
 				ca: true,
 				path_len_constraint: Some(_),
-			}) => return Err(RcgenError::CouldNotParseCertificate),
+			}) => return Err(Error::CouldNotParseCertificate),
 			Some(B {
 				ca: true,
 				path_len_constraint: None,
@@ -658,10 +662,10 @@ impl CertificateParams {
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_subject_alternative_name(
 		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Vec<SanType>, RcgenError> {
+	) -> Result<Vec<SanType>, Error> {
 		let sans = x509
 			.subject_alternative_name()
-			.or(Err(RcgenError::CouldNotParseCertificate))?
+			.or(Err(Error::CouldNotParseCertificate))?
 			.map(|ext| &ext.value.general_names);
 
 		if let Some(sans) = sans {
@@ -677,10 +681,10 @@ impl CertificateParams {
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_key_usages(
 		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Vec<KeyUsagePurpose>, RcgenError> {
+	) -> Result<Vec<KeyUsagePurpose>, Error> {
 		let key_usage = x509
 			.key_usage()
-			.or(Err(RcgenError::CouldNotParseCertificate))?
+			.or(Err(Error::CouldNotParseCertificate))?
 			.map(|ext| ext.value);
 
 		let mut key_usages = Vec::new();
@@ -718,10 +722,10 @@ impl CertificateParams {
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_extended_key_usages(
 		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Vec<ExtendedKeyUsagePurpose>, RcgenError> {
+	) -> Result<Vec<ExtendedKeyUsagePurpose>, Error> {
 		let extended_key_usage = x509
 			.extended_key_usage()
-			.or(Err(RcgenError::CouldNotParseCertificate))?
+			.or(Err(Error::CouldNotParseCertificate))?
 			.map(|ext| ext.value);
 
 		let mut extended_key_usages = Vec::new();
@@ -753,10 +757,10 @@ impl CertificateParams {
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_name_constraints(
 		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Option<NameConstraints>, RcgenError> {
+	) -> Result<Option<NameConstraints>, Error> {
 		let constraints = x509
 			.name_constraints()
-			.or(Err(RcgenError::CouldNotParseCertificate))?
+			.or(Err(Error::CouldNotParseCertificate))?
 			.map(|ext| ext.value);
 
 		if let Some(constraints) = constraints {
@@ -785,7 +789,7 @@ impl CertificateParams {
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_general_subtrees(
 		subtrees: &[x509_parser::extensions::GeneralSubtree<'_>],
-	) -> Result<Vec<GeneralSubtree>, RcgenError> {
+	) -> Result<Vec<GeneralSubtree>, Error> {
 		use x509_parser::extensions::GeneralName;
 
 		let mut result = Vec::new();
@@ -834,11 +838,7 @@ impl CertificateParams {
 			});
 		});
 	}
-	fn write_request<K: PublicKeyData>(
-		&self,
-		pub_key: &K,
-		writer: DERWriter,
-	) -> Result<(), RcgenError> {
+	fn write_request<K: PublicKeyData>(&self, pub_key: &K, writer: DERWriter) -> Result<(), Error> {
 		// No .. pattern, we use this to ensure every field is used
 		#[deny(unused)]
 		let Self {
@@ -873,7 +873,7 @@ impl CertificateParams {
 			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
 		{
-			return Err(RcgenError::UnsupportedInCsr);
+			return Err(Error::UnsupportedInCsr);
 		}
 		writer.write_sequence(|writer| {
 			// Write version
@@ -945,7 +945,7 @@ impl CertificateParams {
 		writer: DERWriter,
 		pub_key: &K,
 		ca: &Certificate,
-	) -> Result<(), RcgenError> {
+	) -> Result<(), Error> {
 		writer.write_sequence(|writer| {
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
@@ -970,7 +970,7 @@ impl CertificateParams {
 				write_dt_utc_or_generalized(writer.next(), self.not_before);
 				// Not after
 				write_dt_utc_or_generalized(writer.next(), self.not_after);
-				Ok::<(), RcgenError>(())
+				Ok::<(), Error>(())
 			})?;
 			// Write subject
 			write_distinguished_name(writer.next(), &self.distinguished_name);
@@ -1173,12 +1173,12 @@ impl CertificateParams {
 		&self,
 		pub_key: &K,
 		ca: &Certificate,
-	) -> Result<Vec<u8>, RcgenError> {
+	) -> Result<Vec<u8>, Error> {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 				let tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
 					self.write_cert(writer, pub_key, ca)?;
-					Ok::<(), RcgenError>(())
+					Ok::<(), Error>(())
 				})?;
 				// Write tbsCertList
 				writer.next().write_der(&tbs_cert_list_serialized);
@@ -1493,10 +1493,10 @@ impl Certificate {
 	/// Generates a new certificate from the given parameters.
 	///
 	/// If there is no key pair included, then a new key pair will be generated and used.
-	pub fn from_params(mut params: CertificateParams) -> Result<Self, RcgenError> {
+	pub fn from_params(mut params: CertificateParams) -> Result<Self, Error> {
 		let key_pair = if let Some(key_pair) = params.key_pair.take() {
 			if !key_pair.is_compatible(&params.alg) {
-				return Err(RcgenError::CertificateKeyPairMismatch);
+				return Err(Error::CertificateKeyPairMismatch);
 			}
 			key_pair
 		} else {
@@ -1515,15 +1515,15 @@ impl Certificate {
 		self.params.key_identifier(&self.key_pair)
 	}
 	/// Serializes the certificate to the binary DER format
-	pub fn serialize_der(&self) -> Result<Vec<u8>, RcgenError> {
+	pub fn serialize_der(&self) -> Result<Vec<u8>, Error> {
 		self.serialize_der_with_signer(&self)
 	}
 	/// Serializes the certificate, signed with another certificate's key, in binary DER format
-	pub fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, RcgenError> {
+	pub fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, Error> {
 		self.params.serialize_der_with_signer(&self.key_pair, ca)
 	}
 	/// Serializes a certificate signing request in binary DER format
-	pub fn serialize_request_der(&self) -> Result<Vec<u8>, RcgenError> {
+	pub fn serialize_request_der(&self) -> Result<Vec<u8>, Error> {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 				let cert_data = yasna::try_construct_der(|writer| {
@@ -1547,21 +1547,21 @@ impl Certificate {
 	}
 	/// Serializes the certificate to the ASCII PEM format
 	#[cfg(feature = "pem")]
-	pub fn serialize_pem(&self) -> Result<String, RcgenError> {
+	pub fn serialize_pem(&self) -> Result<String, Error> {
 		let contents = self.serialize_der()?;
 		let p = Pem::new("CERTIFICATE", contents);
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}
 	/// Serializes the certificate, signed with another certificate's key, to the ASCII PEM format
 	#[cfg(feature = "pem")]
-	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, RcgenError> {
+	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, Error> {
 		let contents = self.serialize_der_with_signer(ca)?;
 		let p = Pem::new("CERTIFICATE", contents);
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}
 	/// Serializes the certificate signing request to the ASCII PEM format
 	#[cfg(feature = "pem")]
-	pub fn serialize_request_pem(&self) -> Result<String, RcgenError> {
+	pub fn serialize_request_pem(&self) -> Result<String, Error> {
 		let contents = self.serialize_request_der()?;
 		let p = Pem::new("CERTIFICATE REQUEST", contents);
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
@@ -1906,7 +1906,7 @@ mod tests {
 	#[cfg(feature = "x509-parser")]
 	mod test_ip_address_from_octets {
 		use super::super::ip_addr_from_octets;
-		use super::super::RcgenError;
+		use super::super::Error;
 		use std::net::IpAddr;
 
 		#[test]
@@ -1932,14 +1932,14 @@ mod tests {
 			let incorrect: Vec<u8> = (0..10).into_iter().collect();
 			let actual = ip_addr_from_octets(&incorrect).unwrap_err();
 
-			assert_eq!(RcgenError::InvalidIpAddressOctetLength(10), actual);
+			assert_eq!(Error::InvalidIpAddressOctetLength(10), actual);
 		}
 
 		#[test]
 		fn none() {
 			let actual = ip_addr_from_octets(&[]).unwrap_err();
 
-			assert_eq!(RcgenError::InvalidIpAddressOctetLength(0), actual);
+			assert_eq!(Error::InvalidIpAddressOctetLength(0), actual);
 		}
 
 		#[test]
@@ -1947,7 +1947,7 @@ mod tests {
 			let incorrect: Vec<u8> = (0..20).into_iter().collect();
 			let actual = ip_addr_from_octets(&incorrect).unwrap_err();
 
-			assert_eq!(RcgenError::InvalidIpAddressOctetLength(20), actual);
+			assert_eq!(Error::InvalidIpAddressOctetLength(20), actual);
 		}
 	}
 

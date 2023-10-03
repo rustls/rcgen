@@ -11,9 +11,7 @@ use crate::{
 	write_distinguished_name, write_dt_utc_or_generalized, write_x509_authority_key_identifier,
 	write_x509_extension,
 };
-use crate::{
-	Certificate, KeyIdMethod, KeyUsagePurpose, RcgenError, SerialNumber, SignatureAlgorithm,
-};
+use crate::{Certificate, Error, KeyIdMethod, KeyUsagePurpose, SerialNumber, SignatureAlgorithm};
 
 /// A certificate revocation list (CRL)
 ///
@@ -54,9 +52,9 @@ pub struct CertificateRevocationList {
 
 impl CertificateRevocationList {
 	/// Generates a new certificate revocation list (CRL) from the given parameters.
-	pub fn from_params(params: CertificateRevocationListParams) -> Result<Self, RcgenError> {
+	pub fn from_params(params: CertificateRevocationListParams) -> Result<Self, Error> {
 		if params.next_update.le(&params.this_update) {
-			return Err(RcgenError::InvalidCrlNextUpdate);
+			return Err(Error::InvalidCrlNextUpdate);
 		}
 		Ok(Self { params })
 	}
@@ -66,18 +64,18 @@ impl CertificateRevocationList {
 	}
 	/// Serializes the certificate revocation list (CRL) in binary DER format, signed with
 	/// the issuing certificate authority's key.
-	pub fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, RcgenError> {
+	pub fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, Error> {
 		if !ca.params.key_usages.is_empty()
 			&& !ca.params.key_usages.contains(&KeyUsagePurpose::CrlSign)
 		{
-			return Err(RcgenError::IssuerNotCrlSigner);
+			return Err(Error::IssuerNotCrlSigner);
 		}
 		self.params.serialize_der_with_signer(ca)
 	}
 	/// Serializes the certificate revocation list (CRL) in ASCII PEM format, signed with
 	/// the issuing certificate authority's key.
 	#[cfg(feature = "pem")]
-	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, RcgenError> {
+	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, Error> {
 		let contents = self.serialize_der_with_signer(ca)?;
 		let p = Pem::new("X509 CRL", contents);
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
@@ -174,13 +172,13 @@ pub struct CertificateRevocationListParams {
 }
 
 impl CertificateRevocationListParams {
-	fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, RcgenError> {
+	fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, Error> {
 		yasna::try_construct_der(|writer| {
 			// https://www.rfc-editor.org/rfc/rfc5280#section-5.1
 			writer.write_sequence(|writer| {
 				let tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
 					self.write_crl(writer, ca)?;
-					Ok::<(), RcgenError>(())
+					Ok::<(), Error>(())
 				})?;
 
 				// Write tbsCertList
@@ -196,7 +194,7 @@ impl CertificateRevocationListParams {
 			})
 		})
 	}
-	fn write_crl(&self, writer: DERWriter, ca: &Certificate) -> Result<(), RcgenError> {
+	fn write_crl(&self, writer: DERWriter, ca: &Certificate) -> Result<(), Error> {
 		writer.write_sequence(|writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
