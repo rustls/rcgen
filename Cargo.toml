@@ -28,7 +28,7 @@ required-features = ["pem"]
 
 [dependencies]
 yasna = { version = "0.5.2", features = ["time", "std"] }
-ring = "0.16"
+ring = "0.17"
 pem = { version = "3.0.2", optional = true }
 time = { version = "0.3.6", default-features = false }
 x509-parser = { version = "0.15", features = ["verify"], optional = true }

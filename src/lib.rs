@@ -1492,7 +1492,8 @@ fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[Gener
 impl Certificate {
 	/// Generates a new certificate from the given parameters.
 	///
-	/// If there is no key pair included, then a new key pair will be generated and used.
+	/// If you want to control the [`KeyPair`] or the randomness used to generate it, set the [`CertificateParams::key_pair`]
+	/// field ahead of time before calling this function.
 	pub fn from_params(mut params: CertificateParams) -> Result<Self, Error> {
 		let key_pair = if let Some(key_pair) = params.key_pair.take() {
 			if !key_pair.is_compatible(&params.alg) {
