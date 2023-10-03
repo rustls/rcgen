@@ -404,7 +404,6 @@ fn test_webpki_separate_ca_name_constraints() {
 #[cfg(feature = "x509-parser")]
 #[test]
 fn test_webpki_imported_ca() {
-	use std::convert::TryInto;
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::from_params(params).unwrap();
@@ -414,7 +413,7 @@ fn test_webpki_imported_ca() {
 		ca_cert.serialize_private_key_der(),
 	);
 
-	let ca_key_pair = ca_key_der.as_slice().try_into().unwrap();
+	let ca_key_pair = KeyPair::from_der(ca_key_der.as_slice()).unwrap();
 	let imported_ca_cert_params =
 		CertificateParams::from_ca_cert_der(ca_cert_der.as_slice(), ca_key_pair).unwrap();
 	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();
@@ -443,7 +442,6 @@ fn test_webpki_imported_ca() {
 #[cfg(feature = "x509-parser")]
 #[test]
 fn test_webpki_imported_ca_with_printable_string() {
-	use std::convert::TryInto;
 	let mut params = util::default_params();
 	params.distinguished_name.push(
 		DnType::CountryName,
@@ -457,7 +455,7 @@ fn test_webpki_imported_ca_with_printable_string() {
 		ca_cert.serialize_private_key_der(),
 	);
 
-	let ca_key_pair = ca_key_der.as_slice().try_into().unwrap();
+	let ca_key_pair = KeyPair::from_der(ca_key_der.as_slice()).unwrap();
 	let imported_ca_cert_params =
 		CertificateParams::from_ca_cert_der(ca_cert_der.as_slice(), ca_key_pair).unwrap();
 	let imported_ca_cert = Certificate::from_params(imported_ca_cert_params).unwrap();

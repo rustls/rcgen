@@ -4,6 +4,7 @@
 ## Unreleased
 
 - Rename `RcGenError` to `Error` to avoid stuttering when used fully-qualified via `rcgen::`.
+- Remove `TryFrom<[u8]>` and `TryFrom<Vec<u8>>` for `KeyPair` in favor of the more descriptive `KeyPair::from_der`.
 
 ## Release 0.11.3 - October 1, 2023
 

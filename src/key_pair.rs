@@ -3,7 +3,6 @@ use pem::Pem;
 use ring::rand::SystemRandom;
 use ring::signature::KeyPair as RingKeyPair;
 use ring::signature::{self, EcdsaKeyPair, Ed25519KeyPair, RsaEncoding, RsaKeyPair};
-use std::convert::TryFrom;
 use std::fmt;
 use yasna::DERWriter;
 
@@ -56,7 +55,7 @@ impl KeyPair {
 	///
 	/// Equivalent to using the [`TryFrom`] implementation.
 	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
-		Ok(der.try_into()?)
+		Ok(KeyPair::from_raw(der)?)
 	}
 	/// Returns the key pair's signature algorithm
 	pub fn algorithm(&self) -> &'static SignatureAlgorithm {
@@ -67,7 +66,7 @@ impl KeyPair {
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)?;
 		let private_key_der: &[_] = private_key.contents();
-		Ok(private_key_der.try_into()?)
+		Ok(KeyPair::from_raw(private_key_der)?)
 	}
 
 	/// Obtains the key pair from a raw public key and a remote private key
@@ -143,9 +142,7 @@ impl KeyPair {
 		})
 	}
 
-	pub(crate) fn from_raw(
-		pkcs8: &[u8],
-	) -> Result<(KeyPairKind, &'static SignatureAlgorithm), Error> {
+	pub(crate) fn from_raw(pkcs8: &[u8]) -> Result<KeyPair, Error> {
 		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
 			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
 		} else if let Ok(eckp) =
@@ -164,7 +161,12 @@ impl KeyPair {
 		} else {
 			return Err(Error::CouldNotParseKeyPair);
 		};
-		Ok((kind, alg))
+
+		Ok(KeyPair {
+			kind,
+			alg,
+			serialized_der: pkcs8.to_vec(),
+		})
 	}
 }
 
@@ -181,32 +183,6 @@ pub trait RemoteKeyPair {
 
 	/// Reveals the algorithm to be used when calling `sign()`
 	fn algorithm(&self) -> &'static SignatureAlgorithm;
-}
-
-impl TryFrom<&[u8]> for KeyPair {
-	type Error = Error;
-
-	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, Error> {
-		let (kind, alg) = KeyPair::from_raw(pkcs8)?;
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: pkcs8.to_vec(),
-		})
-	}
-}
-
-impl TryFrom<Vec<u8>> for KeyPair {
-	type Error = Error;
-
-	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, Error> {
-		let (kind, alg) = KeyPair::from_raw(pkcs8.as_slice())?;
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: pkcs8,
-		})
-	}
 }
 
 impl KeyPair {
