@@ -55,7 +55,7 @@ impl KeyPair {
 	///
 	/// Equivalent to using the [`TryFrom`] implementation.
 	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
-		Ok(KeyPair::from_raw(der)?)
+		Ok(KeyPair::guess_kind_from_der(der)?)
 	}
 	/// Returns the key pair's signature algorithm
 	pub fn algorithm(&self) -> &'static SignatureAlgorithm {
@@ -66,7 +66,7 @@ impl KeyPair {
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)?;
 		let private_key_der: &[_] = private_key.contents();
-		Ok(KeyPair::from_raw(private_key_der)?)
+		Ok(KeyPair::guess_kind_from_der(private_key_der)?)
 	}
 
 	/// Obtains the key pair from a raw public key and a remote private key
@@ -142,7 +142,7 @@ impl KeyPair {
 		})
 	}
 
-	pub(crate) fn from_raw(pkcs8: &[u8]) -> Result<KeyPair, Error> {
+	pub(crate) fn guess_kind_from_der(pkcs8: &[u8]) -> Result<KeyPair, Error> {
 		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
 			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
 		} else if let Ok(eckp) =
