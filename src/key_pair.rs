@@ -105,110 +105,110 @@ impl KeyPair {
 		pkcs8: &[u8],
 		alg: &'static SignatureAlgorithm,
 	) -> Result<Self, Error> {
-		let serialized_der = pkcs8.to_vec();
-
 		if alg == &PKCS_ED25519 {
-			return Ok(KeyPair {
-				kind: KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)?),
-				alg,
-				serialized_der,
-			});
+			return Ok(Self::pkcs_ed25519(pkcs8)?);
 		}
 		if alg == &PKCS_ECDSA_P256_SHA256 {
-			return Ok(KeyPair {
-				kind: KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
-					&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-					pkcs8,
-				)?),
-				alg,
-				serialized_der,
-			});
+			return Ok(Self::pkcs_ecdsa_p256_sha256(pkcs8)?);
 		}
 		if alg == &PKCS_ECDSA_P384_SHA384 {
-			return Ok(KeyPair {
-				kind: KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
-					&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
-					pkcs8,
-				)?),
-				alg,
-				serialized_der,
-			});
+			return Ok(Self::pkcs_ecdsa_p384_sha384(pkcs8)?);
 		}
 		if alg == &PKCS_RSA_SHA256 {
-			return Ok(KeyPair {
-				kind: KeyPairKind::Rsa(
-					RsaKeyPair::from_pkcs8(pkcs8)?,
-					&signature::RSA_PKCS1_SHA256,
-				),
-				alg,
-				serialized_der,
-			});
+			return Ok(Self::pkcs_rsa_sha256(pkcs8)?);
 		}
 		if alg == &PKCS_RSA_SHA384 {
-			return Ok(KeyPair {
-				kind: KeyPairKind::Rsa(
-					RsaKeyPair::from_pkcs8(pkcs8)?,
-					&signature::RSA_PKCS1_SHA384,
-				),
-				alg,
-				serialized_der,
-			});
+			return Ok(Self::pkcs_rsa_sha384(pkcs8)?);
 		}
 		if alg == &PKCS_RSA_SHA512 {
-			return Ok(KeyPair {
-				kind: KeyPairKind::Rsa(
-					RsaKeyPair::from_pkcs8(pkcs8)?,
-					&signature::RSA_PKCS1_SHA512,
-				),
-				alg,
-				serialized_der,
-			});
+			return Ok(Self::pkcs_rsa_sha512(pkcs8)?);
 		}
 		if alg == &PKCS_RSA_PSS_SHA256 {
-			return Ok(KeyPair {
-				kind: KeyPairKind::Rsa(RsaKeyPair::from_pkcs8(pkcs8)?, &signature::RSA_PSS_SHA256),
-				alg,
-				serialized_der,
-			});
+			return Ok(Self::pkcs_rsa_pss_sha256(pkcs8)?);
 		}
 
 		panic!("Unknown SignatureAlgorithm specified!")
 	}
 
 	pub(crate) fn guess_kind_from_der(der: &[u8]) -> Result<KeyPair, Error> {
-		if let Ok(kp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(der) {
-			return Ok(KeyPair {
-				kind: KeyPairKind::Ed(kp),
-				alg: &PKCS_ED25519,
-				serialized_der: der.to_vec(),
-			});
+		if let Ok(kp) = Self::pkcs_ed25519(der) {
+			return Ok(kp);
 		}
 
-		if let Ok(kp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, der) {
-			return Ok(KeyPair {
-				kind: KeyPairKind::Ec(kp),
-				alg: &PKCS_ECDSA_P256_SHA256,
-				serialized_der: der.to_vec(),
-			});
+		if let Ok(kp) = Self::pkcs_ecdsa_p256_sha256(der) {
+			return Ok(kp);
 		}
 
-		if let Ok(kp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, der) {
-			return Ok(KeyPair {
-				kind: KeyPairKind::Ec(kp),
-				alg: &PKCS_ECDSA_P384_SHA384,
-				serialized_der: der.to_vec(),
-			});
+		if let Ok(kp) = Self::pkcs_ecdsa_p384_sha384(der) {
+			return Ok(kp);
 		}
 
-		if let Ok(kp) = RsaKeyPair::from_pkcs8(der) {
-			return Ok(KeyPair {
-				kind: KeyPairKind::Rsa(kp, &signature::RSA_PKCS1_SHA256),
-				alg: &PKCS_RSA_SHA256,
-				serialized_der: der.to_vec(),
-			});
+		if let Ok(kp) = Self::pkcs_rsa_sha256(der) {
+			return Ok(kp);
 		}
 
 		return Err(Error::CouldNotParseKeyPair);
+	}
+
+	fn pkcs_ed25519(der: &[u8]) -> Result<KeyPair, Error> {
+		Ok(KeyPair {
+			kind: KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(der)?),
+			alg: &PKCS_ED25519,
+			serialized_der: der.to_vec(),
+		})
+	}
+
+	fn pkcs_ecdsa_p256_sha256(der: &[u8]) -> Result<KeyPair, Error> {
+		Ok(KeyPair {
+			kind: KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
+				&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+				der,
+			)?),
+			alg: &PKCS_ECDSA_P256_SHA256,
+			serialized_der: der.to_vec(),
+		})
+	}
+
+	fn pkcs_ecdsa_p384_sha384(der: &[u8]) -> Result<KeyPair, Error> {
+		Ok(KeyPair {
+			kind: KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
+				&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
+				der,
+			)?),
+			alg: &PKCS_ECDSA_P384_SHA384,
+			serialized_der: der.to_vec(),
+		})
+	}
+
+	fn pkcs_rsa_sha256(der: &[u8]) -> Result<KeyPair, Error> {
+		Ok(KeyPair {
+			kind: KeyPairKind::Rsa(RsaKeyPair::from_pkcs8(der)?, &signature::RSA_PKCS1_SHA256),
+			alg: &PKCS_RSA_SHA256,
+			serialized_der: der.to_vec(),
+		})
+	}
+
+	fn pkcs_rsa_pss_sha256(der: &[u8]) -> Result<KeyPair, Error> {
+		Ok(KeyPair {
+			kind: KeyPairKind::Rsa(RsaKeyPair::from_pkcs8(der)?, &signature::RSA_PSS_SHA256),
+			alg: &PKCS_RSA_PSS_SHA256,
+			serialized_der: der.to_vec(),
+		})
+	}
+
+	fn pkcs_rsa_sha384(der: &[u8]) -> Result<KeyPair, Error> {
+		Ok(KeyPair {
+			kind: KeyPairKind::Rsa(RsaKeyPair::from_pkcs8(der)?, &signature::RSA_PKCS1_SHA384),
+			alg: &PKCS_RSA_SHA384,
+			serialized_der: der.to_vec(),
+		})
+	}
+	fn pkcs_rsa_sha512(der: &[u8]) -> Result<KeyPair, Error> {
+		Ok(KeyPair {
+			kind: KeyPairKind::Rsa(RsaKeyPair::from_pkcs8(der)?, &signature::RSA_PKCS1_SHA512),
+			alg: &PKCS_RSA_SHA512,
+			serialized_der: der.to_vec(),
+		})
 	}
 }
 
