@@ -142,31 +142,40 @@ impl KeyPair {
 		})
 	}
 
-	pub(crate) fn guess_kind_from_der(pkcs8: &[u8]) -> Result<KeyPair, Error> {
-		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
-			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
-		} else if let Ok(eckp) =
-			EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8)
-		{
-			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
-		} else if let Ok(eckp) =
-			EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8)
-		{
-			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
-		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(pkcs8) {
-			(
-				KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256),
-				&PKCS_RSA_SHA256,
-			)
-		} else {
-			return Err(Error::CouldNotParseKeyPair);
-		};
+	pub(crate) fn guess_kind_from_der(der: &[u8]) -> Result<KeyPair, Error> {
+		if let Ok(kp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(der) {
+			return Ok(KeyPair {
+				kind: KeyPairKind::Ed(kp),
+				alg: &PKCS_ED25519,
+				serialized_der: der.to_vec(),
+			});
+		}
 
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: pkcs8.to_vec(),
-		})
+		if let Ok(kp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, der) {
+			return Ok(KeyPair {
+				kind: KeyPairKind::Ec(kp),
+				alg: &PKCS_ECDSA_P256_SHA256,
+				serialized_der: der.to_vec(),
+			});
+		}
+
+		if let Ok(kp) = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, der) {
+			return Ok(KeyPair {
+				kind: KeyPairKind::Ec(kp),
+				alg: &PKCS_ECDSA_P384_SHA384,
+				serialized_der: der.to_vec(),
+			});
+		}
+
+		if let Ok(kp) = RsaKeyPair::from_pkcs8(der) {
+			return Ok(KeyPair {
+				kind: KeyPairKind::Rsa(kp, &signature::RSA_PKCS1_SHA256),
+				alg: &PKCS_RSA_SHA256,
+				serialized_der: der.to_vec(),
+			});
+		}
+
+		return Err(Error::CouldNotParseKeyPair);
 	}
 }
 
