@@ -105,41 +105,74 @@ impl KeyPair {
 		pkcs8: &[u8],
 		alg: &'static SignatureAlgorithm,
 	) -> Result<Self, Error> {
-		let pkcs8_vec = pkcs8.to_vec();
+		let serialized_der = pkcs8.to_vec();
 
-		let kind = if alg == &PKCS_ED25519 {
-			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)?)
-		} else if alg == &PKCS_ECDSA_P256_SHA256 {
-			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
-				&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-				pkcs8,
-			)?)
-		} else if alg == &PKCS_ECDSA_P384_SHA384 {
-			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
-				&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
-				pkcs8,
-			)?)
-		} else if alg == &PKCS_RSA_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
-			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
-		} else if alg == &PKCS_RSA_SHA384 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
-			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
-		} else if alg == &PKCS_RSA_SHA512 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
-			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
-		} else if alg == &PKCS_RSA_PSS_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
-			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
-		} else {
-			panic!("Unknown SignatureAlgorithm specified!");
-		};
+		if alg == &PKCS_ED25519 {
+			return Ok(KeyPair {
+				kind: KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)?),
+				alg,
+				serialized_der,
+			});
+		}
+		if alg == &PKCS_ECDSA_P256_SHA256 {
+			return Ok(KeyPair {
+				kind: KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
+					&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+					pkcs8,
+				)?),
+				alg,
+				serialized_der,
+			});
+		}
+		if alg == &PKCS_ECDSA_P384_SHA384 {
+			return Ok(KeyPair {
+				kind: KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
+					&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
+					pkcs8,
+				)?),
+				alg,
+				serialized_der,
+			});
+		}
+		if alg == &PKCS_RSA_SHA256 {
+			return Ok(KeyPair {
+				kind: KeyPairKind::Rsa(
+					RsaKeyPair::from_pkcs8(pkcs8)?,
+					&signature::RSA_PKCS1_SHA256,
+				),
+				alg,
+				serialized_der,
+			});
+		}
+		if alg == &PKCS_RSA_SHA384 {
+			return Ok(KeyPair {
+				kind: KeyPairKind::Rsa(
+					RsaKeyPair::from_pkcs8(pkcs8)?,
+					&signature::RSA_PKCS1_SHA384,
+				),
+				alg,
+				serialized_der,
+			});
+		}
+		if alg == &PKCS_RSA_SHA512 {
+			return Ok(KeyPair {
+				kind: KeyPairKind::Rsa(
+					RsaKeyPair::from_pkcs8(pkcs8)?,
+					&signature::RSA_PKCS1_SHA512,
+				),
+				alg,
+				serialized_der,
+			});
+		}
+		if alg == &PKCS_RSA_PSS_SHA256 {
+			return Ok(KeyPair {
+				kind: KeyPairKind::Rsa(RsaKeyPair::from_pkcs8(pkcs8)?, &signature::RSA_PSS_SHA256),
+				alg,
+				serialized_der,
+			});
+		}
 
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: pkcs8_vec,
-		})
+		panic!("Unknown SignatureAlgorithm specified!")
 	}
 
 	pub(crate) fn guess_kind_from_der(der: &[u8]) -> Result<KeyPair, Error> {
