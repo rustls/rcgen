@@ -26,6 +26,10 @@ required-features = ["pem"]
 name = "rsa-irc-openssl"
 required-features = ["pem"]
 
+[[example]]
+name = "sign-leaf-with-ca"
+required-features = ["pem", "x509-parser"]
+
 [dependencies]
 yasna = { version = "0.5.2", features = ["time", "std"] }
 ring = "0.17"
