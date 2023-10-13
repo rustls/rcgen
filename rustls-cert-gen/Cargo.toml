@@ -1,0 +1,9 @@
+[package]
+name = "rustls-cert-gen"
+version = "0.1.0"
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+rcgen = { path = "../rcgen" }
+pem = { workspace = true }

@@ -1,59 +1,10 @@
-[package]
-name = "rcgen"
-version = "0.11.3"
-description = "Rust X.509 certificate generator"
-repository = "https://github.com/est31/rcgen"
-documentation = "https://docs.rs/rcgen"
+[workspace]
+members = ["rustls-cert-gen", "rcgen"]
+resolver = "2"
+
+[workspace.dependencies]
+pem = { version = "3.0.2" }
+
+[workspace.package]
 license = "MIT OR Apache-2.0"
 edition = "2021"
-readme = "README.md"
-keywords = ["mkcert", "ca", "certificate"]
-
-[lib]
-name = "rcgen"
-path = "src/lib.rs"
-
-[[bin]]
-name = "rcgen"
-path = "src/main.rs"
-required-features = ["pem"]
-
-[[example]]
-name = "rsa-irc"
-required-features = ["pem"]
-
-[[example]]
-name = "rsa-irc-openssl"
-required-features = ["pem"]
-
-[[example]]
-name = "sign-leaf-with-ca"
-required-features = ["pem", "x509-parser"]
-
-[dependencies]
-yasna = { version = "0.5.2", features = ["time", "std"] }
-ring = "0.17"
-pem = { version = "3.0.2", optional = true }
-time = { version = "0.3.6", default-features = false }
-x509-parser = { version = "0.15", features = ["verify"], optional = true }
-zeroize = { version = "1.2", optional = true }
-
-[features]
-default = ["pem"]
-
-[package.metadata.docs.rs]
-features = ["x509-parser"]
-
-[dev-dependencies]
-openssl = "0.10"
-x509-parser = { version = "0.15", features = ["verify"] }
-rustls-webpki = { version = "0.101.0", features = ["std"] }
-botan = { version = "0.10", features = ["vendored"] }
-rand = "0.8"
-rsa = "0.9"
-
-# This greatly speeds up rsa key generation times
-# (only applies to the dev-dependency because cargo
-# ignores profile overrides for non leaf packages)
-[profile.dev.package.num-bigint-dig]
-opt-level = 3
