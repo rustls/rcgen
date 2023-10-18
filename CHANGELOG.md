@@ -1,7 +1,7 @@
 
 # Changes
 
-## Unreleased
+## Release 0.11.4 - October 18, 2023
 
 - Rename `RcGenError` to `Error` to avoid stuttering when used fully-qualified via `rcgen::`.
 - Upgrade to `ring` `v0.17`.
