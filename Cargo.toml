@@ -1,5 +1,5 @@
 [workspace]
-members = ["rustls-cert-gen", "rcgen"]
+members = ["rcgen", "rustls-cert-gen"]
 resolver = "2"
 
 [workspace.dependencies]

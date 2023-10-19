@@ -2,7 +2,7 @@
 name = "rcgen"
 version = "0.11.3"
 description = "Rust X.509 certificate generator"
-repository = "https://github.com/est31/rcgen"
+repository = "https://github.com/rustls/rcgen"
 documentation = "https://docs.rs/rcgen"
 license.workspace = true
 edition.workspace = true
