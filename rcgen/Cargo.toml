@@ -4,9 +4,9 @@ version = "0.11.3"
 description = "Rust X.509 certificate generator"
 repository = "https://github.com/rustls/rcgen"
 documentation = "https://docs.rs/rcgen"
+readme.workspace = true
 license.workspace = true
 edition.workspace = true
-readme = "README.md"
 keywords = ["mkcert", "ca", "certificate"]
 
 [lib]
