@@ -580,6 +580,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls-cert-gen"
+version = "0.1.0"
+dependencies = [
+ "pem",
+ "rcgen",
+]
+
+[[package]]
 name = "rustls-webpki"
 version = "0.101.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"

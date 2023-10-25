@@ -1,0 +1,11 @@
+[package]
+name = "rustls-cert-gen"
+version = "0.1.0"
+description = "Rust X.509 certificate generator CLI"
+license.workspace = true
+edition.workspace = true
+keywords.workspace = true
+
+[dependencies]
+rcgen = { path = "../rcgen" }
+pem = { workspace = true }

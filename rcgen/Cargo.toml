@@ -1,0 +1,50 @@
+[package]
+name = "rcgen"
+documentation = "https://docs.rs/rcgen"
+version.workspace = true
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+license.workspace = true
+edition.workspace = true
+keywords.workspace = true
+
+[[example]]
+name = "rsa-irc"
+required-features = ["pem"]
+
+[[example]]
+name = "rsa-irc-openssl"
+required-features = ["pem"]
+
+[[example]]
+name = "sign-leaf-with-ca"
+required-features = ["pem", "x509-parser"]
+
+[dependencies]
+yasna = { version = "0.5.2", features = ["time", "std"] }
+ring = "0.17"
+pem = { workspace = true, optional = true }
+time = { version = "0.3.6", default-features = false }
+x509-parser = { version = "0.15", features = ["verify"], optional = true }
+zeroize = { version = "1.2", optional = true }
+
+[features]
+default = ["pem"]
+
+[package.metadata.docs.rs]
+features = ["x509-parser"]
+
+[dev-dependencies]
+openssl = "0.10"
+x509-parser = { version = "0.15", features = ["verify"] }
+rustls-webpki = { version = "0.101.0", features = ["std"] }
+botan = { version = "0.10", features = ["vendored"] }
+rand = "0.8"
+rsa = "0.9"
+
+# This greatly speeds up rsa key generation times
+# (only applies to the dev-dependency because cargo
+# ignores profile overrides for non leaf packages)
+[profile.dev.package.num-bigint-dig]
+opt-level = 3
