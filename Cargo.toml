@@ -9,3 +9,7 @@ pem = { version = "3.0.2" }
 license = "MIT OR Apache-2.0"
 edition = "2021"
 readme = "README.md"
+version = "0.11.3"
+description = "Rust X.509 certificate generator"
+repository = "https://github.com/rustls/rcgen"
+keywords = ["mkcert", "ca", "certificate"]

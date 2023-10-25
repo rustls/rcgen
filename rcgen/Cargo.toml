@@ -1,17 +1,13 @@
 [package]
 name = "rcgen"
-version = "0.11.3"
-description = "Rust X.509 certificate generator"
-repository = "https://github.com/rustls/rcgen"
 documentation = "https://docs.rs/rcgen"
+version.workspace = true
+description.workspace = true
+repository.workspace = true
 readme.workspace = true
 license.workspace = true
 edition.workspace = true
-keywords = ["mkcert", "ca", "certificate"]
-
-[lib]
-name = "rcgen"
-path = "src/lib.rs"
+keywords.workspace = true
 
 [[example]]
 name = "rsa-irc"
