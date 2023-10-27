@@ -879,36 +879,7 @@ impl CertificateParams {
 			// Write version
 			writer.next().write_u8(0);
 			// Write issuer
-			writer.next().write_sequence(|writer| {
-				for (ty, content) in distinguished_name.iter() {
-					writer.next().write_set(|writer| {
-						writer.next().write_sequence(|writer| {
-							writer.next().write_oid(&ty.to_oid());
-							match content {
-								DnValue::BmpString(s) => writer
-									.next()
-									.write_tagged_implicit(TAG_BMPSTRING, |writer| {
-										writer.write_bytes(s)
-									}),
-								DnValue::PrintableString(s) => {
-									writer.next().write_printable_string(s)
-								},
-								DnValue::TeletexString(s) => writer
-									.next()
-									.write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
-										writer.write_bytes(s)
-									}),
-								DnValue::UniversalString(s) => writer
-									.next()
-									.write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
-										writer.write_bytes(s)
-									}),
-								DnValue::Utf8String(s) => writer.next().write_utf8_string(s),
-							}
-						});
-					});
-				}
-			});
+			write_distinguished_name(writer.next(), &distinguished_name);
 			// Write subjectPublicKeyInfo
 			pub_key.serialize_public_key_der(writer.next());
 			// Write extensions
