@@ -3,7 +3,7 @@
 
 ## Unreleased
 
-- Rename `RcGenError` to `Error` to avoid stuttering when used fully-qualified via `rcgen::`.
+- Rename `RcgenError` to `Error` to avoid stuttering when used fully-qualified via `rcgen::`.
 - Upgrade to `ring` `v0.17`.
 
 ## Release 0.11.3 - October 1, 2023
