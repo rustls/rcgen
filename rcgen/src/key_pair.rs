@@ -68,7 +68,7 @@ impl KeyPair {
 	/// Parses the key pair from the ASCII PEM format
 	#[cfg(feature = "pem")]
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
-		let private_key = pem::parse(pem_str)?;
+		let private_key = pem::parse(pem_str)._err()?;
 		let private_key_der: &[_] = private_key.contents();
 		Ok(private_key_der.try_into()?)
 	}
@@ -91,7 +91,7 @@ impl KeyPair {
 		pem_str: &str,
 		alg: &'static SignatureAlgorithm,
 	) -> Result<Self, Error> {
-		let private_key = pem::parse(pem_str)?;
+		let private_key = pem::parse(pem_str)._err()?;
 		let private_key_der: &[_] = private_key.contents();
 		Ok(Self::from_der_and_sign_algo(private_key_der, alg)?)
 	}
@@ -380,6 +380,12 @@ impl<T> ExternalError<T> for Result<T, ring::error::KeyRejected> {
 impl<T> ExternalError<T> for Result<T, ring::error::Unspecified> {
 	fn _err(self) -> Result<T, Error> {
 		self.map_err(|_| Error::RingUnspecified)
+	}
+}
+
+impl<T> ExternalError<T> for Result<T, pem::PemError> {
+	fn _err(self) -> Result<T, Error> {
+		self.map_err(|e| Error::PemError(e.to_string()))
 	}
 }
 
