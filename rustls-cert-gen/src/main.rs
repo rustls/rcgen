@@ -1,38 +1,37 @@
-#![allow(clippy::complexity, clippy::style, clippy::pedantic)]
+use rustls_cert_gen::{CertificateBuilder, Result};
+mod args;
 
-use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName, DnType, SanType};
-use std::fs;
+fn main() -> Result<()> {
+	let opts = args::options().run();
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-	let mut params: CertificateParams = Default::default();
-	params.not_before = date_time_ymd(1975, 01, 01);
-	params.not_after = date_time_ymd(4096, 01, 01);
-	params.distinguished_name = DistinguishedName::new();
-	params
-		.distinguished_name
-		.push(DnType::OrganizationName, "Crab widgits SE");
-	params
-		.distinguished_name
-		.push(DnType::CommonName, "Master Cert");
-	params.subject_alt_names = vec![
-		SanType::DnsName("crabs.crabs".to_string()),
-		SanType::DnsName("localhost".to_string()),
-	];
+	let ca = CertificateBuilder::new()
+		.signature_algorithm(&opts.sig_algo)?
+		.certificate_authority()
+		.country_name(&opts.country_name)
+		.organization_name(&opts.organization_name)
+		.build()?;
 
-	let cert = Certificate::from_params(params)?;
+	let mut entity = CertificateBuilder::new()
+		.signature_algorithm(&opts.sig_algo)?
+		.end_entity()
+		.common_name(&opts.common_name)
+		.subject_alternative_names(opts.san);
 
-	let pem_serialized = cert.serialize_pem()?;
-	let pem = pem::parse(&pem_serialized)?;
-	let der_serialized = pem.contents();
-	println!("{pem_serialized}");
-	println!("{}", cert.serialize_private_key_pem());
-	std::fs::create_dir_all("certs/")?;
-	fs::write("certs/cert.pem", &pem_serialized.as_bytes())?;
-	fs::write("certs/cert.der", &der_serialized)?;
-	fs::write(
-		"certs/key.pem",
-		&cert.serialize_private_key_pem().as_bytes(),
-	)?;
-	fs::write("certs/key.der", &cert.serialize_private_key_der())?;
+	if opts.client_auth {
+		entity.client_auth();
+	};
+
+	if opts.server_auth {
+		entity.server_auth();
+	};
+
+	entity
+		.build()?
+		.serialize_pem(ca.cert())?
+		.write(&opts.output, &opts.cert_file_name)?;
+
+	ca.serialize_pem()?
+		.write(&opts.output, &opts.ca_file_name)?;
+
 	Ok(())
 }
