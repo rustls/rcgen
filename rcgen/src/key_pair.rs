@@ -58,10 +58,12 @@ impl KeyPair {
 	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
 		Ok(der.try_into()?)
 	}
+
 	/// Returns the key pair's signature algorithm
 	pub fn algorithm(&self) -> &'static SignatureAlgorithm {
 		self.alg
 	}
+
 	/// Parses the key pair from the ASCII PEM format
 	#[cfg(feature = "pem")]
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
@@ -205,6 +207,7 @@ impl KeyPair {
 			SignAlgo::Rsa() => Err(Error::KeyGenerationUnavailable),
 		}
 	}
+
 	/// Get the raw public key of this key pair
 	///
 	/// The key is in raw format, as how [`ring::signature::KeyPair::public_key`]
@@ -213,15 +216,18 @@ impl KeyPair {
 	pub fn public_key_raw(&self) -> &[u8] {
 		self.raw_bytes()
 	}
+
 	/// Check if this key pair can be used with the given signature algorithm
 	pub fn is_compatible(&self, signature_algorithm: &SignatureAlgorithm) -> bool {
 		self.alg == signature_algorithm
 	}
+
 	/// Returns (possibly multiple) compatible [`SignatureAlgorithm`]'s
 	/// that the key can be used with
 	pub fn compatible_algs(&self) -> impl Iterator<Item = &'static SignatureAlgorithm> {
 		std::iter::once(self.alg)
 	}
+
 	pub(crate) fn sign(&self, msg: &[u8], writer: DERWriter) -> Result<(), Error> {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => {
@@ -249,6 +255,7 @@ impl KeyPair {
 		}
 		Ok(())
 	}
+
 	/// Return the key pair's public key in DER format
 	///
 	/// The key is formatted according to the SubjectPublicKeyInfo struct of
@@ -257,6 +264,7 @@ impl KeyPair {
 	pub fn public_key_der(&self) -> Vec<u8> {
 		yasna::construct_der(|writer| self.serialize_public_key_der(writer))
 	}
+
 	/// Return the key pair's public key in PEM format
 	///
 	/// The returned string can be interpreted with `openssl pkey --inform PEM -pubout -pubin -text`
@@ -266,6 +274,7 @@ impl KeyPair {
 		let p = Pem::new("PUBLIC KEY", contents);
 		pem::encode_config(&p, ENCODE_CONFIG)
 	}
+
 	/// Serializes the key pair (including the private key) in PKCS#8 format in DER
 	///
 	/// Panics if called on a remote key pair.
@@ -364,7 +373,9 @@ pub trait RemoteKeyPair {
 
 pub(crate) trait PublicKeyData {
 	fn alg(&self) -> &SignatureAlgorithm;
+
 	fn raw_bytes(&self) -> &[u8];
+
 	fn serialize_public_key_der(&self, writer: DERWriter) {
 		writer.write_sequence(|writer| {
 			self.alg().write_oids_sign_alg(writer.next());
