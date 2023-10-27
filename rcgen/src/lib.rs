@@ -363,6 +363,8 @@ impl DnType {
 pub enum DnValue {
 	/// A string encoded using UCS-2
 	BmpString(Vec<u8>),
+	/// An ASCII string.
+	Ia5String(String),
 	/// An ASCII string containing only A-Z, a-z, 0-9, '()+,-./:=? and `<SPACE>`
 	PrintableString(String),
 	/// A string of characters from the T.61 character set
@@ -1414,6 +1416,7 @@ fn write_distinguished_name(writer: DERWriter, dn: &DistinguishedName) {
 						DnValue::BmpString(s) => writer
 							.next()
 							.write_tagged_implicit(TAG_BMPSTRING, |writer| writer.write_bytes(s)),
+						DnValue::Ia5String(s) => writer.next().write_ia5_string(s),
 						DnValue::PrintableString(s) => writer.next().write_printable_string(s),
 						DnValue::TeletexString(s) => writer
 							.next()
