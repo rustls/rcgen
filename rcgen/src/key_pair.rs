@@ -170,50 +170,7 @@ impl KeyPair {
 		};
 		Ok((kind, alg))
 	}
-}
 
-/// A private key that is not directly accessible, but can be used to sign messages
-///
-/// Trait objects based on this trait can be passed to the [`KeyPair::from_remote`] function for generating certificates
-/// from a remote and raw private key, for example an HSM.
-pub trait RemoteKeyPair {
-	/// Returns the public key of this key pair in the binary format as in [`KeyPair::public_key_raw`]
-	fn public_key(&self) -> &[u8];
-
-	/// Signs `msg` using the selected algorithm
-	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
-
-	/// Reveals the algorithm to be used when calling `sign()`
-	fn algorithm(&self) -> &'static SignatureAlgorithm;
-}
-
-impl TryFrom<&[u8]> for KeyPair {
-	type Error = Error;
-
-	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, Error> {
-		let (kind, alg) = KeyPair::from_raw(pkcs8)?;
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: pkcs8.to_vec(),
-		})
-	}
-}
-
-impl TryFrom<Vec<u8>> for KeyPair {
-	type Error = Error;
-
-	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, Error> {
-		let (kind, alg) = KeyPair::from_raw(pkcs8.as_slice())?;
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: pkcs8,
-		})
-	}
-}
-
-impl KeyPair {
 	/// Generate a new random key pair for the specified signature algorithm
 	pub fn generate(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
 		let rng = &SystemRandom::new();
@@ -347,6 +304,47 @@ impl KeyPair {
 		let contents = self.serialize_der();
 		let p = Pem::new("PRIVATE KEY", contents);
 		pem::encode_config(&p, ENCODE_CONFIG)
+	}
+}
+
+/// A private key that is not directly accessible, but can be used to sign messages
+///
+/// Trait objects based on this trait can be passed to the [`KeyPair::from_remote`] function for generating certificates
+/// from a remote and raw private key, for example an HSM.
+pub trait RemoteKeyPair {
+	/// Returns the public key of this key pair in the binary format as in [`KeyPair::public_key_raw`]
+	fn public_key(&self) -> &[u8];
+
+	/// Signs `msg` using the selected algorithm
+	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
+
+	/// Reveals the algorithm to be used when calling `sign()`
+	fn algorithm(&self) -> &'static SignatureAlgorithm;
+}
+
+impl TryFrom<&[u8]> for KeyPair {
+	type Error = Error;
+
+	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, Error> {
+		let (kind, alg) = KeyPair::from_raw(pkcs8)?;
+		Ok(KeyPair {
+			kind,
+			alg,
+			serialized_der: pkcs8.to_vec(),
+		})
+	}
+}
+
+impl TryFrom<Vec<u8>> for KeyPair {
+	type Error = Error;
+
+	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, Error> {
+		let (kind, alg) = KeyPair::from_raw(pkcs8.as_slice())?;
+		Ok(KeyPair {
+			kind,
+			alg,
+			serialized_der: pkcs8,
+		})
 	}
 }
 
