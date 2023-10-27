@@ -473,20 +473,15 @@ impl DistinguishedName {
 				.ok_or(Error::CouldNotParseCertificate)?;
 			let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
 			let data = attr.attr_value().data;
+			let try_str =
+				|data| std::str::from_utf8(data).map_err(|_| Error::CouldNotParseCertificate);
 			let dn_value = match attr.attr_value().header.tag() {
 				Tag::BmpString => DnValue::BmpString(data.into()),
-				Tag::PrintableString => {
-					let data =
-						std::str::from_utf8(data).map_err(|_| Error::CouldNotParseCertificate)?;
-					DnValue::PrintableString(data.to_owned())
-				},
+				Tag::Ia5String => DnValue::Ia5String(try_str(data)?.to_owned()),
+				Tag::PrintableString => DnValue::PrintableString(try_str(data)?.to_owned()),
 				Tag::T61String => DnValue::TeletexString(data.into()),
 				Tag::UniversalString => DnValue::UniversalString(data.into()),
-				Tag::Utf8String => {
-					let data =
-						std::str::from_utf8(data).map_err(|_| Error::CouldNotParseCertificate)?;
-					DnValue::Utf8String(data.to_owned())
-				},
+				Tag::Utf8String => DnValue::Utf8String(try_str(data)?.to_owned()),
 				_ => return Err(Error::CouldNotParseCertificate),
 			};
 
