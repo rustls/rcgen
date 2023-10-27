@@ -35,6 +35,12 @@ default = ["pem"]
 [package.metadata.docs.rs]
 features = ["x509-parser"]
 
+[package.metadata.cargo_check_external_types]
+allowed_external_types = [
+    "time::offset_date_time::OffsetDateTime",
+    "zeroize::Zeroize"
+]
+
 [dev-dependencies]
 openssl = "0.10"
 x509-parser = { version = "0.15", features = ["verify"] }

@@ -61,6 +61,24 @@ jobs:
         env:
           RUSTDOCFLAGS: ${{ matrix.rust_channel == 'nightly' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
 
+  check-external-types:
+    name: Validate external types appearing in public API
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2023-10-10
+          # ^ sync with https://github.com/awslabs/cargo-check-external-types/blob/main/rust-toolchain.toml
+      - run: cargo install --locked cargo-check-external-types
+      - name: run cargo-check-external-types for rcgen/
+        working-directory: rcgen/
+        run: cargo check-external-types --all-features
+
   build-windows:
     runs-on: windows-latest
     env:
