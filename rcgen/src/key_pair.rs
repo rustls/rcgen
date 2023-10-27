@@ -7,6 +7,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use yasna::DERWriter;
 
+use crate::error::ExternalError;
 use crate::sign_algo::algo::*;
 use crate::sign_algo::SignAlgo;
 #[cfg(feature = "pem")]
@@ -112,30 +113,28 @@ impl KeyPair {
 		let pkcs8_vec = pkcs8.to_vec();
 
 		let kind = if alg == &PKCS_ED25519 {
-			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)?)
+			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)._err()?)
 		} else if alg == &PKCS_ECDSA_P256_SHA256 {
-			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
-				&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-				pkcs8,
-				rng,
-			)?)
+			KeyPairKind::Ec(
+				EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, rng)
+					._err()?,
+			)
 		} else if alg == &PKCS_ECDSA_P384_SHA384 {
-			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
-				&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
-				pkcs8,
-				rng,
-			)?)
+			KeyPairKind::Ec(
+				EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8, rng)
+					._err()?,
+			)
 		} else if alg == &PKCS_RSA_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
 		} else if alg == &PKCS_RSA_SHA384 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
 		} else if alg == &PKCS_RSA_SHA512 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
 		} else if alg == &PKCS_RSA_PSS_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
 			panic!("Unknown SignatureAlgorithm specified!");
@@ -369,6 +368,12 @@ pub trait RemoteKeyPair {
 
 	/// Reveals the algorithm to be used when calling `sign()`
 	fn algorithm(&self) -> &'static SignatureAlgorithm;
+}
+
+impl<T> ExternalError<T> for Result<T, ring::error::KeyRejected> {
+	fn _err(self) -> Result<T, Error> {
+		self.map_err(|e| Error::RingKeyRejected(e.to_string()))
+	}
 }
 
 pub(crate) trait PublicKeyData {

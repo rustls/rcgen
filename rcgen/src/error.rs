@@ -104,12 +104,6 @@ impl From<ring::error::Unspecified> for Error {
 	}
 }
 
-impl From<ring::error::KeyRejected> for Error {
-	fn from(err: ring::error::KeyRejected) -> Self {
-		Error::RingKeyRejected(err.to_string())
-	}
-}
-
 #[cfg(feature = "pem")]
 impl From<pem::PemError> for Error {
 	fn from(e: pem::PemError) -> Self {
