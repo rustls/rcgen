@@ -178,7 +178,7 @@ impl KeyPair {
 
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
-				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)?;
+				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)._err()?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair =
@@ -190,7 +190,7 @@ impl KeyPair {
 				})
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
-				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(rng)?;
+				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(rng)._err()?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(&&key_pair_doc.as_ref()).unwrap();
@@ -231,7 +231,7 @@ impl KeyPair {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => {
 				let system_random = SystemRandom::new();
-				let signature = kp.sign(&system_random, msg)?;
+				let signature = kp.sign(&system_random, msg)._err()?;
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
@@ -243,7 +243,8 @@ impl KeyPair {
 			KeyPairKind::Rsa(kp, padding_alg) => {
 				let system_random = SystemRandom::new();
 				let mut signature = vec![0; kp.public().modulus_len()];
-				kp.sign(*padding_alg, &system_random, msg, &mut signature)?;
+				kp.sign(*padding_alg, &system_random, msg, &mut signature)
+					._err()?;
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
@@ -373,6 +374,12 @@ pub trait RemoteKeyPair {
 impl<T> ExternalError<T> for Result<T, ring::error::KeyRejected> {
 	fn _err(self) -> Result<T, Error> {
 		self.map_err(|e| Error::RingKeyRejected(e.to_string()))
+	}
+}
+
+impl<T> ExternalError<T> for Result<T, ring::error::Unspecified> {
+	fn _err(self) -> Result<T, Error> {
+		self.map_err(|_| Error::RingUnspecified)
 	}
 }
 

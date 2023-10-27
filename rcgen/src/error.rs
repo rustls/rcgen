@@ -98,12 +98,6 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-impl From<ring::error::Unspecified> for Error {
-	fn from(_unspecified: ring::error::Unspecified) -> Self {
-		Error::RingUnspecified
-	}
-}
-
 #[cfg(feature = "pem")]
 impl From<pem::PemError> for Error {
 	fn from(e: pem::PemError) -> Self {

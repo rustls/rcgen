@@ -1,5 +1,5 @@
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DnType, IsCa, KeyPair, RemoteKeyPair,
+	BasicConstraints, Certificate, CertificateParams, DnType, Error, IsCa, KeyPair, RemoteKeyPair,
 };
 use rcgen::{
 	CertificateRevocationList, CertificateRevocationListParams, RevocationReason, RevokedCertParams,
@@ -327,7 +327,7 @@ fn from_remote() {
 			self.0
 				.sign(&system_random, msg)
 				.map(|s| s.as_ref().to_owned())
-				.map_err(rcgen::Error::from)
+				.map_err(|_| Error::RingUnspecified)
 		}
 
 		fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
