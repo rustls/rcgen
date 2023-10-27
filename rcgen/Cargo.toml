@@ -23,10 +23,10 @@ required-features = ["pem", "x509-parser"]
 
 [dependencies]
 yasna = { version = "0.5.2", features = ["time", "std"] }
-ring = "0.17"
+ring = { workspace = true }
 pem = { workspace = true, optional = true }
 time = { version = "0.3.6", default-features = false }
-x509-parser = { version = "0.15", features = ["verify"], optional = true }
+x509-parser = { workspace = true, features = ["verify"], optional = true }
 zeroize = { version = "1.2", optional = true }
 
 [features]
@@ -43,8 +43,8 @@ allowed_external_types = [
 
 [dev-dependencies]
 openssl = "0.10"
-x509-parser = { version = "0.15", features = ["verify"] }
+x509-parser = { workspace = true, features = ["verify"] }
 rustls-webpki = { version = "0.101.0", features = ["std"] }
 botan = { version = "0.10", features = ["vendored"] }
-rand = "0.8"
-rsa = "0.9"
+rand = { workspace = true }
+rsa = { version = "0.9" }

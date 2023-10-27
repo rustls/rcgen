@@ -3,7 +3,10 @@ members = ["rcgen", "rustls-cert-gen"]
 resolver = "2"
 
 [workspace.dependencies]
-pem = { version = "3.0.2" }
+pem = "3.0.2"
+rand = "0.8"
+ring = "0.17"
+x509-parser = "0.15.1"
 
 [workspace.package]
 license = "MIT OR Apache-2.0"

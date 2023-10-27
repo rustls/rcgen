@@ -7,5 +7,13 @@ edition.workspace = true
 keywords.workspace = true
 
 [dependencies]
-rcgen = { path = "../rcgen" }
+bpaf = { version = "0.9.5", features = ["derive"] }
 pem = { workspace = true }
+rcgen = { path = "../rcgen" }
+ring = { workspace = true }
+rand = { workspace = true }
+anyhow = "1.0.75"
+
+[dev-dependencies]
+assert_fs = "1.0.13"
+x509-parser = { workspace = true, features = ["verify"] }
