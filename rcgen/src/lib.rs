@@ -67,7 +67,7 @@ pub use crate::sign_algo::SignatureAlgorithm;
 #[deprecated(
 	note = "Renamed to `Error`. We recommend to refer to it by fully-qualifying the crate: `rcgen::Error`."
 )]
-pub type RcGenError = Error;
+pub type RcgenError = Error;
 
 /// A self signed certificate together with signing keys
 pub struct Certificate {
