@@ -307,21 +307,6 @@ impl KeyPair {
 	}
 }
 
-/// A private key that is not directly accessible, but can be used to sign messages
-///
-/// Trait objects based on this trait can be passed to the [`KeyPair::from_remote`] function for generating certificates
-/// from a remote and raw private key, for example an HSM.
-pub trait RemoteKeyPair {
-	/// Returns the public key of this key pair in the binary format as in [`KeyPair::public_key_raw`]
-	fn public_key(&self) -> &[u8];
-
-	/// Signs `msg` using the selected algorithm
-	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
-
-	/// Reveals the algorithm to be used when calling `sign()`
-	fn algorithm(&self) -> &'static SignatureAlgorithm;
-}
-
 impl TryFrom<&[u8]> for KeyPair {
 	type Error = Error;
 
@@ -360,6 +345,21 @@ impl PublicKeyData for KeyPair {
 			KeyPairKind::Remote(kp) => kp.public_key(),
 		}
 	}
+}
+
+/// A private key that is not directly accessible, but can be used to sign messages
+///
+/// Trait objects based on this trait can be passed to the [`KeyPair::from_remote`] function for generating certificates
+/// from a remote and raw private key, for example an HSM.
+pub trait RemoteKeyPair {
+	/// Returns the public key of this key pair in the binary format as in [`KeyPair::public_key_raw`]
+	fn public_key(&self) -> &[u8];
+
+	/// Signs `msg` using the selected algorithm
+	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
+
+	/// Reveals the algorithm to be used when calling `sign()`
+	fn algorithm(&self) -> &'static SignatureAlgorithm;
 }
 
 pub(crate) trait PublicKeyData {
