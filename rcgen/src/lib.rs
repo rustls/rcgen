@@ -361,16 +361,16 @@ impl DnType {
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[non_exhaustive]
 pub enum DnValue {
-	/// A string of characters from the T.61 character set
-	TeletexString(Vec<u8>),
+	/// A string encoded using UCS-2
+	BmpString(Vec<u8>),
 	/// An ASCII string containing only A-Z, a-z, 0-9, '()+,-./:=? and `<SPACE>`
 	PrintableString(String),
+	/// A string of characters from the T.61 character set
+	TeletexString(Vec<u8>),
 	/// A string encoded using UTF-32
 	UniversalString(Vec<u8>),
 	/// A string encoded using UTF-8
 	Utf8String(String),
-	/// A string encoded using UCS-2
-	BmpString(Vec<u8>),
 }
 
 impl<T> From<T> for DnValue
@@ -885,25 +885,25 @@ impl CertificateParams {
 						writer.next().write_sequence(|writer| {
 							writer.next().write_oid(&ty.to_oid());
 							match content {
-								DnValue::TeletexString(s) => writer
+								DnValue::BmpString(s) => writer
 									.next()
-									.write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
+									.write_tagged_implicit(TAG_BMPSTRING, |writer| {
 										writer.write_bytes(s)
 									}),
 								DnValue::PrintableString(s) => {
 									writer.next().write_printable_string(s)
 								},
+								DnValue::TeletexString(s) => writer
+									.next()
+									.write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
+										writer.write_bytes(s)
+									}),
 								DnValue::UniversalString(s) => writer
 									.next()
 									.write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
 										writer.write_bytes(s)
 									}),
 								DnValue::Utf8String(s) => writer.next().write_utf8_string(s),
-								DnValue::BmpString(s) => writer
-									.next()
-									.write_tagged_implicit(TAG_BMPSTRING, |writer| {
-										writer.write_bytes(s)
-									}),
 							}
 						});
 					});
@@ -1440,21 +1440,21 @@ fn write_distinguished_name(writer: DERWriter, dn: &DistinguishedName) {
 				writer.next().write_sequence(|writer| {
 					writer.next().write_oid(&ty.to_oid());
 					match content {
+						DnValue::BmpString(s) => writer
+							.next()
+							.write_tagged_implicit(TAG_BMPSTRING, |writer| writer.write_bytes(s)),
+						DnValue::PrintableString(s) => writer.next().write_printable_string(s),
 						DnValue::TeletexString(s) => writer
 							.next()
 							.write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
 								writer.write_bytes(s)
 							}),
-						DnValue::PrintableString(s) => writer.next().write_printable_string(s),
 						DnValue::UniversalString(s) => writer
 							.next()
 							.write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
 								writer.write_bytes(s)
 							}),
 						DnValue::Utf8String(s) => writer.next().write_utf8_string(s),
-						DnValue::BmpString(s) => writer
-							.next()
-							.write_tagged_implicit(TAG_BMPSTRING, |writer| writer.write_bytes(s)),
 					}
 				});
 			});
