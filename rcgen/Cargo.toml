@@ -1,7 +1,7 @@
 [package]
 name = "rcgen"
+version = "0.11.3"
 documentation = "https://docs.rs/rcgen"
-version.workspace = true
 description.workspace = true
 repository.workspace = true
 readme.workspace = true
