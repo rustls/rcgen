@@ -299,3 +299,40 @@ mod test_parse_crl_dps {
 		);
 	}
 }
+
+#[cfg(feature = "x509-parser")]
+mod test_parse_ia5string_subject {
+	use crate::util;
+	use rcgen::DnType::CustomDnType;
+	use rcgen::{Certificate, CertificateParams, DistinguishedName, DnValue, KeyPair};
+
+	#[test]
+	fn parse_ia5string_subject() {
+		// Create and serialize a certificate with a subject containing an IA5String email address.
+		let email_address_dn_type = CustomDnType(vec![1, 2, 840, 113549, 1, 9, 1]); // id-emailAddress
+		let email_address_dn_value = DnValue::Ia5String("foo@bar.com".into());
+		let mut params = util::default_params();
+		params.distinguished_name = DistinguishedName::new();
+		params.distinguished_name.push(
+			email_address_dn_type.clone(),
+			email_address_dn_value.clone(),
+		);
+		let cert = Certificate::from_params(params).unwrap();
+		let cert_der = cert.serialize_der().unwrap();
+
+		// We should be able to parse the certificate with x509-parser.
+		assert!(x509_parser::parse_x509_certificate(&cert_der).is_ok());
+
+		// We should be able to reconstitute params from the DER using x509-parser.
+		let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+		let params_from_cert = CertificateParams::from_ca_cert_der(&cert_der, key_pair).unwrap();
+
+		// We should find the expected distinguished name in the reconstituted params.
+		let expected_names = &[(&email_address_dn_type, &email_address_dn_value)];
+		let names = params_from_cert
+			.distinguished_name
+			.iter()
+			.collect::<Vec<(_, _)>>();
+		assert_eq!(names, expected_names);
+	}
+}

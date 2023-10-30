@@ -361,16 +361,18 @@ impl DnType {
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[non_exhaustive]
 pub enum DnValue {
-	/// A string of characters from the T.61 character set
-	TeletexString(Vec<u8>),
+	/// A string encoded using UCS-2
+	BmpString(Vec<u8>),
+	/// An ASCII string.
+	Ia5String(String),
 	/// An ASCII string containing only A-Z, a-z, 0-9, '()+,-./:=? and `<SPACE>`
 	PrintableString(String),
+	/// A string of characters from the T.61 character set
+	TeletexString(Vec<u8>),
 	/// A string encoded using UTF-32
 	UniversalString(Vec<u8>),
 	/// A string encoded using UTF-8
 	Utf8String(String),
-	/// A string encoded using UCS-2
-	BmpString(Vec<u8>),
 }
 
 impl<T> From<T> for DnValue
@@ -471,20 +473,15 @@ impl DistinguishedName {
 				.ok_or(Error::CouldNotParseCertificate)?;
 			let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
 			let data = attr.attr_value().data;
+			let try_str =
+				|data| std::str::from_utf8(data).map_err(|_| Error::CouldNotParseCertificate);
 			let dn_value = match attr.attr_value().header.tag() {
-				Tag::T61String => DnValue::TeletexString(data.into()),
-				Tag::PrintableString => {
-					let data =
-						std::str::from_utf8(data).map_err(|_| Error::CouldNotParseCertificate)?;
-					DnValue::PrintableString(data.to_owned())
-				},
-				Tag::UniversalString => DnValue::UniversalString(data.into()),
-				Tag::Utf8String => {
-					let data =
-						std::str::from_utf8(data).map_err(|_| Error::CouldNotParseCertificate)?;
-					DnValue::Utf8String(data.to_owned())
-				},
 				Tag::BmpString => DnValue::BmpString(data.into()),
+				Tag::Ia5String => DnValue::Ia5String(try_str(data)?.to_owned()),
+				Tag::PrintableString => DnValue::PrintableString(try_str(data)?.to_owned()),
+				Tag::T61String => DnValue::TeletexString(data.into()),
+				Tag::UniversalString => DnValue::UniversalString(data.into()),
+				Tag::Utf8String => DnValue::Utf8String(try_str(data)?.to_owned()),
 				_ => return Err(Error::CouldNotParseCertificate),
 			};
 
@@ -879,36 +876,7 @@ impl CertificateParams {
 			// Write version
 			writer.next().write_u8(0);
 			// Write issuer
-			writer.next().write_sequence(|writer| {
-				for (ty, content) in distinguished_name.iter() {
-					writer.next().write_set(|writer| {
-						writer.next().write_sequence(|writer| {
-							writer.next().write_oid(&ty.to_oid());
-							match content {
-								DnValue::TeletexString(s) => writer
-									.next()
-									.write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
-										writer.write_bytes(s)
-									}),
-								DnValue::PrintableString(s) => {
-									writer.next().write_printable_string(s)
-								},
-								DnValue::UniversalString(s) => writer
-									.next()
-									.write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
-										writer.write_bytes(s)
-									}),
-								DnValue::Utf8String(s) => writer.next().write_utf8_string(s),
-								DnValue::BmpString(s) => writer
-									.next()
-									.write_tagged_implicit(TAG_BMPSTRING, |writer| {
-										writer.write_bytes(s)
-									}),
-							}
-						});
-					});
-				}
-			});
+			write_distinguished_name(writer.next(), &distinguished_name);
 			// Write subjectPublicKeyInfo
 			pub_key.serialize_public_key_der(writer.next());
 			// Write extensions
@@ -1440,21 +1408,22 @@ fn write_distinguished_name(writer: DERWriter, dn: &DistinguishedName) {
 				writer.next().write_sequence(|writer| {
 					writer.next().write_oid(&ty.to_oid());
 					match content {
+						DnValue::BmpString(s) => writer
+							.next()
+							.write_tagged_implicit(TAG_BMPSTRING, |writer| writer.write_bytes(s)),
+						DnValue::Ia5String(s) => writer.next().write_ia5_string(s),
+						DnValue::PrintableString(s) => writer.next().write_printable_string(s),
 						DnValue::TeletexString(s) => writer
 							.next()
 							.write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
 								writer.write_bytes(s)
 							}),
-						DnValue::PrintableString(s) => writer.next().write_printable_string(s),
 						DnValue::UniversalString(s) => writer
 							.next()
 							.write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
 								writer.write_bytes(s)
 							}),
 						DnValue::Utf8String(s) => writer.next().write_utf8_string(s),
-						DnValue::BmpString(s) => writer
-							.next()
-							.write_tagged_implicit(TAG_BMPSTRING, |writer| writer.write_bytes(s)),
 					}
 				});
 			});

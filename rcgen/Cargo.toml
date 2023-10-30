@@ -42,9 +42,3 @@ rustls-webpki = { version = "0.101.0", features = ["std"] }
 botan = { version = "0.10", features = ["vendored"] }
 rand = "0.8"
 rsa = "0.9"
-
-# This greatly speeds up rsa key generation times
-# (only applies to the dev-dependency because cargo
-# ignores profile overrides for non leaf packages)
-[profile.dev.package.num-bigint-dig]
-opt-level = 3

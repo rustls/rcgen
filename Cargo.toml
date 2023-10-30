@@ -13,3 +13,9 @@ version = "0.11.3"
 description = "Rust X.509 certificate generator"
 repository = "https://github.com/rustls/rcgen"
 keywords = ["mkcert", "ca", "certificate"]
+
+# This greatly speeds up rsa key generation times
+# (only applies to the dev-dependency of rcgen because cargo
+# ignores profile overrides for non leaf packages)
+[profile.dev.package.num-bigint-dig]
+opt-level = 3
