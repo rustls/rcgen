@@ -79,6 +79,18 @@ jobs:
         working-directory: rcgen/
         run: cargo check-external-types --all-features
 
+  semver:
+    name: Check semver compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check semver
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+
   build-windows:
     runs-on: windows-latest
     env:
