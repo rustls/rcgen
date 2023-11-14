@@ -17,12 +17,12 @@ fn default_params() -> CertificateParams {
 	params
 }
 
-fn check_cert<'a, 'b>(cert_der: &[u8], cert: &'a Certificate) {
+fn check_cert(cert_der: &[u8], cert: &Certificate) {
 	println!("{}", cert.serialize_pem().unwrap());
 	check_cert_ca(cert_der, cert, cert_der);
 }
 
-fn check_cert_ca<'a, 'b>(cert_der: &[u8], _cert: &'a Certificate, ca_der: &[u8]) {
+fn check_cert_ca(cert_der: &[u8], _cert: &Certificate, ca_der: &[u8]) {
 	println!(
 		"botan version: {}",
 		botan::Version::current().unwrap().string
