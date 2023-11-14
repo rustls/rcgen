@@ -1,5 +1,3 @@
-#![allow(clippy::complexity, clippy::style, clippy::pedantic)]
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName};
 	use std::fmt::Write;

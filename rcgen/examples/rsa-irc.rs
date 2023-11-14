@@ -1,5 +1,3 @@
-#![allow(clippy::complexity, clippy::style, clippy::pedantic)]
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	use rand::rngs::OsRng;
 	use rsa::pkcs8::EncodePrivateKey;
