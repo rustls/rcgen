@@ -1869,7 +1869,7 @@ mod tests {
 		fn test_not_windows_line_endings() {
 			let cert = Certificate::from_params(CertificateParams::default()).unwrap();
 			let pem = cert.serialize_pem().expect("Failed to serialize pem");
-			assert!(!pem.contains("\r"));
+			assert!(!pem.contains('\r'));
 		}
 	}
 
