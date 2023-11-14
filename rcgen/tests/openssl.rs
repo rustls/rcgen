@@ -79,7 +79,7 @@ impl Read for PipeEnd {
 	fn read(&mut self, mut buf: &mut [u8]) -> ioResult<usize> {
 		let inner = self.inner.borrow_mut();
 		let r_sl = &inner.0[1 - self.end_idx][self.read_pos..];
-		if r_sl.len() == 0 {
+		if r_sl.is_empty() {
 			return Err(Error::new(ErrorKind::WouldBlock, "oh no!"));
 		}
 		let r = buf.len().min(r_sl.len());
