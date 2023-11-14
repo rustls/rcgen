@@ -38,8 +38,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - run: cargo clippy --all-features
-      - run: cargo clippy --no-default-features
+      - run: cargo clippy --all-features --all-targets
+      - run: cargo clippy --no-default-features --all-targets
 
   rustdoc:
     name: Documentation
