@@ -241,6 +241,7 @@ fn test_openssl_25519_v1_given() {
 	// Now verify the certificate as well as CSR,
 	// but only on OpenSSL >= 1.1.1
 	// On prior versions, only do basic verification
+	#[allow(clippy::unusual_byte_groupings)]
 	if openssl::version::number() >= 0x1_01_01_00_f {
 		verify_cert(&cert);
 		verify_csr(&cert);
