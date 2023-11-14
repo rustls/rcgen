@@ -223,7 +223,7 @@ mod test_x509_parser_crl {
 		// TODO: x509-parser does not yet parse the CRL issuing DP extension for further examination.
 
 		// We should be able to verify the CRL signature with the issuer.
-		assert!(x509_crl.verify_signature(&x509_issuer.public_key()).is_ok());
+		assert!(x509_crl.verify_signature(x509_issuer.public_key()).is_ok());
 	}
 }
 

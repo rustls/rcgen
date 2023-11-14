@@ -27,8 +27,8 @@ fn check_cert_ca<'a, 'b>(cert_der: &[u8], _cert: &'a Certificate, ca_der: &[u8])
 		"botan version: {}",
 		botan::Version::current().unwrap().string
 	);
-	let trust_anchor = botan::Certificate::load(&ca_der).unwrap();
-	let end_entity_cert = botan::Certificate::load(&cert_der).unwrap();
+	let trust_anchor = botan::Certificate::load(ca_der).unwrap();
+	let end_entity_cert = botan::Certificate::load(cert_der).unwrap();
 
 	// Set time to Jan 10, 2004
 	const REFERENCE_TIME: Option<u64> = Some(0x40_00_00_00);

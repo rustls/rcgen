@@ -26,16 +26,16 @@ mod util;
 fn sign_msg_ecdsa(cert: &Certificate, msg: &[u8], alg: &'static EcdsaSigningAlgorithm) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
 	let key_pair =
-		EcdsaKeyPair::from_pkcs8(&alg, &pk_der, &ring::rand::SystemRandom::new()).unwrap();
+		EcdsaKeyPair::from_pkcs8(alg, &pk_der, &ring::rand::SystemRandom::new()).unwrap();
 	let system_random = SystemRandom::new();
-	let signature = key_pair.sign(&system_random, &msg).unwrap();
+	let signature = key_pair.sign(&system_random, msg).unwrap();
 	signature.as_ref().to_vec()
 }
 
 fn sign_msg_ed25519(cert: &Certificate, msg: &[u8]) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
 	let key_pair = Ed25519KeyPair::from_pkcs8_maybe_unchecked(&pk_der).unwrap();
-	let signature = key_pair.sign(&msg);
+	let signature = key_pair.sign(msg);
 	signature.as_ref().to_vec()
 }
 
@@ -46,7 +46,7 @@ fn sign_msg_rsa(cert: &Certificate, msg: &[u8], encoding: &'static dyn RsaEncodi
 	let system_random = SystemRandom::new();
 	let mut signature = vec![0; key_pair.public().modulus_len()];
 	key_pair
-		.sign(encoding, &system_random, &msg, &mut signature)
+		.sign(encoding, &system_random, msg, &mut signature)
 		.unwrap();
 	signature
 }
@@ -72,7 +72,7 @@ fn check_cert_ca<'a, 'b>(
 	ca_alg: &SignatureAlgorithm,
 	sign_fn: impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>,
 ) {
-	let trust_anchor = TrustAnchor::try_from_cert_der(&ca_der).unwrap();
+	let trust_anchor = TrustAnchor::try_from_cert_der(ca_der).unwrap();
 	let trust_anchor_list = &[trust_anchor];
 	let end_entity_cert = EndEntityCert::try_from(cert_der).unwrap();
 
@@ -82,7 +82,7 @@ fn check_cert_ca<'a, 'b>(
 	// (1/3) Check whether the cert is valid
 	end_entity_cert
 		.verify_for_usage(
-			&[&cert_alg, &ca_alg],
+			&[cert_alg, ca_alg],
 			&trust_anchor_list[..],
 			&[],
 			time,
@@ -99,9 +99,9 @@ fn check_cert_ca<'a, 'b>(
 
 	// (3/3) Check that a message signed by the cert is valid.
 	let msg = b"Hello, World! This message is signed.";
-	let signature = sign_fn(&cert, msg);
+	let signature = sign_fn(cert, msg);
 	end_entity_cert
-		.verify_signature(&cert_alg, msg, &signature)
+		.verify_signature(cert_alg, msg, &signature)
 		.expect("signature is valid");
 }
 
@@ -155,7 +155,7 @@ fn test_webpki_25519() {
 	// Now verify the certificate.
 	let cert_der = cert.serialize_der().unwrap();
 
-	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
+	check_cert(&cert_der, &cert, &webpki::ED25519, sign_msg_ed25519);
 }
 
 #[cfg(feature = "pem")]
@@ -172,7 +172,7 @@ fn test_webpki_25519_v1_given() {
 	// Now verify the certificate.
 	let cert_der = cert.serialize_der().unwrap();
 
-	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
+	check_cert(&cert_der, &cert, &webpki::ED25519, sign_msg_ed25519);
 }
 
 #[cfg(feature = "pem")]
@@ -189,7 +189,7 @@ fn test_webpki_25519_v2_given() {
 	// Now verify the certificate.
 	let cert_der = cert.serialize_der().unwrap();
 
-	check_cert(&cert_der, &cert, &webpki::ED25519, &sign_msg_ed25519);
+	check_cert(&cert_der, &cert, &webpki::ED25519, sign_msg_ed25519);
 }
 
 #[cfg(feature = "pem")]
@@ -550,16 +550,16 @@ fn test_webpki_crl_parse() {
 
 	// We should be able to verify the CRL signature with the issuer's raw SPKI.
 	webpki_crl
-		.verify_signature(&[&webpki::ECDSA_P256_SHA256], &raw_spki.value())
+		.verify_signature(&[&webpki::ECDSA_P256_SHA256], raw_spki.value())
 		.expect("failed to validate CRL signature");
 
 	// We should be able to find the revoked cert with the expected properties.
 	let webpki_revoked_cert = webpki_crl
-		.find_serial(&revoked_cert.serial_number.as_ref())
+		.find_serial(revoked_cert.serial_number.as_ref())
 		.expect("failed to parse revoked certs in CRL")
 		.expect("failed to find expected revoked cert in CRL");
 	assert_eq!(
-		webpki_revoked_cert.serial_number.as_ref(),
+		webpki_revoked_cert.serial_number,
 		revoked_cert.serial_number.as_ref()
 	);
 	assert_eq!(
