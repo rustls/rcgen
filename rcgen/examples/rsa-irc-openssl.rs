@@ -5,8 +5,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	use std::fs;
 
 	let mut params: CertificateParams = Default::default();
-	params.not_before = date_time_ymd(2021, 05, 19);
-	params.not_after = date_time_ymd(4096, 01, 01);
+	params.not_before = date_time_ymd(2021, 5, 19);
+	params.not_after = date_time_ymd(4096, 1, 1);
 	params.distinguished_name = DistinguishedName::new();
 
 	params.alg = &rcgen::PKCS_RSA_SHA256;
