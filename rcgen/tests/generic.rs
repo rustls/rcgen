@@ -127,7 +127,7 @@ mod test_x509_custom_ext {
 			.get_extension_unique(&test_oid)
 			.expect("invalid extensions")
 			.expect("missing custom extension");
-		assert_eq!(favorite_drink_ext.critical, true);
+		assert!(favorite_drink_ext.critical);
 		assert_eq!(favorite_drink_ext.value, test_ext);
 
 		// Generate a CSR with the custom extension, parse it with x509-parser.
@@ -154,7 +154,7 @@ mod test_x509_custom_ext {
 			.iter()
 			.find(|ext| ext.oid == test_oid)
 			.expect("missing requested custom extension");
-		assert_eq!(custom_ext.critical, true);
+		assert!(custom_ext.critical);
 		assert_eq!(custom_ext.value, test_ext);
 	}
 }
