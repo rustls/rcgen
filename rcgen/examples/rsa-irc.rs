@@ -6,6 +6,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	use rsa::RsaPrivateKey;
 
 	use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName};
+	use std::fmt::Write;
 	use std::fs;
 
 	let mut params: CertificateParams = Default::default();
@@ -27,7 +28,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let pem = pem::parse(&pem_serialized)?;
 	let der_serialized = pem.contents();
 	let hash = ring::digest::digest(&ring::digest::SHA512, der_serialized);
-	let hash_hex: String = hash.as_ref().iter().map(|b| format!("{:02x}", b)).collect();
+	let hash_hex = hash.as_ref().iter().fold(String::new(), |mut output, b| {
+		let _ = write!(output, "{b:02x}");
+		output
+	});
 	println!("sha-512 fingerprint: {hash_hex}");
 	println!("{pem_serialized}");
 	println!("{}", cert.serialize_private_key_pem());
