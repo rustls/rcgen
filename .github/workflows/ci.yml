@@ -57,7 +57,7 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
       - name: cargo doc (all features)
-        run: cargo doc --all --all-features --document-private-items
+        run: cargo doc --all-features --document-private-items
         env:
           RUSTDOCFLAGS: ${{ matrix.rust_channel == 'nightly' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
 
@@ -89,10 +89,10 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
     - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
     - run: vcpkg install openssl:x64-windows-static-md
-    - name: Run cargo check --all
-      run: cargo check --all
+    - name: Run cargo check
+      run: cargo check
     - name: Run the tests
-      run: cargo test --all
+      run: cargo test
     - name: Run the tests with x509-parser enabled
       run: cargo test --verbose --features x509-parser
     - name: Run the tests with no default features enabled
@@ -128,10 +128,10 @@ jobs:
       uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.toolchain }}
-    - name: Run cargo check --all
-      run: cargo check --all
+    - name: Run cargo check
+      run: cargo check
     - name: Run the tests
-      run: cargo test --all
+      run: cargo test
     - name: Run the tests with x509-parser enabled
       run: cargo test --verbose --features x509-parser
     - name: Run the tests with no default features enabled
