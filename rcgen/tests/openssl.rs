@@ -20,7 +20,7 @@ fn verify_cert_basic(cert: &Certificate) {
 	let cert_pem = cert.serialize_pem().unwrap();
 	println!("{cert_pem}");
 
-	let x509 = X509::from_pem(&cert_pem.as_bytes()).unwrap();
+	let x509 = X509::from_pem(cert_pem.as_bytes()).unwrap();
 	let mut builder = X509StoreBuilder::new().unwrap();
 	builder.add_cert(x509.clone()).unwrap();
 
@@ -28,7 +28,7 @@ fn verify_cert_basic(cert: &Certificate) {
 	let mut ctx = X509StoreContext::new().unwrap();
 	let mut stack = Stack::new().unwrap();
 	stack.push(x509.clone()).unwrap();
-	ctx.init(&store, &x509, &stack.as_ref(), |ctx| {
+	ctx.init(&store, &x509, stack.as_ref(), |ctx| {
 		ctx.verify_cert().unwrap();
 		Ok(())
 	})
@@ -79,7 +79,7 @@ impl Read for PipeEnd {
 	fn read(&mut self, mut buf: &mut [u8]) -> ioResult<usize> {
 		let inner = self.inner.borrow_mut();
 		let r_sl = &inner.0[1 - self.end_idx][self.read_pos..];
-		if r_sl.len() == 0 {
+		if r_sl.is_empty() {
 			return Err(Error::new(ErrorKind::WouldBlock, "oh no!"));
 		}
 		let r = buf.len().min(r_sl.len());
@@ -101,9 +101,9 @@ fn verify_cert_ca(cert_pem: &str, key: &[u8], ca_cert_pem: &str) {
 	println!("{cert_pem}");
 	println!("{ca_cert_pem}");
 
-	let x509 = X509::from_pem(&cert_pem.as_bytes()).unwrap();
+	let x509 = X509::from_pem(cert_pem.as_bytes()).unwrap();
 
-	let ca_x509 = X509::from_pem(&ca_cert_pem.as_bytes()).unwrap();
+	let ca_x509 = X509::from_pem(ca_cert_pem.as_bytes()).unwrap();
 
 	let mut builder = X509StoreBuilder::new().unwrap();
 	builder.add_cert(ca_x509).unwrap();
@@ -113,7 +113,7 @@ fn verify_cert_ca(cert_pem: &str, key: &[u8], ca_cert_pem: &str) {
 	let srv = SslMethod::tls_server();
 	let mut ssl_srv_ctx = SslAcceptor::mozilla_modern(srv).unwrap();
 	//let key = cert.serialize_private_key_der();
-	let pkey = PKey::private_key_from_der(&key).unwrap();
+	let pkey = PKey::private_key_from_der(key).unwrap();
 	ssl_srv_ctx.set_private_key(&pkey).unwrap();
 
 	ssl_srv_ctx.set_certificate(&x509).unwrap();
@@ -168,7 +168,7 @@ fn verify_csr(cert: &Certificate) {
 	let key = cert.serialize_private_key_der();
 	let pkey = PKey::private_key_from_der(&key).unwrap();
 
-	let req = X509Req::from_pem(&csr.as_bytes()).unwrap();
+	let req = X509Req::from_pem(csr.as_bytes()).unwrap();
 	req.verify(&pkey).unwrap();
 }
 
@@ -241,6 +241,7 @@ fn test_openssl_25519_v1_given() {
 	// Now verify the certificate as well as CSR,
 	// but only on OpenSSL >= 1.1.1
 	// On prior versions, only do basic verification
+	#[allow(clippy::unusual_byte_groupings)]
 	if openssl::version::number() >= 0x1_01_01_00_f {
 		verify_cert(&cert);
 		verify_csr(&cert);

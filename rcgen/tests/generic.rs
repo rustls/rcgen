@@ -127,7 +127,7 @@ mod test_x509_custom_ext {
 			.get_extension_unique(&test_oid)
 			.expect("invalid extensions")
 			.expect("missing custom extension");
-		assert_eq!(favorite_drink_ext.critical, true);
+		assert!(favorite_drink_ext.critical);
 		assert_eq!(favorite_drink_ext.value, test_ext);
 
 		// Generate a CSR with the custom extension, parse it with x509-parser.
@@ -154,7 +154,7 @@ mod test_x509_custom_ext {
 			.iter()
 			.find(|ext| ext.oid == test_oid)
 			.expect("missing requested custom extension");
-		assert_eq!(custom_ext.critical, true);
+		assert!(custom_ext.critical);
 		assert_eq!(custom_ext.value, test_ext);
 	}
 }
@@ -223,7 +223,7 @@ mod test_x509_parser_crl {
 		// TODO: x509-parser does not yet parse the CRL issuing DP extension for further examination.
 
 		// We should be able to verify the CRL signature with the issuer.
-		assert!(x509_crl.verify_signature(&x509_issuer.public_key()).is_ok());
+		assert!(x509_crl.verify_signature(x509_issuer.public_key()).is_ok());
 	}
 }
 
