@@ -7,7 +7,6 @@
 Simple Rust library to generate X.509 certificates.
 
 ```Rust
-extern crate rcgen;
 use rcgen::generate_simple_self_signed;
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
