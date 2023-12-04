@@ -31,7 +31,7 @@ to [this](https://lapo.it/asn1js/) service is very useful.
 
 ## Trying it out with quinn
 
-You can use rcgen together with the [quinn](https://github.com/djc/quinn) crate.
+You can use rcgen together with the [quinn](https://github.com/quinn-rs/quinn) crate.
 The whole set of commands is:
 ```
 cargo run
