@@ -75,13 +75,14 @@ mod test_convert_x509_subject_alternative_name {
 		// Because we're using a function for CA certificates
 		params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 
+		// Arbitrary key pair not used with the test, but required by the parsing function
+		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+		params.key_pair = Some(KeyPair::from_der(key_pair.serialized_der()).unwrap());
+
 		let cert = Certificate::from_params(params).unwrap();
 
 		// Serialize our cert that has our chosen san, so we can testing parsing/deserializing it.
 		let ca_der = cert.serialize_der().unwrap();
-
-		// Arbitrary key pair not used with the test, but required by the parsing function
-		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
 
 		let actual = CertificateParams::from_ca_cert_der(&ca_der, key_pair).unwrap();
 

@@ -43,6 +43,8 @@ pub enum Error {
 	InvalidCrlNextUpdate,
 	/// CRL issuer specifies Key Usages that don't include cRLSign.
 	IssuerNotCrlSigner,
+	/// The KeyIdMethod could not be detected.
+	CouldNotDetectKeyIdMethod,
 }
 
 impl fmt::Display for Error {
@@ -91,6 +93,7 @@ impl fmt::Display for Error {
 				f,
 				"CRL issuer must specify no key usage, or key usage including cRLSign"
 			)?,
+			CouldNotDetectKeyIdMethod => write!(f, "The KeyIdMethod could not be detected")?,
 		};
 		Ok(())
 	}

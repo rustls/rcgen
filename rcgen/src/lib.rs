@@ -611,6 +611,17 @@ impl CertificateParams {
 		let name_constraints = Self::convert_x509_name_constraints(&x509)?;
 		let serial_number = Some(x509.serial.to_bytes_be().into());
 
+		// CertificateParams default
+		let mut key_identifier_method = KeyIdMethod::Sha256;
+
+		for ext in x509.extensions() {
+			if let x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(v) =
+				ext.parsed_extension()
+			{
+				key_identifier_method = KeyIdMethod::detect(v.0, key_pair.public_key_raw())?;
+			}
+		}
+
 		Ok(CertificateParams {
 			alg,
 			is_ca,
@@ -619,6 +630,7 @@ impl CertificateParams {
 			extended_key_usages,
 			name_constraints,
 			serial_number,
+			key_identifier_method,
 			distinguished_name: dn,
 			key_pair: Some(key_pair),
 			not_before: validity.not_before.to_datetime(),
@@ -1132,6 +1144,7 @@ impl CertificateParams {
 			KeyIdMethod::Sha256 => &digest::SHA256,
 			KeyIdMethod::Sha384 => &digest::SHA384,
 			KeyIdMethod::Sha512 => &digest::SHA512,
+			KeyIdMethod::Sha1LegacyOnly => &digest::SHA1_FOR_LEGACY_USE_ONLY,
 		};
 		let digest = digest::digest(digest_method, pub_key.raw_bytes());
 		let truncated_digest = &digest.as_ref()[0..20];
@@ -1347,6 +1360,27 @@ pub enum KeyIdMethod {
 	Sha384,
 	/// RFC 7093 method 3
 	Sha512,
+	/// RFC 5280
+	Sha1LegacyOnly,
+}
+
+impl KeyIdMethod {
+	#[cfg(feature = "x509-parser")]
+	fn detect(identifier: &[u8], pub_key: &[u8]) -> Result<Self, Error> {
+		if digest::digest(&digest::SHA256, pub_key).as_ref()[0..20].eq(identifier) {
+			Ok(Self::Sha256)
+		} else if digest::digest(&digest::SHA384, pub_key).as_ref()[0..20].eq(identifier) {
+			Ok(Self::Sha384)
+		} else if digest::digest(&digest::SHA512, pub_key).as_ref()[0..20].eq(identifier) {
+			Ok(Self::Sha512)
+		} else if digest::digest(&digest::SHA1_FOR_LEGACY_USE_ONLY, pub_key).as_ref()[0..20]
+			.eq(identifier)
+		{
+			Ok(Self::Sha1LegacyOnly)
+		} else {
+			Err(Error::CouldNotDetectKeyIdMethod)
+		}
+	}
 }
 
 /// Helper to obtain an `OffsetDateTime` from year, month, day values
@@ -1848,6 +1882,84 @@ mod tests {
 					j
 				);
 			}
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	mod test_key_id_method {
+		use super::*;
+
+		#[test]
+		fn detect() {
+			let pub_key = vec![
+				48, 130, 2, 10, 2, 130, 2, 1, 0, 189, 99, 200, 88, 106, 129, 174, 34, 38, 102, 81,
+				0, 198, 124, 184, 154, 204, 18, 229, 160, 97, 195, 73, 130, 5, 90, 84, 184, 57, 93,
+				210, 2, 130, 112, 111, 25, 105, 228, 153, 203, 193, 26, 97, 220, 24, 157, 0, 58,
+				188, 246, 108, 191, 139, 20, 150, 61, 31, 82, 190, 169, 250, 79, 28, 93, 63, 166,
+				249, 152, 217, 255, 219, 45, 181, 30, 223, 217, 47, 99, 42, 168, 18, 227, 16, 2,
+				187, 37, 138, 199, 40, 235, 247, 182, 207, 254, 206, 124, 203, 144, 205, 124, 103,
+				52, 145, 23, 101, 46, 196, 20, 236, 90, 65, 106, 107, 138, 244, 86, 232, 82, 46,
+				114, 69, 88, 194, 35, 61, 220, 191, 19, 105, 133, 11, 187, 238, 43, 75, 190, 70,
+				87, 67, 98, 160, 91, 52, 4, 65, 36, 167, 238, 227, 54, 78, 233, 164, 49, 193, 106,
+				26, 105, 5, 197, 22, 74, 122, 210, 12, 36, 218, 204, 153, 233, 189, 247, 115, 148,
+				95, 71, 165, 236, 145, 177, 171, 12, 154, 141, 204, 49, 110, 178, 17, 6, 23, 59,
+				151, 232, 197, 0, 217, 6, 68, 26, 244, 60, 75, 115, 0, 208, 0, 183, 102, 158, 181,
+				226, 66, 227, 54, 224, 158, 150, 196, 104, 247, 214, 241, 195, 188, 222, 209, 189,
+				227, 79, 8, 34, 233, 215, 240, 164, 167, 126, 67, 102, 177, 234, 92, 34, 192, 54,
+				0, 109, 214, 50, 95, 171, 44, 232, 127, 235, 208, 59, 224, 222, 147, 165, 158, 193,
+				110, 1, 74, 249, 167, 23, 55, 89, 109, 107, 52, 11, 71, 120, 21, 167, 53, 101, 36,
+				46, 140, 32, 192, 201, 202, 169, 81, 164, 2, 208, 126, 233, 248, 28, 233, 137, 225,
+				19, 71, 64, 216, 128, 7, 236, 125, 178, 9, 123, 94, 112, 134, 11, 9, 8, 209, 102,
+				56, 104, 59, 137, 226, 112, 71, 89, 141, 253, 222, 137, 140, 162, 193, 134, 173,
+				244, 201, 54, 233, 141, 42, 213, 67, 49, 206, 222, 152, 230, 221, 107, 101, 185,
+				199, 109, 162, 136, 48, 204, 148, 85, 21, 250, 141, 208, 115, 89, 20, 176, 166, 86,
+				174, 232, 23, 210, 60, 116, 126, 161, 97, 196, 29, 30, 192, 216, 77, 242, 135, 169,
+				159, 182, 160, 200, 225, 230, 139, 174, 129, 30, 21, 213, 157, 109, 229, 78, 233,
+				195, 236, 129, 68, 138, 129, 75, 230, 66, 94, 97, 123, 136, 114, 154, 34, 112, 168,
+				80, 32, 70, 6, 139, 102, 66, 43, 109, 126, 120, 252, 8, 6, 11, 246, 117, 135, 184,
+				148, 253, 253, 87, 25, 183, 122, 23, 237, 225, 105, 55, 99, 254, 78, 230, 146, 209,
+				232, 254, 103, 106, 229, 60, 125, 114, 101, 97, 31, 101, 170, 195, 207, 111, 194,
+				111, 208, 106, 245, 50, 250, 5, 169, 64, 219, 180, 211, 77, 133, 157, 212, 26, 202,
+				218, 96, 44, 48, 247, 38, 89, 10, 207, 137, 185, 152, 70, 205, 41, 2, 3, 1, 0, 1,
+			];
+
+			assert_eq!(
+				KeyIdMethod::Sha256,
+				KeyIdMethod::detect(
+					&digest::digest(&digest::SHA256, &pub_key).as_ref()[0..20],
+					&pub_key
+				)
+				.unwrap()
+			);
+
+			assert_eq!(
+				KeyIdMethod::Sha384,
+				KeyIdMethod::detect(
+					&digest::digest(&digest::SHA384, &pub_key).as_ref()[0..20],
+					&pub_key
+				)
+				.unwrap()
+			);
+
+			assert_eq!(
+				KeyIdMethod::Sha512,
+				KeyIdMethod::detect(
+					&digest::digest(&digest::SHA512, &pub_key).as_ref()[0..20],
+					&pub_key
+				)
+				.unwrap()
+			);
+
+			assert_eq!(
+				KeyIdMethod::Sha1LegacyOnly,
+				KeyIdMethod::detect(
+					&digest::digest(&digest::SHA1_FOR_LEGACY_USE_ONLY, &pub_key).as_ref()[0..20],
+					&pub_key
+				)
+				.unwrap()
+			);
+
+			assert!(KeyIdMethod::detect(&[1, 2, 3], &pub_key).is_err());
 		}
 	}
 
