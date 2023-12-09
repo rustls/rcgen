@@ -611,6 +611,16 @@ impl CertificateParams {
 		let name_constraints = Self::convert_x509_name_constraints(&x509)?;
 		let serial_number = Some(x509.serial.to_bytes_be().into());
 
+		let key_identifier_method = x509
+			.iter_extensions()
+			.find_map(|ext| match ext.parsed_extension() {
+				x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(key_id) => {
+					Some(KeyIdMethod::PreSpecified(key_id.0.into()))
+				},
+				_ => None,
+			})
+			.unwrap_or(KeyIdMethod::Sha256);
+
 		Ok(CertificateParams {
 			alg,
 			is_ca,
@@ -619,6 +629,7 @@ impl CertificateParams {
 			extended_key_usages,
 			name_constraints,
 			serial_number,
+			key_identifier_method,
 			distinguished_name: dn,
 			key_pair: Some(key_pair),
 			not_before: validity.not_before.to_datetime(),
@@ -1128,10 +1139,13 @@ impl CertificateParams {
 	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
 	fn key_identifier<K: PublicKeyData>(&self, pub_key: &K) -> Vec<u8> {
 		// Decide which method from RFC 7093 to use
-		let digest_method = match self.key_identifier_method {
+		let digest_method = match &self.key_identifier_method {
 			KeyIdMethod::Sha256 => &digest::SHA256,
 			KeyIdMethod::Sha384 => &digest::SHA384,
 			KeyIdMethod::Sha512 => &digest::SHA512,
+			KeyIdMethod::PreSpecified(b) => {
+				return b.to_vec();
+			},
 		};
 		let digest = digest::digest(digest_method, pub_key.raw_bytes());
 		let truncated_digest = &digest.as_ref()[0..20];
@@ -1347,6 +1361,8 @@ pub enum KeyIdMethod {
 	Sha384,
 	/// RFC 7093 method 3
 	Sha512,
+	/// Pre-specified identifier.
+	PreSpecified(Vec<u8>),
 }
 
 /// Helper to obtain an `OffsetDateTime` from year, month, day values
@@ -1934,6 +1950,128 @@ mod tests {
 			let actual = SanType::try_from_general(&value).unwrap();
 
 			assert_eq!(SanType::IpAddress(IpAddr::from(octets)), actual);
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	mod test_key_identifier_from_ca {
+		use super::*;
+
+		#[test]
+		fn load_ca_and_sign_cert() {
+			let ca_cert = r#"-----BEGIN CERTIFICATE-----
+MIIFDTCCAvWgAwIBAgIUVuDfDt/BUVfObGOHsM+L5/qPZfIwDQYJKoZIhvcNAQEL
+BQAwFjEUMBIGA1UEAwwLZXhhbXBsZS5jb20wHhcNMjMxMjA4MTAwOTI2WhcNMjQx
+MTI4MTAwOTI2WjAWMRQwEgYDVQQDDAtleGFtcGxlLmNvbTCCAiIwDQYJKoZIhvcN
+AQEBBQADggIPADCCAgoCggIBAKXyZsv7Zwek9yc54IXWjCkMwU4eDMz9Uw06WETF
+hZtauwDo4usCeYJa/7x8RZbGcI99s/vOMHjIdVzY6g9p5c6qS+7EUBhXARYVB74z
+XUGwgVGss7lgw+0dNxhQ8F0M2smBXUP9FlJJjJpbWeU+93iynGy+PTXFtYMnOoVI
+4G7YKsG5lX0zBJUNYZslEz6Kp8eRYu7FAdccU0u5bmg02a1WiXOYJeN1+AifUbRN
+zNInZCqMCFgoHczb0DvKU3QX/xrcBxfr/SNJPqxlecUvsozteUoAFAUF1uTxH31q
+cVmCHf9I0r6JJoGxs+XMVbH2SJLdsq/+zpjeHz6gy0z4aRMBpaUWUQ9pEENeSq15
+PXCuX3yPT2BII30mL86OWO6qgms70iALak6xZ/xAT7RT22E1bOF+XJsiUM3OgGF0
+TPmDcpafEMH4kwzdaC7U5hqhYk9I2lfTMEghV86kUXClExuHEQD4GZLcd1HMD/Wg
+qOZO4y/t/yzBPNq01FpeilFph/tW6pxr1X7Jloz1/yIuNFK0oXTB24J/TUi+/S1B
+kavOBg3eNHHDXDjESKtnV+iwo1cFt6LVCrnKhKJ6m95+c+YKQGIrcwkR91OxZ9ZT
+DEzySsPDpWrteZf3K1VA0Ut41aTKu8pYwxsnVdOiBGaJkOh/lrevI6U9Eg4vVq94
+hyAZAgMBAAGjUzBRMB0GA1UdDgQWBBSX1HahmxpxNSrH9KGEElYGul1hhDAfBgNV
+HSMEGDAWgBSX1HahmxpxNSrH9KGEElYGul1hhDAPBgNVHRMBAf8EBTADAQH/MA0G
+CSqGSIb3DQEBCwUAA4ICAQAhtwt0OrHVITVOzoH3c+7SS/rGd9KGpHG4Z/N7ASs3
+7A2PXFC5XbUuylky0+/nbkN6hhecj+Zwt5x5R8k4saXUZ8xkMfP8RaRxyZ3rUOIC
+BZhZm1XbQzaWIQjpjyPUWDDa9P0lGsUyrEIQaLjg1J5jYPOD132bmdIuhZtzldTV
+zeE/4sKdrkj6HZxe1jxAhx2IWm6W+pEAcq1Ld9SmJGOxBVRRKyGsMMw6hCdWfQHv
+Z8qRIhn3FU6ZKW2jvTGJBIXoK4u454qi6DVxkFZ0OK9VwWVuDLvs2Es95TiZPTq+
+KJmRHWHF/Ic78XFgxVq0tVaJAs7qoOMjDkehPG1V8eewanlpcaE6rPx0eiPq+nHE
+gCf0KmKGVM8lQe63obzprkdLKL3T4UDN19K2wqscJcPKK++27OYx2hJaJKmYzF23
+4WhIRzdALTs/2fbB68nVSz7kBtHvsHHS33Q57zEdQq5YeyUaTtCvJJobt70dy9vN
+YolzLWoY/itEPFtbBAdnJxXlctI3bw4Mzw1d66Wt+//R45+cIe6cJdUIqMHDhsGf
+U8EuffvDcTJuUzIkyzbyOI15r1TMbRt8vFR0jzagZBCG73lVacH/bYEb2j4Z1ORi
+L2Fl4tgIQ5tyaTpu9gpJZvPU0VZ/j+1Jdk1c9PJ6xhCjof4nzI9YsLbI8lPtu8K/
+Ng==
+-----END CERTIFICATE-----"#;
+
+			let ca_key = r#"-----BEGIN PRIVATE KEY-----
+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
+PITGdT9dgN88nHPCle0B1+OY+OZ5
+-----END PRIVATE KEY-----"#;
+
+			let kp = KeyPair::from_pem(&ca_key).unwrap();
+			let params = CertificateParams::from_ca_cert_pem(ca_cert, kp).unwrap();
+			let expected_ski = vec![
+				0x97, 0xD4, 0x76, 0xA1, 0x9B, 0x1A, 0x71, 0x35, 0x2A, 0xC7, 0xF4, 0xA1, 0x84, 0x12,
+				0x56, 0x06, 0xBA, 0x5D, 0x61, 0x84,
+			];
+
+			assert_eq!(
+				KeyIdMethod::PreSpecified(expected_ski.clone()),
+				params.key_identifier_method
+			);
+
+			let ca_cert = Certificate::from_params(params).unwrap();
+			assert_eq!(&expected_ski, &ca_cert.get_key_identifier());
+
+			let ca_der = ca_cert.serialize_der().unwrap();
+			let (_remainder, x509) = x509_parser::parse_x509_certificate(&ca_der).unwrap();
+			assert_eq!(
+				&expected_ski,
+				&x509
+					.iter_extensions()
+					.find_map(|ext| match ext.parsed_extension() {
+						x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(key_id) => {
+							Some(key_id.0.to_vec())
+						},
+						_ => None,
+					})
+					.unwrap()
+			);
 		}
 	}
 }
