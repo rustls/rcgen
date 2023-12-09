@@ -7,6 +7,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use yasna::DERWriter;
 
+use crate::error::ExternalError;
 use crate::sign_algo::algo::*;
 use crate::sign_algo::SignAlgo;
 #[cfg(feature = "pem")]
@@ -58,14 +59,16 @@ impl KeyPair {
 	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
 		Ok(der.try_into()?)
 	}
+
 	/// Returns the key pair's signature algorithm
 	pub fn algorithm(&self) -> &'static SignatureAlgorithm {
 		self.alg
 	}
+
 	/// Parses the key pair from the ASCII PEM format
 	#[cfg(feature = "pem")]
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
-		let private_key = pem::parse(pem_str)?;
+		let private_key = pem::parse(pem_str)._err()?;
 		let private_key_der: &[_] = private_key.contents();
 		Ok(private_key_der.try_into()?)
 	}
@@ -88,7 +91,7 @@ impl KeyPair {
 		pem_str: &str,
 		alg: &'static SignatureAlgorithm,
 	) -> Result<Self, Error> {
-		let private_key = pem::parse(pem_str)?;
+		let private_key = pem::parse(pem_str)._err()?;
 		let private_key_der: &[_] = private_key.contents();
 		Ok(Self::from_der_and_sign_algo(private_key_der, alg)?)
 	}
@@ -110,30 +113,28 @@ impl KeyPair {
 		let pkcs8_vec = pkcs8.to_vec();
 
 		let kind = if alg == &PKCS_ED25519 {
-			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)?)
+			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)._err()?)
 		} else if alg == &PKCS_ECDSA_P256_SHA256 {
-			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
-				&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-				pkcs8,
-				rng,
-			)?)
+			KeyPairKind::Ec(
+				EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, rng)
+					._err()?,
+			)
 		} else if alg == &PKCS_ECDSA_P384_SHA384 {
-			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
-				&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
-				pkcs8,
-				rng,
-			)?)
+			KeyPairKind::Ec(
+				EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8, rng)
+					._err()?,
+			)
 		} else if alg == &PKCS_RSA_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
 		} else if alg == &PKCS_RSA_SHA384 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
 		} else if alg == &PKCS_RSA_SHA512 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
 		} else if alg == &PKCS_RSA_PSS_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
 			panic!("Unknown SignatureAlgorithm specified!");
@@ -170,57 +171,14 @@ impl KeyPair {
 		};
 		Ok((kind, alg))
 	}
-}
 
-/// A private key that is not directly accessible, but can be used to sign messages
-///
-/// Trait objects based on this trait can be passed to the [`KeyPair::from_remote`] function for generating certificates
-/// from a remote and raw private key, for example an HSM.
-pub trait RemoteKeyPair {
-	/// Returns the public key of this key pair in the binary format as in [`KeyPair::public_key_raw`]
-	fn public_key(&self) -> &[u8];
-
-	/// Signs `msg` using the selected algorithm
-	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
-
-	/// Reveals the algorithm to be used when calling `sign()`
-	fn algorithm(&self) -> &'static SignatureAlgorithm;
-}
-
-impl TryFrom<&[u8]> for KeyPair {
-	type Error = Error;
-
-	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, Error> {
-		let (kind, alg) = KeyPair::from_raw(pkcs8)?;
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: pkcs8.to_vec(),
-		})
-	}
-}
-
-impl TryFrom<Vec<u8>> for KeyPair {
-	type Error = Error;
-
-	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, Error> {
-		let (kind, alg) = KeyPair::from_raw(pkcs8.as_slice())?;
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: pkcs8,
-		})
-	}
-}
-
-impl KeyPair {
 	/// Generate a new random key pair for the specified signature algorithm
 	pub fn generate(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
 		let rng = &SystemRandom::new();
 
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
-				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)?;
+				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)._err()?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair =
@@ -232,7 +190,7 @@ impl KeyPair {
 				})
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
-				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(rng)?;
+				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(rng)._err()?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(&&key_pair_doc.as_ref()).unwrap();
@@ -248,6 +206,7 @@ impl KeyPair {
 			SignAlgo::Rsa() => Err(Error::KeyGenerationUnavailable),
 		}
 	}
+
 	/// Get the raw public key of this key pair
 	///
 	/// The key is in raw format, as how [`ring::signature::KeyPair::public_key`]
@@ -256,20 +215,23 @@ impl KeyPair {
 	pub fn public_key_raw(&self) -> &[u8] {
 		self.raw_bytes()
 	}
+
 	/// Check if this key pair can be used with the given signature algorithm
 	pub fn is_compatible(&self, signature_algorithm: &SignatureAlgorithm) -> bool {
 		self.alg == signature_algorithm
 	}
+
 	/// Returns (possibly multiple) compatible [`SignatureAlgorithm`]'s
 	/// that the key can be used with
 	pub fn compatible_algs(&self) -> impl Iterator<Item = &'static SignatureAlgorithm> {
 		std::iter::once(self.alg)
 	}
+
 	pub(crate) fn sign(&self, msg: &[u8], writer: DERWriter) -> Result<(), Error> {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => {
 				let system_random = SystemRandom::new();
-				let signature = kp.sign(&system_random, msg)?;
+				let signature = kp.sign(&system_random, msg)._err()?;
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
@@ -281,7 +243,8 @@ impl KeyPair {
 			KeyPairKind::Rsa(kp, padding_alg) => {
 				let system_random = SystemRandom::new();
 				let mut signature = vec![0; kp.public().modulus_len()];
-				kp.sign(*padding_alg, &system_random, msg, &mut signature)?;
+				kp.sign(*padding_alg, &system_random, msg, &mut signature)
+					._err()?;
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
@@ -292,6 +255,7 @@ impl KeyPair {
 		}
 		Ok(())
 	}
+
 	/// Return the key pair's public key in DER format
 	///
 	/// The key is formatted according to the SubjectPublicKeyInfo struct of
@@ -300,6 +264,7 @@ impl KeyPair {
 	pub fn public_key_der(&self) -> Vec<u8> {
 		yasna::construct_der(|writer| self.serialize_public_key_der(writer))
 	}
+
 	/// Return the key pair's public key in PEM format
 	///
 	/// The returned string can be interpreted with `openssl pkey --inform PEM -pubout -pubin -text`
@@ -309,6 +274,7 @@ impl KeyPair {
 		let p = Pem::new("PUBLIC KEY", contents);
 		pem::encode_config(&p, ENCODE_CONFIG)
 	}
+
 	/// Serializes the key pair (including the private key) in PKCS#8 format in DER
 	///
 	/// Panics if called on a remote key pair.
@@ -350,6 +316,32 @@ impl KeyPair {
 	}
 }
 
+impl TryFrom<&[u8]> for KeyPair {
+	type Error = Error;
+
+	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, Error> {
+		let (kind, alg) = KeyPair::from_raw(pkcs8)?;
+		Ok(KeyPair {
+			kind,
+			alg,
+			serialized_der: pkcs8.to_vec(),
+		})
+	}
+}
+
+impl TryFrom<Vec<u8>> for KeyPair {
+	type Error = Error;
+
+	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, Error> {
+		let (kind, alg) = KeyPair::from_raw(pkcs8.as_slice())?;
+		Ok(KeyPair {
+			kind,
+			alg,
+			serialized_der: pkcs8,
+		})
+	}
+}
+
 impl PublicKeyData for KeyPair {
 	fn alg(&self) -> &SignatureAlgorithm {
 		self.alg
@@ -364,9 +356,44 @@ impl PublicKeyData for KeyPair {
 	}
 }
 
+/// A private key that is not directly accessible, but can be used to sign messages
+///
+/// Trait objects based on this trait can be passed to the [`KeyPair::from_remote`] function for generating certificates
+/// from a remote and raw private key, for example an HSM.
+pub trait RemoteKeyPair {
+	/// Returns the public key of this key pair in the binary format as in [`KeyPair::public_key_raw`]
+	fn public_key(&self) -> &[u8];
+
+	/// Signs `msg` using the selected algorithm
+	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
+
+	/// Reveals the algorithm to be used when calling `sign()`
+	fn algorithm(&self) -> &'static SignatureAlgorithm;
+}
+
+impl<T> ExternalError<T> for Result<T, ring::error::KeyRejected> {
+	fn _err(self) -> Result<T, Error> {
+		self.map_err(|e| Error::RingKeyRejected(e.to_string()))
+	}
+}
+
+impl<T> ExternalError<T> for Result<T, ring::error::Unspecified> {
+	fn _err(self) -> Result<T, Error> {
+		self.map_err(|_| Error::RingUnspecified)
+	}
+}
+
+impl<T> ExternalError<T> for Result<T, pem::PemError> {
+	fn _err(self) -> Result<T, Error> {
+		self.map_err(|e| Error::PemError(e.to_string()))
+	}
+}
+
 pub(crate) trait PublicKeyData {
 	fn alg(&self) -> &SignatureAlgorithm;
+
 	fn raw_bytes(&self) -> &[u8];
+
 	fn serialize_public_key_der(&self, writer: DERWriter) {
 		writer.write_sequence(|writer| {
 			self.alg().write_oids_sign_alg(writer.next());
