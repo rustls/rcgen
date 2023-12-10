@@ -243,17 +243,7 @@ impl CertificateRevocationListParams {
 			// RFC 5280 §5.1.2.7:
 			//   This field may only appear if the version is 2 (Section 5.1.2.1).  If
 			//   present, this field is a sequence of one or more CRL extensions.
-			let exts = self.extensions(ca);
-			writer.next().write_tagged(Tag::context(0), |writer| {
-				writer.write_sequence(|writer| {
-					// TODO: have the Extensions type write the outer sequence and each
-					// 		 contained extension once we've ported each of the below
-					//       extensions to self.extensions().
-					for ext in exts.iter() {
-						Extensions::write_extension(writer, ext);
-					}
-				});
-			});
+			self.extensions(ca).write_crl_der(writer.next());
 
 			Ok(())
 		})

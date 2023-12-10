@@ -270,6 +270,16 @@ impl Extensions {
 		});
 	}
 
+	pub(crate) fn write_crl_der(&self, writer: DERWriter) {
+		// Avoid writing an empty tagged extensions sequence.
+		if self.exts.is_empty() {
+			return;
+		}
+
+		// crlExtensions [0] Extensions OPTIONAL
+		writer.write_tagged(Tag::context(0), |writer| self.write_der(writer));
+	}
+
 	/// Write the SEQUENCE of extensions to the DER writer.
 	fn write_der(&self, writer: DERWriter) {
 		debug_assert_eq!(self.exts.len(), self.oids.len());
