@@ -46,7 +46,7 @@ pub struct CustomExtension {
 	/// OID identifying the extension.
 	///
 	/// Only one extension with a given OID may appear within a certificate.
-	pub oid: ObjectIdentifier,
+	pub oid: Vec<u64>,
 
 	/// Criticality of the extension.
 	///
@@ -65,7 +65,7 @@ impl CustomExtension {
 	/// Create a new custom extension with the specified content
 	pub fn from_oid_content(oid: &[u64], criticality: Criticality, der_value: Vec<u8>) -> Self {
 		Self {
-			oid: ObjectIdentifier::from_slice(oid),
+			oid: oid.to_vec(),
 			criticality,
 			der_value,
 		}
@@ -73,7 +73,7 @@ impl CustomExtension {
 
 	/// Obtains the OID components of the extensions, as u64 pieces
 	pub fn oid_components(&self) -> impl Iterator<Item = u64> + '_ {
-		self.oid.components().iter().copied()
+		self.oid.iter().copied()
 	}
 
 	#[cfg(feature = "x509-parser")]
@@ -81,13 +81,11 @@ impl CustomExtension {
 		parsed: &x509_parser::prelude::X509Extension<'_>,
 	) -> Result<Self, Error> {
 		Ok(CustomExtension {
-			oid: ObjectIdentifier::from_slice(
-				&parsed
-					.oid
-					.iter()
-					.ok_or(Error::UnsupportedExtension)?
-					.collect::<Vec<_>>(),
-			),
+			oid: parsed
+				.oid
+				.iter()
+				.ok_or(Error::UnsupportedExtension)?
+				.collect::<Vec<_>>(),
 			criticality: if parsed.critical {
 				Criticality::Critical
 			} else {
@@ -100,7 +98,7 @@ impl CustomExtension {
 
 impl Extension for CustomExtension {
 	fn oid(&self) -> ObjectIdentifier {
-		self.oid.clone()
+		ObjectIdentifier::from_slice(&self.oid)
 	}
 
 	fn criticality(&self) -> Criticality {
