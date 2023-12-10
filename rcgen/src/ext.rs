@@ -5,7 +5,9 @@ use std::net::IpAddr;
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
 
-use crate::{oid, Certificate, CertificateParams, Error, KeyUsagePurpose, SanType};
+use crate::{
+	oid, Certificate, CertificateParams, Error, ExtendedKeyUsagePurpose, KeyUsagePurpose, SanType,
+};
 
 /// The criticality of an extension.
 ///
@@ -371,6 +373,91 @@ impl Extension for KeyUsage {
 	}
 }
 
+/// An X.509v3 extended key usage extension according to
+/// [RFC 5280 4.2.1.12](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.12).
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ExtendedKeyUsage {
+	usages: Vec<ExtendedKeyUsagePurpose>,
+	// This extension MAY, at the option of the certificate issuer, be
+	// either critical or non-critical.
+	critical: Criticality,
+}
+
+impl ExtendedKeyUsage {
+	pub(crate) fn from_params(params: &CertificateParams) -> Option<Self> {
+		match params.extended_key_usages.is_empty() {
+			true => None,
+			false => Some(Self {
+				usages: params.extended_key_usages.clone(),
+				// TODO(xxx): Consider making EKU criticality configurable through params.
+				critical: Criticality::NonCritical,
+			}),
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		ext: &x509_parser::extensions::ParsedExtension,
+	) -> Result<bool, Error> {
+		match ext {
+			x509_parser::extensions::ParsedExtension::ExtendedKeyUsage(eku) => {
+				use ExtendedKeyUsagePurpose::*;
+
+				let mut usages = Vec::new();
+				if eku.any {
+					usages.push(Any);
+				}
+				if eku.server_auth {
+					usages.push(ServerAuth);
+				}
+				if eku.client_auth {
+					usages.push(ClientAuth);
+				}
+				if eku.code_signing {
+					usages.push(CodeSigning);
+				}
+				if eku.email_protection {
+					usages.push(EmailProtection);
+				}
+				if eku.time_stamping {
+					usages.push(TimeStamping);
+				}
+				if eku.ocsp_signing {
+					usages.push(OcspSigning);
+				}
+				params.extended_key_usages = usages;
+				Ok(true)
+			},
+			_ => Ok(false),
+		}
+	}
+}
+
+impl Extension for ExtendedKeyUsage {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(oid::OID_EXT_KEY_USAGE)
+	}
+
+	fn criticality(&self) -> Criticality {
+		self.critical
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		  ExtKeyUsageSyntax ::= SEQUENCE SIZE (1..MAX) OF KeyPurposeId
+		  KeyPurposeId ::= OBJECT IDENTIFIER
+		*/
+		writer.write_sequence(|writer| {
+			for usage in self.usages.iter() {
+				writer
+					.next()
+					.write_oid(&ObjectIdentifier::from_slice(usage.oid()));
+			}
+		});
+	}
+}
+
 #[cfg(test)]
 mod extensions_tests {
 	use crate::oid;
@@ -589,5 +676,60 @@ mod ku_ext_tests {
 		let mut recovered_params = CertificateParams::default();
 		KeyUsage::from_parsed(&mut recovered_params, &parsed_ext).unwrap();
 		assert_eq!(recovered_params.key_usages, params.key_usages);
+	}
+}
+
+#[cfg(test)]
+mod eku_ext_tests {
+	#[cfg(feature = "x509-parser")]
+	use x509_parser::prelude::FromDer;
+
+	use super::*;
+	use crate::CertificateParams;
+
+	#[test]
+	fn test_from_params() {
+		let mut params = CertificateParams::default();
+		params.extended_key_usages = vec![
+			ExtendedKeyUsagePurpose::Any,
+			ExtendedKeyUsagePurpose::ServerAuth,
+			ExtendedKeyUsagePurpose::ClientAuth,
+			ExtendedKeyUsagePurpose::CodeSigning,
+			ExtendedKeyUsagePurpose::EmailProtection,
+			ExtendedKeyUsagePurpose::TimeStamping,
+			ExtendedKeyUsagePurpose::OcspSigning,
+		];
+
+		let ext = ExtendedKeyUsage::from_params(&params).unwrap();
+		assert_eq!(ext.usages, params.extended_key_usages);
+	}
+
+	#[test]
+	#[cfg(feature = "x509-parser")]
+	fn test_from_parsed() {
+		let mut params = CertificateParams::default();
+		params.extended_key_usages = vec![
+			ExtendedKeyUsagePurpose::CodeSigning,
+			ExtendedKeyUsagePurpose::EmailProtection,
+		];
+
+		let der = yasna::construct_der(|writer| {
+			ExtendedKeyUsage::from_params(&params)
+				.unwrap()
+				.write_value(writer)
+		});
+
+		let parsed_ext = x509_parser::extensions::ParsedExtension::ExtendedKeyUsage(
+			x509_parser::extensions::ExtendedKeyUsage::from_der(&der)
+				.unwrap()
+				.1,
+		);
+
+		let mut recovered_params = CertificateParams::default();
+		ExtendedKeyUsage::from_parsed(&mut recovered_params, &parsed_ext).unwrap();
+		assert_eq!(
+			recovered_params.extended_key_usages,
+			params.extended_key_usages
+		);
 	}
 }

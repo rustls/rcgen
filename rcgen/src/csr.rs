@@ -69,15 +69,28 @@ impl CertificateSigningRequest {
 		if let Some(extensions) = csr.requested_extensions() {
 			for ext in extensions {
 				match ext::SubjectAlternativeName::from_parsed(&mut params, ext) {
-					Ok(_) => (),
-					_ => return Err(Error::UnsupportedExtension),
+					Ok(true) => continue, // SAN extension handled.
+					Err(err) => return Err(err),
+					_ => {}, // Not a SAN.
 				}
+				match ext::KeyUsage::from_parsed(&mut params, ext) {
+					Ok(true) => continue, // KU extension handled.
+					Err(err) => return Err(err),
+					_ => {}, // Not a KU.
+				}
+				match ext::ExtendedKeyUsage::from_parsed(&mut params, ext) {
+					Ok(true) => continue, // EKU extension handled.
+					Err(err) => return Err(err),
+					_ => {}, // Not an EKU.
+				}
+
+				// If we get here, we've encountered an unknown and unhandled extension.
+				return Err(Error::UnsupportedExtension);
 			}
 		}
 
 		// Not yet handled:
 		// * is_ca
-		// * extended_key_usages
 		// * name_constraints
 		// and any other extensions.
 

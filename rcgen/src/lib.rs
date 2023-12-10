@@ -608,7 +608,6 @@ impl CertificateParams {
 		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
 		let is_ca = Self::convert_x509_is_ca(&x509)?;
 		let validity = x509.validity();
-		let extended_key_usages = Self::convert_x509_extended_key_usages(&x509)?;
 		let name_constraints = Self::convert_x509_name_constraints(&x509)?;
 		let serial_number = Some(x509.serial.to_bytes_be().into());
 
@@ -625,7 +624,6 @@ impl CertificateParams {
 		let mut params = CertificateParams {
 			alg,
 			is_ca,
-			extended_key_usages,
 			name_constraints,
 			serial_number,
 			key_identifier_method,
@@ -655,6 +653,10 @@ impl CertificateParams {
 
 		if let Some(ku_ext) = find_parsed_extension!(x509, ParsedExtension::KeyUsage(_)) {
 			ext::KeyUsage::from_parsed(&mut params, ku_ext)?;
+		}
+
+		if let Some(eku_ext) = find_parsed_extension!(x509, ParsedExtension::ExtendedKeyUsage(_)) {
+			ext::ExtendedKeyUsage::from_parsed(&mut params, eku_ext)?;
 		}
 
 		Ok(params)
@@ -688,41 +690,6 @@ impl CertificateParams {
 		};
 
 		Ok(is_ca)
-	}
-	#[cfg(feature = "x509-parser")]
-	fn convert_x509_extended_key_usages(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Vec<ExtendedKeyUsagePurpose>, Error> {
-		let extended_key_usage = x509
-			.extended_key_usage()
-			.or(Err(Error::CouldNotParseCertificate))?
-			.map(|ext| ext.value);
-
-		let mut extended_key_usages = Vec::new();
-		if let Some(extended_key_usage) = extended_key_usage {
-			if extended_key_usage.any {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::Any);
-			}
-			if extended_key_usage.server_auth {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::ServerAuth);
-			}
-			if extended_key_usage.client_auth {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::ClientAuth);
-			}
-			if extended_key_usage.code_signing {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::CodeSigning);
-			}
-			if extended_key_usage.email_protection {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::EmailProtection);
-			}
-			if extended_key_usage.time_stamping {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::TimeStamping);
-			}
-			if extended_key_usage.ocsp_signing {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::OcspSigning);
-			}
-		}
-		Ok(extended_key_usages)
 	}
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_name_constraints(
@@ -797,8 +764,8 @@ impl CertificateParams {
 			subject_alt_names,
 			distinguished_name,
 			is_ca,
-			key_usages,
-			extended_key_usages,
+			key_usages: _,
+			extended_key_usages: _,
 			name_constraints,
 			crl_distribution_points,
 			custom_extensions,
@@ -815,8 +782,6 @@ impl CertificateParams {
 		let _ = (alg, key_pair, not_before, not_after, key_identifier_method);
 		if serial_number.is_some()
 			|| *is_ca != IsCa::NoCa
-			|| !key_usages.is_empty()
-			|| !extended_key_usages.is_empty()
 			|| name_constraints.is_some()
 			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
@@ -919,22 +884,6 @@ impl CertificateParams {
 							Extensions::write_extension(writer, ext);
 						}
 
-						// Write extended key usage
-						if !self.extended_key_usages.is_empty() {
-							write_x509_extension(
-								writer.next(),
-								OID_EXT_KEY_USAGE,
-								false,
-								|writer| {
-									writer.write_sequence(|writer| {
-										for usage in self.extended_key_usages.iter() {
-											let oid = ObjectIdentifier::from_slice(usage.oid());
-											writer.next().write_oid(&oid);
-										}
-									});
-								},
-							);
-						}
 						if let Some(name_constraints) = &self.name_constraints {
 							// If both trees are empty, the extension must be omitted.
 							if !name_constraints.is_empty() {
@@ -1105,7 +1054,10 @@ impl CertificateParams {
 			exts.add_extension(Box::new(ku_ext))?;
 		}
 
-		// TODO: EKU.
+		if let Some(eku_ext) = ext::ExtendedKeyUsage::from_params(&self) {
+			exts.add_extension(Box::new(eku_ext))?;
+		}
+
 		// TODO: name constraints.
 		// TODO: crl distribution points.
 		// TODO: basic constraints.
