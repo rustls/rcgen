@@ -727,7 +727,7 @@ impl CertificateParams {
 			is_ca,
 			key_usages: _,
 			extended_key_usages: _,
-			name_constraints,
+			name_constraints: _,
 			crl_distribution_points,
 			custom_extensions,
 			key_pair,
