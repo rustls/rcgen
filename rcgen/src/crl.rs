@@ -291,7 +291,10 @@ impl CertificateRevocationListParams {
 		exts.add_extension(Box::new(ext::CrlNumber::from_params(&self)))
 			.unwrap();
 
-		// TODO: issuing distribution point.
+		if let Some(idp_ext) = ext::IssuingDistributionPoint::from_params(&self) {
+			// Safety: there can be no duplicate IDP ext OID by this point.
+			exts.add_extension(Box::new(idp_ext)).unwrap();
+		}
 
 		exts
 	}
@@ -299,6 +302,7 @@ impl CertificateRevocationListParams {
 
 /// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
 /// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CrlIssuingDistributionPoint {
 	/// The CRL's distribution point, containing a sequence of URIs the CRL can be retrieved from.
 	pub distribution_point: CrlDistributionPoint,
@@ -308,7 +312,7 @@ pub struct CrlIssuingDistributionPoint {
 }
 
 impl CrlIssuingDistributionPoint {
-	fn write_der(&self, writer: DERWriter) {
+	pub(crate) fn write_der(&self, writer: DERWriter) {
 		// IssuingDistributionPoint SEQUENCE
 		writer.write_sequence(|writer| {
 			// distributionPoint [0] DistributionPointName OPTIONAL

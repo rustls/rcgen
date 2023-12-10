@@ -9,7 +9,8 @@ use crate::key_pair::PublicKeyData;
 use crate::oid::{OID_PE_ACME, OID_PKCS_9_AT_EXTENSION_REQUEST};
 use crate::{
 	oid, write_distinguished_name, Certificate, CertificateParams, CertificateRevocationListParams,
-	Error, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, KeyUsagePurpose, SanType, SerialNumber,
+	CrlIssuingDistributionPoint, Error, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa,
+	KeyUsagePurpose, SanType, SerialNumber,
 };
 
 /// The criticality of an extension.
@@ -970,6 +971,38 @@ impl Extension for CrlNumber {
 	fn write_value(&self, writer: DERWriter) {
 		// CRLNumber ::= INTEGER (0..MAX)
 		writer.write_bigint_bytes(self.number.as_ref(), true);
+	}
+}
+
+/// An X.509v3 issuing distribution point extension according to
+/// [RFC 5280 5.2.5](https://www.rfc-editor.org/rfc/rfc5280#section-5.2.5)
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct IssuingDistributionPoint {
+	point: CrlIssuingDistributionPoint,
+}
+
+impl IssuingDistributionPoint {
+	pub(crate) fn from_params(params: &CertificateRevocationListParams) -> Option<Self> {
+		match &params.issuing_distribution_point {
+			Some(idp) => Some(Self { point: idp.clone() }),
+			None => None,
+		}
+	}
+}
+
+impl Extension for IssuingDistributionPoint {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(oid::OID_CRL_ISSUING_DISTRIBUTION_POINT)
+	}
+
+	fn criticality(&self) -> Criticality {
+		// Although the extension is critical, conforming implementations are not required to support this
+		// extension.
+		Criticality::Critical
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		self.point.write_der(writer);
 	}
 }
 
