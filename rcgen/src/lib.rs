@@ -743,7 +743,6 @@ impl CertificateParams {
 		let _ = (alg, key_pair, not_before, not_after, key_identifier_method);
 		if serial_number.is_some()
 			|| *is_ca != IsCa::NoCa
-			|| name_constraints.is_some()
 			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
 		{
