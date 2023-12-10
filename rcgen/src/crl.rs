@@ -357,19 +357,7 @@ impl RevokedCertParams {
 			//   optional for conforming CRL issuers and applications.  However, CRL
 			//   issuers SHOULD include reason codes (Section 5.3.1) and invalidity
 			//   dates (Section 5.3.2) whenever this information is available.
-			let has_reason_code =
-				matches!(self.reason_code, Some(reason) if reason != RevocationReason::Unspecified);
-			let has_invalidity_date = self.invalidity_date.is_some();
-			if has_reason_code || has_invalidity_date {
-				writer.next().write_sequence(|writer| {
-					// TODO: have the Extensions type write the outer sequence and each
-					// 		 contained extension once we've ported each of the below
-					//       extensions to self.extensions().
-					for ext in self.extensions().iter() {
-						Extensions::write_extension(writer, ext);
-					}
-				});
-			}
+			self.extensions().write_der(writer.next());
 		})
 	}
 	/// Returns the X.509 extensions that the [RevokedCertParams] describe.

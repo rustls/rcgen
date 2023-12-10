@@ -282,9 +282,15 @@ impl Extensions {
 		writer.write_tagged(Tag::context(0), |writer| self.write_der(writer));
 	}
 
-	/// Write the SEQUENCE of extensions to the DER writer.
-	fn write_der(&self, writer: DERWriter) {
+	/// Write the SEQUENCE of extensions to the DER writer as a raw SEQUENCE.
+	/// Usually you will want to use `write_exts_der`, `write_csr_der` or `write_crl_der` instead.
+	pub(crate) fn write_der(&self, writer: DERWriter) {
 		debug_assert_eq!(self.exts.len(), self.oids.len());
+
+		// Avoid writing an empty extension SEQUENCE.
+		if self.exts.is_empty() {
+			return;
+		}
 
 		// Extensions ::= SEQUENCE SIZE (1..MAX) OF Extension
 		writer.write_sequence(|writer| {
@@ -294,12 +300,8 @@ impl Extensions {
 		})
 	}
 
-	pub(crate) fn iter(&self) -> impl Iterator<Item = &Box<dyn Extension>> {
-		self.exts.iter()
-	}
-
 	/// Write a single extension SEQUENCE to the DER writer.
-	pub(crate) fn write_extension(writer: &mut DERWriterSeq, extension: &Box<dyn Extension>) {
+	fn write_extension(writer: &mut DERWriterSeq, extension: &Box<dyn Extension>) {
 		//  Extension ::= SEQUENCE {
 		//    extnID    OBJECT IDENTIFIER,
 		//    critical  BOOLEAN DEFAULT FALSE,
