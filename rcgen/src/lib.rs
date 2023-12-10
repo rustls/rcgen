@@ -625,13 +625,11 @@ impl CertificateParams {
 		let alg = SignatureAlgorithm::from_oid(&alg_oid.collect::<Vec<_>>())?;
 
 		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
-		let is_ca = Self::convert_x509_is_ca(&x509)?;
 		let validity = x509.validity();
 		let serial_number = Some(x509.serial.to_bytes_be().into());
 
 		let mut params = CertificateParams {
 			alg,
-			is_ca,
 			serial_number,
 			distinguished_name: dn,
 			key_pair: Some(key_pair),
@@ -681,37 +679,11 @@ impl CertificateParams {
 			ext::SubjectKeyIdentifier::from_parsed(&mut params, ski)?;
 		}
 
+		if let Some(bc) = find_parsed_extension!(x509, ParsedExtension::BasicConstraints(_)) {
+			ext::BasicConstraints::from_parsed(&mut params, bc)?;
+		}
+
 		Ok(params)
-	}
-	#[cfg(feature = "x509-parser")]
-	fn convert_x509_is_ca(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<IsCa, Error> {
-		use x509_parser::extensions::BasicConstraints as B;
-
-		let basic_constraints = x509
-			.basic_constraints()
-			.or(Err(Error::CouldNotParseCertificate))?
-			.map(|ext| ext.value);
-
-		let is_ca = match basic_constraints {
-			Some(B {
-				ca: true,
-				path_len_constraint: Some(n),
-			}) if *n <= u8::MAX as u32 => IsCa::Ca(BasicConstraints::Constrained(*n as u8)),
-			Some(B {
-				ca: true,
-				path_len_constraint: Some(_),
-			}) => return Err(Error::CouldNotParseCertificate),
-			Some(B {
-				ca: true,
-				path_len_constraint: None,
-			}) => IsCa::Ca(BasicConstraints::Unconstrained),
-			Some(B { ca: false, .. }) => IsCa::ExplicitNoCa,
-			None => IsCa::NoCa,
-		};
-
-		Ok(is_ca)
 	}
 	fn write_request<K: PublicKeyData>(&self, pub_key: &K, writer: DERWriter) -> Result<(), Error> {
 		// No .. pattern, we use this to ensure every field is used
@@ -842,42 +814,6 @@ impl CertificateParams {
 							Extensions::write_extension(writer, ext);
 						}
 
-						match self.is_ca {
-							IsCa::Ca(ref constraint) => {
-								// Write basic_constraints
-								write_x509_extension(
-									writer.next(),
-									OID_BASIC_CONSTRAINTS,
-									true,
-									|writer| {
-										writer.write_sequence(|writer| {
-											writer.next().write_bool(true); // cA flag
-											if let BasicConstraints::Constrained(
-												path_len_constraint,
-											) = constraint
-											{
-												writer.next().write_u8(*path_len_constraint);
-											}
-										});
-									},
-								);
-							},
-							IsCa::ExplicitNoCa => {
-								// Write basic_constraints
-								write_x509_extension(
-									writer.next(),
-									OID_BASIC_CONSTRAINTS,
-									true,
-									|writer| {
-										writer.write_sequence(|writer| {
-											writer.next().write_bool(false); // cA flag
-										});
-									},
-								);
-							},
-							IsCa::NoCa => {},
-						}
-
 						// Write the custom extensions
 						for ext in &self.custom_extensions {
 							write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
@@ -975,7 +911,10 @@ impl CertificateParams {
 			&self, pub_key,
 		)))?;
 
-		// TODO: basic constraints.
+		if let Some(bc_ext) = ext::BasicConstraints::from_params(&self) {
+			exts.add_extension(Box::new(bc_ext))?;
+		}
+
 		// TODO: custom extensions
 
 		Ok(exts)

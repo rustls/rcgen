@@ -99,6 +99,11 @@ impl CertificateSigningRequest {
 					Err(err) => return Err(err),
 					_ => {}, // Not a SKI.
 				}
+				match ext::BasicConstraints::from_parsed(&mut params, ext) {
+					Ok(true) => continue, // BC extension handled.
+					Err(err) => return Err(err),
+					_ => {}, // Not a BC.
+				}
 
 				// If we get here, we've encountered an unknown and unhandled extension.
 				return Err(Error::UnsupportedExtension);
@@ -106,8 +111,7 @@ impl CertificateSigningRequest {
 		}
 
 		// Not yet handled:
-		// * is_ca
-		// and any other extensions.
+		// any other extensions.
 
 		Ok(Self {
 			params,

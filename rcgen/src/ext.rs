@@ -8,7 +8,7 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 use crate::key_pair::PublicKeyData;
 use crate::{
 	oid, write_distinguished_name, Certificate, CertificateParams, Error, ExtendedKeyUsagePurpose,
-	GeneralSubtree, KeyUsagePurpose, SanType,
+	GeneralSubtree, IsCa, KeyUsagePurpose, SanType,
 };
 
 /// The criticality of an extension.
@@ -703,6 +703,82 @@ impl Extension for SubjectKeyIdentifier {
 	}
 }
 
+/// An X.509v3 basic constraints extension according to
+/// [RFC 5280 4.2.1.9](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.9).
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct BasicConstraints {
+	is_ca: IsCa,
+}
+
+impl BasicConstraints {
+	pub(crate) fn from_params(params: &CertificateParams) -> Option<Self> {
+		// For NoCa we don't emit the extension, it is implied not a CA.
+		// Use ExplicitNoCa when you want the false cA ext emitted.
+		match params.is_ca {
+			IsCa::NoCa => None,
+			_ => Some(Self {
+				is_ca: params.is_ca.clone(),
+			}),
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		ext: &x509_parser::extensions::ParsedExtension,
+	) -> Result<bool, Error> {
+		Ok(match ext {
+			x509_parser::extensions::ParsedExtension::BasicConstraints(bc) => {
+				match (bc.ca, bc.path_len_constraint) {
+					(true, Some(len)) => {
+						params.is_ca = IsCa::Ca(crate::BasicConstraints::Constrained(
+							u8::try_from(len)
+								.map_err(|_| Error::UnsupportedBasicConstraintsPathLen)?,
+						));
+					},
+					(true, None) => {
+						params.is_ca = IsCa::Ca(crate::BasicConstraints::Unconstrained);
+					},
+					(false, _) => {
+						params.is_ca = IsCa::ExplicitNoCa;
+					},
+				}
+				true
+			},
+			_ => false,
+		})
+	}
+}
+
+impl Extension for BasicConstraints {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(oid::OID_BASIC_CONSTRAINTS)
+	}
+
+	fn criticality(&self) -> Criticality {
+		// Conforming CAs MUST include this extension in all CA certificates
+		// that contain public keys used to validate digital signatures on
+		// certificates and MUST mark the extension as critical in such
+		// certificates
+		Criticality::Critical
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		/*
+			BasicConstraints ::= SEQUENCE {
+			  cA                      BOOLEAN DEFAULT FALSE,
+			  pathLenConstraint       INTEGER (0..MAX) OPTIONAL }
+		*/
+		writer.write_sequence(|writer| {
+			writer.next().write_bool(matches!(self.is_ca, IsCa::Ca(_)));
+			if let IsCa::Ca(crate::BasicConstraints::Constrained(path_len_constraint)) = self.is_ca
+			{
+				writer.next().write_u8(path_len_constraint);
+			}
+		});
+	}
+}
+
 #[cfg(test)]
 mod extensions_tests {
 	use crate::oid;
@@ -1147,6 +1223,123 @@ mod ski_ext_tests {
 		assert_eq!(
 			recovered_params.key_identifier_method,
 			KeyIdMethod::PreSpecified(ski)
+		);
+	}
+}
+
+#[cfg(test)]
+mod bc_ext_tests {
+	#[cfg(feature = "x509-parser")]
+	use x509_parser::prelude::FromDer;
+
+	use super::*;
+	use crate::CertificateParams;
+
+	#[test]
+	fn test_from_params() {
+		// NoCA
+		let params = CertificateParams::default();
+		let ext = BasicConstraints::from_params(&params);
+		assert!(ext.is_none()); // No ext for NoCA.
+
+		// Explicit NoCA
+		let mut params = CertificateParams::default();
+		params.is_ca = IsCa::ExplicitNoCa;
+		let ext = BasicConstraints::from_params(&params);
+		assert_eq!(ext.unwrap().is_ca, IsCa::ExplicitNoCa);
+
+		// CA unconstrained
+		let mut params = CertificateParams::default();
+		params.is_ca = IsCa::Ca(crate::BasicConstraints::Unconstrained);
+		let ext = BasicConstraints::from_params(&params);
+		assert_eq!(
+			ext.unwrap().is_ca,
+			IsCa::Ca(crate::BasicConstraints::Unconstrained)
+		);
+
+		// CA constrained
+		let mut params = CertificateParams::default();
+		params.is_ca = IsCa::Ca(crate::BasicConstraints::Constrained(1));
+		let ext = BasicConstraints::from_params(&params);
+		assert_eq!(
+			ext.unwrap().is_ca,
+			IsCa::Ca(crate::BasicConstraints::Constrained(1))
+		);
+	}
+
+	#[test]
+	#[cfg(feature = "x509-parser")]
+	fn test_from_parsed_explicit_no_ca() {
+		let mut params = CertificateParams::default();
+		params.is_ca = IsCa::ExplicitNoCa;
+
+		let der = yasna::construct_der(|writer| {
+			BasicConstraints::from_params(&params)
+				.unwrap()
+				.write_value(writer)
+		});
+
+		let parsed_ext = x509_parser::extensions::ParsedExtension::BasicConstraints(
+			x509_parser::extensions::BasicConstraints::from_der(&der)
+				.unwrap()
+				.1,
+		);
+
+		let mut recovered_params = CertificateParams::default();
+		BasicConstraints::from_parsed(&mut recovered_params, &parsed_ext).unwrap();
+		assert_eq!(recovered_params.is_ca, IsCa::ExplicitNoCa);
+	}
+
+	#[test]
+	#[cfg(feature = "x509-parser")]
+	fn test_from_parsed_unconstrained() {
+		let mut params = CertificateParams::default();
+		params.is_ca = IsCa::Ca(crate::BasicConstraints::Unconstrained);
+
+		let der = yasna::construct_der(|writer| {
+			BasicConstraints::from_params(&params)
+				.unwrap()
+				.write_value(writer)
+		});
+
+		let parsed_ext = x509_parser::extensions::ParsedExtension::BasicConstraints(
+			x509_parser::extensions::BasicConstraints::from_der(&der)
+				.unwrap()
+				.1,
+		);
+
+		let mut recovered_params = CertificateParams::default();
+		BasicConstraints::from_parsed(&mut recovered_params, &parsed_ext).unwrap();
+		assert_eq!(
+			recovered_params.is_ca,
+			IsCa::Ca(crate::BasicConstraints::Unconstrained)
+		);
+	}
+
+	#[test]
+	#[cfg(feature = "x509-parser")]
+	fn test_from_parsed_constrained() {
+		let mut params = CertificateParams::default();
+		let path_len = 5;
+		params.is_ca = IsCa::Ca(crate::BasicConstraints::Constrained(path_len));
+
+		let der = yasna::construct_der(|writer| {
+			BasicConstraints::from_params(&params)
+				.unwrap()
+				.write_value(writer)
+		});
+
+		let parsed_ext = x509_parser::extensions::ParsedExtension::BasicConstraints(
+			x509_parser::extensions::BasicConstraints::from_der(&der)
+				.unwrap()
+				.1,
+		);
+
+		let mut recovered_params = CertificateParams::default();
+		BasicConstraints::from_parsed(&mut recovered_params, &parsed_ext).unwrap();
+		assert_eq!(
+			recovered_params.is_ca,
+			IsCa::Ca(crate::BasicConstraints::Constrained(path_len))
 		);
 	}
 }
