@@ -6,7 +6,7 @@ use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::key_pair::PublicKeyData;
-use crate::oid::OID_PE_ACME;
+use crate::oid::{OID_PE_ACME, OID_PKCS_9_AT_EXTENSION_REQUEST};
 use crate::{
 	oid, write_distinguished_name, Certificate, CertificateParams, Error, ExtendedKeyUsagePurpose,
 	GeneralSubtree, IsCa, KeyUsagePurpose, SanType,
@@ -235,16 +235,43 @@ impl Extensions {
 		Ok(())
 	}
 
-	/// Write the SEQUENCE of extensions to the DER writer.
+	/// Write the SEQUENCE of extensions to the DER writer, wrapped in the context tag for
+	/// an optional X.509 V3 certificate extensions field.
 	///
-	/// This will return without writing anything if there are no extensions in the collection.
-	pub(crate) fn write_der(&self, writer: DERWriter) {
-		debug_assert_eq!(self.exts.len(), self.oids.len());
-
-		// Avoid writing an empty extensions sequence.
+	/// Nothing will be written to the writer if there were no extensions.
+	pub(crate) fn write_exts_der(&self, writer: DERWriter) {
+		// Avoid writing an empty tagged extensions sequence.
 		if self.exts.is_empty() {
 			return;
 		}
+
+		// extensions [3] Extensions OPTIONAL
+		writer.write_tagged(Tag::context(3), |writer| self.write_der(writer));
+	}
+
+	/// Write the SEQUENCE of extensions to the DER writer, wrapped in the PKCS 9 attribute
+	/// extension request OID and set for a CSR.
+	///
+	/// Nothing will be written to the writer if there were no extensions.
+	pub(crate) fn write_csr_der(&self, writer: DERWriter) {
+		// Avoid writing an empty attribute requests sequence.
+		if self.exts.is_empty() {
+			return;
+		}
+
+		writer.write_sequence(|writer| {
+			writer.next().write_oid(&ObjectIdentifier::from_slice(
+				OID_PKCS_9_AT_EXTENSION_REQUEST,
+			));
+			writer.next().write_set(|writer| {
+				self.write_der(writer.next());
+			});
+		});
+	}
+
+	/// Write the SEQUENCE of extensions to the DER writer.
+	fn write_der(&self, writer: DERWriter) {
+		debug_assert_eq!(self.exts.len(), self.oids.len());
 
 		// Extensions ::= SEQUENCE SIZE (1..MAX) OF Extension
 		writer.write_sequence(|writer| {
@@ -254,12 +281,11 @@ impl Extensions {
 		})
 	}
 
-	/// TODO(@cpu): Remove once `Extensions::write_der` is being used.
 	pub(crate) fn iter(&self) -> impl Iterator<Item = &Box<dyn Extension>> {
 		self.exts.iter()
 	}
 
-	/// TODO(@cpu): Reduce visibility once `Extensions::write_der` is being used.
+	/// Write a single extension SEQUENCE to the DER writer.
 	pub(crate) fn write_extension(writer: &mut DERWriterSeq, extension: &Box<dyn Extension>) {
 		//  Extension ::= SEQUENCE {
 		//    extnID    OBJECT IDENTIFIER,

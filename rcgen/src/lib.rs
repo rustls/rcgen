@@ -683,14 +683,14 @@ impl CertificateParams {
 			not_before,
 			not_after,
 			serial_number,
-			subject_alt_names,
+			subject_alt_names: _,
 			distinguished_name,
 			is_ca,
 			key_usages: _,
 			extended_key_usages: _,
 			name_constraints: _,
 			crl_distribution_points: _,
-			custom_extensions,
+			custom_extensions: _,
 			key_pair,
 			use_authority_key_identifier_extension,
 			key_identifier_method,
@@ -718,23 +718,7 @@ impl CertificateParams {
 			// Write extensions
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
 			writer.next().write_tagged(Tag::context(0), |writer| {
-				let extensions = self.extensions(pub_key, None)?;
-				if !subject_alt_names.is_empty() || !custom_extensions.is_empty() {
-					writer.write_sequence(|writer| {
-						let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
-						writer.next().write_oid(&oid);
-						writer.next().write_set(|writer| {
-							writer.next().write_sequence(|writer| {
-								// TODO: have the Extensions type write the outer sequence and each
-								// 		 contained extension once we've ported each of the below
-								//       extensions to self.extensions().
-								for ext in extensions.iter() {
-									Extensions::write_extension(writer, ext);
-								}
-							});
-						});
-					});
-				}
+				self.extensions(pub_key, None)?.write_csr_der(writer);
 				Ok(())
 			})
 		})
@@ -776,26 +760,8 @@ impl CertificateParams {
 			// Write subjectPublicKeyInfo
 			pub_key.serialize_public_key_der(writer.next());
 			// write extensions
-			let extensions = self.extensions(pub_key, Some(ca))?;
-			let should_write_exts = self.use_authority_key_identifier_extension
-				|| !self.subject_alt_names.is_empty()
-				|| !self.extended_key_usages.is_empty()
-				|| self.name_constraints.iter().any(|c| !c.is_empty())
-				|| matches!(self.is_ca, IsCa::ExplicitNoCa)
-				|| matches!(self.is_ca, IsCa::Ca(_))
-				|| !self.custom_extensions.is_empty();
-			if should_write_exts {
-				writer.next().write_tagged(Tag::context(3), |writer| {
-					writer.write_sequence(|writer| {
-						// TODO: have the Extensions type write the outer sequence and each
-						// 		 contained extension once we've ported each of the below
-						//       extensions to self.extensions().
-						for ext in extensions.iter() {
-							Extensions::write_extension(writer, ext);
-						}
-					});
-				});
-			}
+			self.extensions(pub_key, Some(ca))?
+				.write_exts_der(writer.next());
 			Ok(())
 		})
 	}
