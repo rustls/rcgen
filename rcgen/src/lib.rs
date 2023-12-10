@@ -45,6 +45,7 @@ use std::net::IpAddr;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
+use x509_parser::prelude::ParsedExtension;
 use yasna::models::ObjectIdentifier;
 use yasna::models::{GeneralizedTime, UTCTime};
 use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
@@ -607,7 +608,6 @@ impl CertificateParams {
 		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
 		let is_ca = Self::convert_x509_is_ca(&x509)?;
 		let validity = x509.validity();
-		let key_usages = Self::convert_x509_key_usages(&x509)?;
 		let extended_key_usages = Self::convert_x509_extended_key_usages(&x509)?;
 		let name_constraints = Self::convert_x509_name_constraints(&x509)?;
 		let serial_number = Some(x509.serial.to_bytes_be().into());
@@ -615,7 +615,7 @@ impl CertificateParams {
 		let key_identifier_method = x509
 			.iter_extensions()
 			.find_map(|ext| match ext.parsed_extension() {
-				x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(key_id) => {
+				ParsedExtension::SubjectKeyIdentifier(key_id) => {
 					Some(KeyIdMethod::PreSpecified(key_id.0.into()))
 				},
 				_ => None,
@@ -625,8 +625,6 @@ impl CertificateParams {
 		let mut params = CertificateParams {
 			alg,
 			is_ca,
-			subject_alt_names: Vec::default(),
-			key_usages,
 			extended_key_usages,
 			name_constraints,
 			serial_number,
@@ -638,15 +636,25 @@ impl CertificateParams {
 			..Default::default()
 		};
 
-		if let Some(san_ext) = x509
-			.iter_extensions()
-			.find_map(|ext| match ext.parsed_extension() {
-				ext @ x509_parser::extensions::ParsedExtension::SubjectAlternativeName(_) => {
-					Some(ext)
-				},
-				_ => None,
-			}) {
+		macro_rules! find_parsed_extension {
+			($iter:expr, $variant:pat) => {
+				$iter
+					.iter_extensions()
+					.find_map(|ext| match ext.parsed_extension() {
+						ext @ $variant => Some(ext),
+						_ => None,
+					})
+			};
+		}
+
+		if let Some(san_ext) =
+			find_parsed_extension!(x509, ParsedExtension::SubjectAlternativeName(_))
+		{
 			ext::SubjectAlternativeName::from_parsed(&mut params, san_ext)?;
+		}
+
+		if let Some(ku_ext) = find_parsed_extension!(x509, ParsedExtension::KeyUsage(_)) {
+			ext::KeyUsage::from_parsed(&mut params, ku_ext)?;
 		}
 
 		Ok(params)
@@ -680,47 +688,6 @@ impl CertificateParams {
 		};
 
 		Ok(is_ca)
-	}
-	#[cfg(feature = "x509-parser")]
-	fn convert_x509_key_usages(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Vec<KeyUsagePurpose>, Error> {
-		let key_usage = x509
-			.key_usage()
-			.or(Err(Error::CouldNotParseCertificate))?
-			.map(|ext| ext.value);
-
-		let mut key_usages = Vec::new();
-		if let Some(key_usage) = key_usage {
-			if key_usage.digital_signature() {
-				key_usages.push(KeyUsagePurpose::DigitalSignature);
-			}
-			if key_usage.non_repudiation() {
-				key_usages.push(KeyUsagePurpose::ContentCommitment);
-			}
-			if key_usage.key_encipherment() {
-				key_usages.push(KeyUsagePurpose::KeyEncipherment);
-			}
-			if key_usage.data_encipherment() {
-				key_usages.push(KeyUsagePurpose::DataEncipherment);
-			}
-			if key_usage.key_agreement() {
-				key_usages.push(KeyUsagePurpose::KeyAgreement);
-			}
-			if key_usage.key_cert_sign() {
-				key_usages.push(KeyUsagePurpose::KeyCertSign);
-			}
-			if key_usage.crl_sign() {
-				key_usages.push(KeyUsagePurpose::CrlSign);
-			}
-			if key_usage.encipher_only() {
-				key_usages.push(KeyUsagePurpose::EncipherOnly);
-			}
-			if key_usage.decipher_only() {
-				key_usages.push(KeyUsagePurpose::DecipherOnly);
-			}
-		}
-		Ok(key_usages)
 	}
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_extended_key_usages(
@@ -952,41 +919,6 @@ impl CertificateParams {
 							Extensions::write_extension(writer, ext);
 						}
 
-						// Write standard key usage
-						if !self.key_usages.is_empty() {
-							write_x509_extension(writer.next(), OID_KEY_USAGE, true, |writer| {
-								let mut bits: u16 = 0;
-
-								for entry in self.key_usages.iter() {
-									// Map the index to a value
-									let index = match entry {
-										KeyUsagePurpose::DigitalSignature => 0,
-										KeyUsagePurpose::ContentCommitment => 1,
-										KeyUsagePurpose::KeyEncipherment => 2,
-										KeyUsagePurpose::DataEncipherment => 3,
-										KeyUsagePurpose::KeyAgreement => 4,
-										KeyUsagePurpose::KeyCertSign => 5,
-										KeyUsagePurpose::CrlSign => 6,
-										KeyUsagePurpose::EncipherOnly => 7,
-										KeyUsagePurpose::DecipherOnly => 8,
-									};
-
-									bits |= 1 << index;
-								}
-
-								// Compute the 1-based most significant bit
-								let msb = 16 - bits.leading_zeros();
-								let nb = if msb <= 8 { 1 } else { 2 };
-
-								let bits = bits.reverse_bits().to_be_bytes();
-
-								// Finally take only the bytes != 0
-								let bits = &bits[..nb];
-
-								writer.write_bitvec_bytes(&bits, msb as usize)
-							});
-						}
-
 						// Write extended key usage
 						if !self.extended_key_usages.is_empty() {
 							write_x509_extension(
@@ -1169,7 +1101,10 @@ impl CertificateParams {
 			exts.add_extension(Box::new(san_ext))?;
 		}
 
-		// TODO: KU.
+		if let Some(ku_ext) = ext::KeyUsage::from_params(&self) {
+			exts.add_extension(Box::new(ku_ext))?;
+		}
+
 		// TODO: EKU.
 		// TODO: name constraints.
 		// TODO: crl distribution points.

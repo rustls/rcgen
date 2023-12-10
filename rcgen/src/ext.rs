@@ -5,7 +5,7 @@ use std::net::IpAddr;
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
 
-use crate::{oid, Certificate, CertificateParams, Error, SanType};
+use crate::{oid, Certificate, CertificateParams, Error, KeyUsagePurpose, SanType};
 
 /// The criticality of an extension.
 ///
@@ -260,6 +260,117 @@ impl Extension for SubjectAlternativeName {
 	}
 }
 
+/// An X.509v3 key usage extension according to
+/// [RFC 5280 4.2.1.3](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.3).
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct KeyUsage {
+	usages: Vec<KeyUsagePurpose>,
+}
+
+impl KeyUsage {
+	pub(crate) fn from_params(params: &CertificateParams) -> Option<Self> {
+		match params.key_usages.is_empty() {
+			true => None,
+			false => Some(Self {
+				usages: params.key_usages.clone(),
+			}),
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		ext: &x509_parser::extensions::ParsedExtension,
+	) -> Result<bool, Error> {
+		match ext {
+			x509_parser::extensions::ParsedExtension::KeyUsage(ku) => {
+				let mut usages = Vec::new();
+				if ku.digital_signature() {
+					usages.push(KeyUsagePurpose::DigitalSignature);
+				}
+				// Note: previous editions of X.509 called ContentCommitment "Non repudiation"
+				if ku.non_repudiation() {
+					usages.push(KeyUsagePurpose::ContentCommitment);
+				}
+				if ku.key_encipherment() {
+					usages.push(KeyUsagePurpose::KeyEncipherment);
+				}
+				if ku.key_cert_sign() {
+					usages.push(KeyUsagePurpose::KeyCertSign);
+				}
+				if ku.crl_sign() {
+					usages.push(KeyUsagePurpose::CrlSign);
+				}
+				if ku.encipher_only() {
+					usages.push(KeyUsagePurpose::EncipherOnly);
+				}
+				if ku.decipher_only() {
+					usages.push(KeyUsagePurpose::DecipherOnly);
+				}
+				params.key_usages = usages;
+				Ok(true)
+			},
+			_ => Ok(false),
+		}
+	}
+}
+
+impl Extension for KeyUsage {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(oid::OID_KEY_USAGE)
+	}
+
+	fn criticality(&self) -> Criticality {
+		// When present, conforming CAs SHOULD mark this extension as critical.
+		Criticality::Critical
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		use KeyUsagePurpose::*;
+
+		/*
+		   KeyUsage ::= BIT STRING {
+			  digitalSignature        (0),
+			  nonRepudiation          (1), -- recent editions of X.509 have
+								   -- renamed this bit to contentCommitment
+			  keyEncipherment         (2),
+			  dataEncipherment        (3),
+			  keyAgreement            (4),
+			  keyCertSign             (5),
+			  cRLSign                 (6),
+			  encipherOnly            (7),
+			  decipherOnly            (8) }
+		*/
+		let mut bits: u16 = 0;
+
+		for entry in &self.usages {
+			// Map the index to a value
+			let index = match entry {
+				DigitalSignature => 0,
+				ContentCommitment => 1,
+				KeyEncipherment => 2,
+				DataEncipherment => 3,
+				KeyAgreement => 4,
+				KeyCertSign => 5,
+				CrlSign => 6,
+				EncipherOnly => 7,
+				DecipherOnly => 8,
+			};
+
+			bits |= 1 << index;
+		}
+
+		// Compute the 1-based most significant bit
+		let msb = 16 - bits.leading_zeros();
+		let nb = if msb <= 8 { 1 } else { 2 };
+		let bits = bits.reverse_bits().to_be_bytes();
+
+		// Finally take only the bytes != 0
+		let bits = &bits[..nb];
+		writer.write_bitvec_bytes(&bits, msb as usize)
+	}
+}
+
 #[cfg(test)]
 mod extensions_tests {
 	use crate::oid;
@@ -428,5 +539,55 @@ mod san_ext_tests {
 		let mut recovered_params = CertificateParams::default();
 		SubjectAlternativeName::from_parsed(&mut recovered_params, &parsed_ext).unwrap();
 		assert_eq!(recovered_params.subject_alt_names, params.subject_alt_names);
+	}
+}
+
+#[cfg(test)]
+mod ku_ext_tests {
+	#[cfg(feature = "x509-parser")]
+	use x509_parser::prelude::FromDer;
+
+	use super::*;
+	use crate::CertificateParams;
+
+	#[test]
+	fn test_from_params() {
+		let mut params = CertificateParams::default();
+		params.key_usages = vec![
+			KeyUsagePurpose::DigitalSignature,
+			KeyUsagePurpose::ContentCommitment,
+			KeyUsagePurpose::KeyEncipherment,
+			KeyUsagePurpose::DataEncipherment,
+			KeyUsagePurpose::KeyAgreement,
+			KeyUsagePurpose::KeyCertSign,
+			KeyUsagePurpose::CrlSign,
+			KeyUsagePurpose::EncipherOnly,
+			KeyUsagePurpose::DecipherOnly,
+		];
+
+		let ext = KeyUsage::from_params(&params).unwrap();
+		assert_eq!(ext.usages, params.key_usages);
+	}
+
+	#[test]
+	#[cfg(feature = "x509-parser")]
+	fn test_from_parsed() {
+		let mut params = CertificateParams::default();
+		params.key_usages = vec![
+			KeyUsagePurpose::ContentCommitment,
+			KeyUsagePurpose::KeyEncipherment,
+		];
+
+		let der = yasna::construct_der(|writer| {
+			KeyUsage::from_params(&params).unwrap().write_value(writer)
+		});
+
+		let parsed_ext = x509_parser::extensions::ParsedExtension::KeyUsage(
+			x509_parser::extensions::KeyUsage::from_der(&der).unwrap().1,
+		);
+
+		let mut recovered_params = CertificateParams::default();
+		KeyUsage::from_parsed(&mut recovered_params, &parsed_ext).unwrap();
+		assert_eq!(recovered_params.key_usages, params.key_usages);
 	}
 }
