@@ -94,6 +94,11 @@ impl CertificateSigningRequest {
 					Err(err) => return Err(err),
 					_ => {}, // Not a CDP.
 				}
+				match ext::SubjectKeyIdentifier::from_parsed(&mut params, ext) {
+					Ok(true) => continue, // SKI extension handled.
+					Err(err) => return Err(err),
+					_ => {}, // Not a SKI.
+				}
 
 				// If we get here, we've encountered an unknown and unhandled extension.
 				return Err(Error::UnsupportedExtension);

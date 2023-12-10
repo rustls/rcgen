@@ -629,21 +629,10 @@ impl CertificateParams {
 		let validity = x509.validity();
 		let serial_number = Some(x509.serial.to_bytes_be().into());
 
-		let key_identifier_method = x509
-			.iter_extensions()
-			.find_map(|ext| match ext.parsed_extension() {
-				ParsedExtension::SubjectKeyIdentifier(key_id) => {
-					Some(KeyIdMethod::PreSpecified(key_id.0.into()))
-				},
-				_ => None,
-			})
-			.unwrap_or(KeyIdMethod::Sha256);
-
 		let mut params = CertificateParams {
 			alg,
 			is_ca,
 			serial_number,
-			key_identifier_method,
 			distinguished_name: dn,
 			key_pair: Some(key_pair),
 			not_before: validity.not_before.to_datetime(),
@@ -686,6 +675,10 @@ impl CertificateParams {
 			find_parsed_extension!(x509, ParsedExtension::CRLDistributionPoints(_))
 		{
 			ext::CrlDistributionPoints::from_parsed(&mut params, crl_dps)?;
+		}
+
+		if let Some(ski) = find_parsed_extension!(x509, ParsedExtension::SubjectKeyIdentifier(_)) {
+			ext::SubjectKeyIdentifier::from_parsed(&mut params, ski)?;
 		}
 
 		Ok(params)
@@ -763,7 +756,7 @@ impl CertificateParams {
 			// Write extensions
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
 			writer.next().write_tagged(Tag::context(0), |writer| {
-				let extensions = self.extensions(None)?;
+				let extensions = self.extensions(pub_key, None)?;
 				if !subject_alt_names.is_empty() || !custom_extensions.is_empty() {
 					writer.write_sequence(|writer| {
 						let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
@@ -831,7 +824,7 @@ impl CertificateParams {
 			// Write subjectPublicKeyInfo
 			pub_key.serialize_public_key_der(writer.next());
 			// write extensions
-			let extensions = self.extensions(Some(ca))?;
+			let extensions = self.extensions(pub_key, Some(ca))?;
 			let should_write_exts = self.use_authority_key_identifier_extension
 				|| !self.subject_alt_names.is_empty()
 				|| !self.extended_key_usages.is_empty()
@@ -851,16 +844,6 @@ impl CertificateParams {
 
 						match self.is_ca {
 							IsCa::Ca(ref constraint) => {
-								// Write subject_key_identifier
-								write_x509_extension(
-									writer.next(),
-									OID_SUBJECT_KEY_IDENTIFIER,
-									false,
-									|writer| {
-										let key_identifier = self.key_identifier(pub_key);
-										writer.write_bytes(key_identifier.as_ref());
-									},
-								);
 								// Write basic_constraints
 								write_x509_extension(
 									writer.next(),
@@ -880,16 +863,6 @@ impl CertificateParams {
 								);
 							},
 							IsCa::ExplicitNoCa => {
-								// Write subject_key_identifier
-								write_x509_extension(
-									writer.next(),
-									OID_SUBJECT_KEY_IDENTIFIER,
-									false,
-									|writer| {
-										let key_identifier = self.key_identifier(pub_key);
-										writer.write_bytes(key_identifier.as_ref());
-									},
-								);
 								// Write basic_constraints
 								write_x509_extension(
 									writer.next(),
@@ -960,9 +933,16 @@ impl CertificateParams {
 	/// Returns the X.509 extensions that the [CertificateParams] describe, or an [Error]
 	/// if the described extensions are invalid.
 	///
+	/// The returned extensions will include a subject sublic key identifier extension for the
+	/// provided [PublicKeyData].
+	///
 	/// If an issuer [Certificate] is provided, additional extensions specific to the issuer will
 	/// be included (e.g. the authority key identifier).
-	fn extensions(&self, issuer: Option<&Certificate>) -> Result<Extensions, Error> {
+	fn extensions<K: PublicKeyData>(
+		&self,
+		pub_key: &K,
+		issuer: Option<&Certificate>,
+	) -> Result<Extensions, Error> {
 		let mut exts = Extensions::default();
 
 		if let Some(issuer) = issuer {
@@ -989,8 +969,13 @@ impl CertificateParams {
 			exts.add_extension(Box::new(crl_dps))?;
 		}
 
+		// RFC 5280 describes emitting a SKI as a MUST for CA certs and a SHOULD for EE,
+		// so we emit it unconditionally for all certs.
+		exts.add_extension(Box::new(ext::SubjectKeyIdentifier::from_params(
+			&self, pub_key,
+		)))?;
+
 		// TODO: basic constraints.
-		// TODO: subject key identifier.
 		// TODO: custom extensions
 
 		Ok(exts)

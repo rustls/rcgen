@@ -5,6 +5,7 @@ use std::net::IpAddr;
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
 
+use crate::key_pair::PublicKeyData;
 use crate::{
 	oid, write_distinguished_name, Certificate, CertificateParams, Error, ExtendedKeyUsagePurpose,
 	GeneralSubtree, KeyUsagePurpose, SanType,
@@ -656,6 +657,52 @@ impl Extension for CrlDistributionPoints {
 	}
 }
 
+/// An X.509v3 subject key identifier extension according to
+/// [RFC 5280 4.2.1.2](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.2).
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SubjectKeyIdentifier {
+	key_identifier: Vec<u8>,
+}
+
+impl SubjectKeyIdentifier {
+	pub(crate) fn from_params<K: PublicKeyData>(params: &CertificateParams, pub_key: &K) -> Self {
+		Self {
+			key_identifier: params.key_identifier(pub_key),
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		ext: &x509_parser::extensions::ParsedExtension,
+	) -> Result<bool, Error> {
+		Ok(match ext {
+			x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(ski) => {
+				params.key_identifier_method = crate::KeyIdMethod::PreSpecified(ski.0.to_vec());
+				true
+			},
+			_ => false,
+		})
+	}
+}
+
+impl Extension for SubjectKeyIdentifier {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(oid::OID_SUBJECT_KEY_IDENTIFIER)
+	}
+
+	fn criticality(&self) -> Criticality {
+		// Conforming CAs MUST mark this extension as non-critical.
+		Criticality::NonCritical
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		// SubjectKeyIdentifier ::= KeyIdentifier
+		// KeyIdentifier ::= OCTET STRING
+		writer.write_bytes(&self.key_identifier)
+	}
+}
+
 #[cfg(test)]
 mod extensions_tests {
 	use crate::oid;
@@ -1043,5 +1090,63 @@ mod crl_dps_test {
 		let mut recovered_params = CertificateParams::default();
 		CrlDistributionPoints::from_parsed(&mut recovered_params, &parsed_ext).unwrap();
 		assert_eq!(recovered_params.crl_distribution_points, crl_dps,);
+	}
+}
+
+#[cfg(test)]
+mod ski_ext_tests {
+	#[cfg(feature = "x509-parser")]
+	use x509_parser::prelude::FromDer;
+
+	use super::*;
+	use crate::{CertificateParams, KeyIdMethod, KeyPair};
+
+	#[test]
+	fn test_from_params() {
+		let ski = vec![1, 2, 3, 4];
+		let mut params = CertificateParams::default();
+		params.key_identifier_method = KeyIdMethod::PreSpecified(ski.clone());
+
+		let keypair = KeyPair::generate(&crate::PKCS_ECDSA_P256_SHA256).unwrap();
+		let ext = SubjectKeyIdentifier::from_params(&params, &keypair);
+		assert_eq!(ext.key_identifier, ski);
+
+		let keypair = KeyPair::generate(&crate::PKCS_ECDSA_P256_SHA256).unwrap();
+		let mut params = CertificateParams::default();
+		params.key_pair = Some(keypair);
+
+		let keypair = params.key_pair.as_ref().unwrap();
+		let ext = SubjectKeyIdentifier::from_params(&params, keypair);
+		assert_ne!(ext.key_identifier, ski);
+		assert_eq!(ext.key_identifier.len(), 20); // SHA-256 digest truncated to SHA-1 length
+	}
+
+	#[test]
+	#[cfg(feature = "x509-parser")]
+	fn test_from_parsed() {
+		let ski = vec![1, 2, 3, 4];
+		let keypair = KeyPair::generate(&crate::PKCS_ECDSA_P256_SHA256).unwrap();
+
+		let mut params = CertificateParams::default();
+		params.key_pair = Some(keypair);
+		params.key_identifier_method = KeyIdMethod::PreSpecified(ski.clone());
+
+		let keypair = params.key_pair.as_ref().unwrap();
+		let der = yasna::construct_der(|writer| {
+			SubjectKeyIdentifier::from_params(&params, keypair).write_value(writer)
+		});
+
+		let parsed_ext = x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(
+			x509_parser::extensions::KeyIdentifier::from_der(&der)
+				.unwrap()
+				.1,
+		);
+
+		let mut recovered_params = CertificateParams::default();
+		SubjectKeyIdentifier::from_parsed(&mut recovered_params, &parsed_ext).unwrap();
+		assert_eq!(
+			recovered_params.key_identifier_method,
+			KeyIdMethod::PreSpecified(ski)
+		);
 	}
 }
