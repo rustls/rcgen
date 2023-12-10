@@ -38,6 +38,9 @@ pub enum Error {
 	RingUnspecified,
 	/// Time conversion related errors
 	Time,
+	/// Unsupported CRL distribution point extension in CSR
+	#[cfg(feature = "x509-parser")]
+	UnsupportedCrlDistributionPoint,
 	#[cfg(feature = "x509-parser")]
 	/// Unsupported extension requested in CSR
 	UnsupportedExtension,
@@ -101,6 +104,8 @@ impl fmt::Display for Error {
 			},
 			#[cfg(feature = "x509-parser")]
 			UnsupportedGeneralName => write!(f, "Unsupported general name in CSR",)?,
+			#[cfg(feature = "x509-parser")]
+			UnsupportedCrlDistributionPoint => write!(f, "Unsupported CRL distribution point in CSR",)?,
 		};
 		Ok(())
 	}

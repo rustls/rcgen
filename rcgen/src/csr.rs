@@ -88,6 +88,11 @@ impl CertificateSigningRequest {
 					Err(err) => return Err(err),
 					_ => {}, // Not an NC.
 				}
+				match ext::CrlDistributionPoints::from_parsed(&mut params, ext) {
+					Ok(true) => continue, // CDP extension handled.
+					Err(err) => return Err(err),
+					_ => {}, // Not a CDP.
+				}
 
 				// If we get here, we've encountered an unknown and unhandled extension.
 				return Err(Error::UnsupportedExtension);

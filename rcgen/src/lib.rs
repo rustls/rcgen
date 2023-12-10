@@ -682,6 +682,12 @@ impl CertificateParams {
 			ext::NameConstraints::from_parsed(&mut params, name_constraints)?;
 		}
 
+		if let Some(crl_dps) =
+			find_parsed_extension!(x509, ParsedExtension::CrlDistributionPoints(_))
+		{
+			ext::CrlDistributionPoints::from_parsed(&mut params, crl_dps)?;
+		}
+
 		Ok(params)
 	}
 	#[cfg(feature = "x509-parser")]
@@ -728,7 +734,7 @@ impl CertificateParams {
 			key_usages: _,
 			extended_key_usages: _,
 			name_constraints: _,
-			crl_distribution_points,
+			crl_distribution_points: _,
 			custom_extensions,
 			key_pair,
 			use_authority_key_identifier_extension,
@@ -743,7 +749,6 @@ impl CertificateParams {
 		let _ = (alg, key_pair, not_before, not_after, key_identifier_method);
 		if serial_number.is_some()
 			|| *is_ca != IsCa::NoCa
-			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
 		{
 			return Err(Error::UnsupportedInCsr);
@@ -844,20 +849,6 @@ impl CertificateParams {
 							Extensions::write_extension(writer, ext);
 						}
 
-						if !self.crl_distribution_points.is_empty() {
-							write_x509_extension(
-								writer.next(),
-								OID_CRL_DISTRIBUTION_POINTS,
-								false,
-								|writer| {
-									writer.write_sequence(|writer| {
-										for distribution_point in &self.crl_distribution_points {
-											distribution_point.write_der(writer.next());
-										}
-									})
-								},
-							);
-						}
 						match self.is_ca {
 							IsCa::Ca(ref constraint) => {
 								// Write subject_key_identifier
@@ -994,7 +985,10 @@ impl CertificateParams {
 			exts.add_extension(Box::new(name_constraints_ext))?;
 		}
 
-		// TODO: crl distribution points.
+		if let Some(crl_dps) = ext::CrlDistributionPoints::from_params(&self) {
+			exts.add_extension(Box::new(crl_dps))?;
+		}
+
 		// TODO: basic constraints.
 		// TODO: subject key identifier.
 		// TODO: custom extensions

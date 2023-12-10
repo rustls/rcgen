@@ -575,6 +575,87 @@ impl Extension for NameConstraints {
 	}
 }
 
+/// An X.509v3 CRL distribution points extension according to
+/// [RFC 5280 4.2.1.13](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13).
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct CrlDistributionPoints {
+	distribution_points: Vec<crate::CrlDistributionPoint>,
+}
+
+impl CrlDistributionPoints {
+	pub(crate) fn from_params(params: &CertificateParams) -> Option<Self> {
+		match params.crl_distribution_points.is_empty() {
+			true => return None, // Avoid writing an empty CRL distribution points extension.
+			false => Some(Self {
+				distribution_points: params.crl_distribution_points.clone(),
+			}),
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		ext: &x509_parser::extensions::ParsedExtension,
+	) -> Result<bool, Error> {
+		Ok(match ext {
+			x509_parser::extensions::ParsedExtension::CRLDistributionPoints(crl_dps) => {
+				let dps = crl_dps
+					.points
+					.iter()
+					.map(|dp| {
+						// Rcgen does not support CRL DPs with specific reasons, or an indirect issuer.
+						if dp.reasons.is_some() || dp.crl_issuer.is_some() {
+							return Err(Error::UnsupportedCrlDistributionPoint);
+						}
+						let general_names = match &dp.distribution_point {
+							Some(x509_parser::extensions::DistributionPointName::FullName(
+								general_names,
+							)) => Ok(general_names),
+							// Rcgen does not support CRL DPs missing a distribution point,
+							// or that specific a distribution point with a name relative
+							// to an issuer.
+							_ => Err(Error::UnsupportedCrlDistributionPoint),
+						}?;
+						let uris = general_names
+							.iter()
+							.map(|general_name| match general_name {
+								x509_parser::extensions::GeneralName::URI(uri) => {
+									Ok(uri.to_string())
+								},
+								// Rcgen does not support CRL DP general names other than URI.
+								_ => Err(Error::UnsupportedGeneralName),
+							})
+							.collect::<Result<Vec<_>, _>>()?;
+						Ok(crate::CrlDistributionPoint { uris })
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				params.crl_distribution_points = dps;
+				true
+			},
+			_ => false,
+		})
+	}
+}
+
+impl Extension for CrlDistributionPoints {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(oid::OID_CRL_DISTRIBUTION_POINTS)
+	}
+
+	fn criticality(&self) -> Criticality {
+		// The extension SHOULD be non-critical
+		Criticality::NonCritical
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		writer.write_sequence(|writer| {
+			for distribution_point in &self.distribution_points {
+				distribution_point.write_der(writer.next());
+			}
+		})
+	}
+}
+
 #[cfg(test)]
 mod extensions_tests {
 	use crate::oid;
@@ -910,5 +991,57 @@ mod name_constraints_tests {
 			recovered_params.name_constraints.unwrap().excluded_subtrees,
 			constraints.excluded_subtrees,
 		);
+	}
+}
+
+#[cfg(test)]
+mod crl_dps_test {
+	#[cfg(feature = "x509-parser")]
+	use x509_parser::prelude::FromDer;
+
+	use super::*;
+	use crate::CertificateParams;
+
+	#[test]
+	fn test_from_params() {
+		let crl_dps = vec![
+			crate::CrlDistributionPoint {
+				uris: vec!["http://example.com".into()],
+			},
+			crate::CrlDistributionPoint {
+				uris: vec!["http://example.org".into(), "ldap://example.com".into()],
+			},
+		];
+		let mut params = CertificateParams::default();
+		params.crl_distribution_points = crl_dps.clone();
+
+		let ext = CrlDistributionPoints::from_params(&params).unwrap();
+		assert_eq!(ext.distribution_points, crl_dps);
+	}
+
+	#[test]
+	#[cfg(feature = "x509-parser")]
+	fn test_from_parsed() {
+		let mut params = CertificateParams::default();
+		let crl_dps = vec![crate::CrlDistributionPoint {
+			uris: vec!["http://example.com".into()],
+		}];
+		params.crl_distribution_points = crl_dps.clone();
+
+		let der = yasna::construct_der(|writer| {
+			CrlDistributionPoints::from_params(&params)
+				.unwrap()
+				.write_value(writer)
+		});
+
+		let parsed_ext = x509_parser::extensions::ParsedExtension::CRLDistributionPoints(
+			x509_parser::extensions::CRLDistributionPoints::from_der(&der)
+				.unwrap()
+				.1,
+		);
+
+		let mut recovered_params = CertificateParams::default();
+		CrlDistributionPoints::from_parsed(&mut recovered_params, &parsed_ext).unwrap();
+		assert_eq!(recovered_params.crl_distribution_points, crl_dps,);
 	}
 }
