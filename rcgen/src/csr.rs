@@ -83,6 +83,11 @@ impl CertificateSigningRequest {
 					Err(err) => return Err(err),
 					_ => {}, // Not an EKU.
 				}
+				match ext::NameConstraints::from_parsed(&mut params, ext) {
+					Ok(true) => continue, // NC extension handled.
+					Err(err) => return Err(err),
+					_ => {}, // Not an NC.
+				}
 
 				// If we get here, we've encountered an unknown and unhandled extension.
 				return Err(Error::UnsupportedExtension);
@@ -91,7 +96,6 @@ impl CertificateSigningRequest {
 
 		// Not yet handled:
 		// * is_ca
-		// * name_constraints
 		// and any other extensions.
 
 		Ok(Self {

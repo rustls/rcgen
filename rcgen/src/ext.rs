@@ -6,7 +6,8 @@ use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::{
-	oid, Certificate, CertificateParams, Error, ExtendedKeyUsagePurpose, KeyUsagePurpose, SanType,
+	oid, write_distinguished_name, Certificate, CertificateParams, Error, ExtendedKeyUsagePurpose,
+	GeneralSubtree, KeyUsagePurpose, SanType,
 };
 
 /// The criticality of an extension.
@@ -458,6 +459,122 @@ impl Extension for ExtendedKeyUsage {
 	}
 }
 
+/// An X.509v3 name constraints extension according to
+/// [RFC 5280 4.2.1.10](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.10).
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct NameConstraints {
+	permitted_subtrees: Vec<GeneralSubtree>,
+	excluded_subtrees: Vec<GeneralSubtree>,
+}
+
+impl NameConstraints {
+	pub(crate) fn from_params(params: &CertificateParams) -> Option<Self> {
+		match &params.name_constraints {
+			Some(nc) if nc.permitted_subtrees.is_empty() && nc.excluded_subtrees.is_empty() => {
+				return None; // Avoid writing an empty name constraints extension.
+			},
+			Some(nc) => Some(Self {
+				permitted_subtrees: nc.permitted_subtrees.clone(),
+				excluded_subtrees: nc.excluded_subtrees.clone(),
+			}),
+			_ => None,
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		ext: &x509_parser::extensions::ParsedExtension,
+	) -> Result<bool, Error> {
+		Ok(match ext {
+			x509_parser::extensions::ParsedExtension::NameConstraints(ncs) => {
+				let mut permitted_subtrees = Vec::default();
+				if let Some(ncs_permitted) = &ncs.permitted_subtrees {
+					permitted_subtrees = ncs_permitted
+						.iter()
+						.map(GeneralSubtree::from_x509_general_subtree)
+						.collect::<Result<Vec<_>, _>>()?;
+				}
+				let mut excluded_subtrees = Vec::default();
+				if let Some(ncs_excluded) = &ncs.excluded_subtrees {
+					excluded_subtrees = ncs_excluded
+						.iter()
+						.map(GeneralSubtree::from_x509_general_subtree)
+						.collect::<Result<Vec<_>, _>>()?;
+				}
+				if !permitted_subtrees.is_empty() || !excluded_subtrees.is_empty() {
+					params.name_constraints = Some(crate::NameConstraints {
+						permitted_subtrees,
+						excluded_subtrees,
+					});
+				}
+				true
+			},
+			_ => false,
+		})
+	}
+
+	fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
+		/*
+			GeneralSubtrees ::= SEQUENCE SIZE (1..MAX) OF GeneralSubtree
+			GeneralSubtree ::= SEQUENCE {
+				  base                    GeneralName,
+				  minimum         [0]     BaseDistance DEFAULT 0,
+				  maximum         [1]     BaseDistance OPTIONAL }
+			BaseDistance ::= INTEGER (0..MAX)
+		*/
+		writer.write_tagged_implicit(Tag::context(tag), |writer| {
+			writer.write_sequence(|writer| {
+				for subtree in general_subtrees.iter() {
+					writer.next().write_sequence(|writer| {
+						writer.next().write_tagged_implicit(
+							Tag::context(subtree.tag()),
+							|writer| match subtree {
+								GeneralSubtree::Rfc822Name(name)
+								| GeneralSubtree::DnsName(name) => writer.write_ia5_string(name),
+								GeneralSubtree::DirectoryName(name) => {
+									write_distinguished_name(writer, name)
+								},
+								GeneralSubtree::IpAddress(subnet) => {
+									writer.write_bytes(&subnet.to_bytes())
+								},
+							},
+						);
+						// minimum must be 0 (the default) and maximum must be absent
+					});
+				}
+			});
+		});
+	}
+}
+
+impl Extension for NameConstraints {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(oid::OID_NAME_CONSTRAINTS)
+	}
+
+	fn criticality(&self) -> Criticality {
+		// Conforming CAs MUST mark this extension as critical
+		Criticality::Critical
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		/*
+			NameConstraints ::= SEQUENCE {
+				  permittedSubtrees       [0]     GeneralSubtrees OPTIONAL,
+				  excludedSubtrees        [1]     GeneralSubtrees OPTIONAL }
+		*/
+		writer.write_sequence(|writer| {
+			if !self.permitted_subtrees.is_empty() {
+				Self::write_general_subtrees(writer.next(), 0, &self.permitted_subtrees);
+			}
+			if !self.excluded_subtrees.is_empty() {
+				Self::write_general_subtrees(writer.next(), 1, &self.excluded_subtrees);
+			}
+		});
+	}
+}
+
 #[cfg(test)]
 mod extensions_tests {
 	use crate::oid;
@@ -730,6 +847,68 @@ mod eku_ext_tests {
 		assert_eq!(
 			recovered_params.extended_key_usages,
 			params.extended_key_usages
+		);
+	}
+}
+
+#[cfg(test)]
+mod name_constraints_tests {
+	#[cfg(feature = "x509-parser")]
+	use x509_parser::prelude::FromDer;
+
+	use super::*;
+	use crate::CertificateParams;
+
+	#[test]
+	fn test_from_params() {
+		let constraints = crate::NameConstraints {
+			permitted_subtrees: vec![GeneralSubtree::DnsName("com".into())],
+			excluded_subtrees: vec![GeneralSubtree::DnsName("org".into())],
+		};
+		let mut params = CertificateParams::default();
+		params.name_constraints = Some(constraints.clone());
+
+		let ext = NameConstraints::from_params(&params).unwrap();
+		assert_eq!(ext.permitted_subtrees, constraints.permitted_subtrees);
+		assert_eq!(ext.excluded_subtrees, constraints.excluded_subtrees);
+	}
+
+	#[test]
+	#[cfg(feature = "x509-parser")]
+	fn test_from_parsed() {
+		let mut params = CertificateParams::default();
+		let constraints = crate::NameConstraints {
+			permitted_subtrees: vec![GeneralSubtree::DnsName("com".into())],
+			excluded_subtrees: Vec::default(),
+		};
+		params.name_constraints = Some(constraints.clone());
+
+		let der = yasna::construct_der(|writer| {
+			NameConstraints::from_params(&params)
+				.unwrap()
+				.write_value(writer)
+		});
+
+		let parsed_ext = x509_parser::extensions::ParsedExtension::NameConstraints(
+			x509_parser::extensions::NameConstraints::from_der(&der)
+				.unwrap()
+				.1,
+		);
+
+		let mut recovered_params = CertificateParams::default();
+		NameConstraints::from_parsed(&mut recovered_params, &parsed_ext).unwrap();
+		assert!(recovered_params.name_constraints.is_some());
+		assert_eq!(
+			recovered_params
+				.name_constraints
+				.as_ref()
+				.unwrap()
+				.permitted_subtrees,
+			constraints.permitted_subtrees,
+		);
+		assert_eq!(
+			recovered_params.name_constraints.unwrap().excluded_subtrees,
+			constraints.excluded_subtrees,
 		);
 	}
 }

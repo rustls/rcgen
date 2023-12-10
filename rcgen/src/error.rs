@@ -41,6 +41,9 @@ pub enum Error {
 	#[cfg(feature = "x509-parser")]
 	/// Unsupported extension requested in CSR
 	UnsupportedExtension,
+	/// Unsupported general name type in CSR
+	#[cfg(feature = "x509-parser")]
+	UnsupportedGeneralName,
 	/// Unsupported field when generating a CSR
 	UnsupportedInCsr,
 	/// The requested signature algorithm is not supported
@@ -96,6 +99,8 @@ impl fmt::Display for Error {
 			DuplicateExtension(oid) => {
 				write!(f, "Extension with OID {oid} present multiple times")?
 			},
+			#[cfg(feature = "x509-parser")]
+			UnsupportedGeneralName => write!(f, "Unsupported general name in CSR",)?,
 		};
 		Ok(())
 	}

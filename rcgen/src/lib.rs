@@ -222,6 +222,24 @@ impl GeneralSubtree {
 			GeneralSubtree::IpAddress(_addr) => TAG_IP_ADDRESS,
 		}
 	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_x509_general_subtree(
+		general_subtree: &x509_parser::extensions::GeneralSubtree,
+	) -> Result<Self, Error> {
+		use x509_parser::extensions::GeneralName as X509GeneralName;
+		match &general_subtree.base {
+			X509GeneralName::RFC822Name(name) => Ok(GeneralSubtree::Rfc822Name(name.to_string())),
+			X509GeneralName::DNSName(name) => Ok(GeneralSubtree::DnsName(name.to_string())),
+			X509GeneralName::DirectoryName(name) => Ok(GeneralSubtree::DirectoryName(
+				DistinguishedName::from_name(name)?,
+			)),
+			// TODO(XXX): Consider how to handle the &[u8] that x509_parser provides.
+			//            It would need to be mapped into the rcgen CidrSubnet type.
+			// GeneralName::IPAddress(addr) => GeneralSubtree::IpAddress(...)
+			_ => Err(Error::UnsupportedGeneralName),
+		}
+	}
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -609,7 +627,6 @@ impl CertificateParams {
 		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
 		let is_ca = Self::convert_x509_is_ca(&x509)?;
 		let validity = x509.validity();
-		let name_constraints = Self::convert_x509_name_constraints(&x509)?;
 		let serial_number = Some(x509.serial.to_bytes_be().into());
 
 		let key_identifier_method = x509
@@ -625,7 +642,6 @@ impl CertificateParams {
 		let mut params = CertificateParams {
 			alg,
 			is_ca,
-			name_constraints,
 			serial_number,
 			key_identifier_method,
 			distinguished_name: dn,
@@ -660,6 +676,12 @@ impl CertificateParams {
 			ext::ExtendedKeyUsage::from_parsed(&mut params, eku_ext)?;
 		}
 
+		if let Some(name_constraints) =
+			find_parsed_extension!(x509, ParsedExtension::NameConstraints(_))
+		{
+			ext::NameConstraints::from_parsed(&mut params, name_constraints)?;
+		}
+
 		Ok(params)
 	}
 	#[cfg(feature = "x509-parser")]
@@ -691,68 +713,6 @@ impl CertificateParams {
 		};
 
 		Ok(is_ca)
-	}
-	#[cfg(feature = "x509-parser")]
-	fn convert_x509_name_constraints(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Option<NameConstraints>, Error> {
-		let constraints = x509
-			.name_constraints()
-			.or(Err(Error::CouldNotParseCertificate))?
-			.map(|ext| ext.value);
-
-		if let Some(constraints) = constraints {
-			let permitted_subtrees = if let Some(permitted) = &constraints.permitted_subtrees {
-				Self::convert_x509_general_subtrees(&permitted)?
-			} else {
-				Vec::new()
-			};
-
-			let excluded_subtrees = if let Some(excluded) = &constraints.excluded_subtrees {
-				Self::convert_x509_general_subtrees(&excluded)?
-			} else {
-				Vec::new()
-			};
-
-			let name_constraints = NameConstraints {
-				permitted_subtrees,
-				excluded_subtrees,
-			};
-
-			Ok(Some(name_constraints))
-		} else {
-			Ok(None)
-		}
-	}
-	#[cfg(feature = "x509-parser")]
-	fn convert_x509_general_subtrees(
-		subtrees: &[x509_parser::extensions::GeneralSubtree<'_>],
-	) -> Result<Vec<GeneralSubtree>, Error> {
-		use x509_parser::extensions::GeneralName;
-
-		let mut result = Vec::new();
-		for subtree in subtrees {
-			let subtree = match &subtree.base {
-				GeneralName::RFC822Name(s) => GeneralSubtree::Rfc822Name(s.to_string()),
-				GeneralName::DNSName(s) => GeneralSubtree::DnsName(s.to_string()),
-				GeneralName::DirectoryName(n) => {
-					GeneralSubtree::DirectoryName(DistinguishedName::from_name(&n)?)
-				},
-				GeneralName::IPAddress(bytes) if bytes.len() == 8 => {
-					let addr: [u8; 4] = bytes[..4].try_into().unwrap();
-					let mask: [u8; 4] = bytes[4..].try_into().unwrap();
-					GeneralSubtree::IpAddress(CidrSubnet::V4(addr, mask))
-				},
-				GeneralName::IPAddress(bytes) if bytes.len() == 32 => {
-					let addr: [u8; 16] = bytes[..16].try_into().unwrap();
-					let mask: [u8; 16] = bytes[16..].try_into().unwrap();
-					GeneralSubtree::IpAddress(CidrSubnet::V6(addr, mask))
-				},
-				_ => continue,
-			};
-			result.push(subtree);
-		}
-		Ok(result)
 	}
 	fn write_request<K: PublicKeyData>(&self, pub_key: &K, writer: DERWriter) -> Result<(), Error> {
 		// No .. pattern, we use this to ensure every field is used
@@ -885,34 +845,6 @@ impl CertificateParams {
 							Extensions::write_extension(writer, ext);
 						}
 
-						if let Some(name_constraints) = &self.name_constraints {
-							// If both trees are empty, the extension must be omitted.
-							if !name_constraints.is_empty() {
-								write_x509_extension(
-									writer.next(),
-									OID_NAME_CONSTRAINTS,
-									true,
-									|writer| {
-										writer.write_sequence(|writer| {
-											if !name_constraints.permitted_subtrees.is_empty() {
-												write_general_subtrees(
-													writer.next(),
-													0,
-													&name_constraints.permitted_subtrees,
-												);
-											}
-											if !name_constraints.excluded_subtrees.is_empty() {
-												write_general_subtrees(
-													writer.next(),
-													1,
-													&name_constraints.excluded_subtrees,
-												);
-											}
-										});
-									},
-								);
-							}
-						}
 						if !self.crl_distribution_points.is_empty() {
 							write_x509_extension(
 								writer.next(),
@@ -1059,7 +991,10 @@ impl CertificateParams {
 			exts.add_extension(Box::new(eku_ext))?;
 		}
 
-		// TODO: name constraints.
+		if let Some(name_constraints_ext) = ext::NameConstraints::from_params(&self) {
+			exts.add_extension(Box::new(name_constraints_ext))?;
+		}
+
 		// TODO: crl distribution points.
 		// TODO: basic constraints.
 		// TODO: subject key identifier.
@@ -1336,33 +1271,6 @@ fn write_distinguished_name(writer: DERWriter, dn: &DistinguishedName) {
 				});
 			});
 		}
-	});
-}
-
-fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
-	writer.write_tagged_implicit(Tag::context(tag), |writer| {
-		writer.write_sequence(|writer| {
-			for subtree in general_subtrees.iter() {
-				writer.next().write_sequence(|writer| {
-					writer
-						.next()
-						.write_tagged_implicit(
-							Tag::context(subtree.tag()),
-							|writer| match subtree {
-								GeneralSubtree::Rfc822Name(name)
-								| GeneralSubtree::DnsName(name) => writer.write_ia5_string(name),
-								GeneralSubtree::DirectoryName(name) => {
-									write_distinguished_name(writer, name)
-								},
-								GeneralSubtree::IpAddress(subnet) => {
-									writer.write_bytes(&subnet.to_bytes())
-								},
-							},
-						);
-					// minimum must be 0 (the default) and maximum must be absent
-				});
-			}
-		});
 	});
 }
 
