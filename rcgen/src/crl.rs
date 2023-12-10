@@ -247,19 +247,15 @@ impl CertificateRevocationListParams {
 			//   Conforming CRL issuers are REQUIRED to include the authority key
 			//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
 			//   extensions in all CRLs issued.
+			let exts = self.extensions(Some(ca));
 			writer.next().write_tagged(Tag::context(0), |writer| {
 				writer.write_sequence(|writer| {
 					// TODO: have the Extensions type write the outer sequence and each
 					// 		 contained extension once we've ported each of the below
 					//       extensions to self.extensions().
-					for ext in self.extensions(Some(ca)).iter() {
+					for ext in exts.iter() {
 						Extensions::write_extension(writer, ext);
 					}
-
-					// Write CRL number.
-					write_x509_extension(writer.next(), OID_CRL_NUMBER, false, |writer| {
-						writer.write_bigint_bytes(self.crl_number.as_ref(), true);
-					});
 
 					// Write issuing distribution point (if present).
 					if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
@@ -291,7 +287,10 @@ impl CertificateRevocationListParams {
 				.unwrap();
 		}
 
-		// TODO: CRL number.
+		// Safety: there can be no duplicate CRL number ext OID by this point.
+		exts.add_extension(Box::new(ext::CrlNumber::from_params(&self)))
+			.unwrap();
+
 		// TODO: issuing distribution point.
 
 		exts

@@ -8,8 +8,8 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 use crate::key_pair::PublicKeyData;
 use crate::oid::{OID_PE_ACME, OID_PKCS_9_AT_EXTENSION_REQUEST};
 use crate::{
-	oid, write_distinguished_name, Certificate, CertificateParams, Error, ExtendedKeyUsagePurpose,
-	GeneralSubtree, IsCa, KeyUsagePurpose, SanType,
+	oid, write_distinguished_name, Certificate, CertificateParams, CertificateRevocationListParams,
+	Error, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, KeyUsagePurpose, SanType, SerialNumber,
 };
 
 /// The criticality of an extension.
@@ -938,6 +938,38 @@ impl Extension for BasicConstraints {
 				writer.next().write_u8(path_len_constraint);
 			}
 		});
+	}
+}
+
+/// An X.509v3 CRL number extension according to
+/// [RFC 5280 5.2.3](https://www.rfc-editor.org/rfc/rfc5280#section-5.2.3)
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct CrlNumber {
+	number: SerialNumber,
+}
+
+impl CrlNumber {
+	pub(crate) fn from_params(params: &CertificateRevocationListParams) -> Self {
+		Self {
+			number: params.crl_number.clone(),
+		}
+	}
+}
+
+impl Extension for CrlNumber {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(oid::OID_CRL_NUMBER)
+	}
+
+	fn criticality(&self) -> Criticality {
+		// CRL issuers conforming to this profile MUST include this extension in all
+		// CRLs and MUST mark this extension as non-critical.
+		Criticality::NonCritical
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		// CRLNumber ::= INTEGER (0..MAX)
+		writer.write_bigint_bytes(self.number.as_ref(), true);
 	}
 }
 
