@@ -243,11 +243,7 @@ impl CertificateRevocationListParams {
 			// RFC 5280 §5.1.2.7:
 			//   This field may only appear if the version is 2 (Section 5.1.2.1).  If
 			//   present, this field is a sequence of one or more CRL extensions.
-			// RFC 5280 §5.2:
-			//   Conforming CRL issuers are REQUIRED to include the authority key
-			//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
-			//   extensions in all CRLs issued.
-			let exts = self.extensions(Some(ca));
+			let exts = self.extensions(ca);
 			writer.next().write_tagged(Tag::context(0), |writer| {
 				writer.write_sequence(|writer| {
 					// TODO: have the Extensions type write the outer sequence and each
@@ -278,14 +274,16 @@ impl CertificateRevocationListParams {
 	///
 	/// If an issuer [Certificate] is provided, additional extensions specific to the issuer will
 	/// be included (e.g. the authority key identifier).
-	fn extensions(&self, issuer: Option<&Certificate>) -> Extensions {
+	fn extensions(&self, issuer: &Certificate) -> Extensions {
 		let mut exts = Extensions::default();
 
-		if let Some(issuer) = issuer {
-			// Safety: `exts` is empty at this point - there can be no duplicate AKI ext OID.
-			exts.add_extension(Box::new(ext::AuthorityKeyIdentifier::from(issuer)))
-				.unwrap();
-		}
+		// RFC 5280 §5.2:
+		//   Conforming CRL issuers are REQUIRED to include the authority key
+		//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
+		//   extensions in all CRLs issued.
+		// Safety: `exts` is empty at this point - there can be no duplicate AKI ext OID.
+		exts.add_extension(Box::new(ext::AuthorityKeyIdentifier::from(issuer)))
+			.unwrap();
 
 		// Safety: there can be no duplicate CRL number ext OID by this point.
 		exts.add_extension(Box::new(ext::CrlNumber::from_params(&self)))
