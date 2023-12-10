@@ -45,6 +45,7 @@ use std::net::IpAddr;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
+#[cfg(feature = "x509-parser")]
 use x509_parser::prelude::ParsedExtension;
 use yasna::models::ObjectIdentifier;
 use yasna::models::{GeneralizedTime, UTCTime};

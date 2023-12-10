@@ -1,10 +1,10 @@
 #[cfg(feature = "x509-parser")]
-use crate::DistinguishedName;
+use crate::{ext, DistinguishedName};
 #[cfg(feature = "pem")]
 use pem::Pem;
 use std::hash::Hash;
 
-use crate::{ext, Certificate, CertificateParams, Error, PublicKeyData, SignatureAlgorithm};
+use crate::{Certificate, CertificateParams, Error, PublicKeyData, SignatureAlgorithm};
 
 /// A public key, extracted from a CSR
 #[derive(Debug, PartialEq, Eq, Hash)]
