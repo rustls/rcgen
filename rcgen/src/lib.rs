@@ -676,43 +676,14 @@ impl CertificateParams {
 		Ok(params)
 	}
 	fn write_request<K: PublicKeyData>(&self, pub_key: &K, writer: DERWriter) -> Result<(), Error> {
-		// No .. pattern, we use this to ensure every field is used
-		#[deny(unused)]
-		let Self {
-			alg,
-			not_before,
-			not_after,
-			serial_number,
-			subject_alt_names: _,
-			distinguished_name,
-			is_ca,
-			key_usages: _,
-			extended_key_usages: _,
-			name_constraints: _,
-			crl_distribution_points: _,
-			custom_extensions: _,
-			key_pair,
-			use_authority_key_identifier_extension,
-			key_identifier_method,
-		} = self;
-		// - alg and key_pair will be used by the caller
-		// - not_before and not_after cannot be put in a CSR
-		// - There might be a use case for specifying the key identifier
-		// in the CSR, but in the current API it can't be distinguished
-		// from the defaults so this is left for a later version if
-		// needed.
-		let _ = (alg, key_pair, not_before, not_after, key_identifier_method);
-		if serial_number.is_some()
-			|| *is_ca != IsCa::NoCa
-			|| *use_authority_key_identifier_extension
-		{
+		if self.serial_number.is_some() || self.use_authority_key_identifier_extension {
 			return Err(Error::UnsupportedInCsr);
 		}
 		writer.write_sequence(|writer| {
 			// Write version
 			writer.next().write_u8(0);
 			// Write issuer
-			write_distinguished_name(writer.next(), &distinguished_name);
+			write_distinguished_name(writer.next(), &self.distinguished_name);
 			// Write subjectPublicKeyInfo
 			pub_key.serialize_public_key_der(writer.next());
 			// Write extensions
