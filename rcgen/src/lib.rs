@@ -918,12 +918,6 @@ pub struct NameConstraints {
 	pub excluded_subtrees: Vec<GeneralSubtree>,
 }
 
-impl NameConstraints {
-	fn is_empty(&self) -> bool {
-		self.permitted_subtrees.is_empty() && self.excluded_subtrees.is_empty()
-	}
-}
-
 /// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum KeyUsagePurpose {
