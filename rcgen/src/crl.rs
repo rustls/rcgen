@@ -370,13 +370,6 @@ impl RevokedCertParams {
 						Extensions::write_extension(writer, ext);
 					}
 
-					// Write reason code if present.
-					self.reason_code.map(|reason_code| {
-						write_x509_extension(writer.next(), OID_CRL_REASONS, false, |writer| {
-							writer.write_enum(reason_code as i64);
-						});
-					});
-
 					// Write invalidity date if present.
 					self.invalidity_date.map(|invalidity_date| {
 						write_x509_extension(
@@ -394,9 +387,13 @@ impl RevokedCertParams {
 	}
 	/// Returns the X.509 extensions that the [RevokedCertParams] describe.
 	fn extensions(&self) -> Extensions {
-		let exts = Extensions::default();
+		let mut exts = Extensions::default();
 
-		// TODO: reason code.
+		if let Some(reason_code_ext) = ext::ReasonCode::from_params(&self) {
+			// Safety: there can be no duplicate reason code ext OID by this point.
+			exts.add_extension(Box::new(reason_code_ext)).unwrap();
+		}
+
 		// TODO: invalidity date.
 
 		exts

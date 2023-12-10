@@ -8,9 +8,9 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 use crate::key_pair::PublicKeyData;
 use crate::oid::{OID_PE_ACME, OID_PKCS_9_AT_EXTENSION_REQUEST};
 use crate::{
-	oid, write_distinguished_name, Certificate, CertificateParams, CertificateRevocationListParams,
-	CrlIssuingDistributionPoint, Error, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa,
-	KeyUsagePurpose, SanType, SerialNumber,
+	crl, oid, write_distinguished_name, Certificate, CertificateParams,
+	CertificateRevocationListParams, CrlIssuingDistributionPoint, Error, ExtendedKeyUsagePurpose,
+	GeneralSubtree, IsCa, KeyUsagePurpose, RevokedCertParams, SanType, SerialNumber,
 };
 
 /// The criticality of an extension.
@@ -1013,6 +1013,51 @@ impl Extension for IssuingDistributionPoint {
 
 	fn write_value(&self, writer: DERWriter) {
 		self.point.write_der(writer);
+	}
+}
+
+/// An X.509v3 reason code extension according to
+/// [RFC 5280 5.3.1](https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1).
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ReasonCode {
+	reason: crl::RevocationReason,
+}
+
+impl ReasonCode {
+	pub(crate) fn from_params(params: &RevokedCertParams) -> Option<Self> {
+		match &params.reason_code {
+			Some(reason) => Some(Self { reason: *reason }),
+			None => None,
+		}
+	}
+}
+
+impl Extension for ReasonCode {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(oid::OID_CRL_REASONS)
+	}
+
+	fn criticality(&self) -> Criticality {
+		// The reasonCode is a non-critical CRL entry extension
+		Criticality::NonCritical
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   CRLReason ::= ENUMERATED {
+			   unspecified             (0),
+			   keyCompromise           (1),
+			   cACompromise            (2),
+			   affiliationChanged      (3),
+			   superseded              (4),
+			   cessationOfOperation    (5),
+			   certificateHold         (6),
+					-- value 7 is not used
+			   removeFromCRL           (8),
+			   privilegeWithdrawn      (9),
+			   aACompromise           (10) }
+		*/
+		writer.write_enum(self.reason as i64);
 	}
 }
 
