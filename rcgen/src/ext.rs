@@ -6,6 +6,7 @@ use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::key_pair::PublicKeyData;
+use crate::oid::OID_PE_ACME;
 use crate::{
 	oid, write_distinguished_name, Certificate, CertificateParams, Error, ExtendedKeyUsagePurpose,
 	GeneralSubtree, IsCa, KeyUsagePurpose, SanType,
@@ -20,7 +21,7 @@ use crate::{
 ///
 /// [RFC 5280 Section 4.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2>
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Criticality {
+pub enum Criticality {
 	/// The extension MUST be recognized and parsed correctly.
 	///
 	/// A certificate-using system MUST reject the certificate if it encounters a critical
@@ -33,6 +34,141 @@ pub(crate) enum Criticality {
 	/// A non-critical extension MAY be ignored if it is not recognized, but MUST be
 	/// processed if it is recognized
 	NonCritical,
+}
+
+/// A custom extension of a certificate, as specified in
+/// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomExtension {
+	/// OID identifying the extension.
+	///
+	/// Only one extension with a given OID may appear within a certificate.
+	pub oid: ObjectIdentifier,
+
+	/// Criticality of the extension.
+	///
+	/// See [Criticality] for more information.
+	pub criticality: Criticality,
+
+	/// The raw DER encoded value of the extension.
+	///
+	/// This should not contain the OID, criticality, OCTET STRING, or the outer extension SEQUENCE
+	/// of the extension itself: it should only be the DER encoded bytes that will be found
+	/// within the extensions' OCTET STRING value.
+	pub der_value: Vec<u8>,
+}
+
+impl CustomExtension {
+	/// Create a new custom extension with the specified content
+	pub fn from_oid_content(oid: &[u64], criticality: Criticality, der_value: Vec<u8>) -> Self {
+		Self {
+			oid: ObjectIdentifier::from_slice(oid),
+			criticality,
+			der_value,
+		}
+	}
+
+	/// Obtains the OID components of the extensions, as u64 pieces
+	pub fn oid_components(&self) -> impl Iterator<Item = u64> + '_ {
+		self.oid.components().iter().copied()
+	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		parsed: &x509_parser::prelude::X509Extension<'_>,
+	) -> Result<Self, Error> {
+		Ok(CustomExtension {
+			oid: ObjectIdentifier::from_slice(
+				&parsed
+					.oid
+					.iter()
+					.ok_or(Error::UnsupportedExtension)?
+					.collect::<Vec<_>>(),
+			),
+			criticality: if parsed.critical {
+				Criticality::Critical
+			} else {
+				Criticality::NonCritical
+			},
+			der_value: parsed.value.to_vec(),
+		})
+	}
+}
+
+impl Extension for CustomExtension {
+	fn oid(&self) -> ObjectIdentifier {
+		self.oid.clone()
+	}
+
+	fn criticality(&self) -> Criticality {
+		self.criticality
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		writer.write_der(&self.der_value)
+	}
+}
+
+/// An ACME TLS-ALPN-01 challenge response certificate extension.
+///
+/// See [RFC 8737 Section 3] for more information.
+///
+/// [RFC 8737 Section 3]: <https://tools.ietf.org/html/rfc8737#section-3>
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcmeIdentifier {
+	// The SHA256 digest of the RFC 8555 key authorization for a TLS-ALPN-01 challenge
+	// issued by the CA.
+	key_auth_digest: [u8; 32],
+}
+
+impl AcmeIdentifier {
+	/// Construct an ACME TLS-ALPN-01 challenge response certificate extension.
+	///
+	/// `key_auth_digest` should be the SHA-256 digest of the key authorization for the
+	/// TLS-ALPN-01 challenge issued by the CA.
+	///
+	/// If you have a `Vec` or `&[u8]` use `try_from` and handle the potential error
+	/// if the input length is not 32 bytes.
+	pub fn new(key_auth_digest: [u8; 32]) -> Self {
+		Self {
+			key_auth_digest: key_auth_digest,
+		}
+	}
+}
+
+impl TryFrom<&[u8]> for AcmeIdentifier {
+	type Error = Error;
+
+	fn try_from(key_auth_digest: &[u8]) -> Result<Self, Self::Error> {
+		// All TLS-ALPN-01 challenge response digests are 32 bytes long,
+		// matching the output of the SHA256 digest algorithm.
+		if key_auth_digest.len() != 32 {
+			return Err(Error::InvalidAcmeIdentifierLength);
+		}
+
+		let mut sha_digest = [0u8; 32];
+		sha_digest.copy_from_slice(&key_auth_digest);
+		Ok(Self {
+			key_auth_digest: sha_digest,
+		})
+	}
+}
+
+impl Extension for AcmeIdentifier {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(OID_PE_ACME)
+	}
+
+	fn criticality(&self) -> Criticality {
+		// The acmeIdentifier extension MUST be critical so that the certificate isn't inadvertently
+		// used by non-ACME software.
+		Criticality::Critical
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		// Authorization ::= OCTET STRING (SIZE (32))
+		writer.write_bytes(&self.key_auth_digest);
+	}
 }
 
 /// A trait describing an X.509 Extension.

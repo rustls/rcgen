@@ -67,51 +67,59 @@ impl CertificateSigningRequest {
 		params.distinguished_name = DistinguishedName::from_name(&info.subject)?;
 		let raw = info.subject_pki.subject_public_key.data.to_vec();
 
-		if let Some(extensions) = csr.requested_extensions() {
-			for ext in extensions {
-				match ext::SubjectAlternativeName::from_parsed(&mut params, ext) {
-					Ok(true) => continue, // SAN extension handled.
-					Err(err) => return Err(err),
-					_ => {}, // Not a SAN.
+		// Pull out the extension requests attributes from the CSR.
+		// Note: we avoid using csr.requested_extensions() here because it maps to the parsed
+		// extension value and we want the raw extension value to handle unknown extensions
+		// ourselves.
+		let requested_exts = csr
+			.certification_request_info
+			.iter_attributes()
+			.filter_map(|attr| {
+				if let x509_parser::prelude::ParsedCriAttribute::ExtensionRequest(requested) =
+					&attr.parsed_attribute()
+				{
+					Some(requested.extensions.iter().collect::<Vec<_>>())
+				} else {
+					None
 				}
-				match ext::KeyUsage::from_parsed(&mut params, ext) {
-					Ok(true) => continue, // KU extension handled.
-					Err(err) => return Err(err),
-					_ => {}, // Not a KU.
-				}
-				match ext::ExtendedKeyUsage::from_parsed(&mut params, ext) {
-					Ok(true) => continue, // EKU extension handled.
-					Err(err) => return Err(err),
-					_ => {}, // Not an EKU.
-				}
-				match ext::NameConstraints::from_parsed(&mut params, ext) {
-					Ok(true) => continue, // NC extension handled.
-					Err(err) => return Err(err),
-					_ => {}, // Not an NC.
-				}
-				match ext::CrlDistributionPoints::from_parsed(&mut params, ext) {
-					Ok(true) => continue, // CDP extension handled.
-					Err(err) => return Err(err),
-					_ => {}, // Not a CDP.
-				}
-				match ext::SubjectKeyIdentifier::from_parsed(&mut params, ext) {
-					Ok(true) => continue, // SKI extension handled.
-					Err(err) => return Err(err),
-					_ => {}, // Not a SKI.
-				}
-				match ext::BasicConstraints::from_parsed(&mut params, ext) {
-					Ok(true) => continue, // BC extension handled.
-					Err(err) => return Err(err),
-					_ => {}, // Not a BC.
-				}
+			})
+			.flatten()
+			.collect::<Vec<_>>();
 
-				// If we get here, we've encountered an unknown and unhandled extension.
-				return Err(Error::UnsupportedExtension);
+		for ext in requested_exts {
+			use x509_parser::extensions::ParsedExtension;
+
+			let supported = match ext.parsed_extension() {
+				ext @ ParsedExtension::SubjectAlternativeName(_) => {
+					ext::SubjectAlternativeName::from_parsed(&mut params, ext)?
+				},
+				ext @ ParsedExtension::KeyUsage(_) => ext::KeyUsage::from_parsed(&mut params, ext)?,
+				ext @ ParsedExtension::ExtendedKeyUsage(_) => {
+					ext::ExtendedKeyUsage::from_parsed(&mut params, ext)?
+				},
+				ext @ ParsedExtension::NameConstraints(_) => {
+					ext::NameConstraints::from_parsed(&mut params, ext)?
+				},
+				ext @ ParsedExtension::CRLDistributionPoints(_) => {
+					ext::CrlDistributionPoints::from_parsed(&mut params, ext)?
+				},
+				ext @ ParsedExtension::SubjectKeyIdentifier(_) => {
+					ext::SubjectKeyIdentifier::from_parsed(&mut params, ext)?
+				},
+				ext @ ParsedExtension::BasicConstraints(_) => {
+					ext::BasicConstraints::from_parsed(&mut params, ext)?
+				},
+				ParsedExtension::AuthorityKeyIdentifier(_) => {
+					true // We always handle emitting this ourselves - don't copy it as a custom extension.
+				},
+				_ => false,
+			};
+			if !supported {
+				params
+					.custom_extensions
+					.push(ext::CustomExtension::from_parsed(ext)?);
 			}
 		}
-
-		// Not yet handled:
-		// any other extensions.
 
 		Ok(Self {
 			params,

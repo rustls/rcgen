@@ -66,6 +66,8 @@ use crate::oid::*;
 pub use crate::sign_algo::algo::*;
 pub use crate::sign_algo::SignatureAlgorithm;
 
+pub use crate::ext::{AcmeIdentifier, Criticality, CustomExtension};
+
 /// Type-alias for the old name of [`Error`].
 #[deprecated(
 	note = "Renamed to `Error`. We recommend to refer to it by fully-qualifying the crate: `rcgen::Error`."
@@ -638,49 +640,37 @@ impl CertificateParams {
 			..Default::default()
 		};
 
-		macro_rules! find_parsed_extension {
-			($iter:expr, $variant:pat) => {
-				$iter
-					.iter_extensions()
-					.find_map(|ext| match ext.parsed_extension() {
-						ext @ $variant => Some(ext),
-						_ => None,
-					})
+		for ext in x509.iter_extensions() {
+			let handled = match ext.parsed_extension() {
+				ext @ ParsedExtension::SubjectAlternativeName(_) => {
+					ext::SubjectAlternativeName::from_parsed(&mut params, ext)?
+				},
+				ext @ ParsedExtension::KeyUsage(_) => ext::KeyUsage::from_parsed(&mut params, ext)?,
+				ext @ ParsedExtension::ExtendedKeyUsage(_) => {
+					ext::ExtendedKeyUsage::from_parsed(&mut params, ext)?
+				},
+				ext @ ParsedExtension::NameConstraints(_) => {
+					ext::NameConstraints::from_parsed(&mut params, ext)?
+				},
+				ext @ ParsedExtension::CRLDistributionPoints(_) => {
+					ext::CrlDistributionPoints::from_parsed(&mut params, ext)?
+				},
+				ext @ ParsedExtension::SubjectKeyIdentifier(_) => {
+					ext::SubjectKeyIdentifier::from_parsed(&mut params, ext)?
+				},
+				ext @ ParsedExtension::BasicConstraints(_) => {
+					ext::BasicConstraints::from_parsed(&mut params, ext)?
+				},
+				ParsedExtension::AuthorityKeyIdentifier(_) => {
+					true // We always handle emitting this ourselves - don't copy it as a custom extension.
+				},
+				_ => false,
 			};
-		}
-
-		if let Some(san_ext) =
-			find_parsed_extension!(x509, ParsedExtension::SubjectAlternativeName(_))
-		{
-			ext::SubjectAlternativeName::from_parsed(&mut params, san_ext)?;
-		}
-
-		if let Some(ku_ext) = find_parsed_extension!(x509, ParsedExtension::KeyUsage(_)) {
-			ext::KeyUsage::from_parsed(&mut params, ku_ext)?;
-		}
-
-		if let Some(eku_ext) = find_parsed_extension!(x509, ParsedExtension::ExtendedKeyUsage(_)) {
-			ext::ExtendedKeyUsage::from_parsed(&mut params, eku_ext)?;
-		}
-
-		if let Some(name_constraints) =
-			find_parsed_extension!(x509, ParsedExtension::NameConstraints(_))
-		{
-			ext::NameConstraints::from_parsed(&mut params, name_constraints)?;
-		}
-
-		if let Some(crl_dps) =
-			find_parsed_extension!(x509, ParsedExtension::CRLDistributionPoints(_))
-		{
-			ext::CrlDistributionPoints::from_parsed(&mut params, crl_dps)?;
-		}
-
-		if let Some(ski) = find_parsed_extension!(x509, ParsedExtension::SubjectKeyIdentifier(_)) {
-			ext::SubjectKeyIdentifier::from_parsed(&mut params, ski)?;
-		}
-
-		if let Some(bc) = find_parsed_extension!(x509, ParsedExtension::BasicConstraints(_)) {
-			ext::BasicConstraints::from_parsed(&mut params, bc)?;
+			if !handled {
+				params
+					.custom_extensions
+					.push(CustomExtension::from_parsed(ext)?);
+			}
 		}
 
 		Ok(params)
@@ -740,16 +730,6 @@ impl CertificateParams {
 								//       extensions to self.extensions().
 								for ext in extensions.iter() {
 									Extensions::write_extension(writer, ext);
-								}
-
-								// Write custom extensions
-								for ext in custom_extensions {
-									write_x509_extension(
-										writer.next(),
-										&ext.oid,
-										ext.critical,
-										|writer| writer.write_der(ext.content()),
-									);
 								}
 							});
 						});
@@ -812,13 +792,6 @@ impl CertificateParams {
 						//       extensions to self.extensions().
 						for ext in extensions.iter() {
 							Extensions::write_extension(writer, ext);
-						}
-
-						// Write the custom extensions
-						for ext in &self.custom_extensions {
-							write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
-								writer.write_der(ext.content())
-							});
 						}
 					});
 				});
@@ -915,7 +888,12 @@ impl CertificateParams {
 			exts.add_extension(Box::new(bc_ext))?;
 		}
 
-		// TODO: custom extensions
+		exts.add_extensions(
+			self.custom_extensions
+				.clone()
+				.into_iter()
+				.map(|x| Box::new(x) as Box<dyn ext::Extension>),
+		)?;
 
 		Ok(exts)
 	}
@@ -1036,59 +1014,6 @@ impl ExtendedKeyUsagePurpose {
 			TimeStamping => &[1, 3, 6, 1, 5, 5, 7, 3, 8],
 			OcspSigning => &[1, 3, 6, 1, 5, 5, 7, 3, 9],
 		}
-	}
-}
-
-/// A custom extension of a certificate, as specified in
-/// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct CustomExtension {
-	oid: Vec<u64>,
-	critical: bool,
-
-	/// The content must be DER-encoded
-	content: Vec<u8>,
-}
-
-impl CustomExtension {
-	/// Creates a new acmeIdentifier extension for ACME TLS-ALPN-01
-	/// as specified in [RFC 8737](https://tools.ietf.org/html/rfc8737#section-3)
-	///
-	/// Panics if the passed `sha_digest` parameter doesn't hold 32 bytes (256 bits).
-	pub fn new_acme_identifier(sha_digest: &[u8]) -> Self {
-		assert_eq!(sha_digest.len(), 32, "wrong size of sha_digest");
-		let content = yasna::construct_der(|writer| {
-			writer.write_bytes(sha_digest);
-		});
-		Self {
-			oid: OID_PE_ACME.to_owned(),
-			critical: true,
-			content,
-		}
-	}
-	/// Create a new custom extension with the specified content
-	pub fn from_oid_content(oid: &[u64], content: Vec<u8>) -> Self {
-		Self {
-			oid: oid.to_owned(),
-			critical: false,
-			content,
-		}
-	}
-	/// Sets the criticality flag of the extension.
-	pub fn set_criticality(&mut self, criticality: bool) {
-		self.critical = criticality;
-	}
-	/// Obtains the criticality flag of the extension.
-	pub fn criticality(&self) -> bool {
-		self.critical
-	}
-	/// Obtains the content of the extension.
-	pub fn content(&self) -> &[u8] {
-		&self.content
-	}
-	/// Obtains the OID components of the extensions, as u64 pieces
-	pub fn oid_components(&self) -> impl Iterator<Item = u64> + '_ {
-		self.oid.iter().copied()
 	}
 }
 

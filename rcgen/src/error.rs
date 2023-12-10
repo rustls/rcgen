@@ -15,6 +15,8 @@ pub enum Error {
 	CouldNotParseKeyPair,
 	/// Duplicate extension OID
 	DuplicateExtension(String),
+	/// Invalid ACME identifier extension digest length.
+	InvalidAcmeIdentifierLength,
 	/// Invalid certificate revocation list (CRL) next update.
 	InvalidCrlNextUpdate,
 	/// An IP address was provided as a byte array, but the byte array was an invalid length.
@@ -113,6 +115,10 @@ impl fmt::Display for Error {
 			UnsupportedBasicConstraintsPathLen => write!(
 				f,
 				"Unsupported basic constraints extension path length constraint in CSR"
+			)?,
+			InvalidAcmeIdentifierLength => write!(
+				f,
+				"Invalid ACME identifier extension digest length. Must be 32 bytes.",
 			)?,
 		};
 		Ok(())
