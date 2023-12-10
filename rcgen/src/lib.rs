@@ -607,7 +607,6 @@ impl CertificateParams {
 		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
 		let is_ca = Self::convert_x509_is_ca(&x509)?;
 		let validity = x509.validity();
-		let subject_alt_names = Self::convert_x509_subject_alternative_name(&x509)?;
 		let key_usages = Self::convert_x509_key_usages(&x509)?;
 		let extended_key_usages = Self::convert_x509_extended_key_usages(&x509)?;
 		let name_constraints = Self::convert_x509_name_constraints(&x509)?;
@@ -623,10 +622,10 @@ impl CertificateParams {
 			})
 			.unwrap_or(KeyIdMethod::Sha256);
 
-		Ok(CertificateParams {
+		let mut params = CertificateParams {
 			alg,
 			is_ca,
-			subject_alt_names,
+			subject_alt_names: Vec::default(),
 			key_usages,
 			extended_key_usages,
 			name_constraints,
@@ -637,7 +636,20 @@ impl CertificateParams {
 			not_before: validity.not_before.to_datetime(),
 			not_after: validity.not_after.to_datetime(),
 			..Default::default()
-		})
+		};
+
+		if let Some(san_ext) = x509
+			.iter_extensions()
+			.find_map(|ext| match ext.parsed_extension() {
+				ext @ x509_parser::extensions::ParsedExtension::SubjectAlternativeName(_) => {
+					Some(ext)
+				},
+				_ => None,
+			}) {
+			ext::SubjectAlternativeName::from_parsed(&mut params, san_ext)?;
+		}
+
+		Ok(params)
 	}
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_is_ca(
@@ -668,25 +680,6 @@ impl CertificateParams {
 		};
 
 		Ok(is_ca)
-	}
-	#[cfg(feature = "x509-parser")]
-	fn convert_x509_subject_alternative_name(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Vec<SanType>, Error> {
-		let sans = x509
-			.subject_alternative_name()
-			.or(Err(Error::CouldNotParseCertificate))?
-			.map(|ext| &ext.value.general_names);
-
-		if let Some(sans) = sans {
-			let mut subject_alt_names = Vec::with_capacity(sans.len());
-			for san in sans {
-				subject_alt_names.push(SanType::try_from_general(san)?);
-			}
-			Ok(subject_alt_names)
-		} else {
-			Ok(Vec::new())
-		}
 	}
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_key_usages(
@@ -826,28 +819,6 @@ impl CertificateParams {
 		}
 		Ok(result)
 	}
-	fn write_subject_alt_names(&self, writer: DERWriter) {
-		write_x509_extension(writer, OID_SUBJECT_ALT_NAME, false, |writer| {
-			writer.write_sequence(|writer| {
-				for san in self.subject_alt_names.iter() {
-					writer.next().write_tagged_implicit(
-						Tag::context(san.tag()),
-						|writer| match san {
-							SanType::Rfc822Name(name)
-							| SanType::DnsName(name)
-							| SanType::URI(name) => writer.write_ia5_string(name),
-							SanType::IpAddress(IpAddr::V4(addr)) => {
-								writer.write_bytes(&addr.octets())
-							},
-							SanType::IpAddress(IpAddr::V6(addr)) => {
-								writer.write_bytes(&addr.octets())
-							},
-						},
-					);
-				}
-			});
-		});
-	}
 	fn write_request<K: PublicKeyData>(&self, pub_key: &K, writer: DERWriter) -> Result<(), Error> {
 		// No .. pattern, we use this to ensure every field is used
 		#[deny(unused)]
@@ -908,9 +879,6 @@ impl CertificateParams {
 								for ext in extensions.iter() {
 									Extensions::write_extension(writer, ext);
 								}
-
-								// Write subject_alt_names
-								self.write_subject_alt_names(writer.next());
 
 								// Write custom extensions
 								for ext in custom_extensions {
@@ -982,11 +950,6 @@ impl CertificateParams {
 						//       extensions to self.extensions().
 						for ext in extensions.iter() {
 							Extensions::write_extension(writer, ext);
-						}
-
-						// Write subject_alt_names
-						if !self.subject_alt_names.is_empty() {
-							self.write_subject_alt_names(writer.next());
 						}
 
 						// Write standard key usage
@@ -1202,7 +1165,10 @@ impl CertificateParams {
 			exts.add_extension(Box::new(ext::AuthorityKeyIdentifier::from(issuer)))?;
 		}
 
-		// TODO: SAN.
+		if let Some(san_ext) = ext::SubjectAlternativeName::from_params(&self) {
+			exts.add_extension(Box::new(san_ext))?;
+		}
+
 		// TODO: KU.
 		// TODO: EKU.
 		// TODO: name constraints.

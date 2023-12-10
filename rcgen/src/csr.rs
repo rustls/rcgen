@@ -1,10 +1,10 @@
 #[cfg(feature = "x509-parser")]
-use crate::{DistinguishedName, SanType};
+use crate::DistinguishedName;
 #[cfg(feature = "pem")]
 use pem::Pem;
 use std::hash::Hash;
 
-use crate::{Certificate, CertificateParams, Error, PublicKeyData, SignatureAlgorithm};
+use crate::{ext, Certificate, CertificateParams, Error, PublicKeyData, SignatureAlgorithm};
 
 /// A public key, extracted from a CSR
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -68,14 +68,8 @@ impl CertificateSigningRequest {
 
 		if let Some(extensions) = csr.requested_extensions() {
 			for ext in extensions {
-				match ext {
-					x509_parser::extensions::ParsedExtension::SubjectAlternativeName(san) => {
-						for name in &san.general_names {
-							params
-								.subject_alt_names
-								.push(SanType::try_from_general(name)?);
-						}
-					},
+				match ext::SubjectAlternativeName::from_parsed(&mut params, ext) {
+					Ok(_) => (),
 					_ => return Err(Error::UnsupportedExtension),
 				}
 			}

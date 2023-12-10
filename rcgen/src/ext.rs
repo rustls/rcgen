@@ -1,10 +1,11 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::net::IpAddr;
 
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
 
-use crate::{oid, Certificate, Error};
+use crate::{oid, Certificate, CertificateParams, Error, SanType};
 
 /// The criticality of an extension.
 ///
@@ -183,6 +184,82 @@ impl From<&Certificate> for AuthorityKeyIdentifier {
 	}
 }
 
+/// An X.509v3 subject alternative name extension according to
+/// [RFC 5280 4.2.1.6](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.6).
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SubjectAlternativeName {
+	criticality: Criticality,
+	names: Vec<SanType>,
+}
+
+impl SubjectAlternativeName {
+	pub(crate) fn from_params(params: &CertificateParams) -> Option<Self> {
+		match params.subject_alt_names.is_empty() {
+			true => None,
+			false => Some(Self {
+				// TODO(XXX): For now we mark the SAN extension as non-critical, matching the pre-existing
+				//   handling, however per 5280 this extension's criticality is determined based
+				// 	 on whether or not the subject contains an empty sequence.
+				criticality: Criticality::NonCritical,
+				names: params.subject_alt_names.clone(),
+			}),
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		ext: &x509_parser::extensions::ParsedExtension,
+	) -> Result<bool, Error> {
+		Ok(match ext {
+			x509_parser::extensions::ParsedExtension::SubjectAlternativeName(san) => {
+				for name in &san.general_names {
+					params
+						.subject_alt_names
+						.push(SanType::try_from_general(name)?);
+				}
+				true
+			},
+			_ => false,
+		})
+	}
+
+	fn write_name(writer: DERWriter, san: &SanType) {
+		writer.write_tagged_implicit(Tag::context(san.tag()), |writer| match san {
+			SanType::Rfc822Name(name) | SanType::DnsName(name) | SanType::URI(name) => {
+				writer.write_ia5_string(&name)
+			},
+			SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
+			SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
+		})
+	}
+}
+
+impl Extension for SubjectAlternativeName {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(oid::OID_SUBJECT_ALT_NAME)
+	}
+
+	fn criticality(&self) -> Criticality {
+		// this extension's criticality is determined based on whether or not the subject contains
+		// an empty sequence. If it does, the SAN MUST be critical. If it has a non-empty subject
+		// distinguished name, the SAN SHOULD be non-critical.
+		self.criticality
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   SubjectAltName ::= GeneralNames
+		   GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
+		*/
+		writer.write_sequence(|writer| {
+			self.names
+				.iter()
+				.for_each(|san| Self::write_name(writer.next(), san));
+		});
+	}
+}
+
 #[cfg(test)]
 mod extensions_tests {
 	use crate::oid;
@@ -290,5 +367,66 @@ mod extensions_tests {
 		fn write_value(&self, writer: DERWriter) {
 			writer.write_der(&self.der);
 		}
+	}
+}
+
+#[cfg(test)]
+mod san_ext_tests {
+	#[cfg(feature = "x509-parser")]
+	use x509_parser::prelude::FromDer;
+
+	use super::*;
+	use crate::CertificateParams;
+
+	#[test]
+	fn test_from_params() {
+		let domain_a = "test.example.com".to_string();
+		let domain_b = "example.com".to_string();
+		let ip = IpAddr::try_from([127, 0, 0, 1]).unwrap();
+		let mut params = CertificateParams::new(vec![domain_a.clone(), domain_b.clone()]);
+		params
+			.subject_alt_names
+			.push(SanType::IpAddress(ip.clone()));
+
+		let ext = SubjectAlternativeName::from_params(&params).unwrap();
+		let expected_names = vec![
+			SanType::DnsName(domain_a),
+			SanType::DnsName(domain_b),
+			SanType::IpAddress(ip),
+		];
+		assert_eq!(ext.names, expected_names);
+	}
+
+	#[test]
+	fn test_from_empty_san() {
+		assert!(SubjectAlternativeName::from_params(&CertificateParams::default()).is_none());
+	}
+
+	#[test]
+	#[cfg(feature = "x509-parser")]
+	fn test_from_parsed() {
+		let domain_a = "test.example.com".to_string();
+		let domain_b = "example.com".to_string();
+		let ip = IpAddr::try_from([127, 0, 0, 1]).unwrap();
+		let mut params = CertificateParams::new(vec![domain_a.clone(), domain_b.clone()]);
+		params
+			.subject_alt_names
+			.push(SanType::IpAddress(ip.clone()));
+
+		let der = yasna::construct_der(|writer| {
+			SubjectAlternativeName::from_params(&params)
+				.unwrap()
+				.write_value(writer)
+		});
+
+		let parsed_ext = x509_parser::extensions::ParsedExtension::SubjectAlternativeName(
+			x509_parser::extensions::SubjectAlternativeName::from_der(&der)
+				.unwrap()
+				.1,
+		);
+
+		let mut recovered_params = CertificateParams::default();
+		SubjectAlternativeName::from_parsed(&mut recovered_params, &parsed_ext).unwrap();
+		assert_eq!(recovered_params.subject_alt_names, params.subject_alt_names);
 	}
 }
