@@ -252,18 +252,6 @@ impl CertificateRevocationListParams {
 					for ext in exts.iter() {
 						Extensions::write_extension(writer, ext);
 					}
-
-					// Write issuing distribution point (if present).
-					if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
-						write_x509_extension(
-							writer.next(),
-							OID_CRL_ISSUING_DISTRIBUTION_POINT,
-							true,
-							|writer| {
-								issuing_distribution_point.write_der(writer);
-							},
-						);
-					}
 				});
 			});
 
