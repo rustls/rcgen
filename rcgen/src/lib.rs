@@ -683,7 +683,7 @@ impl CertificateParams {
 		}
 
 		if let Some(crl_dps) =
-			find_parsed_extension!(x509, ParsedExtension::CrlDistributionPoints(_))
+			find_parsed_extension!(x509, ParsedExtension::CRLDistributionPoints(_))
 		{
 			ext::CrlDistributionPoints::from_parsed(&mut params, crl_dps)?;
 		}
