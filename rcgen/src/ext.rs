@@ -2,9 +2,9 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use yasna::models::ObjectIdentifier;
-use yasna::{DERWriter, DERWriterSeq};
+use yasna::{DERWriter, DERWriterSeq, Tag};
 
-use crate::{CertificateParams, Error};
+use crate::{oid, Certificate, Error};
 
 /// The criticality of an extension.
 ///
@@ -137,6 +137,49 @@ impl Extensions {
 				extension.write_value(writer)
 			}));
 		});
+	}
+}
+
+/// An X.509v3 authority key identifier extension according to
+/// [RFC 5280 4.2.1.1](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.1).
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
+pub(crate) struct AuthorityKeyIdentifier {
+	key_identifier: Vec<u8>,
+}
+
+impl Extension for AuthorityKeyIdentifier {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(oid::OID_AUTHORITY_KEY_IDENTIFIER)
+	}
+
+	fn criticality(&self) -> Criticality {
+		// Conforming CAs MUST mark this extension as non-critical.
+		Criticality::NonCritical
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		/*
+			AuthorityKeyIdentifier ::= SEQUENCE {
+				   keyIdentifier             [0] KeyIdentifier           OPTIONAL,
+				   authorityCertIssuer       [1] GeneralNames            OPTIONAL,
+				   authorityCertSerialNumber [2] CertificateSerialNumber OPTIONAL  }
+			KeyIdentifier ::= OCTET STRING
+		*/
+		writer.write_sequence(|writer| {
+			writer
+				.next()
+				.write_tagged_implicit(Tag::context(0), |writer| {
+					writer.write_bytes(&self.key_identifier)
+				})
+		});
+	}
+}
+
+impl From<&Certificate> for AuthorityKeyIdentifier {
+	fn from(cert: &Certificate) -> Self {
+		Self {
+			key_identifier: cert.get_key_identifier(),
+		}
 	}
 }
 

@@ -8,10 +8,7 @@ use crate::ext::Extensions;
 use crate::oid::*;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
-use crate::{
-	write_distinguished_name, write_dt_utc_or_generalized, write_x509_authority_key_identifier,
-	write_x509_extension,
-};
+use crate::{ext, write_distinguished_name, write_dt_utc_or_generalized, write_x509_extension};
 use crate::{Certificate, Error, KeyIdMethod, KeyUsagePurpose, SerialNumber, SignatureAlgorithm};
 
 /// A certificate revocation list (CRL)
@@ -259,9 +256,6 @@ impl CertificateRevocationListParams {
 						Extensions::write_extension(writer, ext);
 					}
 
-					// Write authority key identifier.
-					write_x509_authority_key_identifier(writer.next(), ca);
-
 					// Write CRL number.
 					write_x509_extension(writer.next(), OID_CRL_NUMBER, false, |writer| {
 						writer.write_bigint_bytes(self.crl_number.as_ref(), true);
@@ -288,10 +282,15 @@ impl CertificateRevocationListParams {
 	///
 	/// If an issuer [Certificate] is provided, additional extensions specific to the issuer will
 	/// be included (e.g. the authority key identifier).
-	fn extensions(&self, _issuer: Option<&Certificate>) -> Extensions {
-		let exts = Extensions::default();
+	fn extensions(&self, issuer: Option<&Certificate>) -> Extensions {
+		let mut exts = Extensions::default();
 
-		// TODO: AKI.
+		if let Some(issuer) = issuer {
+			// Safety: `exts` is empty at this point - there can be no duplicate AKI ext OID.
+			exts.add_extension(Box::new(ext::AuthorityKeyIdentifier::from(issuer)))
+				.unwrap();
+		}
+
 		// TODO: CRL number.
 		// TODO: issuing distribution point.
 
