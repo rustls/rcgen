@@ -45,6 +45,7 @@ impl CertificateSigningRequest {
 	///
 	/// Currently, this only supports the `Subject Alternative Name` extension.
 	/// On encountering other extensions, this function will return an error.
+	// TODO(@cpu): update this doc comment.
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(csr: &[u8]) -> Result<Self, Error> {
 		use x509_parser::prelude::FromDer;
