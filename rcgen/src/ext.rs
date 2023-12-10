@@ -203,6 +203,7 @@ impl Extensions {
 	/// # Errors
 	///
 	/// Returns [Error::DuplicateExtension] if any of the extensions have the same OID.
+	#[cfg(test)]
 	pub(crate) fn new(
 		extensions: impl IntoIterator<Item = Box<dyn Extension>>,
 	) -> Result<Self, Error> {
