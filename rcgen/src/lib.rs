@@ -1169,34 +1169,6 @@ impl Certificate {
 	}
 }
 
-/// Serializes an X.509v3 extension according to RFC 5280
-fn write_x509_extension(
-	writer: DERWriter,
-	extension_oid: &[u64],
-	is_critical: bool,
-	value_serializer: impl FnOnce(DERWriter),
-) {
-	// Extension specification:
-	//    Extension  ::=  SEQUENCE  {
-	//         extnID      OBJECT IDENTIFIER,
-	//         critical    BOOLEAN DEFAULT FALSE,
-	//         extnValue   OCTET STRING
-	//                     -- contains the DER encoding of an ASN.1 value
-	//                     -- corresponding to the extension type identified
-	//                     -- by extnID
-	//         }
-
-	writer.write_sequence(|writer| {
-		let oid = ObjectIdentifier::from_slice(extension_oid);
-		writer.next().write_oid(&oid);
-		if is_critical {
-			writer.next().write_bool(true);
-		}
-		let bytes = yasna::construct_der(value_serializer);
-		writer.next().write_bytes(&bytes);
-	})
-}
-
 #[cfg(feature = "zeroize")]
 impl zeroize::Zeroize for KeyPair {
 	fn zeroize(&mut self) {

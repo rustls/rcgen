@@ -5,10 +5,9 @@ use yasna::DERWriter;
 use yasna::Tag;
 
 use crate::ext::Extensions;
-use crate::oid::*;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
-use crate::{ext, write_distinguished_name, write_dt_utc_or_generalized, write_x509_extension};
+use crate::{ext, write_distinguished_name, write_dt_utc_or_generalized};
 use crate::{Certificate, Error, KeyIdMethod, KeyUsagePurpose, SerialNumber, SignatureAlgorithm};
 
 /// A certificate revocation list (CRL)
@@ -369,18 +368,6 @@ impl RevokedCertParams {
 					for ext in self.extensions().iter() {
 						Extensions::write_extension(writer, ext);
 					}
-
-					// Write invalidity date if present.
-					self.invalidity_date.map(|invalidity_date| {
-						write_x509_extension(
-							writer.next(),
-							OID_CRL_INVALIDITY_DATE,
-							false,
-							|writer| {
-								write_dt_utc_or_generalized(writer, invalidity_date);
-							},
-						)
-					});
 				});
 			}
 		})
@@ -394,7 +381,10 @@ impl RevokedCertParams {
 			exts.add_extension(Box::new(reason_code_ext)).unwrap();
 		}
 
-		// TODO: invalidity date.
+		if let Some(invalidity_date_ext) = ext::InvalidityDate::from_params(&self) {
+			// Safety: there can be no duplicate invalidity date ext OID by this point.
+			exts.add_extension(Box::new(invalidity_date_ext)).unwrap();
+		}
 
 		exts
 	}

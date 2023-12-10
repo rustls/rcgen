@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::net::IpAddr;
+use time::OffsetDateTime;
 
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
@@ -8,9 +9,10 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 use crate::key_pair::PublicKeyData;
 use crate::oid::{OID_PE_ACME, OID_PKCS_9_AT_EXTENSION_REQUEST};
 use crate::{
-	crl, oid, write_distinguished_name, Certificate, CertificateParams,
-	CertificateRevocationListParams, CrlIssuingDistributionPoint, Error, ExtendedKeyUsagePurpose,
-	GeneralSubtree, IsCa, KeyUsagePurpose, RevokedCertParams, SanType, SerialNumber,
+	crl, oid, write_distinguished_name, write_dt_utc_or_generalized, Certificate,
+	CertificateParams, CertificateRevocationListParams, CrlIssuingDistributionPoint, Error,
+	ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, KeyUsagePurpose, RevokedCertParams, SanType,
+	SerialNumber,
 };
 
 /// The criticality of an extension.
@@ -1058,6 +1060,38 @@ impl Extension for ReasonCode {
 			   aACompromise           (10) }
 		*/
 		writer.write_enum(self.reason as i64);
+	}
+}
+
+/// An X.509v3 invalidity date extension according to
+/// [RFC 5280 5.3.2](https://www.rfc-editor.org/rfc/rfc5280#section-5.3.2).
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct InvalidityDate {
+	date: OffsetDateTime,
+}
+
+impl InvalidityDate {
+	pub(crate) fn from_params(params: &RevokedCertParams) -> Option<Self> {
+		match &params.invalidity_date {
+			Some(date) => Some(Self { date: date.clone() }),
+			None => None,
+		}
+	}
+}
+
+impl Extension for InvalidityDate {
+	fn oid(&self) -> ObjectIdentifier {
+		ObjectIdentifier::from_slice(oid::OID_CRL_INVALIDITY_DATE)
+	}
+
+	fn criticality(&self) -> Criticality {
+		// The invalidity date is a non-critical CRL entry extension
+		Criticality::NonCritical
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		// InvalidityDate ::= GeneralizedTime
+		write_dt_utc_or_generalized(writer, self.date);
 	}
 }
 
