@@ -537,7 +537,7 @@ pub struct CertificateParams {
 	pub use_authority_key_identifier_extension: bool,
 	/// Method to generate key identifiers from public keys
 	///
-	/// Defaults to SHA-256.
+	/// Defaults to a truncated SHA-256 digest. See [`KeyIdMethod`] for more information.
 	pub key_identifier_method: KeyIdMethod,
 }
 
@@ -1077,8 +1077,9 @@ impl CertificateParams {
 									OID_SUBJECT_KEY_IDENTIFIER,
 									false,
 									|writer| {
-										let key_identifier = self.key_identifier(pub_key);
-										writer.write_bytes(key_identifier.as_ref());
+										writer.write_bytes(
+											&self.key_identifier_method.derive(pub_key),
+										);
 									},
 								);
 								// Write basic_constraints
@@ -1106,8 +1107,9 @@ impl CertificateParams {
 									OID_SUBJECT_KEY_IDENTIFIER,
 									false,
 									|writer| {
-										let key_identifier = self.key_identifier(pub_key);
-										writer.write_bytes(key_identifier.as_ref());
+										writer.write_bytes(
+											&self.key_identifier_method.derive(pub_key),
+										);
 									},
 								);
 								// Write basic_constraints
@@ -1137,22 +1139,7 @@ impl CertificateParams {
 			Ok(())
 		})
 	}
-	/// Calculates a subject key identifier for the certificate subject's public key.
-	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
-	fn key_identifier<K: PublicKeyData>(&self, pub_key: &K) -> Vec<u8> {
-		// Decide which method from RFC 7093 to use
-		let digest_method = match &self.key_identifier_method {
-			KeyIdMethod::Sha256 => &digest::SHA256,
-			KeyIdMethod::Sha384 => &digest::SHA384,
-			KeyIdMethod::Sha512 => &digest::SHA512,
-			KeyIdMethod::PreSpecified(b) => {
-				return b.to_vec();
-			},
-		};
-		let digest = digest::digest(digest_method, pub_key.raw_bytes());
-		let truncated_digest = &digest.as_ref()[0..20];
-		truncated_digest.to_vec()
-	}
+
 	fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
@@ -1352,19 +1339,49 @@ impl CustomExtension {
 
 /// Method to generate key identifiers from public keys.
 ///
-/// This allows choice over methods to generate key identifiers
-/// as specified in RFC 7093 section 2.
+/// Key identifiers should be derived from the public key data. [RFC 7093] defines
+/// three methods to do so using a choice of SHA256 (method 1), SHA384 (method 2), or SHA512
+/// (method 3). In each case the first 160 bits of the hash are used as the key identifier
+/// to match the output length that would be produced were SHA1 used (a legacy option defined
+/// in RFC 5280).
+///
+/// In addition to the RFC 7093 mechanisms, rcgen supports using a pre-specified key identifier.
+/// This can be helpful when working with an existing `Certificate`.
+///
+/// [RFC 7093]: https://www.rfc-editor.org/rfc/rfc7093
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[non_exhaustive]
 pub enum KeyIdMethod {
-	/// RFC 7093 method 1
+	/// RFC 7093 method 1 - a truncated SHA256 digest.
 	Sha256,
-	/// RFC 7093 method 2
+	/// RFC 7093 method 2 - a truncated SHA384 digest.
 	Sha384,
-	/// RFC 7093 method 3
+	/// RFC 7093 method 3 - a truncated SHA512 digest.
 	Sha512,
-	/// Pre-specified identifier.
+	/// Pre-specified identifier. The exact given value is used as the key identifier.
 	PreSpecified(Vec<u8>),
+}
+
+impl KeyIdMethod {
+	/// Derive a key identifier for the provided public key using the key ID method.
+	///
+	/// Typically this is a truncated hash over the public key's raw bytes, but may
+	/// be a pre-specified value.
+	///
+	/// This key identifier is used in the SubjectKeyIdentifier and AuthorityKeyIdentifier
+	/// X.509v3 extensions.
+	pub(crate) fn derive(&self, pub_key: &impl PublicKeyData) -> Vec<u8> {
+		let digest_method = match &self {
+			Self::Sha256 => &digest::SHA256,
+			Self::Sha384 => &digest::SHA384,
+			Self::Sha512 => &digest::SHA512,
+			Self::PreSpecified(b) => {
+				return b.to_vec();
+			},
+		};
+		let digest = digest::digest(digest_method, pub_key.raw_bytes());
+		digest.as_ref()[0..20].to_vec()
+	}
 }
 
 /// Helper to obtain an `OffsetDateTime` from year, month, day values
@@ -1500,7 +1517,7 @@ impl Certificate {
 	/// Calculates a subject key identifier for the certificate subject's public key.
 	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
 	pub fn get_key_identifier(&self) -> Vec<u8> {
-		self.params.key_identifier(&self.key_pair)
+		self.params.key_identifier_method.derive(&self.key_pair)
 	}
 	/// Serializes the certificate to the binary DER format
 	pub fn serialize_der(&self) -> Result<Vec<u8>, Error> {
