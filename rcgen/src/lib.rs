@@ -924,7 +924,9 @@ impl CertificateParams {
 		&self,
 		writer: DERWriter,
 		pub_key: &K,
-		ca: &Certificate,
+		sig_alg: &SignatureAlgorithm,
+		issuer: &KeyPair,
+		issuer_name: &DistinguishedName,
 	) -> Result<(), Error> {
 		writer.write_sequence(|writer| {
 			// Write version
@@ -941,10 +943,10 @@ impl CertificateParams {
 				sl[0] = sl[0] & 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
 				writer.next().write_bigint_bytes(&sl, true);
 			};
-			// Write signature
-			ca.params.alg.write_alg_ident(writer.next());
-			// Write issuer
-			write_distinguished_name(writer.next(), &ca.params.distinguished_name);
+			// Write signature algorithm
+			sig_alg.write_alg_ident(writer.next());
+			// Write issuer name
+			write_distinguished_name(writer.next(), issuer_name);
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
@@ -971,7 +973,7 @@ impl CertificateParams {
 						if self.use_authority_key_identifier_extension {
 							write_x509_authority_key_identifier(
 								writer.next(),
-								self.key_identifier_method.derive(&ca.key_pair),
+								self.key_identifier_method.derive(issuer),
 							);
 						}
 						// Write subject_alt_names
@@ -1146,22 +1148,24 @@ impl CertificateParams {
 	fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
-		ca: &Certificate,
+		sig_alg: &SignatureAlgorithm,
+		issuer: &KeyPair,
+		issuer_name: &DistinguishedName,
 	) -> Result<Vec<u8>, Error> {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 				let tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
-					self.write_cert(writer, pub_key, ca)?;
+					self.write_cert(writer, pub_key, sig_alg, issuer, issuer_name)?;
 					Ok::<(), Error>(())
 				})?;
 				// Write tbsCertList
 				writer.next().write_der(&tbs_cert_list_serialized);
 
 				// Write signatureAlgorithm
-				ca.params.alg.write_alg_ident(writer.next());
+				sig_alg.write_alg_ident(writer.next());
 
 				// Write signature
-				ca.key_pair.sign(&tbs_cert_list_serialized, writer.next())?;
+				issuer.sign(&tbs_cert_list_serialized, writer.next())?;
 
 				Ok(())
 			})
@@ -1528,7 +1532,12 @@ impl Certificate {
 	}
 	/// Serializes the certificate, signed with another certificate's key, in binary DER format
 	pub fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, Error> {
-		self.params.serialize_der_with_signer(&self.key_pair, ca)
+		self.params.serialize_der_with_signer(
+			&self.key_pair,
+			ca.params.alg,
+			&ca.key_pair,
+			&ca.params.distinguished_name,
+		)
 	}
 	/// Serializes a certificate signing request in binary DER format
 	pub fn serialize_request_der(&self) -> Result<Vec<u8>, Error> {

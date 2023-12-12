@@ -9,7 +9,7 @@ use crate::oid::*;
 use crate::ENCODE_CONFIG;
 use crate::{
 	write_distinguished_name, write_dt_utc_or_generalized, write_x509_authority_key_identifier,
-	write_x509_extension,
+	write_x509_extension, DistinguishedName, KeyPair,
 };
 use crate::{Certificate, Error, KeyIdMethod, KeyUsagePurpose, SerialNumber, SignatureAlgorithm};
 
@@ -70,7 +70,11 @@ impl CertificateRevocationList {
 		{
 			return Err(Error::IssuerNotCrlSigner);
 		}
-		self.params.serialize_der_with_signer(ca)
+		self.params.serialize_der_with_signer(
+			self.params.alg,
+			&ca.key_pair,
+			&ca.params.distinguished_name,
+		)
 	}
 	/// Serializes the certificate revocation list (CRL) in ASCII PEM format, signed with
 	/// the issuing certificate authority's key.
@@ -172,12 +176,17 @@ pub struct CertificateRevocationListParams {
 }
 
 impl CertificateRevocationListParams {
-	fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, Error> {
+	fn serialize_der_with_signer(
+		&self,
+		sig_alg: &SignatureAlgorithm,
+		issuer: &KeyPair,
+		issuer_name: &DistinguishedName,
+	) -> Result<Vec<u8>, Error> {
 		yasna::try_construct_der(|writer| {
 			// https://www.rfc-editor.org/rfc/rfc5280#section-5.1
 			writer.write_sequence(|writer| {
 				let tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
-					self.write_crl(writer, ca)?;
+					self.write_crl(writer, sig_alg, issuer, issuer_name)?;
 					Ok::<(), Error>(())
 				})?;
 
@@ -185,16 +194,22 @@ impl CertificateRevocationListParams {
 				writer.next().write_der(&tbs_cert_list_serialized);
 
 				// Write signatureAlgorithm
-				ca.params.alg.write_alg_ident(writer.next());
+				sig_alg.write_alg_ident(writer.next());
 
 				// Write signature
-				ca.key_pair.sign(&tbs_cert_list_serialized, writer.next())?;
+				issuer.sign(&tbs_cert_list_serialized, writer.next())?;
 
 				Ok(())
 			})
 		})
 	}
-	fn write_crl(&self, writer: DERWriter, ca: &Certificate) -> Result<(), Error> {
+	fn write_crl(
+		&self,
+		writer: DERWriter,
+		sig_alg: &SignatureAlgorithm,
+		issuer: &KeyPair,
+		issuer_name: &DistinguishedName,
+	) -> Result<(), Error> {
 		writer.write_sequence(|writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
@@ -211,12 +226,12 @@ impl CertificateRevocationListParams {
 			// RFC 5280 §5.1.2.2:
 			//   This field MUST contain the same algorithm identifier as the
 			//   signatureAlgorithm field in the sequence CertificateList
-			ca.params.alg.write_alg_ident(writer.next());
+			sig_alg.write_alg_ident(writer.next());
 
 			// Write issuer.
 			// RFC 5280 §5.1.2.3:
 			//   The issuer field MUST contain a non-empty X.500 distinguished name (DN).
-			write_distinguished_name(writer.next(), &ca.params.distinguished_name);
+			write_distinguished_name(writer.next(), issuer_name);
 
 			// Write thisUpdate date.
 			// RFC 5280 §5.1.2.4:
@@ -254,7 +269,7 @@ impl CertificateRevocationListParams {
 					// Write authority key identifier.
 					write_x509_authority_key_identifier(
 						writer.next(),
-						self.key_identifier_method.derive(&ca.key_pair),
+						self.key_identifier_method.derive(issuer),
 					);
 
 					// Write CRL number.
