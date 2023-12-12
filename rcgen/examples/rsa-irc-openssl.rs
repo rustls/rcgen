@@ -15,8 +15,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let key_pair = rcgen::KeyPair::from_pem(&key_pair_pem)?;
 	params.key_pair = Some(key_pair);
 
-	let cert = Certificate::from_params(params)?;
-	let pem_serialized = cert.serialize_pem()?;
+	let cert = Certificate::generate_self_signed(params)?;
+	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;
 	let der_serialized = pem.contents();
 	let hash = ring::digest::digest(&ring::digest::SHA512, der_serialized);

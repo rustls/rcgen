@@ -17,9 +17,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		SanType::DnsName("localhost".to_string()),
 	];
 
-	let cert = Certificate::from_params(params)?;
+	let cert = Certificate::generate_self_signed(params)?;
 
-	let pem_serialized = cert.serialize_pem()?;
+	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;
 	let der_serialized = pem.contents();
 	println!("{pem_serialized}");

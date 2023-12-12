@@ -43,7 +43,7 @@ mod test_key_params_mismatch {
 				wrong_params.alg = *kalg_2;
 
 				assert_eq!(
-					Certificate::from_params(wrong_params).err(),
+					Certificate::generate_self_signed(wrong_params).err(),
 					Some(Error::CertificateKeyPairMismatch),
 					"i: {} j: {}",
 					i,
@@ -75,15 +75,15 @@ mod test_convert_x509_subject_alternative_name {
 		// Because we're using a function for CA certificates
 		params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 
-		let cert = Certificate::from_params(params).unwrap();
+		let cert = Certificate::generate_self_signed(params).unwrap();
 
 		// Serialize our cert that has our chosen san, so we can testing parsing/deserializing it.
-		let ca_der = cert.serialize_der().unwrap();
+		let ca_der = cert.der();
 
 		// Arbitrary key pair not used with the test, but required by the parsing function
 		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
 
-		let actual = CertificateParams::from_ca_cert_der(&ca_der, key_pair).unwrap();
+		let actual = CertificateParams::from_ca_cert_der(ca_der, key_pair).unwrap();
 
 		assert!(actual.subject_alt_names.contains(&ip_san));
 	}
@@ -118,9 +118,8 @@ mod test_x509_custom_ext {
 		// Ensure the custom exts. being omitted into a CSR doesn't require SAN ext being present.
 		// See https://github.com/rustls/rcgen/issues/122
 		params.subject_alt_names = Vec::default();
-		let test_cert = Certificate::from_params(params).unwrap();
-		let test_cert_der = test_cert.serialize_der().unwrap();
-		let (_, x509_test_cert) = X509Certificate::from_der(&test_cert_der).unwrap();
+		let test_cert = Certificate::generate_self_signed(params).unwrap();
+		let (_, x509_test_cert) = X509Certificate::from_der(test_cert.der()).unwrap();
 
 		// We should be able to find the extension by OID, with expected criticality and value.
 		let favorite_drink_ext = x509_test_cert
@@ -173,8 +172,7 @@ mod test_x509_parser_crl {
 		let (crl, issuer) = util::test_crl();
 		let revoked_cert = crl.get_params().revoked_certs.first().unwrap();
 		let revoked_cert_serial = BigUint::from_bytes_be(revoked_cert.serial_number.as_ref());
-		let issuer_der = issuer.serialize_der().unwrap();
-		let (_, x509_issuer) = X509Certificate::from_der(&issuer_der).unwrap();
+		let (_, x509_issuer) = X509Certificate::from_der(issuer.der()).unwrap();
 
 		// Serialize the CRL signed by the issuer in DER form.
 		let crl_der = crl.serialize_der_with_signer(&issuer).unwrap();
@@ -317,15 +315,15 @@ mod test_parse_ia5string_subject {
 			email_address_dn_type.clone(),
 			email_address_dn_value.clone(),
 		);
-		let cert = Certificate::from_params(params).unwrap();
-		let cert_der = cert.serialize_der().unwrap();
+		let cert = Certificate::generate_self_signed(params).unwrap();
+		let cert_der = cert.der();
 
 		// We should be able to parse the certificate with x509-parser.
-		assert!(x509_parser::parse_x509_certificate(&cert_der).is_ok());
+		assert!(x509_parser::parse_x509_certificate(cert_der).is_ok());
 
 		// We should be able to reconstitute params from the DER using x509-parser.
 		let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
-		let params_from_cert = CertificateParams::from_ca_cert_der(&cert_der, key_pair).unwrap();
+		let params_from_cert = CertificateParams::from_ca_cert_der(cert_der, key_pair).unwrap();
 
 		// We should find the expected distinguished name in the reconstituted params.
 		let expected_names = &[(&email_address_dn_type, &email_address_dn_value)];

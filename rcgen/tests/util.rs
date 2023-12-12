@@ -88,7 +88,7 @@ pub fn test_crl() -> (CertificateRevocationList, Certificate) {
 		KeyUsagePurpose::DigitalSignature,
 		KeyUsagePurpose::CrlSign,
 	];
-	let issuer = Certificate::from_params(issuer).unwrap();
+	let issuer = Certificate::generate_self_signed(issuer).unwrap();
 
 	let now = OffsetDateTime::now_utc();
 	let next_week = now + Duration::weeks(1);
@@ -133,6 +133,8 @@ pub fn cert_with_crl_dps() -> Vec<u8> {
 		},
 	];
 
-	let cert = Certificate::from_params(params).unwrap();
-	cert.serialize_der().unwrap()
+	Certificate::generate_self_signed(params)
+		.unwrap()
+		.der()
+		.to_vec()
 }
