@@ -252,7 +252,10 @@ impl CertificateRevocationListParams {
 			writer.next().write_tagged(Tag::context(0), |writer| {
 				writer.write_sequence(|writer| {
 					// Write authority key identifier.
-					write_x509_authority_key_identifier(writer.next(), ca);
+					write_x509_authority_key_identifier(
+						writer.next(),
+						self.key_identifier_method.derive(&ca.key_pair),
+					);
 
 					// Write CRL number.
 					write_x509_extension(writer.next(), OID_CRL_NUMBER, false, |writer| {

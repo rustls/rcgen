@@ -969,7 +969,10 @@ impl CertificateParams {
 				writer.next().write_tagged(Tag::context(3), |writer| {
 					writer.write_sequence(|writer| {
 						if self.use_authority_key_identifier_extension {
-							write_x509_authority_key_identifier(writer.next(), ca)
+							write_x509_authority_key_identifier(
+								writer.next(),
+								self.key_identifier_method.derive(&ca.key_pair),
+							);
 						}
 						// Write subject_alt_names
 						if !self.subject_alt_names.is_empty() {
@@ -1615,7 +1618,7 @@ fn write_x509_extension(
 }
 
 /// Serializes an X.509v3 authority key identifier extension according to RFC 5280.
-fn write_x509_authority_key_identifier(writer: DERWriter, ca: &Certificate) {
+fn write_x509_authority_key_identifier(writer: DERWriter, aki: Vec<u8>) {
 	// Write Authority Key Identifier
 	// RFC 5280 states:
 	//   'The keyIdentifier field of the authorityKeyIdentifier extension MUST
@@ -1630,9 +1633,7 @@ fn write_x509_authority_key_identifier(writer: DERWriter, ca: &Certificate) {
 		writer.write_sequence(|writer| {
 			writer
 				.next()
-				.write_tagged_implicit(Tag::context(0), |writer| {
-					writer.write_bytes(ca.get_key_identifier().as_ref())
-				})
+				.write_tagged_implicit(Tag::context(0), |writer| writer.write_bytes(&aki))
 		});
 	});
 }
