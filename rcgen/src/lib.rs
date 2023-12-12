@@ -69,7 +69,7 @@ pub use crate::sign_algo::SignatureAlgorithm;
 )]
 pub type RcgenError = Error;
 
-/// A self signed certificate together with signing keys
+/// Certificate generation parameters together with a subject keypair.
 pub struct Certificate {
 	params: CertificateParams,
 	key_pair: KeyPair,
