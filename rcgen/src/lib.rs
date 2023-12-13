@@ -73,6 +73,7 @@ pub type RcgenError = Error;
 pub struct Certificate {
 	params: CertificateParams,
 	key_pair: KeyPair,
+	subject_public_key_info: Vec<u8>,
 	der: Vec<u8>,
 }
 
@@ -927,6 +928,7 @@ impl CertificateParams {
 		issuer: &KeyPair,
 		issuer_name: &DistinguishedName,
 	) -> Result<(), Error> {
+		let pub_key_spki = yasna::construct_der(|writer| pub_key.serialize_public_key_der(writer));
 		writer.write_sequence(|writer| {
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
@@ -972,7 +974,7 @@ impl CertificateParams {
 						if self.use_authority_key_identifier_extension {
 							write_x509_authority_key_identifier(
 								writer.next(),
-								self.key_identifier_method.derive(issuer),
+								self.key_identifier_method.derive(issuer.public_key_der()),
 							);
 						}
 						// Write subject_alt_names
@@ -1082,7 +1084,7 @@ impl CertificateParams {
 									false,
 									|writer| {
 										writer.write_bytes(
-											&self.key_identifier_method.derive(pub_key),
+											&self.key_identifier_method.derive(pub_key_spki),
 										);
 									},
 								);
@@ -1112,7 +1114,7 @@ impl CertificateParams {
 									false,
 									|writer| {
 										writer.write_bytes(
-											&self.key_identifier_method.derive(pub_key),
+											&self.key_identifier_method.derive(pub_key_spki),
 										);
 									},
 								);
@@ -1369,14 +1371,14 @@ pub enum KeyIdMethod {
 }
 
 impl KeyIdMethod {
-	/// Derive a key identifier for the provided public key using the key ID method.
+	/// Derive a key identifier for the provided subject public key info using the key ID method.
 	///
-	/// Typically this is a truncated hash over the public key's raw bytes, but may
+	/// Typically this is a truncated hash over the raw subject public key info, but may
 	/// be a pre-specified value.
 	///
 	/// This key identifier is used in the SubjectKeyIdentifier and AuthorityKeyIdentifier
 	/// X.509v3 extensions.
-	pub(crate) fn derive(&self, pub_key: &impl PublicKeyData) -> Vec<u8> {
+	pub(crate) fn derive(&self, subject_public_key_info: impl AsRef<[u8]>) -> Vec<u8> {
 		let digest_method = match &self {
 			Self::Sha256 => &digest::SHA256,
 			Self::Sha384 => &digest::SHA384,
@@ -1385,7 +1387,7 @@ impl KeyIdMethod {
 				return b.to_vec();
 			},
 		};
-		let digest = digest::digest(digest_method, pub_key.raw_bytes());
+		let digest = digest::digest(digest_method, subject_public_key_info.as_ref());
 		digest.as_ref()[0..20].to_vec()
 	}
 }
@@ -1507,6 +1509,7 @@ impl Certificate {
 	/// this function.
 	pub fn generate_self_signed(mut params: CertificateParams) -> Result<Self, Error> {
 		let key_pair = KeyPair::validate_or_generate(&mut params.key_pair, params.alg)?;
+		let subject_public_key_info = key_pair.public_key_der();
 		let der = params.serialize_der_with_signer(
 			&key_pair,
 			params.alg,
@@ -1516,6 +1519,7 @@ impl Certificate {
 		Ok(Certificate {
 			params,
 			key_pair,
+			subject_public_key_info,
 			der,
 		})
 	}
@@ -1526,6 +1530,7 @@ impl Certificate {
 	/// this function.
 	pub fn generate(mut params: CertificateParams, issuer: &Certificate) -> Result<Self, Error> {
 		let key_pair = KeyPair::validate_or_generate(&mut params.key_pair, params.alg)?;
+		let subject_public_key_info = key_pair.public_key_der();
 		let der = params.serialize_der_with_signer(
 			&key_pair,
 			&issuer.params.alg,
@@ -1535,6 +1540,7 @@ impl Certificate {
 		Ok(Certificate {
 			params,
 			key_pair,
+			subject_public_key_info,
 			der,
 		})
 	}
@@ -1545,7 +1551,9 @@ impl Certificate {
 	/// Calculates a subject key identifier for the certificate subject's public key.
 	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
 	pub fn get_key_identifier(&self) -> Vec<u8> {
-		self.params.key_identifier_method.derive(&self.key_pair)
+		self.params
+			.key_identifier_method
+			.derive(&self.subject_public_key_info)
 	}
 	/// Get the certificate in DER encoded format
 	pub fn der(&self) -> &[u8] {
