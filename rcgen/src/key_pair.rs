@@ -17,7 +17,7 @@ use crate::sign_algo::SignAlgo;
 use crate::ENCODE_CONFIG;
 use crate::{Error, SignatureAlgorithm};
 
-/// A key pair vairant
+/// A key pair variant
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum KeyPairKind {
 	/// A Ecdsa key pair
