@@ -1506,15 +1506,7 @@ impl Certificate {
 	/// If you want to control the [`KeyPair`] or the randomness used to generate it, set the [`CertificateParams::key_pair`]
 	/// field ahead of time before calling this function.
 	pub fn from_params(mut params: CertificateParams) -> Result<Self, Error> {
-		let key_pair = if let Some(key_pair) = params.key_pair.take() {
-			if !key_pair.is_compatible(&params.alg) {
-				return Err(Error::CertificateKeyPairMismatch);
-			}
-			key_pair
-		} else {
-			KeyPair::generate(&params.alg)?
-		};
-
+		let key_pair = KeyPair::validate_or_generate(&mut params.key_pair, params.alg)?;
 		Ok(Certificate { params, key_pair })
 	}
 	/// Returns the certificate parameters
