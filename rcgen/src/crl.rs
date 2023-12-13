@@ -64,7 +64,11 @@ impl CertificateRevocationList {
 	}
 	/// Serializes the certificate revocation list (CRL) in binary DER format, signed with
 	/// the issuing certificate authority's key.
-	pub fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, Error> {
+	pub fn serialize_der_with_signer(
+		&self,
+		ca: &Certificate,
+		ca_key: &KeyPair,
+	) -> Result<Vec<u8>, Error> {
 		if !ca.params.key_usages.is_empty()
 			&& !ca.params.key_usages.contains(&KeyUsagePurpose::CrlSign)
 		{
@@ -72,15 +76,19 @@ impl CertificateRevocationList {
 		}
 		self.params.serialize_der_with_signer(
 			self.params.alg,
-			&ca.key_pair,
+			ca_key,
 			&ca.params.distinguished_name,
 		)
 	}
 	/// Serializes the certificate revocation list (CRL) in ASCII PEM format, signed with
 	/// the issuing certificate authority's key.
 	#[cfg(feature = "pem")]
-	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, Error> {
-		let contents = self.serialize_der_with_signer(ca)?;
+	pub fn serialize_pem_with_signer(
+		&self,
+		ca: &Certificate,
+		ca_key: &KeyPair,
+	) -> Result<String, Error> {
+		let contents = self.serialize_der_with_signer(ca, ca_key)?;
 		let p = Pem::new("X509 CRL", contents);
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}

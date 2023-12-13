@@ -1,7 +1,7 @@
 use bpaf::Bpaf;
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType,
-	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyUsagePurpose, SanType,
+	BasicConstraints, Certificate, CertificateParams, CertifiedKey, DistinguishedName, DnType,
+	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
 };
 use std::{fmt, fs::File, io, path::Path};
 
@@ -103,15 +103,15 @@ impl CaBuilder {
 	}
 	/// build `Ca` Certificate.
 	pub fn build(self) -> Result<Ca, rcgen::Error> {
-		Ok(Ca {
-			cert: Certificate::generate_self_signed(self.params)?,
-		})
+		let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(self.params)?;
+		Ok(Ca { cert, key_pair })
 	}
 }
 
 /// End-entity [Certificate]
 pub struct Ca {
 	cert: Certificate,
+	key_pair: KeyPair,
 }
 
 impl Ca {
@@ -119,10 +119,11 @@ impl Ca {
 	pub fn serialize_pem(&self) -> PemCertifiedKey {
 		PemCertifiedKey {
 			cert_pem: self.cert.pem(),
-			private_key_pem: self.cert.serialize_private_key_pem(),
+			private_key_pem: self.key_pair.serialize_pem(),
 		}
 	}
 	/// Return `&Certificate`
+	#[allow(dead_code)]
 	pub fn cert(&self) -> &Certificate {
 		&self.cert
 	}
@@ -131,6 +132,7 @@ impl Ca {
 /// End-entity [Certificate]
 pub struct EndEntity {
 	cert: Certificate,
+	key_pair: KeyPair,
 }
 
 impl EndEntity {
@@ -138,7 +140,7 @@ impl EndEntity {
 	pub fn serialize_pem(&self) -> PemCertifiedKey {
 		PemCertifiedKey {
 			cert_pem: self.cert.pem(),
-			private_key_pem: self.cert.serialize_private_key_pem(),
+			private_key_pem: self.key_pair.serialize_pem(),
 		}
 	}
 }
@@ -188,10 +190,10 @@ impl EndEntityBuilder {
 		self
 	}
 	/// build `EndEntity` Certificate.
-	pub fn build(self, issuer: &Certificate) -> Result<EndEntity, rcgen::Error> {
-		Ok(EndEntity {
-			cert: Certificate::generate(self.params, issuer)?,
-		})
+	pub fn build(self, issuer: &Ca) -> Result<EndEntity, rcgen::Error> {
+		let CertifiedKey { cert, key_pair } =
+			Certificate::generate(self.params, &issuer.cert, &issuer.key_pair)?;
+		Ok(EndEntity { cert, key_pair })
 	}
 }
 
@@ -298,7 +300,7 @@ mod tests {
 		let ca = CertificateBuilder::new().certificate_authority().build()?;
 		let end_entity = CertificateBuilder::new()
 			.end_entity()
-			.build(ca.cert())?
+			.build(&ca)?
 			.serialize_pem();
 
 		let der = pem::parse(end_entity.cert_pem)?;
@@ -318,7 +320,7 @@ mod tests {
 		let end_entity = CertificateBuilder::new()
 			.signature_algorithm(&KeypairAlgorithm::EcdsaP384)?
 			.end_entity()
-			.build(ca.cert())?
+			.build(&ca)?
 			.serialize_pem();
 
 		let der = pem::parse(end_entity.cert_pem)?;
@@ -337,7 +339,7 @@ mod tests {
 		let end_entity = CertificateBuilder::new()
 			.signature_algorithm(&KeypairAlgorithm::Ed25519)?
 			.end_entity()
-			.build(ca.cert())?
+			.build(&ca)?
 			.serialize_pem();
 
 		let der = pem::parse(end_entity.cert_pem)?;

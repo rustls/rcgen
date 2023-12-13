@@ -1,5 +1,6 @@
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DnType, Error, IsCa, KeyPair, RemoteKeyPair,
+	BasicConstraints, Certificate, CertificateParams, CertifiedKey, DnType, Error, IsCa, KeyPair,
+	RemoteKeyPair,
 };
 use rcgen::{
 	CertificateRevocationList, CertificateRevocationListParams, RevocationReason, RevokedCertParams,
@@ -23,8 +24,8 @@ use time::{Duration, OffsetDateTime};
 
 mod util;
 
-fn sign_msg_ecdsa(cert: &Certificate, msg: &[u8], alg: &'static EcdsaSigningAlgorithm) -> Vec<u8> {
-	let pk_der = cert.serialize_private_key_der();
+fn sign_msg_ecdsa(key_pair: &KeyPair, msg: &[u8], alg: &'static EcdsaSigningAlgorithm) -> Vec<u8> {
+	let pk_der = key_pair.serialize_der();
 	let key_pair =
 		EcdsaKeyPair::from_pkcs8(alg, &pk_der, &ring::rand::SystemRandom::new()).unwrap();
 	let system_random = SystemRandom::new();
@@ -32,16 +33,16 @@ fn sign_msg_ecdsa(cert: &Certificate, msg: &[u8], alg: &'static EcdsaSigningAlgo
 	signature.as_ref().to_vec()
 }
 
-fn sign_msg_ed25519(cert: &Certificate, msg: &[u8]) -> Vec<u8> {
-	let pk_der = cert.serialize_private_key_der();
+fn sign_msg_ed25519(key_pair: &KeyPair, msg: &[u8]) -> Vec<u8> {
+	let pk_der = key_pair.serialize_der();
 	let key_pair = Ed25519KeyPair::from_pkcs8_maybe_unchecked(&pk_der).unwrap();
 	let signature = key_pair.sign(msg);
 	signature.as_ref().to_vec()
 }
 
 #[cfg(feature = "pem")]
-fn sign_msg_rsa(cert: &Certificate, msg: &[u8], encoding: &'static dyn RsaEncoding) -> Vec<u8> {
-	let pk_der = cert.serialize_private_key_der();
+fn sign_msg_rsa(key_pair: &KeyPair, msg: &[u8], encoding: &'static dyn RsaEncoding) -> Vec<u8> {
+	let pk_der = key_pair.serialize_der();
 	let key_pair = RsaKeyPair::from_pkcs8(&pk_der).unwrap();
 	let system_random = SystemRandom::new();
 	let mut signature = vec![0; key_pair.public().modulus_len()];
@@ -54,23 +55,24 @@ fn sign_msg_rsa(cert: &Certificate, msg: &[u8], encoding: &'static dyn RsaEncodi
 fn check_cert<'a, 'b>(
 	cert_der: &[u8],
 	cert: &'a Certificate,
+	cert_key: &'a KeyPair,
 	alg: &SignatureAlgorithm,
-	sign_fn: impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>,
+	sign_fn: impl FnOnce(&'a KeyPair, &'b [u8]) -> Vec<u8>,
 ) {
 	#[cfg(feature = "pem")]
 	{
 		println!("{}", cert.pem());
 	}
-	check_cert_ca(cert_der, cert, cert_der, alg, alg, sign_fn);
+	check_cert_ca(cert_der, cert_key, cert_der, alg, alg, sign_fn);
 }
 
 fn check_cert_ca<'a, 'b>(
 	cert_der: &[u8],
-	cert: &'a Certificate,
+	cert_key: &'a KeyPair,
 	ca_der: &[u8],
 	cert_alg: &SignatureAlgorithm,
 	ca_alg: &SignatureAlgorithm,
-	sign_fn: impl FnOnce(&'a Certificate, &'b [u8]) -> Vec<u8>,
+	sign_fn: impl FnOnce(&'a KeyPair, &'b [u8]) -> Vec<u8>,
 ) {
 	let trust_anchor = TrustAnchor::try_from_cert_der(ca_der).unwrap();
 	let trust_anchor_list = &[trust_anchor];
@@ -99,7 +101,7 @@ fn check_cert_ca<'a, 'b>(
 
 	// (3/3) Check that a message signed by the cert is valid.
 	let msg = b"Hello, World! This message is signed.";
-	let signature = sign_fn(cert, msg);
+	let signature = sign_fn(cert_key, msg);
 	end_entity_cert
 		.verify_signature(cert_alg, msg, &signature)
 		.expect("signature is valid");
@@ -108,11 +110,18 @@ fn check_cert_ca<'a, 'b>(
 #[test]
 fn test_webpki() {
 	let params = util::default_params();
-	let cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
-	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
-	check_cert(cert.der(), &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
+	let sign_fn =
+		|key_pair, msg| sign_msg_ecdsa(key_pair, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	check_cert(
+		cert.der(),
+		&cert,
+		&key_pair,
+		&webpki::ECDSA_P256_SHA256,
+		sign_fn,
+	);
 }
 
 #[test]
@@ -120,11 +129,17 @@ fn test_webpki_256() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
 
-	let cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
-	check_cert(cert.der(), &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
+	check_cert(
+		cert.der(),
+		&cert,
+		&key_pair,
+		&webpki::ECDSA_P256_SHA256,
+		sign_fn,
+	);
 }
 
 #[test]
@@ -132,11 +147,17 @@ fn test_webpki_384() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ECDSA_P384_SHA384;
 
-	let cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P384_SHA384_ASN1_SIGNING);
-	check_cert(cert.der(), &cert, &webpki::ECDSA_P384_SHA384, sign_fn);
+	check_cert(
+		cert.der(),
+		&cert,
+		&key_pair,
+		&webpki::ECDSA_P384_SHA384,
+		sign_fn,
+	);
 }
 
 #[test]
@@ -144,10 +165,16 @@ fn test_webpki_25519() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
 
-	let cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
-	check_cert(cert.der(), &cert, &webpki::ED25519, sign_msg_ed25519);
+	check_cert(
+		cert.der(),
+		&cert,
+		&key_pair,
+		&webpki::ED25519,
+		sign_msg_ed25519,
+	);
 }
 
 #[cfg(feature = "pem")]
@@ -159,10 +186,16 @@ fn test_webpki_25519_v1_given() {
 	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V1).unwrap();
 	params.key_pair = Some(kp);
 
-	let cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
-	check_cert(cert.der(), &cert, &webpki::ED25519, sign_msg_ed25519);
+	check_cert(
+		cert.der(),
+		&cert,
+		&key_pair,
+		&webpki::ED25519,
+		sign_msg_ed25519,
+	);
 }
 
 #[cfg(feature = "pem")]
@@ -174,10 +207,16 @@ fn test_webpki_25519_v2_given() {
 	let kp = rcgen::KeyPair::from_pem(util::ED25519_TEST_KEY_PAIR_PEM_V2).unwrap();
 	params.key_pair = Some(kp);
 
-	let cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
-	check_cert(cert.der(), &cert, &webpki::ED25519, sign_msg_ed25519);
+	check_cert(
+		cert.der(),
+		&cert,
+		&key_pair,
+		&webpki::ED25519,
+		sign_msg_ed25519,
+	);
 }
 
 #[cfg(feature = "pem")]
@@ -189,12 +228,13 @@ fn test_webpki_rsa_given() {
 	let kp = rcgen::KeyPair::from_pem(util::RSA_TEST_KEY_PAIR_PEM).unwrap();
 	params.key_pair = Some(kp);
 
-	let cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
 	check_cert(
 		cert.der(),
 		&cert,
+		&key_pair,
 		&webpki::RSA_PKCS1_2048_8192_SHA256,
 		|msg, cert| sign_msg_rsa(msg, cert, &signature::RSA_PKCS1_SHA256),
 	);
@@ -227,10 +267,10 @@ fn test_webpki_rsa_combinations_given() {
 		let kp = rcgen::KeyPair::from_pem_and_sign_algo(util::RSA_TEST_KEY_PAIR_PEM, c.0).unwrap();
 		params.key_pair = Some(kp);
 
-		let cert = Certificate::generate_self_signed(params).unwrap();
+		let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 		// Now verify the certificate.
-		check_cert(cert.der(), &cert, c.1, |msg, cert| {
+		check_cert(cert.der(), &cert, &key_pair, c.1, |msg, cert| {
 			sign_msg_rsa(msg, cert, c.2)
 		});
 	}
@@ -240,7 +280,10 @@ fn test_webpki_rsa_combinations_given() {
 fn test_webpki_separate_ca() {
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-	let ca_cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey {
+		cert: ca_cert,
+		key_pair: ca_key,
+	} = Certificate::generate_self_signed(params).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
 	params
@@ -250,11 +293,11 @@ fn test_webpki_separate_ca() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 
-	let cert = Certificate::generate(params, &ca_cert).unwrap();
+	let CertifiedKey { cert, key_pair } = Certificate::generate(params, &ca_cert, &ca_key).unwrap();
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
 		cert.der(),
-		&cert,
+		&key_pair,
 		ca_cert.der(),
 		&webpki::ECDSA_P256_SHA256,
 		&webpki::ECDSA_P256_SHA256,
@@ -267,7 +310,10 @@ fn test_webpki_separate_ca_with_other_signing_alg() {
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
-	let ca_cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey {
+		cert: ca_cert,
+		key_pair: ca_key,
+	} = Certificate::generate_self_signed(params).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
 	params.alg = &rcgen::PKCS_ED25519;
@@ -278,10 +324,10 @@ fn test_webpki_separate_ca_with_other_signing_alg() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 
-	let cert = Certificate::generate(params, &ca_cert).unwrap();
+	let CertifiedKey { cert, key_pair } = Certificate::generate(params, &ca_cert, &ca_key).unwrap();
 	check_cert_ca(
 		cert.der(),
-		&cert,
+		&key_pair,
 		ca_cert.der(),
 		&webpki::ED25519,
 		&webpki::ECDSA_P256_SHA256,
@@ -330,7 +376,10 @@ fn from_remote() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
 	params.key_pair = Some(remote);
-	let cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey {
+		cert,
+		key_pair: cert_kp,
+	} = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
 	let sign_fn = move |_, msg| {
@@ -338,7 +387,13 @@ fn from_remote() {
 		let signature = key_pair.sign(&system_random, msg).unwrap();
 		signature.as_ref().to_vec()
 	};
-	check_cert(cert.der(), &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
+	check_cert(
+		cert.der(),
+		&cert,
+		&cert_kp,
+		&webpki::ECDSA_P256_SHA256,
+		sign_fn,
+	);
 }
 
 /*
@@ -385,14 +440,20 @@ fn test_webpki_imported_ca() {
 	use std::convert::TryInto;
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-	let ca_cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey {
+		cert: ca_cert,
+		key_pair: ca_key,
+	} = Certificate::generate_self_signed(params).unwrap();
 
-	let (ca_cert_der, ca_key_der) = (ca_cert.der(), ca_cert.serialize_private_key_der());
+	let (ca_cert_der, ca_key_der) = (ca_cert.der(), ca_key.serialize_der());
 
 	let ca_key_pair = ca_key_der.as_slice().try_into().unwrap();
 	let imported_ca_cert_params =
 		CertificateParams::from_ca_cert_der(ca_cert_der, ca_key_pair).unwrap();
-	let imported_ca_cert = Certificate::generate_self_signed(imported_ca_cert_params).unwrap();
+	let CertifiedKey {
+		cert: imported_ca_cert,
+		key_pair: ca_key,
+	} = Certificate::generate_self_signed(imported_ca_cert_params).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
 	params
@@ -401,12 +462,15 @@ fn test_webpki_imported_ca() {
 	params
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
-	let cert = Certificate::generate(params, &imported_ca_cert).unwrap();
+	let CertifiedKey {
+		cert,
+		key_pair: cert_key,
+	} = Certificate::generate(params, &imported_ca_cert, &ca_key).unwrap();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
 		cert.der(),
-		&cert,
+		&cert_key,
 		ca_cert_der,
 		&webpki::ECDSA_P256_SHA256,
 		&webpki::ECDSA_P256_SHA256,
@@ -424,14 +488,20 @@ fn test_webpki_imported_ca_with_printable_string() {
 		DnValue::PrintableString("US".to_string()),
 	);
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-	let ca_cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey {
+		cert: ca_cert,
+		key_pair: ca_key,
+	} = Certificate::generate_self_signed(params).unwrap();
 
-	let (ca_cert_der, ca_key_der) = (ca_cert.der(), ca_cert.serialize_private_key_der());
+	let (ca_cert_der, ca_key_der) = (ca_cert.der(), ca_key.serialize_der());
 
 	let ca_key_pair = ca_key_der.as_slice().try_into().unwrap();
 	let imported_ca_cert_params =
 		CertificateParams::from_ca_cert_der(ca_cert_der, ca_key_pair).unwrap();
-	let imported_ca_cert = Certificate::generate_self_signed(imported_ca_cert_params).unwrap();
+	let CertifiedKey {
+		cert: imported_ca_cert,
+		key_pair: ca_key,
+	} = Certificate::generate_self_signed(imported_ca_cert_params).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
 	params
@@ -440,12 +510,15 @@ fn test_webpki_imported_ca_with_printable_string() {
 	params
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
-	let cert = Certificate::generate(params, &imported_ca_cert).unwrap();
+	let CertifiedKey {
+		cert,
+		key_pair: cert_key,
+	} = Certificate::generate(params, &imported_ca_cert, &ca_key).unwrap();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
 		cert.der(),
-		&cert,
+		&cert_key,
 		ca_cert_der,
 		&webpki::ECDSA_P256_SHA256,
 		&webpki::ECDSA_P256_SHA256,
@@ -463,19 +536,26 @@ fn test_certificate_from_csr() {
 	params
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
-	let cert = Certificate::generate_self_signed(params).unwrap();
-	let csr_der = cert.serialize_request_der().unwrap();
+	let CertifiedKey {
+		cert,
+		key_pair: cert_key,
+	} = Certificate::generate_self_signed(params).unwrap();
+	let csr_der = cert.serialize_request_der(&cert_key).unwrap();
 	let csr = CertificateSigningRequest::from_der(&csr_der).unwrap();
 
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-	let ca_cert = Certificate::generate_self_signed(params).unwrap();
-	let cert_der = csr.serialize_der_with_signer(&ca_cert).unwrap();
+	let CertifiedKey {
+		cert: ca_cert,
+		key_pair: ca_key,
+	} = Certificate::generate_self_signed(params).unwrap();
+	let cert_der = csr.serialize_der_with_signer(&ca_cert, &ca_key).unwrap();
 
-	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	let sign_fn =
+		|key_pair, msg| sign_msg_ecdsa(key_pair, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
 		&cert_der,
-		&cert,
+		&cert_key,
 		ca_cert.der(),
 		&webpki::ECDSA_P256_SHA256,
 		&webpki::ECDSA_P256_SHA256,
@@ -487,28 +567,34 @@ fn test_certificate_from_csr() {
 fn test_webpki_serial_number() {
 	let mut params = util::default_params();
 	params.serial_number = Some(vec![0, 1, 2].into());
-	let cert = Certificate::generate_self_signed(params).unwrap();
+	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
-	check_cert(cert.der(), &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
+	check_cert(
+		cert.der(),
+		&cert,
+		&key_pair,
+		&webpki::ECDSA_P256_SHA256,
+		sign_fn,
+	);
 }
 
 #[test]
 fn test_webpki_crl_parse() {
 	// Create a CRL with one revoked cert, and an issuer to sign the CRL.
-	let (crl, issuer) = util::test_crl();
+	let (crl, issuer, issuer_key) = util::test_crl();
 	let revoked_cert = crl.get_params().revoked_certs.first().unwrap();
 
 	// Serialize the CRL signed by the issuer to DER.
-	let der = crl.serialize_der_with_signer(&issuer).unwrap();
+	let der = crl.serialize_der_with_signer(&issuer, &issuer_key).unwrap();
 
 	// We should be able to parse the CRL DER without error.
 	let webpki_crl = BorrowedCertRevocationList::from_der(&der).expect("failed to parse CRL DER");
 
 	// Webpki represents certificate SPKIs internally without the outer SEQUENCE.
 	// We remove that here before calling verify_signature.
-	let issuer_spki = issuer.get_key_pair().public_key_der();
+	let issuer_spki = issuer_key.public_key_der();
 	let raw_spki = yasna::parse_der(&issuer_spki, |reader| reader.read_tagged_der()).unwrap();
 
 	// We should be able to verify the CRL signature with the issuer's raw SPKI.
@@ -547,7 +633,10 @@ fn test_webpki_crl_revoke() {
 		KeyUsagePurpose::CrlSign,
 	];
 	issuer.alg = alg;
-	let issuer = Certificate::generate_self_signed(issuer).unwrap();
+	let CertifiedKey {
+		cert: issuer,
+		key_pair: issuer_key,
+	} = Certificate::generate_self_signed(issuer).unwrap();
 
 	// Create an end entity cert issued by the issuer.
 	let mut ee = util::default_params();
@@ -555,7 +644,9 @@ fn test_webpki_crl_revoke() {
 	ee.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
 	ee.alg = alg;
 	ee.serial_number = Some(SerialNumber::from(99999));
-	let ee = Certificate::generate(ee, &issuer).unwrap();
+	let ee = Certificate::generate(ee, &issuer, &issuer_key)
+		.unwrap()
+		.cert;
 
 	// Set up webpki's verification requirements.
 	let trust_anchor = TrustAnchor::try_from_cert_der(issuer.der()).unwrap();
@@ -593,7 +684,7 @@ fn test_webpki_crl_revoke() {
 		alg,
 	};
 	let crl = CertificateRevocationList::from_params(crl).unwrap();
-	let crl_der = crl.serialize_der_with_signer(&issuer).unwrap();
+	let crl_der = crl.serialize_der_with_signer(&issuer, &issuer_key).unwrap();
 	let crl = BorrowedCertRevocationList::from_der(&crl_der).unwrap();
 
 	// The end entity cert should **not** validate when we provide a CRL that revokes the EE cert.

@@ -1,4 +1,4 @@
-use rcgen::{BasicConstraints, Certificate, CertificateParams};
+use rcgen::{BasicConstraints, Certificate, CertificateParams, CertifiedKey, KeyPair};
 use rcgen::{
 	CertificateRevocationList, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope,
 };
@@ -80,7 +80,7 @@ pub fn default_params() -> CertificateParams {
 }
 
 #[allow(unused)] // Used by openssl + x509-parser features.
-pub fn test_crl() -> (CertificateRevocationList, Certificate) {
+pub fn test_crl() -> (CertificateRevocationList, Certificate, KeyPair) {
 	let mut issuer = default_params();
 	issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	issuer.key_usages = vec![
@@ -88,7 +88,10 @@ pub fn test_crl() -> (CertificateRevocationList, Certificate) {
 		KeyUsagePurpose::DigitalSignature,
 		KeyUsagePurpose::CrlSign,
 	];
-	let issuer = Certificate::generate_self_signed(issuer).unwrap();
+	let CertifiedKey {
+		cert: issuer,
+		key_pair,
+	} = Certificate::generate_self_signed(issuer).unwrap();
 
 	let now = OffsetDateTime::now_utc();
 	let next_week = now + Duration::weeks(1);
@@ -115,7 +118,7 @@ pub fn test_crl() -> (CertificateRevocationList, Certificate) {
 	};
 	let crl = CertificateRevocationList::from_params(crl).unwrap();
 
-	(crl, issuer)
+	(crl, issuer, key_pair)
 }
 
 #[allow(unused)] // Used by openssl + x509-parser features.
@@ -135,6 +138,7 @@ pub fn cert_with_crl_dps() -> Vec<u8> {
 
 	Certificate::generate_self_signed(params)
 		.unwrap()
+		.cert
 		.der()
 		.to_vec()
 }

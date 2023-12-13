@@ -30,7 +30,7 @@ fn main() -> anyhow::Result<()> {
 	};
 
 	entity
-		.build(ca.cert())?
+		.build(&ca)?
 		.serialize_pem()
 		.write(&opts.output, &opts.cert_file_name)?;
 
