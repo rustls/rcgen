@@ -1,13 +1,16 @@
 #[cfg(feature = "pem")]
 use pem::Pem;
-use ring::rand::SystemRandom;
-use ring::signature::KeyPair as RingKeyPair;
-use ring::signature::{self, EcdsaKeyPair, Ed25519KeyPair, RsaEncoding, RsaKeyPair};
 use std::convert::TryFrom;
 use std::fmt;
 use yasna::DERWriter;
 
 use crate::error::ExternalError;
+use crate::ring_like::error as ring_error;
+use crate::ring_like::rand::SystemRandom;
+use crate::ring_like::signature::{
+	self, EcdsaKeyPair, Ed25519KeyPair, KeyPair as RingKeyPair, RsaEncoding, RsaKeyPair,
+};
+use crate::ring_like::{ecdsa_from_pkcs8, rsa_key_pair_public_modulus_len};
 use crate::sign_algo::algo::*;
 use crate::sign_algo::SignAlgo;
 #[cfg(feature = "pem")]
@@ -115,15 +118,17 @@ impl KeyPair {
 		let kind = if alg == &PKCS_ED25519 {
 			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)._err()?)
 		} else if alg == &PKCS_ECDSA_P256_SHA256 {
-			KeyPairKind::Ec(
-				EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, rng)
-					._err()?,
-			)
+			KeyPairKind::Ec(ecdsa_from_pkcs8(
+				&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+				pkcs8,
+				rng,
+			)?)
 		} else if alg == &PKCS_ECDSA_P384_SHA384 {
-			KeyPairKind::Ec(
-				EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8, rng)
-					._err()?,
-			)
+			KeyPairKind::Ec(ecdsa_from_pkcs8(
+				&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
+				pkcs8,
+				rng,
+			)?)
 		} else if alg == &PKCS_RSA_SHA256 {
 			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
@@ -154,11 +159,11 @@ impl KeyPair {
 		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
 			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
 		} else if let Ok(eckp) =
-			EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, &rng)
+			ecdsa_from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, &rng)
 		{
 			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
 		} else if let Ok(eckp) =
-			EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8, &rng)
+			ecdsa_from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8, &rng)
 		{
 			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
 		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(pkcs8) {
@@ -181,8 +186,7 @@ impl KeyPair {
 				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)._err()?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
-				let key_pair =
-					EcdsaKeyPair::from_pkcs8(&sign_alg, &&key_pair_doc.as_ref(), rng).unwrap();
+				let key_pair = ecdsa_from_pkcs8(&sign_alg, &&key_pair_doc.as_ref(), rng).unwrap();
 				Ok(KeyPair {
 					kind: KeyPairKind::Ec(key_pair),
 					alg,
@@ -242,7 +246,7 @@ impl KeyPair {
 			},
 			KeyPairKind::Rsa(kp, padding_alg) => {
 				let system_random = SystemRandom::new();
-				let mut signature = vec![0; kp.public().modulus_len()];
+				let mut signature = vec![0; rsa_key_pair_public_modulus_len(kp)];
 				kp.sign(*padding_alg, &system_random, msg, &mut signature)
 					._err()?;
 				let sig = &signature.as_ref();
@@ -371,13 +375,13 @@ pub trait RemoteKeyPair {
 	fn algorithm(&self) -> &'static SignatureAlgorithm;
 }
 
-impl<T> ExternalError<T> for Result<T, ring::error::KeyRejected> {
+impl<T> ExternalError<T> for Result<T, ring_error::KeyRejected> {
 	fn _err(self) -> Result<T, Error> {
 		self.map_err(|e| Error::RingKeyRejected(e.to_string()))
 	}
 }
 
-impl<T> ExternalError<T> for Result<T, ring::error::Unspecified> {
+impl<T> ExternalError<T> for Result<T, ring_error::Unspecified> {
 	fn _err(self) -> Result<T, Error> {
 		self.map_err(|_| Error::RingUnspecified)
 	}
@@ -407,8 +411,8 @@ pub(crate) trait PublicKeyData {
 mod test {
 	use super::*;
 
-	use ring::rand::SystemRandom;
-	use ring::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
+	use crate::ring_like::rand::SystemRandom;
+	use crate::ring_like::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
 
 	#[test]
 	fn test_algorithm() {
