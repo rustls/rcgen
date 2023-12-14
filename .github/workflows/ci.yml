@@ -39,7 +39,7 @@ jobs:
         with:
           components: clippy
       - run: cargo clippy --all-features --all-targets
-      - run: cargo clippy --no-default-features --all-targets
+      - run: cargo clippy --no-default-features --features aws_lc_rs,pem --all-targets
 
   rustdoc:
     name: Documentation
@@ -119,6 +119,8 @@ jobs:
         arch: amd64
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
+    - name: Install NASM for aws-lc-rs on Windows
+      uses: ilammy/setup-nasm@v1
     - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
     - run: vcpkg install openssl:x64-windows-static-md
     - name: Run cargo check
@@ -127,8 +129,8 @@ jobs:
       run: cargo test --all-targets
     - name: Run the tests with x509-parser enabled
       run: cargo test --verbose --features x509-parser --all-targets
-    - name: Run the tests with no default features enabled
-      run: cargo test --verbose --no-default-features --all-targets
+    - name: Run the tests with aws_lc_rs backend enabled
+      run: cargo test --verbose --no-default-features --features aws_lc_rs,pem --all-targets
 
   build:
     strategy:
@@ -166,8 +168,8 @@ jobs:
       run: cargo test --all-targets
     - name: Run the tests with x509-parser enabled
       run: cargo test --verbose --features x509-parser --all-targets
-    - name: Run the tests with no default features enabled
-      run: cargo test --verbose --no-default-features --all-targets
+    - name: Run the tests with aws_lc_rs backend enabled
+      run: cargo test --verbose --no-default-features --features aws_lc_rs,pem --all-targets
 
   coverage:
     name: Measure coverage

@@ -22,15 +22,18 @@ name = "sign-leaf-with-ca"
 required-features = ["pem", "x509-parser"]
 
 [dependencies]
+aws-lc-rs = { version = "1.0.0", optional = true }
 yasna = { version = "0.5.2", features = ["time", "std"] }
-ring = { workspace = true }
+ring = { version = "0.17", optional = true }
 pem = { workspace = true, optional = true }
 time = { version = "0.3.6", default-features = false }
-x509-parser = { workspace = true, features = ["verify"], optional = true }
+x509-parser = { version = "0.15", features = ["verify"], optional = true }
 zeroize = { version = "1.2", optional = true }
 
 [features]
-default = ["pem"]
+default = ["pem", "ring"]
+aws_lc_rs = ["dep:aws-lc-rs"]
+ring = ["dep:ring"]
 
 [package.metadata.docs.rs]
 features = ["x509-parser"]
@@ -43,8 +46,9 @@ allowed_external_types = [
 
 [dev-dependencies]
 openssl = "0.10"
-x509-parser = { workspace = true, features = ["verify"] }
+x509-parser = { version = "0.15", features = ["verify"] }
 rustls-webpki = { version = "0.101.0", features = ["std"] }
 botan = { version = "0.10", features = ["vendored"] }
-rand = { workspace = true }
-rsa = { version = "0.9" }
+rand = "0.8"
+rsa = "0.9"
+ring = "0.17"
