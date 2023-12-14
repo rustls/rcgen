@@ -90,6 +90,8 @@ jobs:
 
       - name: Check semver
         uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          exclude: rustls-cert-gen
 
   build-windows:
     runs-on: windows-latest
