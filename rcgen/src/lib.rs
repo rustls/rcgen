@@ -578,6 +578,22 @@ impl Default for CertificateParams {
 }
 
 impl CertificateParams {
+	/// Generate certificate parameters with reasonable defaults
+	pub fn new(subject_alt_names: impl Into<Vec<String>>) -> Self {
+		let subject_alt_names = subject_alt_names
+			.into()
+			.into_iter()
+			.map(|s| match s.parse() {
+				Ok(ip) => SanType::IpAddress(ip),
+				Err(_) => SanType::DnsName(s),
+			})
+			.collect::<Vec<_>>();
+		CertificateParams {
+			subject_alt_names,
+			..Default::default()
+		}
+	}
+
 	/// Parses an existing ca certificate from the ASCII PEM format.
 	///
 	/// See [`from_ca_cert_der`](Self::from_ca_cert_der) for more details.
@@ -1206,24 +1222,6 @@ pub enum BasicConstraints {
 	Unconstrained,
 	/// Constrain to the contained number of intermediate certificates
 	Constrained(u8),
-}
-
-impl CertificateParams {
-	/// Generate certificate parameters with reasonable defaults
-	pub fn new(subject_alt_names: impl Into<Vec<String>>) -> Self {
-		let subject_alt_names = subject_alt_names
-			.into()
-			.into_iter()
-			.map(|s| match s.parse() {
-				Ok(ip) => SanType::IpAddress(ip),
-				Err(_) => SanType::DnsName(s),
-			})
-			.collect::<Vec<_>>();
-		CertificateParams {
-			subject_alt_names,
-			..Default::default()
-		}
-	}
 }
 
 /// The [NameConstraints extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.10)
