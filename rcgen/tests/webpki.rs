@@ -549,12 +549,12 @@ fn test_certificate_from_csr() {
 		cert: ca_cert,
 		key_pair: ca_key,
 	} = Certificate::generate_self_signed(params).unwrap();
-	let cert_der = csr.serialize_der_with_signer(&ca_cert, &ca_key).unwrap();
+	let cert = Certificate::from_request(csr, &ca_cert, &ca_key).unwrap();
 
 	let sign_fn =
 		|key_pair, msg| sign_msg_ecdsa(key_pair, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
-		&cert_der,
+		cert.der(),
 		&cert_key,
 		ca_cert.der(),
 		&webpki::ECDSA_P256_SHA256,
