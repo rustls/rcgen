@@ -1,10 +1,14 @@
 
 # Changes
 
-## Unreleased
+## Release 0.12.0 - December 16, 2023
 
-- Rename `RcgenError` to `Error` to avoid stuttering when used fully-qualified via `rcgen::`.
-- Upgrade to `ring` `v0.17`.
+- Rename `RcgenError` to `Error`. Contributed by [thomaseizinger](https://github.com/thomaseizinger).
+- The public interface of `Error` has been made not expose external library types: `Error::PemError` now holds a `String` value, and the `Error` type doesn't support `From<_>` based conversion any more. This allows rcgen to update dependencies without impacting downstream users.
+- Upgrade to `ring` `v0.17`. Contributed by [thomaseizinger](https://github.com/thomaseizinger).
+- Make dependency on `ring` optional and allow usage of `aws-lc-rs` via a cargo feature. Ring remains the default. Contributed by [BiagioFesta](https://github.com/BiagioFesta).
+- Add `Ia5String` support for `DistinguishedName`s.
+- Add a `KeyIdMethod::PreSpecified` variant to set, and not generate the SKI. `CertificateParams::from_ca_cert_pem` now uses it when building params from an existing CA certificate. Contributed by [Brocar](https://github.com/Brocar).
 
 ## Release 0.11.3 - October 1, 2023
 
