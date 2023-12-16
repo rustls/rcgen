@@ -4,9 +4,9 @@
 ## Release 0.12.0 - December 16, 2023
 
 - Rename `RcgenError` to `Error`. Contributed by [thomaseizinger](https://github.com/thomaseizinger).
-- Lock down the `From` impls for `Error` and make it future-proof.
+- `Error::PemError` has been changed to hold a `String` value. The `From<_>` traits for external error types have been removed. This allows rcgen to update dependent crates without impacting API consumers.
 - Upgrade to `ring` `v0.17`. Contributed by [thomaseizinger](https://github.com/thomaseizinger).
-- Make dependency on `ring` optional and allow usage of `aws_lc_rs`. Contributed by [BiagioFesta](https://github.com/BiagioFesta).
+- Make dependency on `ring` optional and allow usage of `aws-lc-rs`. Ring continues to be used as the default. You may opt-in to using `aws-lc-rs` instead by disabling default features and specifying the `aws_lc_rs` feature.  Contributed by [BiagioFesta](https://github.com/BiagioFesta).
 - Add `Ia5String` support for `DistinguishedName`s.
 
 ## Release 0.11.3 - October 1, 2023
