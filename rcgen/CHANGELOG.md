@@ -1,10 +1,13 @@
 
 # Changes
 
-## Unreleased
+## Release 0.12.0 - December 16, 2023
 
-- Rename `RcgenError` to `Error` to avoid stuttering when used fully-qualified via `rcgen::`.
-- Upgrade to `ring` `v0.17`.
+- Rename `RcgenError` to `Error`. Contributed by [thomaseizinger](https://github.com/thomaseizinger).
+- Lock down the `From` impls for `Error` and make it future-proof.
+- Upgrade to `ring` `v0.17`. Contributed by [thomaseizinger](https://github.com/thomaseizinger).
+- Make dependency on `ring` optional and allow usage of `aws_lc_rs`. Contributed by [BiagioFesta](https://github.com/BiagioFesta).
+- Add `Ia5String` support for `DistinguishedName`s.
 
 ## Release 0.11.3 - October 1, 2023
 
