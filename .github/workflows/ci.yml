@@ -29,6 +29,13 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features:
+          - --all-features
+          - --no-default-features --features ring
+          - --no-default-features --features aws_lc_rs
+          - --no-default-features --features aws_lc_rs,pem
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -38,8 +45,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - run: cargo clippy --all-features --all-targets
-      - run: cargo clippy --no-default-features --features aws_lc_rs,pem --all-targets
+      - run: cargo clippy ${{ matrix.features }} --all-targets
 
   rustdoc:
     name: Documentation
