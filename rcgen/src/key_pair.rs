@@ -387,6 +387,7 @@ impl<T> ExternalError<T> for Result<T, ring_error::Unspecified> {
 	}
 }
 
+#[cfg(feature = "pem")]
 impl<T> ExternalError<T> for Result<T, pem::PemError> {
 	fn _err(self) -> Result<T, Error> {
 		self.map_err(|e| Error::PemError(e.to_string()))
