@@ -1,38 +1,126 @@
-#![allow(clippy::complexity, clippy::style, clippy::pedantic)]
+use bpaf::Bpaf;
+use rcgen::SanType;
+use std::{net::IpAddr, path::PathBuf};
 
-use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName, DnType, SanType};
-use std::fs;
+mod cert;
+use cert::{keypair_algorithm, CertificateBuilder, KeypairAlgorithm};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-	let mut params: CertificateParams = Default::default();
-	params.not_before = date_time_ymd(1975, 01, 01);
-	params.not_after = date_time_ymd(4096, 01, 01);
-	params.distinguished_name = DistinguishedName::new();
-	params
-		.distinguished_name
-		.push(DnType::OrganizationName, "Crab widgits SE");
-	params
-		.distinguished_name
-		.push(DnType::CommonName, "Master Cert");
-	params.subject_alt_names = vec![
-		SanType::DnsName("crabs.crabs".to_string()),
-		SanType::DnsName("localhost".to_string()),
-	];
+fn main() -> anyhow::Result<()> {
+	let opts = options().run();
 
-	let cert = Certificate::from_params(params)?;
+	let ca = CertificateBuilder::new()
+		.signature_algorithm(&opts.keypair_algorithm)?
+		.certificate_authority()
+		.country_name(&opts.country_name)
+		.organization_name(&opts.organization_name)
+		.build()?;
 
-	let pem_serialized = cert.serialize_pem()?;
-	let pem = pem::parse(&pem_serialized)?;
-	let der_serialized = pem.contents();
-	println!("{pem_serialized}");
-	println!("{}", cert.serialize_private_key_pem());
-	std::fs::create_dir_all("certs/")?;
-	fs::write("certs/cert.pem", &pem_serialized.as_bytes())?;
-	fs::write("certs/cert.der", &der_serialized)?;
-	fs::write(
-		"certs/key.pem",
-		&cert.serialize_private_key_pem().as_bytes(),
-	)?;
-	fs::write("certs/key.der", &cert.serialize_private_key_der())?;
+	let mut entity = CertificateBuilder::new()
+		.signature_algorithm(&opts.keypair_algorithm)?
+		.end_entity()
+		.common_name(&opts.common_name)
+		.subject_alternative_names(opts.san);
+
+	if opts.client_auth {
+		entity.client_auth();
+	};
+
+	if opts.server_auth {
+		entity.server_auth();
+	};
+
+	entity
+		.build()?
+		.serialize_pem(ca.cert())?
+		.write(&opts.output, &opts.cert_file_name)?;
+
+	ca.serialize_pem()?
+		.write(&opts.output, &opts.ca_file_name)?;
+
 	Ok(())
+}
+
+#[derive(Clone, Debug, Bpaf)]
+#[bpaf(options)]
+/// rustls-cert-gen TLS Certificate Generator
+struct Options {
+	/// Output directory for generated files
+	#[bpaf(short, long, argument("output/path/"))]
+	pub output: PathBuf,
+	/// Keypair algorithm
+	#[bpaf(
+		external(keypair_algorithm),
+		fallback(KeypairAlgorithm::EcdsaP256),
+		display_fallback,
+		group_help("Keypair Algorithm:")
+	)]
+	pub keypair_algorithm: KeypairAlgorithm,
+	/// Extended Key Usage Purpose: ClientAuth
+	#[bpaf(long)]
+	pub client_auth: bool,
+	/// Extended Key Usage Purpose: ServerAuth
+	#[bpaf(long)]
+	pub server_auth: bool,
+	/// Basename for end-entity cert/key
+	#[bpaf(long, fallback("cert".into()), display_fallback)]
+	pub cert_file_name: String,
+	/// Basename for ca cert/key
+	#[bpaf(long, fallback("root-ca".into()), display_fallback)]
+	pub ca_file_name: String,
+	/// Subject Alt Name (apply multiple times for multiple names/Ips)
+	#[bpaf(many, long, argument::<String>("san"), map(parse_sans))]
+	pub san: Vec<SanType>,
+	/// Common Name (Currently only used for end-entity)
+	#[bpaf(long, fallback("Tls End-Entity Certificate".into()), display_fallback)]
+	pub common_name: String,
+	/// Country Name (Currently only used for ca)
+	#[bpaf(long, fallback("BR".into()), display_fallback)]
+	pub country_name: String,
+	/// Organization Name (Currently only used for ca)
+	#[bpaf(long, fallback("Crab widgits SE".into()), display_fallback)]
+	pub organization_name: String,
+}
+
+/// Parse cli input into SanType. Try first `IpAddr`, if that fails
+/// declare it to be a DnsName.
+fn parse_sans(hosts: Vec<String>) -> Vec<SanType> {
+	hosts
+		.into_iter()
+		.map(|host| {
+			if let Ok(ip) = host.parse::<IpAddr>() {
+				SanType::IpAddress(ip)
+			} else {
+				SanType::DnsName(host)
+			}
+		})
+		.collect()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_parse_san() {
+		let hosts = vec![
+			"my.host.com",
+			"localhost",
+			"185.199.108.153",
+			"2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+		]
+		.into_iter()
+		.map(Into::into)
+		.collect();
+		let sans: Vec<SanType> = parse_sans(hosts);
+		assert_eq!(SanType::DnsName("my.host.com".into()), sans[0]);
+		assert_eq!(SanType::DnsName("localhost".into()), sans[1]);
+		assert_eq!(
+			SanType::IpAddress("185.199.108.153".parse().unwrap()),
+			sans[2]
+		);
+		assert_eq!(
+			SanType::IpAddress("2001:0db8:85a3:0000:0000:8a2e:0370:7334".parse().unwrap()),
+			sans[3]
+		);
+	}
 }
