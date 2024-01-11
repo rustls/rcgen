@@ -13,9 +13,12 @@ use webpki::{
 };
 use webpki::{DnsNameRef, Time};
 
+#[cfg(feature = "random")]
 use ring::rand::SystemRandom;
+#[cfg(feature = "crypto")]
 use ring::signature::{self, EcdsaKeyPair, EcdsaSigningAlgorithm, Ed25519KeyPair, KeyPair as _};
-#[cfg(feature = "pem")]
+
+#[cfg(all(feature = "pem", feature = "crypto"))]
 use ring::signature::{RsaEncoding, RsaKeyPair};
 
 use std::convert::TryFrom;
@@ -23,6 +26,7 @@ use time::{Duration, OffsetDateTime};
 
 mod util;
 
+#[cfg(all(feature = "random", feature ="crypto"))]
 fn sign_msg_ecdsa(cert: &Certificate, msg: &[u8], alg: &'static EcdsaSigningAlgorithm) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
 	let key_pair =
@@ -32,6 +36,7 @@ fn sign_msg_ecdsa(cert: &Certificate, msg: &[u8], alg: &'static EcdsaSigningAlgo
 	signature.as_ref().to_vec()
 }
 
+#[cfg(all(feature = feature ="crypto"))]
 fn sign_msg_ed25519(cert: &Certificate, msg: &[u8]) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
 	let key_pair = Ed25519KeyPair::from_pkcs8_maybe_unchecked(&pk_der).unwrap();
@@ -39,7 +44,7 @@ fn sign_msg_ed25519(cert: &Certificate, msg: &[u8]) -> Vec<u8> {
 	signature.as_ref().to_vec()
 }
 
-#[cfg(feature = "pem")]
+#[cfg(all(feature = "pem", feature = "crypto"))]
 fn sign_msg_rsa(cert: &Certificate, msg: &[u8], encoding: &'static dyn RsaEncoding) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
 	let key_pair = RsaKeyPair::from_pkcs8(&pk_der).unwrap();
@@ -105,6 +110,7 @@ fn check_cert_ca<'a, 'b>(
 		.expect("signature is valid");
 }
 
+#[cfg(all(feature = "crypto"))]
 #[test]
 fn test_webpki() {
 	let params = util::default_params();
@@ -117,6 +123,7 @@ fn test_webpki() {
 	check_cert(&cert_der, &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
 }
 
+#[cfg(all(feature = "crypto"))]
 #[test]
 fn test_webpki_256() {
 	let mut params = util::default_params();
@@ -131,6 +138,7 @@ fn test_webpki_256() {
 	check_cert(&cert_der, &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
 }
 
+#[cfg(all(feature = "crypto"))]
 #[test]
 fn test_webpki_384() {
 	let mut params = util::default_params();
@@ -145,6 +153,7 @@ fn test_webpki_384() {
 	check_cert(&cert_der, &cert, &webpki::ECDSA_P384_SHA384, sign_fn);
 }
 
+#[cfg(all(feature = "crypto"))]
 #[test]
 fn test_webpki_25519() {
 	let mut params = util::default_params();
@@ -158,7 +167,7 @@ fn test_webpki_25519() {
 	check_cert(&cert_der, &cert, &webpki::ED25519, sign_msg_ed25519);
 }
 
-#[cfg(feature = "pem")]
+#[cfg(all(feature = "pem", feature = "crypto"))]
 #[test]
 fn test_webpki_25519_v1_given() {
 	let mut params = util::default_params();
@@ -175,7 +184,7 @@ fn test_webpki_25519_v1_given() {
 	check_cert(&cert_der, &cert, &webpki::ED25519, sign_msg_ed25519);
 }
 
-#[cfg(feature = "pem")]
+#[cfg(all(feature = "pem", feature = "crypto"))]
 #[test]
 fn test_webpki_25519_v2_given() {
 	let mut params = util::default_params();
@@ -192,7 +201,7 @@ fn test_webpki_25519_v2_given() {
 	check_cert(&cert_der, &cert, &webpki::ED25519, sign_msg_ed25519);
 }
 
-#[cfg(feature = "pem")]
+#[cfg(all(feature = "pem", feature = "crypto"))]
 #[test]
 fn test_webpki_rsa_given() {
 	let mut params = util::default_params();
@@ -214,7 +223,7 @@ fn test_webpki_rsa_given() {
 	);
 }
 
-#[cfg(feature = "pem")]
+#[cfg(all(feature = "pem", feature = "crypto"))]
 #[test]
 fn test_webpki_rsa_combinations_given() {
 	let configs: &[(_, _, &'static dyn signature::RsaEncoding)] = &[
@@ -252,6 +261,7 @@ fn test_webpki_rsa_combinations_given() {
 	}
 }
 
+#[cfg(all(feature = "crypto"))]
 #[test]
 fn test_webpki_separate_ca() {
 	let mut params = util::default_params();
@@ -313,6 +323,7 @@ fn test_webpki_separate_ca_with_other_signing_alg() {
 	);
 }
 
+#[cfg(all(feature = "pem", feature = "crypto"))]
 #[test]
 fn from_remote() {
 	struct Remote(EcdsaKeyPair);
@@ -518,6 +529,7 @@ fn test_certificate_from_csr() {
 	);
 }
 
+#[cfg(all(feature = "crypto"))]
 #[test]
 fn test_webpki_serial_number() {
 	let mut params = util::default_params();

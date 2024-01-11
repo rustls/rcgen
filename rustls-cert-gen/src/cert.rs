@@ -50,6 +50,7 @@ impl CertificateBuilder {
 		Self { params }
 	}
 	/// Set signature algorithm (instead of default).
+	#[cfg(feature = "crypto")]
 	pub fn signature_algorithm(mut self, alg: &KeypairAlgorithm) -> anyhow::Result<Self> {
 		let keypair = alg.to_keypair()?;
 		self.params.alg = keypair.algorithm();
@@ -213,6 +214,7 @@ impl fmt::Display for KeypairAlgorithm {
 	}
 }
 
+#[cfg(feature = "crypto")]
 impl KeypairAlgorithm {
 	/// Return an `rcgen::KeyPair` for the given varient
 	fn to_keypair(&self) -> Result<rcgen::KeyPair, rcgen::Error> {

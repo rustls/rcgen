@@ -8,15 +8,19 @@ use cert::{keypair_algorithm, CertificateBuilder, KeypairAlgorithm};
 fn main() -> anyhow::Result<()> {
 	let opts = options().run();
 
-	let ca = CertificateBuilder::new()
-		.signature_algorithm(&opts.keypair_algorithm)?
+	let ca = CertificateBuilder::new();
+	#[cfg(feature = "crypto")]
+	let ca = ca.signature_algorithm(&opts.keypair_algorithm)?;
+	let ca = ca
 		.certificate_authority()
 		.country_name(&opts.country_name)
 		.organization_name(&opts.organization_name)
 		.build()?;
 
-	let mut entity = CertificateBuilder::new()
-		.signature_algorithm(&opts.keypair_algorithm)?
+	let entity = CertificateBuilder::new();
+	#[cfg(feature = "crypto")]
+	let mut entity = entity.signature_algorithm(&opts.keypair_algorithm)?;
+	let mut entity = entity
 		.end_entity()
 		.common_name(&opts.common_name)
 		.subject_alternative_names(opts.san);

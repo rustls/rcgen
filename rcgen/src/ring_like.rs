@@ -4,9 +4,12 @@ pub(crate) use ring::*;
 #[cfg(all(not(feature = "ring"), feature = "aws_lc_rs"))]
 pub(crate) use aws_lc_rs::*;
 
+#[cfg(feature = "crypto")]
 use crate::error::ExternalError;
+#[cfg(feature = "crypto")]
 use crate::Error;
 
+#[cfg(feature = "crypto")]
 pub(crate) fn ecdsa_from_pkcs8(
 	alg: &'static signature::EcdsaSigningAlgorithm,
 	pkcs8: &[u8],
@@ -23,6 +26,7 @@ pub(crate) fn ecdsa_from_pkcs8(
 	}
 }
 
+#[cfg(feature = "crypto")]
 pub(crate) fn rsa_key_pair_public_modulus_len(kp: &signature::RsaKeyPair) -> usize {
 	#[cfg(feature = "ring")]
 	{

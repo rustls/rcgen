@@ -157,30 +157,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "327762f6e5a765692301e5bb513e0d9fef63be86bbc14528052b1cd3e6f03e07"
 
 [[package]]
-name = "botan"
-version = "0.10.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "350081af1a3c6883f8a1f863ac553bfe6922589aad60008a70947765ed57c53e"
-dependencies = [
- "botan-sys",
-]
-
-[[package]]
-name = "botan-src"
-version = "0.30101.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaaf0426c00371ec87f150daa40f3a8f149c6e8b9646d5fafa30888cacb2bc9f"
-
-[[package]]
-name = "botan-sys"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f49dde1b8ebd2996cc41c55c39f6ef8b54e38148d8973aeba0792b87b1621ca"
-dependencies = [
- "botan-src",
-]
-
-[[package]]
 name = "bpaf"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -865,7 +841,6 @@ name = "rcgen"
 version = "0.12.0"
 dependencies = [
  "aws-lc-rs",
- "botan",
  "openssl",
  "pem",
  "rand",

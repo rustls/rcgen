@@ -1,6 +1,6 @@
 mod util;
 
-#[cfg(feature = "pem")]
+#[cfg(all(feature = "pem", feature = "crypto"))]
 mod test_key_params_mismatch {
 	use crate::util;
 

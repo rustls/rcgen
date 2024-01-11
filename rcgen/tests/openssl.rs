@@ -229,6 +229,7 @@ fn test_openssl_25519() {
 }
 
 #[test]
+#[cfg(feature = "crypto")]
 fn test_openssl_25519_v1_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
@@ -251,6 +252,7 @@ fn test_openssl_25519_v1_given() {
 }
 
 #[test]
+#[cfg(feature = "crypto")]
 fn test_openssl_25519_v2_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_ED25519;
@@ -269,6 +271,7 @@ fn test_openssl_25519_v2_given() {
 }
 
 #[test]
+#[cfg(feature = "crypto")]
 fn test_openssl_rsa_given() {
 	let mut params = util::default_params();
 	params.alg = &rcgen::PKCS_RSA_SHA256;
@@ -284,6 +287,7 @@ fn test_openssl_rsa_given() {
 }
 
 #[test]
+#[cfg(feature = "crypto")]
 fn test_openssl_rsa_combinations_given() {
 	let alg_list = [
 		&rcgen::PKCS_RSA_SHA256,
