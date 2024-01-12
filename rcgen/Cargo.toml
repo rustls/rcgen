@@ -31,7 +31,7 @@ x509-parser = { workspace = true, features = ["verify"], optional = true }
 zeroize = { version = "1.2", optional = true }
 
 [features]
-default = ["crypto", "random", "pem", "ring"]
+default = ["crypto", "pem", "ring"]
 crypto = ["random"]
 random = []
 aws_lc_rs = ["dep:aws-lc-rs"]
@@ -51,7 +51,7 @@ allowed_external_types = [
 openssl = "0.10"
 x509-parser = { workspace = true, features = ["verify"] }
 rustls-webpki = { version = "0.101.0", features = ["std"] }
-#botan = { version = "0.10", features = ["vendored"] }
+botan = { version = "0.10", features = ["vendored"] }
 rand = { workspace = true }
 rsa = "0.9"
 ring = { workspace = true }

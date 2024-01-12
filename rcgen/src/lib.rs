@@ -35,6 +35,7 @@ println!("{}", cert.serialize_private_key_pem());
 
 #[cfg(feature = "pem")]
 use pem::Pem;
+#[cfg(feature = "crypto")]
 use ring_like::digest;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -116,6 +117,7 @@ mod csr;
 mod error;
 mod key_pair;
 mod oid;
+#[cfg(feature = "crypto")]
 mod ring_like;
 mod sign_algo;
 

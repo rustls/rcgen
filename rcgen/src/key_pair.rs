@@ -9,8 +9,9 @@ use crate::error::ExternalError;
 use crate::ring_like::error as ring_error;
 #[cfg(feature = "random")]
 use crate::ring_like::rand::SystemRandom;
+#[cfg(feature = "random")]
 use crate::ring_like::signature::{KeyPair as RingKeyPair, Ed25519KeyPair};
-// #[cfg(feature = "random")]
+#[cfg(feature = "random")]
 use crate::ring_like::signature::EcdsaKeyPair;
 #[cfg(feature = "crypto")]
 use crate::ring_like::signature::{

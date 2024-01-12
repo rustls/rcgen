@@ -1,9 +1,12 @@
 use bpaf::Bpaf;
 use rcgen::SanType;
-use std::{net::IpAddr, path::PathBuf};
+use std::net::IpAddr;
+use std::path::PathBuf;
 
 mod cert;
-use cert::{keypair_algorithm, CertificateBuilder, KeypairAlgorithm};
+use cert::CertificateBuilder;
+#[cfg(feature = "crypto")]
+use cert::{keypair_algorithm, KeypairAlgorithm};
 
 fn main() -> anyhow::Result<()> {
 	let opts = options().run();
@@ -19,7 +22,7 @@ fn main() -> anyhow::Result<()> {
 
 	let entity = CertificateBuilder::new();
 	#[cfg(feature = "crypto")]
-	let mut entity = entity.signature_algorithm(&opts.keypair_algorithm)?;
+	let entity = entity.signature_algorithm(&opts.keypair_algorithm)?;
 	let mut entity = entity
 		.end_entity()
 		.common_name(&opts.common_name)
@@ -43,7 +46,7 @@ fn main() -> anyhow::Result<()> {
 
 	Ok(())
 }
-
+/// #[cfg(feature = "crypto")]
 #[derive(Clone, Debug, Bpaf)]
 #[bpaf(options)]
 /// rustls-cert-gen TLS Certificate Generator
@@ -52,12 +55,14 @@ struct Options {
 	#[bpaf(short, long, argument("output/path/"))]
 	pub output: PathBuf,
 	/// Keypair algorithm
+	#[cfg(feature = "crypto")]
 	#[bpaf(
 		external(keypair_algorithm),
 		fallback(KeypairAlgorithm::EcdsaP256),
 		display_fallback,
 		group_help("Keypair Algorithm:")
 	)]
+	#[cfg(feature = "crypto")]
 	pub keypair_algorithm: KeypairAlgorithm,
 	/// Extended Key Usage Purpose: ClientAuth
 	#[bpaf(long)]

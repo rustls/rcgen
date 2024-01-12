@@ -6,8 +6,12 @@ license.workspace = true
 edition.workspace = true
 keywords.workspace = true
 
+[features]
+default = ["crypto"]
+crypto = ["rcgen/crypto"]
+
 [dependencies]
-rcgen = { path = "../rcgen", default-features = false, features = ["pem", "crypto", "random"] }
+rcgen = { path = "../rcgen", default-features = false, features = ["pem"] }
 bpaf = { version = "0.9.5", features = ["derive"] }
 pem = { workspace = true }
 ring = { workspace = true }

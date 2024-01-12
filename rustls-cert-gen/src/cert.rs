@@ -1,9 +1,12 @@
+#[cfg(feature = "crypto")]
 use bpaf::Bpaf;
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType,
 	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyUsagePurpose, SanType,
 };
-use std::{fmt, fs::File, io, path::Path};
+use std::{fs::File, io, path::Path};
+#[cfg(feature = "crypto")]
+use std::fmt;
 
 #[derive(Debug, Clone)]
 /// PEM serialized Certificate and PEM serialized corresponding private key
@@ -196,6 +199,7 @@ impl EndEntityBuilder {
 	}
 }
 
+#[cfg(feature = "crypto")]
 #[derive(Clone, Debug, Bpaf)]
 /// Supported Keypair Algorithms
 pub enum KeypairAlgorithm {
@@ -204,6 +208,7 @@ pub enum KeypairAlgorithm {
 	EcdsaP384,
 }
 
+#[cfg(feature = "crypto")]
 impl fmt::Display for KeypairAlgorithm {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
@@ -314,6 +319,8 @@ mod tests {
 
 		Ok(())
 	}
+	
+	#[cfg(feature = "crypto")]
 	#[test]
 	fn serialize_end_entity_ecdsa_p384_sha384_sig() -> anyhow::Result<()> {
 		let ca = CertificateBuilder::new().certificate_authority().build()?;
@@ -333,6 +340,7 @@ mod tests {
 		Ok(())
 	}
 
+	#[cfg(feature = "crypto")]
 	#[test]
 	fn serialize_end_entity_ed25519_sig() -> anyhow::Result<()> {
 		let ca = CertificateBuilder::new().certificate_authority().build()?;
@@ -417,6 +425,7 @@ mod tests {
 		assert_eq!(cert.params.subject_alt_names, vec![]);
 	}
 
+	#[cfg(feature = "crypto")]
 	#[test]
 	fn keypair_algorithm_to_keypair() -> anyhow::Result<()> {
 		let keypair = KeypairAlgorithm::Ed25519.to_keypair()?;
