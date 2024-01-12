@@ -55,7 +55,7 @@ pub use crate::crl::{
 	CertificateRevocationList, CertificateRevocationListParams, CrlDistributionPoint,
 	CrlIssuingDistributionPoint, CrlScope, RevocationReason, RevokedCertParams,
 };
-pub use crate::csr::{CertificateSigningRequest, PublicKey};
+pub use crate::csr::{CertificateSigningRequestParams, PublicKey};
 pub use crate::error::Error;
 use crate::key_pair::PublicKeyData;
 pub use crate::key_pair::{KeyPair, RemoteKeyPair};
@@ -1562,7 +1562,7 @@ impl Certificate {
 	/// Generate a new certificate using the certificate signing request parameters, signed by
 	/// the provided issuer.
 	pub fn from_request(
-		request: CertificateSigningRequest,
+		request: CertificateSigningRequestParams,
 		issuer: &Certificate,
 		issuer_key: &KeyPair,
 	) -> Result<Certificate, Error> {
@@ -1704,7 +1704,7 @@ impl zeroize::Zeroize for KeyPair {
 }
 
 #[cfg(feature = "zeroize")]
-impl zeroize::Zeroize for CertificateSigningRequest {
+impl zeroize::Zeroize for CertificateSigningRequestParams {
 	fn zeroize(&mut self) {
 		self.params.zeroize();
 	}

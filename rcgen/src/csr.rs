@@ -21,15 +21,15 @@ impl PublicKeyData for PublicKey {
 	}
 }
 
-/// Data for a certificate signing request
-pub struct CertificateSigningRequest {
+/// Parameters for a certificate signing request
+pub struct CertificateSigningRequestParams {
 	/// Parameters for the certificate to be signed.
 	pub params: CertificateParams,
 	/// Public key to include in the certificate signing request.
 	pub public_key: PublicKey,
 }
 
-impl CertificateSigningRequest {
+impl CertificateSigningRequestParams {
 	/// Parse a certificate signing request from the ASCII PEM format
 	///
 	/// See [`from_der`](Self::from_der) for more details.

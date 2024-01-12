@@ -6,7 +6,7 @@ use rcgen::{
 	CertificateRevocationList, CertificateRevocationListParams, RevocationReason, RevokedCertParams,
 };
 #[cfg(feature = "x509-parser")]
-use rcgen::{CertificateSigningRequest, DnValue};
+use rcgen::{CertificateSigningRequestParams, DnValue};
 use rcgen::{ExtendedKeyUsagePurpose, KeyUsagePurpose, SerialNumber};
 use webpki::SignatureAlgorithm;
 use webpki::{
@@ -541,7 +541,7 @@ fn test_certificate_from_csr() {
 		key_pair: cert_key,
 	} = Certificate::generate_self_signed(params).unwrap();
 	let csr_der = cert.serialize_request_der(&cert_key).unwrap();
-	let csr = CertificateSigningRequest::from_der(&csr_der).unwrap();
+	let csr = CertificateSigningRequestParams::from_der(&csr_der).unwrap();
 
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
