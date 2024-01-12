@@ -177,6 +177,21 @@ jobs:
     - name: Run the tests with aws_lc_rs backend enabled
       run: cargo test --verbose --no-default-features --features aws_lc_rs,pem --all-targets
 
+  # Build rustls-cert-gen as a standalone package, see this PR for why it's needed:
+  # https://github.com/rustls/rcgen/pull/206#pullrequestreview-1816197358
+  build-rustls-cert-gen-standalone:
+    name: Build rustls-cert-gen as a standalone package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run the tests
+        run: cargo test --package rustls-cert-gen
+
   coverage:
     name: Measure coverage
     runs-on: ubuntu-latest
