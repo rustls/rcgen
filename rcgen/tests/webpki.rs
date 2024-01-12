@@ -26,7 +26,7 @@ use time::{Duration, OffsetDateTime};
 
 mod util;
 
-#[cfg(all(feature = "random", feature ="crypto"))]
+#[cfg(all(feature = "random", feature = "crypto"))]
 fn sign_msg_ecdsa(cert: &Certificate, msg: &[u8], alg: &'static EcdsaSigningAlgorithm) -> Vec<u8> {
 	let pk_der = cert.serialize_private_key_der();
 	let key_pair =

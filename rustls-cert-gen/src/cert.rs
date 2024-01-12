@@ -4,9 +4,9 @@ use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType,
 	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyUsagePurpose, SanType,
 };
-use std::{fs::File, io, path::Path};
 #[cfg(feature = "crypto")]
 use std::fmt;
+use std::{fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
 /// PEM serialized Certificate and PEM serialized corresponding private key
@@ -319,7 +319,7 @@ mod tests {
 
 		Ok(())
 	}
-	
+
 	#[cfg(feature = "crypto")]
 	#[test]
 	fn serialize_end_entity_ecdsa_p384_sha384_sig() -> anyhow::Result<()> {

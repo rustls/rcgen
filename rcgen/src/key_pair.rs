@@ -10,13 +10,11 @@ use crate::ring_like::error as ring_error;
 #[cfg(feature = "random")]
 use crate::ring_like::rand::SystemRandom;
 #[cfg(feature = "random")]
-use crate::ring_like::signature::{KeyPair as RingKeyPair, Ed25519KeyPair};
-#[cfg(feature = "random")]
 use crate::ring_like::signature::EcdsaKeyPair;
 #[cfg(feature = "crypto")]
-use crate::ring_like::signature::{
-	self, RsaEncoding, RsaKeyPair,
-};
+use crate::ring_like::signature::{self, RsaEncoding, RsaKeyPair};
+#[cfg(feature = "random")]
+use crate::ring_like::signature::{Ed25519KeyPair, KeyPair as RingKeyPair};
 #[cfg(feature = "crypto")]
 use crate::ring_like::{ecdsa_from_pkcs8, rsa_key_pair_public_modulus_len};
 #[cfg(feature = "crypto")]
@@ -203,7 +201,6 @@ impl KeyPair {
 	/// DOC
 	#[cfg(feature = "crypto")]
 	pub fn generate(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
-
 		let rng = &SystemRandom::new();
 
 		match alg.sign_alg {
