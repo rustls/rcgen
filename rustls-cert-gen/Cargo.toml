@@ -7,7 +7,7 @@ edition.workspace = true
 keywords.workspace = true
 
 [dependencies]
-rcgen = { path = "../rcgen", default-features = false, features = ["pem"] }
+rcgen = { path = "../rcgen", default-features = false, features = ["pem", "ring"] }
 bpaf = { version = "0.9.5", features = ["derive"] }
 pem = { workspace = true }
 ring = { workspace = true }
