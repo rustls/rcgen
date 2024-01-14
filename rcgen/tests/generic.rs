@@ -308,3 +308,35 @@ mod test_parse_ia5string_subject {
 		assert_eq!(names, expected_names);
 	}
 }
+
+#[cfg(feature = "x509-parser")]
+mod test_parse_other_name_alt_name {
+	use rcgen::{Certificate, CertificateParams, KeyPair, SanType};
+
+	#[test]
+	fn parse_other_name_alt_name() {
+		// Create and serialize a certificate with an alternative name containing an "OtherName".
+		let mut params = CertificateParams::default();
+		let other_name = SanType::OtherName((vec![1, 2, 3, 4], "Foo".into()));
+		params.subject_alt_names.push(other_name.clone());
+		let key_pair = KeyPair::generate().unwrap();
+
+		let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
+
+		let cert_der = cert.der();
+
+		// We should be able to parse the certificate with x509-parser.
+		assert!(x509_parser::parse_x509_certificate(cert_der).is_ok());
+
+		// We should be able to reconstitute params from the DER using x509-parser.
+		let params_from_cert = CertificateParams::from_ca_cert_der(cert_der).unwrap();
+
+		// We should find the expected distinguished name in the reconstituted params.
+		let expected_alt_names = &[&other_name];
+		let subject_alt_names = params_from_cert
+			.subject_alt_names
+			.iter()
+			.collect::<Vec<_>>();
+		assert_eq!(subject_alt_names, expected_alt_names);
+	}
+}
