@@ -6,7 +6,7 @@ This crate provides a way to generate self signed X.509 certificates.
 The most simple way of using this crate is by calling the
 [`generate_simple_self_signed`] function.
 For more customization abilities, we provide the lower level
-[`Certificate::from_params`] function.
+[`Certificate::generate_self_signed`] and [`Certificate::generate`] functions.
 */
 #![cfg_attr(
 	feature = "pem",
@@ -15,15 +15,15 @@ For more customization abilities, we provide the lower level
 
 ```
 extern crate rcgen;
-use rcgen::generate_simple_self_signed;
+use rcgen::{generate_simple_self_signed, CertifiedKey};
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let cert = generate_simple_self_signed(subject_alt_names).unwrap();
-println!("{}", cert.serialize_pem().unwrap());
-println!("{}", cert.serialize_private_key_pem());
+let CertifiedKey{cert, key_pair} = generate_simple_self_signed(subject_alt_names).unwrap();
+println!("{}", cert.pem());
+println!("{}", key_pair.serialize_pem());
 # }
 ```"##
 )]
@@ -55,7 +55,7 @@ pub use crate::crl::{
 	CertificateRevocationList, CertificateRevocationListParams, CrlDistributionPoint,
 	CrlIssuingDistributionPoint, CrlScope, RevocationReason, RevokedCertParams,
 };
-pub use crate::csr::{CertificateSigningRequest, PublicKey};
+pub use crate::csr::{CertificateSigningRequestParams, PublicKey};
 pub use crate::error::Error;
 use crate::key_pair::PublicKeyData;
 pub use crate::key_pair::{KeyPair, RemoteKeyPair};
@@ -69,10 +69,19 @@ pub use crate::sign_algo::SignatureAlgorithm;
 )]
 pub type RcgenError = Error;
 
-/// A self signed certificate together with signing keys
+/// An issued certificate, together with the subject keypair.
+pub struct CertifiedKey {
+	/// An issued certificate.
+	pub cert: Certificate,
+	/// The certificate's subject key pair.
+	pub key_pair: KeyPair,
+}
+
+/// An issued certificate together with the parameters used to generate it.
 pub struct Certificate {
 	params: CertificateParams,
-	key_pair: KeyPair,
+	subject_public_key_info: Vec<u8>,
+	der: Vec<u8>,
 }
 
 /**
@@ -81,7 +90,7 @@ KISS function to generate a self signed certificate
 Given a set of domain names you want your certificate to be valid for,
 this function fills in the other generation parameters with
 reasonable defaults and generates a self signed certificate
-as output.
+and key pair as output.
 */
 #[cfg_attr(
 	feature = "pem",
@@ -90,23 +99,23 @@ as output.
 
 ```
 extern crate rcgen;
-use rcgen::generate_simple_self_signed;
+use rcgen::{generate_simple_self_signed, CertifiedKey};
 # fn main () {
 let subject_alt_names :&[_] = &["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let cert = generate_simple_self_signed(subject_alt_names).unwrap();
+let CertifiedKey{cert, key_pair} = generate_simple_self_signed(subject_alt_names).unwrap();
 // The certificate is now valid for localhost and the domain "hello.world.example"
-println!("{}", cert.serialize_pem().unwrap());
-println!("{}", cert.serialize_private_key_pem());
+println!("{}", cert.pem());
+println!("{}", key_pair.serialize_pem());
 # }
 ```
 "##
 )]
 pub fn generate_simple_self_signed(
 	subject_alt_names: impl Into<Vec<String>>,
-) -> Result<Certificate, Error> {
-	Certificate::from_params(CertificateParams::new(subject_alt_names))
+) -> Result<CertifiedKey, Error> {
+	Certificate::generate_self_signed(CertificateParams::new(subject_alt_names))
 }
 
 // https://tools.ietf.org/html/rfc5280#section-4.1.1
@@ -537,7 +546,7 @@ pub struct CertificateParams {
 	pub use_authority_key_identifier_extension: bool,
 	/// Method to generate key identifiers from public keys
 	///
-	/// Defaults to SHA-256.
+	/// Defaults to a truncated SHA-256 digest. See [`KeyIdMethod`] for more information.
 	pub key_identifier_method: KeyIdMethod,
 }
 
@@ -569,7 +578,23 @@ impl Default for CertificateParams {
 }
 
 impl CertificateParams {
-	/// Parses a ca certificate from the ASCII PEM format for signing
+	/// Generate certificate parameters with reasonable defaults
+	pub fn new(subject_alt_names: impl Into<Vec<String>>) -> Self {
+		let subject_alt_names = subject_alt_names
+			.into()
+			.into_iter()
+			.map(|s| match s.parse() {
+				Ok(ip) => SanType::IpAddress(ip),
+				Err(_) => SanType::DnsName(s),
+			})
+			.collect::<Vec<_>>();
+		CertificateParams {
+			subject_alt_names,
+			..Default::default()
+		}
+	}
+
+	/// Parses an existing ca certificate from the ASCII PEM format.
 	///
 	/// See [`from_ca_cert_der`](Self::from_ca_cert_der) for more details.
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
@@ -578,19 +603,21 @@ impl CertificateParams {
 		Self::from_ca_cert_der(certificate.contents(), key_pair)
 	}
 
-	/// Parses a ca certificate from the DER format for signing
+	/// Parses an existing ca certificate from the DER format.
 	///
-	/// This function is only of use if you have an existing ca certificate with
-	/// which you want to sign a certificate newly generated by `rcgen` using the
-	/// [`serialize_der_with_signer`](Certificate::serialize_der_with_signer) or
-	/// [`serialize_pem_with_signer`](Certificate::serialize_pem_with_signer)
-	/// functions.
+	/// This function is only of use if you have an existing CA certificate
+	/// you would like to use to sign a certificate generated by `rcgen`.
+	/// By providing the returned [`Certificate`] and the passed-through
+	/// [`KeyPair`] to [`Certificate::generate`] or
+	/// [`Certificate::from_request`] functions you can generate a new certificate
+	/// from [`CertificateParams`], signed by the pre-existing CA.
 	///
-	/// This function only extracts from the given ca cert the information
-	/// needed for signing. Any information beyond that is not extracted
-	/// and left to defaults.
+	/// In general this function only extracts the information needed for signing.
+	/// Other attributes of the [`Certificate`] may be left as defaults.
 	///
-	/// Will not check if certificate is a ca certificate!
+	/// This function assumes the provided certificate is a CA. It will not check
+	/// for the presence of the `BasicConstraints` extension, or perform any other
+	/// validation.
 	#[cfg(feature = "x509-parser")]
 	pub fn from_ca_cert_der(ca_cert: &[u8], key_pair: KeyPair) -> Result<Self, Error> {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
@@ -887,7 +914,7 @@ impl CertificateParams {
 		writer.write_sequence(|writer| {
 			// Write version
 			writer.next().write_u8(0);
-			// Write issuer
+			// Write subject name
 			write_distinguished_name(writer.next(), &distinguished_name);
 			// Write subjectPublicKeyInfo
 			pub_key.serialize_public_key_der(writer.next());
@@ -924,8 +951,11 @@ impl CertificateParams {
 		&self,
 		writer: DERWriter,
 		pub_key: &K,
-		ca: &Certificate,
+		sig_alg: &SignatureAlgorithm,
+		issuer: &KeyPair,
+		issuer_name: &DistinguishedName,
 	) -> Result<(), Error> {
+		let pub_key_spki = yasna::construct_der(|writer| pub_key.serialize_public_key_der(writer));
 		writer.write_sequence(|writer| {
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
@@ -941,10 +971,10 @@ impl CertificateParams {
 				sl[0] = sl[0] & 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
 				writer.next().write_bigint_bytes(&sl, true);
 			};
-			// Write signature
-			ca.params.alg.write_alg_ident(writer.next());
-			// Write issuer
-			write_distinguished_name(writer.next(), &ca.params.distinguished_name);
+			// Write signature algorithm
+			sig_alg.write_alg_ident(writer.next());
+			// Write issuer name
+			write_distinguished_name(writer.next(), issuer_name);
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
@@ -969,7 +999,10 @@ impl CertificateParams {
 				writer.next().write_tagged(Tag::context(3), |writer| {
 					writer.write_sequence(|writer| {
 						if self.use_authority_key_identifier_extension {
-							write_x509_authority_key_identifier(writer.next(), ca)
+							write_x509_authority_key_identifier(
+								writer.next(),
+								self.key_identifier_method.derive(issuer.public_key_der()),
+							);
 						}
 						// Write subject_alt_names
 						if !self.subject_alt_names.is_empty() {
@@ -1077,8 +1110,9 @@ impl CertificateParams {
 									OID_SUBJECT_KEY_IDENTIFIER,
 									false,
 									|writer| {
-										let key_identifier = self.key_identifier(pub_key);
-										writer.write_bytes(key_identifier.as_ref());
+										writer.write_bytes(
+											&self.key_identifier_method.derive(pub_key_spki),
+										);
 									},
 								);
 								// Write basic_constraints
@@ -1106,8 +1140,9 @@ impl CertificateParams {
 									OID_SUBJECT_KEY_IDENTIFIER,
 									false,
 									|writer| {
-										let key_identifier = self.key_identifier(pub_key);
-										writer.write_bytes(key_identifier.as_ref());
+										writer.write_bytes(
+											&self.key_identifier_method.derive(pub_key_spki),
+										);
 									},
 								);
 								// Write basic_constraints
@@ -1137,41 +1172,28 @@ impl CertificateParams {
 			Ok(())
 		})
 	}
-	/// Calculates a subject key identifier for the certificate subject's public key.
-	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
-	fn key_identifier<K: PublicKeyData>(&self, pub_key: &K) -> Vec<u8> {
-		// Decide which method from RFC 7093 to use
-		let digest_method = match &self.key_identifier_method {
-			KeyIdMethod::Sha256 => &digest::SHA256,
-			KeyIdMethod::Sha384 => &digest::SHA384,
-			KeyIdMethod::Sha512 => &digest::SHA512,
-			KeyIdMethod::PreSpecified(b) => {
-				return b.to_vec();
-			},
-		};
-		let digest = digest::digest(digest_method, pub_key.raw_bytes());
-		let truncated_digest = &digest.as_ref()[0..20];
-		truncated_digest.to_vec()
-	}
+
 	fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
-		ca: &Certificate,
+		sig_alg: &SignatureAlgorithm,
+		issuer: &KeyPair,
+		issuer_name: &DistinguishedName,
 	) -> Result<Vec<u8>, Error> {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 				let tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
-					self.write_cert(writer, pub_key, ca)?;
+					self.write_cert(writer, pub_key, sig_alg, issuer, issuer_name)?;
 					Ok::<(), Error>(())
 				})?;
 				// Write tbsCertList
 				writer.next().write_der(&tbs_cert_list_serialized);
 
 				// Write signatureAlgorithm
-				ca.params.alg.write_alg_ident(writer.next());
+				sig_alg.write_alg_ident(writer.next());
 
 				// Write signature
-				ca.key_pair.sign(&tbs_cert_list_serialized, writer.next())?;
+				issuer.sign(&tbs_cert_list_serialized, writer.next())?;
 
 				Ok(())
 			})
@@ -1200,24 +1222,6 @@ pub enum BasicConstraints {
 	Unconstrained,
 	/// Constrain to the contained number of intermediate certificates
 	Constrained(u8),
-}
-
-impl CertificateParams {
-	/// Generate certificate parameters with reasonable defaults
-	pub fn new(subject_alt_names: impl Into<Vec<String>>) -> Self {
-		let subject_alt_names = subject_alt_names
-			.into()
-			.into_iter()
-			.map(|s| match s.parse() {
-				Ok(ip) => SanType::IpAddress(ip),
-				Err(_) => SanType::DnsName(s),
-			})
-			.collect::<Vec<_>>();
-		CertificateParams {
-			subject_alt_names,
-			..Default::default()
-		}
-	}
 }
 
 /// The [NameConstraints extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.10)
@@ -1352,19 +1356,49 @@ impl CustomExtension {
 
 /// Method to generate key identifiers from public keys.
 ///
-/// This allows choice over methods to generate key identifiers
-/// as specified in RFC 7093 section 2.
+/// Key identifiers should be derived from the public key data. [RFC 7093] defines
+/// three methods to do so using a choice of SHA256 (method 1), SHA384 (method 2), or SHA512
+/// (method 3). In each case the first 160 bits of the hash are used as the key identifier
+/// to match the output length that would be produced were SHA1 used (a legacy option defined
+/// in RFC 5280).
+///
+/// In addition to the RFC 7093 mechanisms, rcgen supports using a pre-specified key identifier.
+/// This can be helpful when working with an existing `Certificate`.
+///
+/// [RFC 7093]: https://www.rfc-editor.org/rfc/rfc7093
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[non_exhaustive]
 pub enum KeyIdMethod {
-	/// RFC 7093 method 1
+	/// RFC 7093 method 1 - a truncated SHA256 digest.
 	Sha256,
-	/// RFC 7093 method 2
+	/// RFC 7093 method 2 - a truncated SHA384 digest.
 	Sha384,
-	/// RFC 7093 method 3
+	/// RFC 7093 method 3 - a truncated SHA512 digest.
 	Sha512,
-	/// Pre-specified identifier.
+	/// Pre-specified identifier. The exact given value is used as the key identifier.
 	PreSpecified(Vec<u8>),
+}
+
+impl KeyIdMethod {
+	/// Derive a key identifier for the provided subject public key info using the key ID method.
+	///
+	/// Typically this is a truncated hash over the raw subject public key info, but may
+	/// be a pre-specified value.
+	///
+	/// This key identifier is used in the SubjectKeyIdentifier and AuthorityKeyIdentifier
+	/// X.509v3 extensions.
+	pub(crate) fn derive(&self, subject_public_key_info: impl AsRef<[u8]>) -> Vec<u8> {
+		let digest_method = match &self {
+			Self::Sha256 => &digest::SHA256,
+			Self::Sha384 => &digest::SHA384,
+			Self::Sha512 => &digest::SHA512,
+			Self::PreSpecified(b) => {
+				return b.to_vec();
+			},
+		};
+		let digest = digest::digest(digest_method, subject_public_key_info.as_ref());
+		digest.as_ref()[0..20].to_vec()
+	}
 }
 
 /// Helper to obtain an `OffsetDateTime` from year, month, day values
@@ -1477,21 +1511,100 @@ fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[Gener
 }
 
 impl Certificate {
-	/// Generates a new certificate from the given parameters.
+	/// Generates a new self-signed certificate from the given parameters.
 	///
-	/// If you want to control the [`KeyPair`] or the randomness used to generate it, set the [`CertificateParams::key_pair`]
-	/// field ahead of time before calling this function.
-	pub fn from_params(mut params: CertificateParams) -> Result<Self, Error> {
-		let key_pair = if let Some(key_pair) = params.key_pair.take() {
-			if !key_pair.is_compatible(&params.alg) {
-				return Err(Error::CertificateKeyPairMismatch);
-			}
-			key_pair
-		} else {
-			KeyPair::generate(&params.alg)?
-		};
-
-		Ok(Certificate { params, key_pair })
+	/// If [`CertificateParams::key_pair`] is not set to a pre-generated key, a new key pair
+	/// is generated using reasonable defaults.
+	///
+	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
+	/// [`Certificate::pem`]. Similarly the private key of the returned [`KeyPair`] may be
+	/// serialized using [`KeyPair::serialize_der`] and [`KeyPair::serialize_pem`].
+	pub fn generate_self_signed(mut params: CertificateParams) -> Result<CertifiedKey, Error> {
+		let key_pair = KeyPair::validate_or_generate(&mut params.key_pair, params.alg)?;
+		let subject_public_key_info = key_pair.public_key_der();
+		let der = params.serialize_der_with_signer(
+			&key_pair,
+			params.alg,
+			&key_pair,
+			&params.distinguished_name,
+		)?;
+		Ok(CertifiedKey {
+			cert: Certificate {
+				params,
+				subject_public_key_info,
+				der,
+			},
+			key_pair,
+		})
+	}
+	/// Generate a new certificate from the given parameters, signed by the provided issuer.
+	///
+	/// If [`CertificateParams::key_pair`] is not set to a pre-generated key, a new key pair
+	/// is generated using reasonable defaults.
+	///
+	/// The returned certificate will have its issuer field set to the subject of the
+	/// provided `issuer`, and the authority key identifier extension will be populated using
+	/// the subject public key of `issuer`. It will be signed by `issuer_key`.
+	///
+	/// Note that no validation of the `issuer` certificate is performed. Rcgen will not require
+	/// the certificate to be a CA certificate, or have key usage extensions that allow signing.
+	///
+	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
+	/// [`Certificate::pem`]. Similarly the private key of the returned [`KeyPair`] may be
+	/// serialized using [`KeyPair::serialize_der`] and [`KeyPair::serialize_pem`].
+	pub fn generate(
+		mut params: CertificateParams,
+		issuer: &Certificate,
+		issuer_key: &KeyPair,
+	) -> Result<CertifiedKey, Error> {
+		let key_pair = KeyPair::validate_or_generate(&mut params.key_pair, params.alg)?;
+		let subject_public_key_info = key_pair.public_key_der();
+		let der = params.serialize_der_with_signer(
+			&key_pair,
+			&issuer.params.alg,
+			issuer_key,
+			&issuer.params.distinguished_name,
+		)?;
+		Ok(CertifiedKey {
+			cert: Certificate {
+				params,
+				subject_public_key_info,
+				der,
+			},
+			key_pair,
+		})
+	}
+	/// Generate a new certificate using the certificate signing request parameters, signed by
+	/// the provided issuer.
+	///
+	/// The returned certificate will have its issuer field set to the subject of the provided
+	/// `issuer`, and the authority key identifier extension will be populated using the subject
+	/// public key of `issuer`. It will be signed by `issuer_key`.
+	///
+	/// Note that no validation of the `issuer` certificate is performed. Rcgen will not require
+	/// the certificate to be a CA certificate, or have key usage extensions that allow signing.
+	///
+	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
+	/// [`Certificate::pem`].
+	pub fn from_request(
+		request: CertificateSigningRequestParams,
+		issuer: &Certificate,
+		issuer_key: &KeyPair,
+	) -> Result<Certificate, Error> {
+		let der = request.params.serialize_der_with_signer(
+			&request.public_key,
+			request.params.alg,
+			issuer_key,
+			&issuer.params.distinguished_name,
+		)?;
+		let subject_public_key_info = yasna::construct_der(|writer| {
+			request.public_key.serialize_public_key_der(writer);
+		});
+		Ok(Certificate {
+			params: request.params,
+			subject_public_key_info,
+			der,
+		})
 	}
 	/// Returns the certificate parameters
 	pub fn get_params(&self) -> &CertificateParams {
@@ -1500,22 +1613,34 @@ impl Certificate {
 	/// Calculates a subject key identifier for the certificate subject's public key.
 	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
 	pub fn get_key_identifier(&self) -> Vec<u8> {
-		self.params.key_identifier(&self.key_pair)
+		self.params
+			.key_identifier_method
+			.derive(&self.subject_public_key_info)
 	}
-	/// Serializes the certificate to the binary DER format
-	pub fn serialize_der(&self) -> Result<Vec<u8>, Error> {
-		self.serialize_der_with_signer(&self)
+	/// Get the certificate in DER encoded format.
+	pub fn der(&self) -> &[u8] {
+		&self.der
 	}
-	/// Serializes the certificate, signed with another certificate's key, in binary DER format
-	pub fn serialize_der_with_signer(&self, ca: &Certificate) -> Result<Vec<u8>, Error> {
-		self.params.serialize_der_with_signer(&self.key_pair, ca)
+	/// Get the certificate in PEM encoded format.
+	#[cfg(feature = "pem")]
+	pub fn pem(&self) -> String {
+		pem::encode_config(&Pem::new("CERTIFICATE", self.der()), ENCODE_CONFIG)
 	}
-	/// Serializes a certificate signing request in binary DER format
-	pub fn serialize_request_der(&self) -> Result<Vec<u8>, Error> {
+	/// Generate and serialize a certificate signing request (CSR) in binary DER format.
+	///
+	/// The constructed CSR will contain attributes based on the certificate parameters,
+	/// and include the subject public key information from `subject_key`. Additionally,
+	/// the CSR will be self-signed using the subject key.
+	///
+	/// **Important**: since this function generates a new CSR for each invocation you
+	/// should not call `serialize_request_der` and then `serialize_request_pem`. This will
+	/// result in two different CSRs. Instead call only `serialize_request_pem` and base64
+	/// decode the inner content to get the DER encoded CSR using a library like `pem`.
+	pub fn serialize_request_der(&self, subject_key: &KeyPair) -> Result<Vec<u8>, Error> {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 				let cert_data = yasna::try_construct_der(|writer| {
-					self.params.write_request(&self.key_pair, writer)
+					self.params.write_request(subject_key, writer)
 				})?;
 				writer.next().write_der(&cert_data);
 
@@ -1523,49 +1648,27 @@ impl Certificate {
 				self.params.alg.write_alg_ident(writer.next());
 
 				// Write signature
-				self.key_pair.sign(&cert_data, writer.next())?;
+				subject_key.sign(&cert_data, writer.next())?;
 
 				Ok(())
 			})
 		})
 	}
-	/// Return the certificate's key pair
-	pub fn get_key_pair(&self) -> &KeyPair {
-		&self.key_pair
-	}
-	/// Serializes the certificate to the ASCII PEM format
+	/// Generate and serialize a certificate signing request (CSR) in binary DER format.
+	///
+	/// The constructed CSR will contain attributes based on the certificate parameters,
+	/// and include the subject public key information from `subject_key`. Additionally,
+	/// the CSR will be self-signed using the subject key.
+	///
+	/// **Important**: since this function generates a new CSR for each invocation you
+	/// should not call `serialize_request_pem` and then `serialize_request_der`. This will
+	/// result in two different CSRs. Instead call only `serialize_request_pem` and base64
+	/// decode the inner content to get the DER encoded CSR using a library like `pem`.
 	#[cfg(feature = "pem")]
-	pub fn serialize_pem(&self) -> Result<String, Error> {
-		let contents = self.serialize_der()?;
-		let p = Pem::new("CERTIFICATE", contents);
-		Ok(pem::encode_config(&p, ENCODE_CONFIG))
-	}
-	/// Serializes the certificate, signed with another certificate's key, to the ASCII PEM format
-	#[cfg(feature = "pem")]
-	pub fn serialize_pem_with_signer(&self, ca: &Certificate) -> Result<String, Error> {
-		let contents = self.serialize_der_with_signer(ca)?;
-		let p = Pem::new("CERTIFICATE", contents);
-		Ok(pem::encode_config(&p, ENCODE_CONFIG))
-	}
-	/// Serializes the certificate signing request to the ASCII PEM format
-	#[cfg(feature = "pem")]
-	pub fn serialize_request_pem(&self) -> Result<String, Error> {
-		let contents = self.serialize_request_der()?;
+	pub fn serialize_request_pem(&self, subject_key: &KeyPair) -> Result<String, Error> {
+		let contents = self.serialize_request_der(subject_key)?;
 		let p = Pem::new("CERTIFICATE REQUEST", contents);
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
-	}
-	/// Serializes the private key in PKCS#8 format
-	///
-	/// Panics if called on a remote key pair.
-	pub fn serialize_private_key_der(&self) -> Vec<u8> {
-		self.key_pair.serialize_der()
-	}
-	/// Serializes the private key in PEM format
-	///
-	/// Panics if called on a remote key pair.
-	#[cfg(feature = "pem")]
-	pub fn serialize_private_key_pem(&self) -> String {
-		self.key_pair.serialize_pem()
 	}
 }
 
@@ -1598,7 +1701,7 @@ fn write_x509_extension(
 }
 
 /// Serializes an X.509v3 authority key identifier extension according to RFC 5280.
-fn write_x509_authority_key_identifier(writer: DERWriter, ca: &Certificate) {
+fn write_x509_authority_key_identifier(writer: DERWriter, aki: Vec<u8>) {
 	// Write Authority Key Identifier
 	// RFC 5280 states:
 	//   'The keyIdentifier field of the authorityKeyIdentifier extension MUST
@@ -1613,9 +1716,7 @@ fn write_x509_authority_key_identifier(writer: DERWriter, ca: &Certificate) {
 		writer.write_sequence(|writer| {
 			writer
 				.next()
-				.write_tagged_implicit(Tag::context(0), |writer| {
-					writer.write_bytes(ca.get_key_identifier().as_ref())
-				})
+				.write_tagged_implicit(Tag::context(0), |writer| writer.write_bytes(&aki))
 		});
 	});
 }
@@ -1628,15 +1729,7 @@ impl zeroize::Zeroize for KeyPair {
 }
 
 #[cfg(feature = "zeroize")]
-impl zeroize::Zeroize for Certificate {
-	fn zeroize(&mut self) {
-		self.params.zeroize();
-		self.key_pair.zeroize();
-	}
-}
-
-#[cfg(feature = "zeroize")]
-impl zeroize::Zeroize for CertificateSigningRequest {
+impl zeroize::Zeroize for CertificateSigningRequestParams {
 	fn zeroize(&mut self) {
 		self.params.zeroize();
 	}
@@ -1760,13 +1853,10 @@ mod tests {
 		params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
 
 		// Make the cert
-		let cert = Certificate::from_params(params).unwrap();
-
-		// Serialize it
-		let der = cert.serialize_der().unwrap();
+		let cert = Certificate::generate_self_signed(params).unwrap().cert;
 
 		// Parse it
-		let (_rem, cert) = x509_parser::parse_x509_certificate(&der).unwrap();
+		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
 
 		// Check oid
 		let key_usage_oid_str = "2.5.29.15";
@@ -1800,13 +1890,10 @@ mod tests {
 		params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
 
 		// Make the cert
-		let cert = Certificate::from_params(params).unwrap();
-
-		// Serialize it
-		let der = cert.serialize_der().unwrap();
+		let cert = Certificate::generate_self_signed(params).unwrap().cert;
 
 		// Parse it
-		let (_rem, cert) = x509_parser::parse_x509_certificate(&der).unwrap();
+		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
 
 		// Check oid
 		let key_usage_oid_str = "2.5.29.15";
@@ -1837,13 +1924,10 @@ mod tests {
 		params.extended_key_usages = vec![ExtendedKeyUsagePurpose::Any];
 
 		// Make the cert
-		let cert = Certificate::from_params(params).unwrap();
-
-		// Serialize it
-		let der = cert.serialize_der().unwrap();
+		let cert = Certificate::generate_self_signed(params).unwrap().cert;
 
 		// Parse it
-		let (_rem, cert) = x509_parser::parse_x509_certificate(&der).unwrap();
+		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
 
 		// Ensure we found it.
 		let maybe_extension = cert.extended_key_usage().unwrap();
@@ -1877,17 +1961,19 @@ mod tests {
 		#[test]
 		#[cfg(windows)]
 		fn test_windows_line_endings() {
-			let cert = Certificate::from_params(CertificateParams::default()).unwrap();
-			let pem = cert.serialize_pem().expect("Failed to serialize pem");
-			assert!(pem.contains("\r\n"));
+			let cert = Certificate::generate_self_signed(CertificateParams::default())
+				.unwrap()
+				.cert;
+			assert!(cert.pem().contains("\r\n"));
 		}
 
 		#[test]
 		#[cfg(not(windows))]
 		fn test_not_windows_line_endings() {
-			let cert = Certificate::from_params(CertificateParams::default()).unwrap();
-			let pem = cert.serialize_pem().expect("Failed to serialize pem");
-			assert!(!pem.contains('\r'));
+			let cert = Certificate::generate_self_signed(CertificateParams::default())
+				.unwrap()
+				.cert;
+			assert!(!cert.pem().contains('\r'));
 		}
 	}
 
@@ -2057,11 +2143,10 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 				params.key_identifier_method
 			);
 
-			let ca_cert = Certificate::from_params(params).unwrap();
+			let ca_cert = Certificate::generate_self_signed(params).unwrap().cert;
 			assert_eq!(&expected_ski, &ca_cert.get_key_identifier());
 
-			let ca_der = ca_cert.serialize_der().unwrap();
-			let (_remainder, x509) = x509_parser::parse_x509_certificate(&ca_der).unwrap();
+			let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert.der()).unwrap();
 			assert_eq!(
 				&expected_ski,
 				&x509

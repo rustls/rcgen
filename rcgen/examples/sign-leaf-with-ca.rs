@@ -1,22 +1,22 @@
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DnType, DnValue::PrintableString,
-	ExtendedKeyUsagePurpose, IsCa, KeyUsagePurpose,
+	BasicConstraints, Certificate, CertificateParams, CertifiedKey, DnType,
+	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyUsagePurpose,
 };
 use time::{Duration, OffsetDateTime};
 
 /// Example demonstrating signing end-endity certificate with ca
 fn main() {
-	let ca = new_ca();
+	let ca = new_ca().cert;
 	let end_entity = new_end_entity();
 
-	let end_entity_pem = end_entity.serialize_pem_with_signer(&ca).unwrap();
+	let end_entity_pem = end_entity.pem();
 	println!("directly signed end-entity certificate: {end_entity_pem}");
 
-	let ca_cert_pem = ca.serialize_pem().unwrap();
+	let ca_cert_pem = ca.pem();
 	println!("ca certificate: {ca_cert_pem}",);
 }
 
-fn new_ca() -> Certificate {
+fn new_ca() -> CertifiedKey {
 	let mut params = CertificateParams::new(Vec::default());
 	let (yesterday, tomorrow) = validity_period();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
@@ -32,7 +32,7 @@ fn new_ca() -> Certificate {
 
 	params.not_before = yesterday;
 	params.not_after = tomorrow;
-	Certificate::from_params(params).unwrap()
+	Certificate::generate_self_signed(params).unwrap()
 }
 
 fn new_end_entity() -> Certificate {
@@ -47,7 +47,7 @@ fn new_end_entity() -> Certificate {
 		.push(ExtendedKeyUsagePurpose::ServerAuth);
 	params.not_before = yesterday;
 	params.not_after = tomorrow;
-	Certificate::from_params(params).unwrap()
+	Certificate::generate_self_signed(params).unwrap().cert
 }
 
 fn validity_period() -> (OffsetDateTime, OffsetDateTime) {

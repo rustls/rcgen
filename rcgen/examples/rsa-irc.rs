@@ -1,3 +1,5 @@
+use rcgen::CertifiedKey;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	use rand::rngs::OsRng;
 	use rsa::pkcs8::EncodePrivateKey;
@@ -21,8 +23,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let key_pair = rcgen::KeyPair::try_from(private_key_der.as_bytes()).unwrap();
 	params.key_pair = Some(key_pair);
 
-	let cert = Certificate::from_params(params)?;
-	let pem_serialized = cert.serialize_pem()?;
+	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params)?;
+	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;
 	let der_serialized = pem.contents();
 	let hash = ring::digest::digest(&ring::digest::SHA512, der_serialized);
@@ -32,11 +34,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	});
 	println!("sha-512 fingerprint: {hash_hex}");
 	println!("{pem_serialized}");
-	println!("{}", cert.serialize_private_key_pem());
+	println!("{}", key_pair.serialize_pem());
 	std::fs::create_dir_all("certs/")?;
 	fs::write("certs/cert.pem", pem_serialized.as_bytes())?;
 	fs::write("certs/cert.der", der_serialized)?;
-	fs::write("certs/key.pem", cert.serialize_private_key_pem().as_bytes())?;
-	fs::write("certs/key.der", cert.serialize_private_key_der())?;
+	fs::write("certs/key.pem", key_pair.serialize_pem().as_bytes())?;
+	fs::write("certs/key.der", key_pair.serialize_der())?;
 	Ok(())
 }

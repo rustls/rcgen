@@ -17,7 +17,7 @@ use crate::sign_algo::SignAlgo;
 use crate::ENCODE_CONFIG;
 use crate::{Error, SignatureAlgorithm};
 
-/// A key pair vairant
+/// A key pair variant
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum KeyPairKind {
 	/// A Ecdsa key pair
@@ -208,6 +208,26 @@ impl KeyPair {
 			// https://github.com/briansmith/ring/issues/219
 			// https://github.com/briansmith/ring/pull/733
 			SignAlgo::Rsa() => Err(Error::KeyGenerationUnavailable),
+		}
+	}
+
+	/// Validate a provided key pair's compatibility with `sig_alg` or generate a new one.
+	///
+	/// If a provided `existing_key_pair` is not compatible with the `sig_alg` an error is
+	/// returned.
+	///
+	/// If `None` is provided for `existing_key_pair` a new key pair compatible with `sig_alg`
+	/// is generated from scratch.
+	pub(crate) fn validate_or_generate(
+		existing_key_pair: &mut Option<KeyPair>,
+		sig_alg: &'static SignatureAlgorithm,
+	) -> Result<Self, Error> {
+		match existing_key_pair.take() {
+			Some(kp) if !kp.is_compatible(sig_alg) => {
+				return Err(Error::CertificateKeyPairMismatch)
+			},
+			Some(kp) => Ok(kp),
+			None => KeyPair::generate(sig_alg),
 		}
 	}
 
