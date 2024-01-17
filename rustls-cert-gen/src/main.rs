@@ -3,7 +3,7 @@ use rcgen::SanType;
 use std::{net::IpAddr, path::PathBuf};
 
 mod cert;
-use cert::{keypair_algorithm, CertificateBuilder, KeypairAlgorithm};
+use cert::{key_pair_algorithm, CertificateBuilder, KeyPairAlgorithm};
 
 fn main() -> anyhow::Result<()> {
 	let opts = options().run();
@@ -48,12 +48,12 @@ struct Options {
 	pub output: PathBuf,
 	/// Keypair algorithm
 	#[bpaf(
-		external(keypair_algorithm),
-		fallback(KeypairAlgorithm::EcdsaP256),
+		external(key_pair_algorithm),
+		fallback(KeyPairAlgorithm::EcdsaP256),
 		display_fallback,
 		group_help("Keypair Algorithm:")
 	)]
-	pub keypair_algorithm: KeypairAlgorithm,
+	pub keypair_algorithm: KeyPairAlgorithm,
 	/// Extended Key Usage Purpose: ClientAuth
 	#[bpaf(long)]
 	pub client_auth: bool,

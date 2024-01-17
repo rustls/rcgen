@@ -34,7 +34,7 @@ impl PemCertifiedKey {
 #[derive(Default)]
 pub struct CertificateBuilder {
 	params: CertificateParams,
-	alg: KeypairAlgorithm,
+	alg: KeyPairAlgorithm,
 }
 
 impl CertificateBuilder {
@@ -50,11 +50,11 @@ impl CertificateBuilder {
 		params.distinguished_name = DistinguishedName::new();
 		Self {
 			params,
-			alg: KeypairAlgorithm::EcdsaP256,
+			alg: KeyPairAlgorithm::EcdsaP256,
 		}
 	}
 	/// Set signature algorithm (instead of default).
-	pub fn signature_algorithm(mut self, alg: KeypairAlgorithm) -> anyhow::Result<Self> {
+	pub fn signature_algorithm(mut self, alg: KeyPairAlgorithm) -> anyhow::Result<Self> {
 		self.alg = alg;
 		Ok(self)
 	}
@@ -76,12 +76,12 @@ impl CertificateBuilder {
 /// [CertificateParams] from which an [Ca] [Certificate] can be built
 pub struct CaBuilder {
 	params: CertificateParams,
-	alg: KeypairAlgorithm,
+	alg: KeyPairAlgorithm,
 }
 
 impl CaBuilder {
 	/// Initialize `CaBuilder`
-	pub fn new(mut params: CertificateParams, alg: KeypairAlgorithm) -> Self {
+	pub fn new(mut params: CertificateParams, alg: KeyPairAlgorithm) -> Self {
 		params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
 		params.key_usages.push(KeyUsagePurpose::KeyCertSign);
@@ -106,7 +106,7 @@ impl CaBuilder {
 	}
 	/// build `Ca` Certificate.
 	pub fn build(self) -> Result<Ca, rcgen::Error> {
-		let key_pair = self.alg.to_keypair()?;
+		let key_pair = self.alg.to_key_pair()?;
 		let cert = Certificate::generate_self_signed(self.params, &key_pair)?;
 		Ok(Ca { cert, key_pair })
 	}
@@ -152,12 +152,12 @@ impl EndEntity {
 /// [CertificateParams] from which an [EndEntity] [Certificate] can be built
 pub struct EndEntityBuilder {
 	params: CertificateParams,
-	alg: KeypairAlgorithm,
+	alg: KeyPairAlgorithm,
 }
 
 impl EndEntityBuilder {
 	/// Initialize `EndEntityBuilder`
-	pub fn new(mut params: CertificateParams, alg: KeypairAlgorithm) -> Self {
+	pub fn new(mut params: CertificateParams, alg: KeyPairAlgorithm) -> Self {
 		params.is_ca = IsCa::NoCa;
 		params.use_authority_key_identifier_extension = true;
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
@@ -196,7 +196,7 @@ impl EndEntityBuilder {
 	}
 	/// build `EndEntity` Certificate.
 	pub fn build(self, issuer: &Ca) -> Result<EndEntity, rcgen::Error> {
-		let key_pair = self.alg.to_keypair()?;
+		let key_pair = self.alg.to_key_pair()?;
 		let cert = Certificate::generate(self.params, &key_pair, &issuer.cert, &issuer.key_pair)?;
 		Ok(EndEntity { cert, key_pair })
 	}
@@ -204,28 +204,28 @@ impl EndEntityBuilder {
 
 /// Supported Keypair Algorithms
 #[derive(Clone, Copy, Debug, Default, Bpaf, PartialEq)]
-pub enum KeypairAlgorithm {
+pub enum KeyPairAlgorithm {
 	Ed25519,
 	#[default]
 	EcdsaP256,
 	EcdsaP384,
 }
 
-impl fmt::Display for KeypairAlgorithm {
+impl fmt::Display for KeyPairAlgorithm {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			KeypairAlgorithm::Ed25519 => write!(f, "ed25519"),
-			KeypairAlgorithm::EcdsaP256 => write!(f, "ecdsa-p256"),
-			KeypairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
+			KeyPairAlgorithm::Ed25519 => write!(f, "ed25519"),
+			KeyPairAlgorithm::EcdsaP256 => write!(f, "ecdsa-p256"),
+			KeyPairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
 		}
 	}
 }
 
-impl KeypairAlgorithm {
+impl KeyPairAlgorithm {
 	/// Return an `rcgen::KeyPair` for the given varient
-	fn to_keypair(&self) -> Result<rcgen::KeyPair, rcgen::Error> {
+	fn to_key_pair(self) -> Result<rcgen::KeyPair, rcgen::Error> {
 		match self {
-			KeypairAlgorithm::Ed25519 => {
+			KeyPairAlgorithm::Ed25519 => {
 				use ring::signature::Ed25519KeyPair;
 
 				let rng = ring::rand::SystemRandom::new();
@@ -235,7 +235,7 @@ impl KeypairAlgorithm {
 
 				rcgen::KeyPair::from_der_and_sign_algo(pkcs8_bytes.as_ref(), alg)
 			},
-			KeypairAlgorithm::EcdsaP256 => {
+			KeyPairAlgorithm::EcdsaP256 => {
 				use ring::signature::EcdsaKeyPair;
 				use ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING;
 
@@ -246,7 +246,7 @@ impl KeypairAlgorithm {
 						.or(Err(rcgen::Error::RingUnspecified))?;
 				rcgen::KeyPair::from_der_and_sign_algo(pkcs8_bytes.as_ref(), alg)
 			},
-			KeypairAlgorithm::EcdsaP384 => {
+			KeyPairAlgorithm::EcdsaP384 => {
 				use ring::signature::EcdsaKeyPair;
 				use ring::signature::ECDSA_P384_SHA384_ASN1_SIGNING;
 
@@ -298,7 +298,7 @@ mod tests {
 	fn with_sig_algo_default() -> anyhow::Result<()> {
 		let end_entity = CertificateBuilder::new().end_entity();
 
-		assert_eq!(end_entity.alg, KeypairAlgorithm::EcdsaP256);
+		assert_eq!(end_entity.alg, KeyPairAlgorithm::EcdsaP256);
 		Ok(())
 	}
 	#[test]
@@ -324,7 +324,7 @@ mod tests {
 	fn serialize_end_entity_ecdsa_p384_sha384_sig() -> anyhow::Result<()> {
 		let ca = CertificateBuilder::new().certificate_authority().build()?;
 		let end_entity = CertificateBuilder::new()
-			.signature_algorithm(KeypairAlgorithm::EcdsaP384)?
+			.signature_algorithm(KeyPairAlgorithm::EcdsaP384)?
 			.end_entity()
 			.build(&ca)?
 			.serialize_pem();
@@ -343,7 +343,7 @@ mod tests {
 	fn serialize_end_entity_ed25519_sig() -> anyhow::Result<()> {
 		let ca = CertificateBuilder::new().certificate_authority().build()?;
 		let end_entity = CertificateBuilder::new()
-			.signature_algorithm(KeypairAlgorithm::Ed25519)?
+			.signature_algorithm(KeyPairAlgorithm::Ed25519)?
 			.end_entity()
 			.build(&ca)?
 			.serialize_pem();
@@ -365,7 +365,7 @@ mod tests {
 	#[test]
 	fn init_end_endity() {
 		let params = CertificateParams::default();
-		let cert = EndEntityBuilder::new(params, KeypairAlgorithm::default());
+		let cert = EndEntityBuilder::new(params, KeyPairAlgorithm::default());
 		assert_eq!(cert.params.is_ca, IsCa::NoCa)
 	}
 	#[test]
@@ -375,7 +375,7 @@ mod tests {
 			.build()
 			.unwrap();
 		let params = CertificateParams::default();
-		let mut cert = EndEntityBuilder::new(params, KeypairAlgorithm::default());
+		let mut cert = EndEntityBuilder::new(params, KeyPairAlgorithm::default());
 		assert_eq!(cert.params.is_ca, IsCa::NoCa);
 		assert_eq!(
 			cert.client_auth().params.extended_key_usages,
@@ -389,7 +389,7 @@ mod tests {
 			.build()
 			.unwrap();
 		let params = CertificateParams::default();
-		let mut cert = EndEntityBuilder::new(params, KeypairAlgorithm::default());
+		let mut cert = EndEntityBuilder::new(params, KeyPairAlgorithm::default());
 		assert_eq!(cert.params.is_ca, IsCa::NoCa);
 		assert_eq!(
 			cert.server_auth().params.extended_key_usages,
@@ -405,7 +405,7 @@ mod tests {
 		let name = "unexpected.oomyoo.xyz";
 		let names = vec![SanType::DnsName(name.into())];
 		let params = CertificateParams::default();
-		let cert = EndEntityBuilder::new(params, KeypairAlgorithm::default())
+		let cert = EndEntityBuilder::new(params, KeyPairAlgorithm::default())
 			.subject_alternative_names(names);
 		assert_eq!(
 			cert.params.subject_alt_names,
@@ -420,21 +420,21 @@ mod tests {
 			.unwrap();
 		let names = vec![];
 		let params = CertificateParams::default();
-		let cert = EndEntityBuilder::new(params, KeypairAlgorithm::default())
+		let cert = EndEntityBuilder::new(params, KeyPairAlgorithm::default())
 			.subject_alternative_names(names);
 		assert_eq!(cert.params.subject_alt_names, vec![]);
 	}
 
 	#[test]
-	fn keypair_algorithm_to_keypair() -> anyhow::Result<()> {
-		let keypair = KeypairAlgorithm::Ed25519.to_keypair()?;
+	fn key_pair_algorithm_to_keypair() -> anyhow::Result<()> {
+		let keypair = KeyPairAlgorithm::Ed25519.to_key_pair()?;
 		assert_eq!(format!("{:?}", keypair.algorithm()), "PKCS_ED25519");
-		let keypair = KeypairAlgorithm::EcdsaP256.to_keypair()?;
+		let keypair = KeyPairAlgorithm::EcdsaP256.to_key_pair()?;
 		assert_eq!(
 			format!("{:?}", keypair.algorithm()),
 			"PKCS_ECDSA_P256_SHA256"
 		);
-		let keypair = KeypairAlgorithm::EcdsaP384.to_keypair()?;
+		let keypair = KeyPairAlgorithm::EcdsaP384.to_key_pair()?;
 		assert_eq!(
 			format!("{:?}", keypair.algorithm()),
 			"PKCS_ECDSA_P384_SHA384"
