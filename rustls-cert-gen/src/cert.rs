@@ -32,11 +32,11 @@ impl PemCertifiedKey {
 /// Builder to configure TLS [CertificateParams] to be finalized
 /// into either a [Ca] or an [EndEntity].
 #[derive(Default)]
-pub struct CertificateBuilder {
-	params: CertificateParams,
+pub struct CertificateBuilder<'a> {
+	params: CertificateParams<'a>,
 }
 
-impl CertificateBuilder {
+impl<'a> CertificateBuilder<'a> {
 	/// Initialize `CertificateParams` with defaults
 	/// # Example
 	/// ```
@@ -50,7 +50,7 @@ impl CertificateBuilder {
 		Self { params }
 	}
 	/// Set signature algorithm (instead of default).
-	pub fn signature_algorithm(mut self, alg: &KeypairAlgorithm) -> anyhow::Result<Self> {
+	pub fn signature_algorithm(mut self, alg: &'a KeypairAlgorithm) -> anyhow::Result<Self> {
 		let keypair = alg.to_keypair()?;
 		self.params.alg = keypair.algorithm();
 		self.params.key_pair = Some(keypair);
@@ -62,23 +62,23 @@ impl CertificateBuilder {
 	/// # use rustls_cert_gen::CertificateBuilder;
 	/// let cert = CertificateBuilder::new().certificate_authority();
 	/// ```
-	pub fn certificate_authority(self) -> CaBuilder {
+	pub fn certificate_authority(self) -> CaBuilder<'a> {
 		CaBuilder::new(self.params)
 	}
 	/// Set options for `EndEntity` Certificates
-	pub fn end_entity(self) -> EndEntityBuilder {
+	pub fn end_entity(self) -> EndEntityBuilder<'a> {
 		EndEntityBuilder::new(self.params)
 	}
 }
 
 /// [CertificateParams] from which an [Ca] [Certificate] can be built
-pub struct CaBuilder {
-	params: CertificateParams,
+pub struct CaBuilder<'a> {
+	params: CertificateParams<'a>,
 }
 
-impl CaBuilder {
+impl<'a> CaBuilder<'a> {
 	/// Initialize `CaBuilder`
-	pub fn new(mut params: CertificateParams) -> Self {
+	pub fn new(mut params: CertificateParams<'a>) -> Self {
 		params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
 		params.key_usages.push(KeyUsagePurpose::KeyCertSign);
@@ -102,19 +102,19 @@ impl CaBuilder {
 		self
 	}
 	/// build `Ca` Certificate.
-	pub fn build(self) -> Result<Ca, rcgen::Error> {
-		let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(self.params)?;
+	pub fn build(self) -> Result<Ca<'a>, rcgen::Error> {
+		let CertifiedKey { cert, key_pair } = Certificate::<'a>::generate_self_signed(self.params)?;
 		Ok(Ca { cert, key_pair })
 	}
 }
 
 /// End-entity [Certificate]
-pub struct Ca {
-	cert: Certificate,
-	key_pair: KeyPair,
+pub struct Ca<'a> {
+	cert: Certificate<'a>,
+	key_pair: KeyPair<'a>,
 }
 
-impl Ca {
+impl Ca<'_> {
 	/// Self-sign and serialize
 	pub fn serialize_pem(&self) -> PemCertifiedKey {
 		PemCertifiedKey {
@@ -130,12 +130,12 @@ impl Ca {
 }
 
 /// End-entity [Certificate]
-pub struct EndEntity {
-	cert: Certificate,
-	key_pair: KeyPair,
+pub struct EndEntity<'a> {
+	cert: Certificate<'a>,
+	key_pair: KeyPair<'a>,
 }
 
-impl EndEntity {
+impl EndEntity<'_> {
 	/// Sign with `signer` and serialize.
 	pub fn serialize_pem(&self) -> PemCertifiedKey {
 		PemCertifiedKey {
@@ -146,13 +146,13 @@ impl EndEntity {
 }
 
 /// [CertificateParams] from which an [EndEntity] [Certificate] can be built
-pub struct EndEntityBuilder {
-	params: CertificateParams,
+pub struct EndEntityBuilder<'a> {
+	params: CertificateParams<'a>,
 }
 
-impl EndEntityBuilder {
+impl<'a> EndEntityBuilder<'a> {
 	/// Initialize `EndEntityBuilder`
-	pub fn new(mut params: CertificateParams) -> Self {
+	pub fn new(mut params: CertificateParams<'a>) -> Self {
 		params.is_ca = IsCa::NoCa;
 		params.use_authority_key_identifier_extension = true;
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
@@ -190,7 +190,7 @@ impl EndEntityBuilder {
 		self
 	}
 	/// build `EndEntity` Certificate.
-	pub fn build(self, issuer: &Ca) -> Result<EndEntity, rcgen::Error> {
+	pub fn build(self, issuer: &'a Ca) -> Result<EndEntity<'a>, rcgen::Error> {
 		let CertifiedKey { cert, key_pair } =
 			Certificate::generate(self.params, &issuer.cert, &issuer.key_pair)?;
 		Ok(EndEntity { cert, key_pair })

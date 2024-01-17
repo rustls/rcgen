@@ -481,7 +481,7 @@ mod test {
 
 	#[test]
 	#[should_panic]
-	fn test_remote_key_pair() {
+	fn test_remote_key_pair_is_unserializable() {
 		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
 		let remote_key = KeyPair::from_remote(&key_pair).unwrap();
 		remote_key.serialize_der();
