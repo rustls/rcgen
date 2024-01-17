@@ -312,7 +312,7 @@ impl<'a> KeyPair<'a> {
 	pub fn serialize_der(&self) -> Vec<u8> {
 		match &self.serialized_der {
 			Some(serialized_der) => serialized_der.clone(),
-			None => panic!("Serializing a remote key pair is not supported")
+			None => panic!("Serializing a remote key pair is not supported"),
 		}
 	}
 
@@ -323,7 +323,7 @@ impl<'a> KeyPair<'a> {
 	pub fn serialized_der(&self) -> &[u8] {
 		match &self.serialized_der {
 			Some(serialized_der) => serialized_der,
-			None => panic!("Serializing a remote key pair is not supported")
+			None => panic!("Serializing a remote key pair is not supported"),
 		}
 	}
 

@@ -113,8 +113,9 @@ fn test_webpki() {
 	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
-	let sign_fn =
-		|key_pair: &KeyPair, msg| sign_msg_ecdsa(key_pair, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	let sign_fn = |key_pair: &KeyPair, msg| {
+		sign_msg_ecdsa(key_pair, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING)
+	};
 	check_cert(
 		cert.der(),
 		&cert,
@@ -132,7 +133,8 @@ fn test_webpki_256() {
 	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
-	let sign_fn = |cert: &KeyPair, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	let sign_fn =
+		|cert: &KeyPair, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert(
 		cert.der(),
 		&cert,
@@ -150,7 +152,8 @@ fn test_webpki_384() {
 	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
-	let sign_fn = |cert: &KeyPair, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P384_SHA384_ASN1_SIGNING);
+	let sign_fn =
+		|cert: &KeyPair, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P384_SHA384_ASN1_SIGNING);
 	check_cert(
 		cert.der(),
 		&cert,
@@ -294,7 +297,8 @@ fn test_webpki_separate_ca() {
 		.push(DnType::CommonName, "Dev domain");
 
 	let CertifiedKey { cert, key_pair } = Certificate::generate(params, &ca_cert, &ca_key).unwrap();
-	let sign_fn = |cert: &KeyPair, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	let sign_fn =
+		|cert: &KeyPair, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
 		cert.der(),
 		&key_pair,
@@ -571,7 +575,8 @@ fn test_webpki_serial_number() {
 	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params).unwrap();
 
 	// Now verify the certificate.
-	let sign_fn = |cert: &KeyPair, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	let sign_fn =
+		|cert: &KeyPair, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert(
 		cert.der(),
 		&cert,
