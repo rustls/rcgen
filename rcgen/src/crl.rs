@@ -21,12 +21,26 @@ use crate::{Certificate, Error, KeyIdMethod, KeyUsagePurpose, SerialNumber};
 /// extern crate rcgen;
 /// use rcgen::*;
 ///
+/// #[cfg(not(feature = "crypto"))]
+/// struct MyKeyPair { public_key: Vec<u8> }
+/// #[cfg(not(feature = "crypto"))]
+/// impl RemoteKeyPair for MyKeyPair {
+///   fn public_key(&self) -> &[u8] { &self.public_key }
+///   fn sign(&self, _: &[u8]) -> Result<Vec<u8>, rcgen::Error> { Ok(vec![]) }
+///   fn algorithm(&self) -> &'static SignatureAlgorithm { &PKCS_ED25519 }
+/// }
 /// # fn main () {
 /// // Generate a CRL issuer.
-/// let mut issuer_params = CertificateParams::new(vec!["crl.issuer.example.com".to_string()]);
+/// let mut issuer_params = CertificateParams::new(vec!["crl.issuer.example.com".to_string()]).unwrap();
+/// issuer_params.serial_number = Some(SerialNumber::from(9999));
 /// issuer_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 /// issuer_params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::CrlSign];
+/// #[cfg(feature = "crypto")]
 /// let key_pair = KeyPair::generate().unwrap();
+/// #[cfg(not(feature = "crypto"))]
+/// let remote_key_pair = MyKeyPair { public_key: vec![] };
+/// #[cfg(not(feature = "crypto"))]
+/// let key_pair = KeyPair::from_remote(Box::new(remote_key_pair)).unwrap();
 /// let issuer = Certificate::generate_self_signed(issuer_params, &key_pair).unwrap();
 /// // Describe a revoked certificate.
 /// let revoked_cert = RevokedCertParams{
@@ -42,7 +56,10 @@ use crate::{Certificate, Error, KeyIdMethod, KeyUsagePurpose, SerialNumber};
 ///   crl_number: SerialNumber::from(1234),
 ///   issuing_distribution_point: None,
 ///   revoked_certs: vec![revoked_cert],
+///   #[cfg(feature = "crypto")]
 ///   key_identifier_method: KeyIdMethod::Sha256,
+///   #[cfg(not(feature = "crypto"))]
+///   key_identifier_method: KeyIdMethod::PreSpecified(vec![]),
 /// };
 /// let crl = CertificateRevocationList::from_params(crl).unwrap();
 ///# }

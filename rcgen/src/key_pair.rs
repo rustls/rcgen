@@ -1,30 +1,38 @@
 #[cfg(feature = "pem")]
 use pem::Pem;
+#[cfg(feature = "crypto")]
 use std::convert::TryFrom;
 use std::fmt;
 use yasna::DERWriter;
 
+#[cfg(any(feature = "crypto", feature = "pem"))]
 use crate::error::ExternalError;
-use crate::ring_like::error as ring_error;
-use crate::ring_like::rand::SystemRandom;
-use crate::ring_like::signature::{
-	self, EcdsaKeyPair, Ed25519KeyPair, KeyPair as RingKeyPair, RsaEncoding, RsaKeyPair,
+#[cfg(feature = "crypto")]
+use crate::ring_like::{
+	error as ring_error,
+	rand::SystemRandom,
+	signature::{
+		self, EcdsaKeyPair, Ed25519KeyPair, KeyPair as RingKeyPair, RsaEncoding, RsaKeyPair,
+	},
+	{ecdsa_from_pkcs8, rsa_key_pair_public_modulus_len},
 };
-use crate::ring_like::{ecdsa_from_pkcs8, rsa_key_pair_public_modulus_len};
-use crate::sign_algo::algo::*;
-use crate::sign_algo::SignAlgo;
+#[cfg(feature = "crypto")]
+use crate::sign_algo::{algo::*, SignAlgo};
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
-use crate::{Error, SignatureAlgorithm};
+use crate::{sign_algo::SignatureAlgorithm, Error};
 
 /// A key pair variant
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum KeyPairKind {
 	/// A Ecdsa key pair
+	#[cfg(feature = "crypto")]
 	Ec(EcdsaKeyPair),
 	/// A Ed25519 key pair
+	#[cfg(feature = "crypto")]
 	Ed(Ed25519KeyPair),
 	/// A RSA key pair
+	#[cfg(feature = "crypto")]
 	Rsa(RsaKeyPair, &'static dyn RsaEncoding),
 	/// A remote key pair
 	Remote(Box<dyn RemoteKeyPair + Send + Sync>),
@@ -33,8 +41,11 @@ pub(crate) enum KeyPairKind {
 impl fmt::Debug for KeyPairKind {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
+			#[cfg(feature = "crypto")]
 			Self::Ec(key_pair) => write!(f, "{:?}", key_pair),
+			#[cfg(feature = "crypto")]
 			Self::Ed(key_pair) => write!(f, "{:?}", key_pair),
+			#[cfg(feature = "crypto")]
 			Self::Rsa(key_pair, _) => write!(f, "{:?}", key_pair),
 			Self::Remote(_) => write!(f, "Box<dyn RemotePrivateKey>"),
 		}
@@ -57,6 +68,7 @@ pub struct KeyPair {
 
 impl KeyPair {
 	/// Generate a new random [`PKCS_ECDSA_P256_SHA256`] key pair
+	#[cfg(feature = "crypto")]
 	pub fn generate() -> Result<Self, Error> {
 		Self::generate_for(&PKCS_ECDSA_P256_SHA256)
 	}
@@ -64,6 +76,7 @@ impl KeyPair {
 	/// Generate a new random key pair for the specified signature algorithm
 	///
 	/// If you're not sure which algorithm to use, [`PKCS_ECDSA_P256_SHA256`] is a good choice.
+	#[cfg(feature = "crypto")]
 	pub fn generate_for(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
 		let rng = &SystemRandom::new();
 
@@ -102,6 +115,7 @@ impl KeyPair {
 	/// Parses the key pair from the DER format
 	///
 	/// Equivalent to using the [`TryFrom`] implementation.
+	#[cfg(feature = "crypto")]
 	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
 		Ok(der.try_into()?)
 	}
@@ -112,7 +126,7 @@ impl KeyPair {
 	}
 
 	/// Parses the key pair from the ASCII PEM format
-	#[cfg(feature = "pem")]
+	#[cfg(all(feature = "pem", feature = "crypto"))]
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)._err()?;
 		let private_key_der: &[_] = private_key.contents();
@@ -132,7 +146,7 @@ impl KeyPair {
 	/// using the specified [`SignatureAlgorithm`]
 	///
 	/// Same as [from_pem_and_sign_algo](Self::from_pem_and_sign_algo).
-	#[cfg(feature = "pem")]
+	#[cfg(all(feature = "pem", feature = "crypto"))]
 	pub fn from_pem_and_sign_algo(
 		pem_str: &str,
 		alg: &'static SignatureAlgorithm,
@@ -151,6 +165,7 @@ impl KeyPair {
 	/// key pair. However, sometimes multiple signature algorithms fit for the
 	/// same der key. In that instance, you can use this function to precisely
 	/// specify the `SignatureAlgorithm`.
+	#[cfg(feature = "crypto")]
 	pub fn from_der_and_sign_algo(
 		pkcs8: &[u8],
 		alg: &'static SignatureAlgorithm,
@@ -195,6 +210,7 @@ impl KeyPair {
 		})
 	}
 
+	#[cfg(feature = "crypto")]
 	pub(crate) fn from_raw(
 		pkcs8: &[u8],
 	) -> Result<(KeyPairKind, &'static SignatureAlgorithm), Error> {
@@ -242,17 +258,20 @@ impl KeyPair {
 
 	pub(crate) fn sign(&self, msg: &[u8], writer: DERWriter) -> Result<(), Error> {
 		match &self.kind {
+			#[cfg(feature = "crypto")]
 			KeyPairKind::Ec(kp) => {
 				let system_random = SystemRandom::new();
 				let signature = kp.sign(&system_random, msg)._err()?;
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
+			#[cfg(feature = "crypto")]
 			KeyPairKind::Ed(kp) => {
 				let signature = kp.sign(msg);
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
+			#[cfg(feature = "crypto")]
 			KeyPairKind::Rsa(kp, padding_alg) => {
 				let system_random = SystemRandom::new();
 				let mut signature = vec![0; rsa_key_pair_public_modulus_len(kp)];
@@ -292,6 +311,7 @@ impl KeyPair {
 	///
 	/// Panics if called on a remote key pair.
 	pub fn serialize_der(&self) -> Vec<u8> {
+		#[cfg_attr(not(feature = "crypto"), allow(irrefutable_let_patterns))]
 		if let KeyPairKind::Remote(_) = self.kind {
 			panic!("Serializing a remote key pair is not supported")
 		}
@@ -304,6 +324,7 @@ impl KeyPair {
 	///
 	/// Panics if called on a remote key pair.
 	pub fn serialized_der(&self) -> &[u8] {
+		#[cfg_attr(not(feature = "crypto"), allow(irrefutable_let_patterns))]
 		if let KeyPairKind::Remote(_) = self.kind {
 			panic!("Serializing a remote key pair is not supported")
 		}
@@ -313,6 +334,7 @@ impl KeyPair {
 
 	/// Access the remote key pair if it is a remote one
 	pub fn as_remote(&self) -> Option<&(dyn RemoteKeyPair + Send + Sync)> {
+		#[cfg_attr(not(feature = "crypto"), allow(irrefutable_let_patterns))]
 		if let KeyPairKind::Remote(remote) = &self.kind {
 			Some(remote.as_ref())
 		} else {
@@ -329,6 +351,7 @@ impl KeyPair {
 	}
 }
 
+#[cfg(feature = "crypto")]
 impl TryFrom<&[u8]> for KeyPair {
 	type Error = Error;
 
@@ -342,6 +365,7 @@ impl TryFrom<&[u8]> for KeyPair {
 	}
 }
 
+#[cfg(feature = "crypto")]
 impl TryFrom<Vec<u8>> for KeyPair {
 	type Error = Error;
 
@@ -361,8 +385,11 @@ impl PublicKeyData for KeyPair {
 	}
 	fn raw_bytes(&self) -> &[u8] {
 		match &self.kind {
+			#[cfg(feature = "crypto")]
 			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
+			#[cfg(feature = "crypto")]
 			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
+			#[cfg(feature = "crypto")]
 			KeyPairKind::Rsa(kp, _) => kp.public_key().as_ref(),
 			KeyPairKind::Remote(kp) => kp.public_key(),
 		}
@@ -384,12 +411,14 @@ pub trait RemoteKeyPair {
 	fn algorithm(&self) -> &'static SignatureAlgorithm;
 }
 
+#[cfg(feature = "crypto")]
 impl<T> ExternalError<T> for Result<T, ring_error::KeyRejected> {
 	fn _err(self) -> Result<T, Error> {
 		self.map_err(|e| Error::RingKeyRejected(e.to_string()))
 	}
 }
 
+#[cfg(feature = "crypto")]
 impl<T> ExternalError<T> for Result<T, ring_error::Unspecified> {
 	fn _err(self) -> Result<T, Error> {
 		self.map_err(|_| Error::RingUnspecified)
@@ -419,11 +448,16 @@ pub(crate) trait PublicKeyData {
 
 #[cfg(test)]
 mod test {
+	#[cfg(crypto)]
 	use super::*;
 
-	use crate::ring_like::rand::SystemRandom;
-	use crate::ring_like::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
+	#[cfg(crypto)]
+	use crate::ring_like::{
+		rand::SystemRandom,
+		signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING},
+	};
 
+	#[cfg(crypto)]
 	#[test]
 	fn test_algorithm() {
 		let rng = SystemRandom::new();

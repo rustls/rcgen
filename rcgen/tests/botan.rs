@@ -1,4 +1,4 @@
-#![cfg(feature = "x509-parser")]
+#![cfg(all(feature = "crypto", feature = "x509-parser"))]
 
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
 use rcgen::{
