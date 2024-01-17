@@ -1,3 +1,4 @@
+use pki_types::{CertificateDer, ServerName, SignatureVerificationAlgorithm, UnixTime};
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, CertifiedKey, DnType, Error, IsCa, KeyPair,
 	RemoteKeyPair,
@@ -8,18 +9,17 @@ use rcgen::{
 #[cfg(feature = "x509-parser")]
 use rcgen::{CertificateSigningRequestParams, DnValue};
 use rcgen::{ExtendedKeyUsagePurpose, KeyUsagePurpose, SerialNumber};
-use webpki::SignatureAlgorithm;
 use webpki::{
-	BorrowedCertRevocationList, CertRevocationList, EndEntityCert, KeyUsage, TrustAnchor,
+	anchor_from_trusted_cert, BorrowedCertRevocationList, CertRevocationList, EndEntityCert,
+	KeyUsage, RevocationOptionsBuilder,
 };
-use webpki::{DnsNameRef, Time};
 
 use ring::rand::SystemRandom;
 use ring::signature::{self, EcdsaKeyPair, EcdsaSigningAlgorithm, Ed25519KeyPair, KeyPair as _};
 #[cfg(feature = "pem")]
 use ring::signature::{RsaEncoding, RsaKeyPair};
 
-use std::convert::TryFrom;
+use std::time::Duration as StdDuration;
 use time::{Duration, OffsetDateTime};
 
 mod util;
@@ -56,7 +56,7 @@ fn check_cert<'a, 'b>(
 	cert_der: &[u8],
 	cert: &'a Certificate,
 	cert_key: &'a KeyPair,
-	alg: &SignatureAlgorithm,
+	alg: &dyn SignatureVerificationAlgorithm,
 	sign_fn: impl FnOnce(&'a KeyPair, &'b [u8]) -> Vec<u8>,
 ) {
 	#[cfg(feature = "pem")]
@@ -70,16 +70,18 @@ fn check_cert_ca<'a, 'b>(
 	cert_der: &[u8],
 	cert_key: &'a KeyPair,
 	ca_der: &[u8],
-	cert_alg: &SignatureAlgorithm,
-	ca_alg: &SignatureAlgorithm,
+	cert_alg: &dyn SignatureVerificationAlgorithm,
+	ca_alg: &dyn SignatureVerificationAlgorithm,
 	sign_fn: impl FnOnce(&'a KeyPair, &'b [u8]) -> Vec<u8>,
 ) {
-	let trust_anchor = TrustAnchor::try_from_cert_der(ca_der).unwrap();
+	let ca_der = CertificateDer::from(ca_der);
+	let trust_anchor = anchor_from_trusted_cert(&ca_der).unwrap();
 	let trust_anchor_list = &[trust_anchor];
-	let end_entity_cert = EndEntityCert::try_from(cert_der).unwrap();
+	let cert_der = CertificateDer::from(cert_der);
+	let end_entity_cert = EndEntityCert::try_from(&cert_der).unwrap();
 
 	// Set time to Jan 10, 2004
-	let time = Time::from_seconds_since_unix_epoch(0x40_00_00_00);
+	let time = UnixTime::since_unix_epoch(StdDuration::from_secs(0x40_00_00_00));
 
 	// (1/3) Check whether the cert is valid
 	end_entity_cert
@@ -89,14 +91,15 @@ fn check_cert_ca<'a, 'b>(
 			&[],
 			time,
 			KeyUsage::server_auth(),
-			&[],
+			None,
+			None,
 		)
 		.expect("valid TLS server cert");
 
 	// (2/3) Check that the cert is valid for the given DNS name
-	let dns_name = DnsNameRef::try_from_ascii_str("crabs.crabs").unwrap();
+	let dns_name = ServerName::try_from("crabs.crabs").unwrap();
 	end_entity_cert
-		.verify_is_valid_for_subject_name(webpki::SubjectNameRef::from(dns_name))
+		.verify_is_valid_for_subject_name(&dns_name)
 		.expect("valid for DNS name");
 
 	// (3/3) Check that a message signed by the cert is valid.
@@ -119,7 +122,7 @@ fn test_webpki() {
 		cert.der(),
 		&cert,
 		&key_pair,
-		&webpki::ECDSA_P256_SHA256,
+		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
 	);
 }
@@ -137,7 +140,7 @@ fn test_webpki_256() {
 		cert.der(),
 		&cert,
 		&key_pair,
-		&webpki::ECDSA_P256_SHA256,
+		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
 	);
 }
@@ -155,7 +158,7 @@ fn test_webpki_384() {
 		cert.der(),
 		&cert,
 		&key_pair,
-		&webpki::ECDSA_P384_SHA384,
+		webpki::ring::ECDSA_P384_SHA384,
 		sign_fn,
 	);
 }
@@ -172,7 +175,7 @@ fn test_webpki_25519() {
 		cert.der(),
 		&cert,
 		&key_pair,
-		&webpki::ED25519,
+		webpki::ring::ED25519,
 		sign_msg_ed25519,
 	);
 }
@@ -193,7 +196,7 @@ fn test_webpki_25519_v1_given() {
 		cert.der(),
 		&cert,
 		&key_pair,
-		&webpki::ED25519,
+		webpki::ring::ED25519,
 		sign_msg_ed25519,
 	);
 }
@@ -214,7 +217,7 @@ fn test_webpki_25519_v2_given() {
 		cert.der(),
 		&cert,
 		&key_pair,
-		&webpki::ED25519,
+		webpki::ring::ED25519,
 		sign_msg_ed25519,
 	);
 }
@@ -235,7 +238,7 @@ fn test_webpki_rsa_given() {
 		cert.der(),
 		&cert,
 		&key_pair,
-		&webpki::RSA_PKCS1_2048_8192_SHA256,
+		webpki::ring::RSA_PKCS1_2048_8192_SHA256,
 		|msg, cert| sign_msg_rsa(msg, cert, &signature::RSA_PKCS1_SHA256),
 	);
 }
@@ -246,17 +249,17 @@ fn test_webpki_rsa_combinations_given() {
 	let configs: &[(_, _, &'static dyn signature::RsaEncoding)] = &[
 		(
 			&rcgen::PKCS_RSA_SHA256,
-			&webpki::RSA_PKCS1_2048_8192_SHA256,
+			webpki::ring::RSA_PKCS1_2048_8192_SHA256,
 			&signature::RSA_PKCS1_SHA256,
 		),
 		(
 			&rcgen::PKCS_RSA_SHA384,
-			&webpki::RSA_PKCS1_2048_8192_SHA384,
+			webpki::ring::RSA_PKCS1_2048_8192_SHA384,
 			&signature::RSA_PKCS1_SHA384,
 		),
 		(
 			&rcgen::PKCS_RSA_SHA512,
-			&webpki::RSA_PKCS1_2048_8192_SHA512,
+			webpki::ring::RSA_PKCS1_2048_8192_SHA512,
 			&signature::RSA_PKCS1_SHA512,
 		),
 		//(&rcgen::PKCS_RSA_PSS_SHA256, &webpki::RSA_PSS_2048_8192_SHA256_LEGACY_KEY, &signature::RSA_PSS_SHA256),
@@ -299,8 +302,8 @@ fn test_webpki_separate_ca() {
 		cert.der(),
 		&key_pair,
 		ca_cert.der(),
-		&webpki::ECDSA_P256_SHA256,
-		&webpki::ECDSA_P256_SHA256,
+		webpki::ring::ECDSA_P256_SHA256,
+		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
 	);
 }
@@ -329,8 +332,8 @@ fn test_webpki_separate_ca_with_other_signing_alg() {
 		cert.der(),
 		&key_pair,
 		ca_cert.der(),
-		&webpki::ED25519,
-		&webpki::ECDSA_P256_SHA256,
+		webpki::ring::ED25519,
+		webpki::ring::ECDSA_P256_SHA256,
 		sign_msg_ed25519,
 	);
 }
@@ -391,7 +394,7 @@ fn from_remote() {
 		cert.der(),
 		&cert,
 		&cert_kp,
-		&webpki::ECDSA_P256_SHA256,
+		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
 	);
 }
@@ -472,8 +475,8 @@ fn test_webpki_imported_ca() {
 		cert.der(),
 		&cert_key,
 		ca_cert_der,
-		&webpki::ECDSA_P256_SHA256,
-		&webpki::ECDSA_P256_SHA256,
+		webpki::ring::ECDSA_P256_SHA256,
+		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
 	);
 }
@@ -520,8 +523,8 @@ fn test_webpki_imported_ca_with_printable_string() {
 		cert.der(),
 		&cert_key,
 		ca_cert_der,
-		&webpki::ECDSA_P256_SHA256,
-		&webpki::ECDSA_P256_SHA256,
+		webpki::ring::ECDSA_P256_SHA256,
+		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
 	);
 }
@@ -557,8 +560,8 @@ fn test_certificate_from_csr() {
 		cert.der(),
 		&cert_key,
 		ca_cert.der(),
-		&webpki::ECDSA_P256_SHA256,
-		&webpki::ECDSA_P256_SHA256,
+		webpki::ring::ECDSA_P256_SHA256,
+		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
 	);
 }
@@ -575,7 +578,7 @@ fn test_webpki_serial_number() {
 		cert.der(),
 		&cert,
 		&key_pair,
-		&webpki::ECDSA_P256_SHA256,
+		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
 	);
 }
@@ -590,17 +593,9 @@ fn test_webpki_crl_parse() {
 	let der = crl.serialize_der_with_signer(&issuer, &issuer_key).unwrap();
 
 	// We should be able to parse the CRL DER without error.
-	let webpki_crl = BorrowedCertRevocationList::from_der(&der).expect("failed to parse CRL DER");
-
-	// Webpki represents certificate SPKIs internally without the outer SEQUENCE.
-	// We remove that here before calling verify_signature.
-	let issuer_spki = issuer_key.public_key_der();
-	let raw_spki = yasna::parse_der(&issuer_spki, |reader| reader.read_tagged_der()).unwrap();
-
-	// We should be able to verify the CRL signature with the issuer's raw SPKI.
-	webpki_crl
-		.verify_signature(&[&webpki::ECDSA_P256_SHA256], raw_spki.value())
-		.expect("failed to validate CRL signature");
+	let webpki_crl = CertRevocationList::from(
+		BorrowedCertRevocationList::from_der(&der).expect("failed to parse CRL DER"),
+	);
 
 	// We should be able to find the revoked cert with the expected properties.
 	let webpki_revoked_cert = webpki_crl
@@ -617,7 +612,9 @@ fn test_webpki_crl_parse() {
 	);
 	assert_eq!(
 		webpki_revoked_cert.revocation_date,
-		Time::from_seconds_since_unix_epoch(revoked_cert.revocation_time.unix_timestamp() as u64)
+		UnixTime::since_unix_epoch(StdDuration::from_secs(
+			revoked_cert.revocation_time.unix_timestamp() as u64
+		))
 	);
 }
 
@@ -649,21 +646,24 @@ fn test_webpki_crl_revoke() {
 		.cert;
 
 	// Set up webpki's verification requirements.
-	let trust_anchor = TrustAnchor::try_from_cert_der(issuer.der()).unwrap();
+	let ca_der = CertificateDer::from(issuer.der());
+	let trust_anchor = anchor_from_trusted_cert(&ca_der).unwrap();
 	let trust_anchor_list = &[trust_anchor];
-	let end_entity_cert = EndEntityCert::try_from(ee.der()).unwrap();
+	let ee_der = CertificateDer::from(ee.der());
+	let end_entity_cert = EndEntityCert::try_from(&ee_der).unwrap();
 	let unix_time = 0x40_00_00_00;
-	let time = Time::from_seconds_since_unix_epoch(unix_time);
+	let time = UnixTime::since_unix_epoch(StdDuration::from_secs(unix_time));
 
 	// The end entity cert should validate with the issuer without error.
 	end_entity_cert
 		.verify_for_usage(
-			&[&webpki::ECDSA_P256_SHA256],
+			&[webpki::ring::ECDSA_P256_SHA256],
 			&trust_anchor_list[..],
 			&[],
 			time,
 			KeyUsage::client_auth(),
-			&[],
+			None,
+			None,
 		)
 		.expect("failed to validate ee cert with issuer");
 
@@ -685,16 +685,17 @@ fn test_webpki_crl_revoke() {
 	};
 	let crl = CertificateRevocationList::from_params(crl).unwrap();
 	let crl_der = crl.serialize_der_with_signer(&issuer, &issuer_key).unwrap();
-	let crl = BorrowedCertRevocationList::from_der(&crl_der).unwrap();
+	let crl = CertRevocationList::from(BorrowedCertRevocationList::from_der(&crl_der).unwrap());
 
 	// The end entity cert should **not** validate when we provide a CRL that revokes the EE cert.
 	let result = end_entity_cert.verify_for_usage(
-		&[&webpki::ECDSA_P256_SHA256],
+		&[webpki::ring::ECDSA_P256_SHA256],
 		&trust_anchor_list[..],
 		&[],
 		time,
 		KeyUsage::client_auth(),
-		&[&crl],
+		Some(RevocationOptionsBuilder::new(&[&crl]).unwrap().build()),
+		None,
 	);
 	assert!(matches!(result, Err(webpki::Error::CertRevoked)));
 }
@@ -702,7 +703,8 @@ fn test_webpki_crl_revoke() {
 #[test]
 fn test_webpki_cert_crl_dps() {
 	let der = util::cert_with_crl_dps();
-	webpki::EndEntityCert::try_from(der.as_ref()).expect("failed to parse cert with CRL DPs ext");
+	let cert = CertificateDer::from(der);
+	webpki::EndEntityCert::try_from(&cert).expect("failed to parse cert with CRL DPs ext");
 	// Webpki doesn't expose the parsed CRL distribution extension, so we can't interrogate that
 	// it matches the expected form. See `openssl.rs` for more extensive coverage.
 }

@@ -47,8 +47,9 @@ allowed_external_types = [
 
 [dev-dependencies]
 openssl = "0.10"
+pki-types = { package = "rustls-pki-types", version = "1" }
 x509-parser = { workspace = true, features = ["verify"] }
-rustls-webpki = { version = "0.101.0", features = ["std"] }
+rustls-webpki = { version = "0.102", features = ["std"] }
 botan = { version = "0.10", features = ["vendored"] }
 rand = { workspace = true }
 rsa = "0.9"
