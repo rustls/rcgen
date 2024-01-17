@@ -90,11 +90,11 @@ impl CaBuilder {
 	}
 	/// Add CountryName to `distinguished_name`. Multiple calls will
 	/// replace previous value.
-	pub fn country_name(mut self, country: &str) -> Self {
+	pub fn country_name(mut self, country: &str) -> Result<Self, rcgen::Error> {
 		self.params
 			.distinguished_name
-			.push(DnType::CountryName, PrintableString(country.into()));
-		self
+			.push(DnType::CountryName, PrintableString(country.try_into()?));
+		Ok(self)
 	}
 	/// Add OrganizationName to `distinguished_name`. Multiple calls will
 	/// replace previous value.

@@ -62,6 +62,7 @@ pub use crate::key_pair::{KeyPair, RemoteKeyPair};
 use crate::oid::*;
 pub use crate::sign_algo::algo::*;
 pub use crate::sign_algo::SignatureAlgorithm;
+pub use crate::string_types::*;
 
 /// Type-alias for the old name of [`Error`].
 #[deprecated(
@@ -131,6 +132,7 @@ mod key_pair;
 mod oid;
 mod ring_like;
 mod sign_algo;
+mod string_types;
 
 // Example certs usable as reference:
 // Uses ECDSA: https://crt.sh/?asn1=607203242
@@ -376,15 +378,15 @@ impl DnType {
 #[non_exhaustive]
 pub enum DnValue {
 	/// A string encoded using UCS-2
-	BmpString(Vec<u8>),
+	BmpString(BmpString),
 	/// An ASCII string.
-	Ia5String(String),
+	Ia5String(Ia5String),
 	/// An ASCII string containing only A-Z, a-z, 0-9, '()+,-./:=? and `<SPACE>`
-	PrintableString(String),
+	PrintableString(PrintableString),
 	/// A string of characters from the T.61 character set
-	TeletexString(Vec<u8>),
+	TeletexString(TeletexString),
 	/// A string encoded using UTF-32
-	UniversalString(Vec<u8>),
+	UniversalString(UniversalString),
 	/// A string encoded using UTF-8
 	Utf8String(String),
 }
@@ -444,9 +446,9 @@ impl DistinguishedName {
 	/// # use rcgen::{DistinguishedName, DnType, DnValue};
 	/// let mut dn = DistinguishedName::new();
 	/// dn.push(DnType::OrganizationName, "Crab widgits SE");
-	/// dn.push(DnType::CommonName, DnValue::PrintableString("Master Cert".to_string()));
+	/// dn.push(DnType::CommonName, DnValue::PrintableString("Master Cert".try_into().unwrap()));
 	/// assert_eq!(dn.get(&DnType::OrganizationName), Some(&DnValue::Utf8String("Crab widgits SE".to_string())));
-	/// assert_eq!(dn.get(&DnType::CommonName), Some(&DnValue::PrintableString("Master Cert".to_string())));
+	/// assert_eq!(dn.get(&DnType::CommonName), Some(&DnValue::PrintableString("Master Cert".try_into().unwrap())));
 	/// ```
 	pub fn push(&mut self, ty: DnType, s: impl Into<DnValue>) {
 		if !self.entries.contains_key(&ty) {
@@ -490,11 +492,13 @@ impl DistinguishedName {
 			let try_str =
 				|data| std::str::from_utf8(data).map_err(|_| Error::CouldNotParseCertificate);
 			let dn_value = match attr.attr_value().header.tag() {
-				Tag::BmpString => DnValue::BmpString(data.into()),
-				Tag::Ia5String => DnValue::Ia5String(try_str(data)?.to_owned()),
-				Tag::PrintableString => DnValue::PrintableString(try_str(data)?.to_owned()),
-				Tag::T61String => DnValue::TeletexString(data.into()),
-				Tag::UniversalString => DnValue::UniversalString(data.into()),
+				Tag::BmpString => DnValue::BmpString(BmpString::from_utf16be(data.to_vec())?),
+				Tag::Ia5String => DnValue::Ia5String(try_str(data)?.try_into()?),
+				Tag::PrintableString => DnValue::PrintableString(try_str(data)?.try_into()?),
+				Tag::T61String => DnValue::TeletexString(try_str(data)?.try_into()?),
+				Tag::UniversalString => {
+					DnValue::UniversalString(UniversalString::from_utf32be(data.to_vec())?)
+				},
 				Tag::Utf8String => DnValue::Utf8String(try_str(data)?.to_owned()),
 				_ => return Err(Error::CouldNotParseCertificate),
 			};
@@ -1450,18 +1454,24 @@ fn write_distinguished_name(writer: DERWriter, dn: &DistinguishedName) {
 					match content {
 						DnValue::BmpString(s) => writer
 							.next()
-							.write_tagged_implicit(TAG_BMPSTRING, |writer| writer.write_bytes(s)),
-						DnValue::Ia5String(s) => writer.next().write_ia5_string(s),
-						DnValue::PrintableString(s) => writer.next().write_printable_string(s),
+							.write_tagged_implicit(TAG_BMPSTRING, |writer| {
+								writer.write_bytes(s.as_bytes())
+							}),
+
+						DnValue::Ia5String(s) => writer.next().write_ia5_string(s.as_str()),
+
+						DnValue::PrintableString(s) => {
+							writer.next().write_printable_string(s.as_str())
+						},
 						DnValue::TeletexString(s) => writer
 							.next()
 							.write_tagged_implicit(TAG_TELETEXSTRING, |writer| {
-								writer.write_bytes(s)
+								writer.write_bytes(s.as_bytes())
 							}),
 						DnValue::UniversalString(s) => writer
 							.next()
 							.write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
-								writer.write_bytes(s)
+								writer.write_bytes(s.as_bytes())
 							}),
 						DnValue::Utf8String(s) => writer.next().write_utf8_string(s),
 					}

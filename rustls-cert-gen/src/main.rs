@@ -11,7 +11,7 @@ fn main() -> anyhow::Result<()> {
 	let ca = CertificateBuilder::new()
 		.signature_algorithm(opts.keypair_algorithm)?
 		.certificate_authority()
-		.country_name(&opts.country_name)
+		.country_name(&opts.country_name)?
 		.organization_name(&opts.organization_name)
 		.build()?;
 

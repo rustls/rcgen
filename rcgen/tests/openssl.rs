@@ -314,7 +314,7 @@ fn test_openssl_separate_ca_with_printable_string() {
 	let (mut params, ca_key) = util::default_params();
 	params.distinguished_name.push(
 		DnType::CountryName,
-		DnValue::PrintableString("US".to_string()),
+		DnValue::PrintableString("US".try_into().unwrap()),
 	);
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::generate_self_signed(params, &ca_key).unwrap();

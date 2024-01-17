@@ -171,7 +171,7 @@ fn test_botan_imported_ca_with_printable_string() {
 	let (mut params, imported_ca_key) = default_params();
 	params.distinguished_name.push(
 		DnType::CountryName,
-		DnValue::PrintableString("US".to_string()),
+		DnValue::PrintableString("US".try_into().unwrap()),
 	);
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::generate_self_signed(params, &imported_ca_key).unwrap();

@@ -20,9 +20,10 @@ fn new_ca() -> Certificate {
 	let mut params = CertificateParams::new(Vec::default());
 	let (yesterday, tomorrow) = validity_period();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-	params
-		.distinguished_name
-		.push(DnType::CountryName, PrintableString("BR".into()));
+	params.distinguished_name.push(
+		DnType::CountryName,
+		PrintableString("BR".try_into().unwrap()),
+	);
 	params
 		.distinguished_name
 		.push(DnType::OrganizationName, "Crab widgits SE");

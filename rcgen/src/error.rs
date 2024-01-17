@@ -13,6 +13,16 @@ pub enum Error {
 	#[cfg(feature = "x509-parser")]
 	/// Invalid subject alternative name type
 	InvalidNameType,
+	/// Invalid PrintableString type
+	InvalidPrintableString,
+	/// Invalide UniversalString type
+	InvalidUniversalString,
+	/// Invalid Ia5String type
+	InvalidIa5String,
+	/// Invalid TeletexString type
+	InvalidTeletexString,
+	/// Invalid BmpString type
+	InvalidBmpString,
 	/// An IP address was provided as a byte array, but the byte array was an invalid length.
 	InvalidIpAddressOctetLength(usize),
 	/// There is no support for generating
@@ -55,6 +65,11 @@ impl fmt::Display for Error {
 			CouldNotParseKeyPair => write!(f, "Could not parse key pair")?,
 			#[cfg(feature = "x509-parser")]
 			InvalidNameType => write!(f, "Invalid subject alternative name type")?,
+			InvalidPrintableString => write!(f, "Invalid PrintableString")?,
+			InvalidIa5String => write!(f, "Invalid IA5String")?,
+			InvalidBmpString => write!(f, "Invalid BMPString")?,
+			InvalidUniversalString => write!(f, "Invalid UniversalString")?,
+			InvalidTeletexString => write!(f, "Invalid TeletexString")?,
 			InvalidIpAddressOctetLength(actual) => {
 				write!(f, "Invalid IP address octet length of {actual} bytes")?
 			},
