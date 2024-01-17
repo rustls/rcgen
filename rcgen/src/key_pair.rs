@@ -19,7 +19,7 @@ use crate::{Error, SignatureAlgorithm};
 
 /// A key pair variant
 #[allow(clippy::large_enum_variant)]
-pub(crate) enum KeyPairKind {
+pub(crate) enum KeyPairKind<'a> {
 	/// A Ecdsa key pair
 	Ec(EcdsaKeyPair),
 	/// A Ed25519 key pair
@@ -27,10 +27,10 @@ pub(crate) enum KeyPairKind {
 	/// A RSA key pair
 	Rsa(RsaKeyPair, &'static dyn RsaEncoding),
 	/// A remote key pair
-	Remote(Box<dyn RemoteKeyPair + Send + Sync>),
+	Remote(&'a (dyn RemoteKeyPair + Send + Sync)),
 }
 
-impl fmt::Debug for KeyPairKind {
+impl fmt::Debug for KeyPairKind<'_> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Self::Ec(key_pair) => write!(f, "{:?}", key_pair),
@@ -49,13 +49,13 @@ impl fmt::Debug for KeyPairKind {
 /// for how to generate RSA keys in the wanted format
 /// and conversion between the formats.
 #[derive(Debug)]
-pub struct KeyPair {
-	pub(crate) kind: KeyPairKind,
+pub struct KeyPair<'a> {
+	pub(crate) kind: KeyPairKind<'a>,
 	pub(crate) alg: &'static SignatureAlgorithm,
 	pub(crate) serialized_der: Vec<u8>,
 }
 
-impl KeyPair {
+impl<'a> KeyPair<'a> {
 	/// Parses the key pair from the DER format
 	///
 	/// Equivalent to using the [`TryFrom`] implementation.
@@ -77,7 +77,7 @@ impl KeyPair {
 	}
 
 	/// Obtains the key pair from a raw public key and a remote private key
-	pub fn from_remote(key_pair: Box<dyn RemoteKeyPair + Send + Sync>) -> Result<Self, Error> {
+	pub fn from_remote(key_pair: &'a (dyn RemoteKeyPair + Send + Sync)) -> Result<Self, Error> {
 		Ok(Self {
 			alg: key_pair.algorithm(),
 			kind: KeyPairKind::Remote(key_pair),
@@ -154,7 +154,7 @@ impl KeyPair {
 
 	pub(crate) fn from_raw(
 		pkcs8: &[u8],
-	) -> Result<(KeyPairKind, &'static SignatureAlgorithm), Error> {
+	) -> Result<(KeyPairKind<'a>, &'static SignatureAlgorithm), Error> {
 		let rng = SystemRandom::new();
 		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
 			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
@@ -219,7 +219,7 @@ impl KeyPair {
 	/// If `None` is provided for `existing_key_pair` a new key pair compatible with `sig_alg`
 	/// is generated from scratch.
 	pub(crate) fn validate_or_generate(
-		existing_key_pair: &mut Option<KeyPair>,
+		existing_key_pair: &mut Option<KeyPair<'a>>,
 		sig_alg: &'static SignatureAlgorithm,
 	) -> Result<Self, Error> {
 		match existing_key_pair.take() {
@@ -251,32 +251,39 @@ impl KeyPair {
 		std::iter::once(self.alg)
 	}
 
-	pub(crate) fn sign(&self, msg: &[u8], writer: DERWriter) -> Result<(), Error> {
-		match &self.kind {
+	fn sign_raw(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
+		let signature = match &self.kind {
 			KeyPairKind::Ec(kp) => {
 				let system_random = SystemRandom::new();
 				let signature = kp.sign(&system_random, msg)._err()?;
-				let sig = &signature.as_ref();
-				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
+
+				signature.as_ref().to_vec()
 			},
 			KeyPairKind::Ed(kp) => {
 				let signature = kp.sign(msg);
-				let sig = &signature.as_ref();
-				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
+
+				signature.as_ref().to_vec()
 			},
 			KeyPairKind::Rsa(kp, padding_alg) => {
 				let system_random = SystemRandom::new();
 				let mut signature = vec![0; rsa_key_pair_public_modulus_len(kp)];
 				kp.sign(*padding_alg, &system_random, msg, &mut signature)
 					._err()?;
-				let sig = &signature.as_ref();
-				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
+
+				signature
 			},
 			KeyPairKind::Remote(kp) => {
 				let signature = kp.sign(msg)?;
-				writer.write_bitvec_bytes(&signature, &signature.len() * 8);
+
+				signature
 			},
-		}
+		};
+		Ok(signature)
+	}
+
+	pub(crate) fn sign(&self, msg: &[u8], writer: DERWriter) -> Result<(), Error> {
+		let sig = self.sign_raw(msg)?;
+		writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 		Ok(())
 	}
 
@@ -324,8 +331,8 @@ impl KeyPair {
 
 	/// Access the remote key pair if it is a remote one
 	pub fn as_remote(&self) -> Option<&(dyn RemoteKeyPair + Send + Sync)> {
-		if let KeyPairKind::Remote(remote) = &self.kind {
-			Some(remote.as_ref())
+		if let KeyPairKind::Remote(remote) = self.kind {
+			Some(remote)
 		} else {
 			None
 		}
@@ -340,23 +347,23 @@ impl KeyPair {
 	}
 }
 
-impl TryFrom<&[u8]> for KeyPair {
+impl<'a> TryFrom<&[u8]> for KeyPair<'a> {
 	type Error = Error;
 
-	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, Error> {
+	fn try_from(pkcs8: &[u8]) -> Result<KeyPair<'a>, Error> {
 		let (kind, alg) = KeyPair::from_raw(pkcs8)?;
 		Ok(KeyPair {
 			kind,
 			alg,
-			serialized_der: pkcs8.to_vec(),
+			serialized_der: pkcs8.to_vec().into(),
 		})
 	}
 }
 
-impl TryFrom<Vec<u8>> for KeyPair {
+impl<'a> TryFrom<Vec<u8>> for KeyPair<'a> {
 	type Error = Error;
 
-	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, Error> {
+	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair<'a>, Error> {
 		let (kind, alg) = KeyPair::from_raw(pkcs8.as_slice())?;
 		Ok(KeyPair {
 			kind,
@@ -366,7 +373,7 @@ impl TryFrom<Vec<u8>> for KeyPair {
 	}
 }
 
-impl PublicKeyData for KeyPair {
+impl PublicKeyData for KeyPair<'_> {
 	fn alg(&self) -> &SignatureAlgorithm {
 		self.alg
 	}
@@ -393,6 +400,20 @@ pub trait RemoteKeyPair {
 
 	/// Reveals the algorithm to be used when calling `sign()`
 	fn algorithm(&self) -> &'static SignatureAlgorithm;
+}
+
+impl RemoteKeyPair for KeyPair<'_> {
+	fn public_key(&self) -> &[u8] {
+		self.public_key_raw()
+	}
+
+	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
+		self.sign_raw(msg)
+	}
+
+	fn algorithm(&self) -> &'static SignatureAlgorithm {
+		self.alg
+	}
 }
 
 impl<T> ExternalError<T> for Result<T, ring_error::KeyRejected> {
@@ -432,6 +453,7 @@ pub(crate) trait PublicKeyData {
 mod test {
 	use super::*;
 
+	use crate::key_pair;
 	use crate::ring_like::rand::SystemRandom;
 	use crate::ring_like::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
 
@@ -443,5 +465,25 @@ mod test {
 
 		let key_pair = KeyPair::from_der(&der).unwrap();
 		assert_eq!(key_pair.algorithm(), &PKCS_ECDSA_P256_SHA256);
+	}
+
+	#[test]
+	fn test_remote_key_pair() {
+		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+		assert_eq!(key_pair.algorithm(), &PKCS_ECDSA_P256_SHA256);
+		let remote_key1 = KeyPair::from_remote(&key_pair).unwrap();
+		let remote_key2 = KeyPair::from_remote(&key_pair).unwrap();
+		assert_eq!(remote_key1.algorithm(), key_pair.algorithm());
+		assert_eq!(remote_key2.algorithm(), key_pair.algorithm());
+		assert_eq!(remote_key1.public_key_der(), key_pair.public_key_der());
+		assert_eq!(remote_key2.public_key_der(), key_pair.public_key_der());
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_remote_key_pair() {
+		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+		let remote_key = KeyPair::from_remote(&key_pair).unwrap();
+		remote_key.serialize_der();
 	}
 }

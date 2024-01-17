@@ -70,16 +70,16 @@ pub use crate::sign_algo::SignatureAlgorithm;
 pub type RcgenError = Error;
 
 /// An issued certificate, together with the subject keypair.
-pub struct CertifiedKey {
+pub struct CertifiedKey<'a> {
 	/// An issued certificate.
-	pub cert: Certificate,
+	pub cert: Certificate<'a>,
 	/// The certificate's subject key pair.
-	pub key_pair: KeyPair,
+	pub key_pair: KeyPair<'a>,
 }
 
 /// An issued certificate together with the parameters used to generate it.
-pub struct Certificate {
-	params: CertificateParams,
+pub struct Certificate<'a> {
+	params: CertificateParams<'a>,
 	subject_public_key_info: Vec<u8>,
 	der: Vec<u8>,
 }
@@ -112,9 +112,9 @@ println!("{}", key_pair.serialize_pem());
 ```
 "##
 )]
-pub fn generate_simple_self_signed(
+pub fn generate_simple_self_signed<'a>(
 	subject_alt_names: impl Into<Vec<String>>,
-) -> Result<CertifiedKey, Error> {
+) -> Result<CertifiedKey<'a>, Error> {
 	Certificate::generate_self_signed(CertificateParams::new(subject_alt_names))
 }
 
@@ -522,7 +522,7 @@ impl<'a> Iterator for DistinguishedNameIterator<'a> {
 /// Parameters used for certificate generation
 #[allow(missing_docs)]
 #[non_exhaustive]
-pub struct CertificateParams {
+pub struct CertificateParams<'a> {
 	pub alg: &'static SignatureAlgorithm,
 	pub not_before: OffsetDateTime,
 	pub not_after: OffsetDateTime,
@@ -541,7 +541,7 @@ pub struct CertificateParams {
 	pub crl_distribution_points: Vec<CrlDistributionPoint>,
 	pub custom_extensions: Vec<CustomExtension>,
 	/// The certificate's key pair, a new random key pair will be generated if this is `None`
-	pub key_pair: Option<KeyPair>,
+	pub key_pair: Option<KeyPair<'a>>,
 	/// If `true`, the 'Authority Key Identifier' extension will be added to the generated cert
 	pub use_authority_key_identifier_extension: bool,
 	/// Method to generate key identifiers from public keys
@@ -550,7 +550,7 @@ pub struct CertificateParams {
 	pub key_identifier_method: KeyIdMethod,
 }
 
-impl Default for CertificateParams {
+impl Default for CertificateParams<'_> {
 	fn default() -> Self {
 		// not_before and not_after set to reasonably long dates
 		let not_before = date_time_ymd(1975, 01, 01);
@@ -577,7 +577,7 @@ impl Default for CertificateParams {
 	}
 }
 
-impl CertificateParams {
+impl<'a> CertificateParams<'a> {
 	/// Generate certificate parameters with reasonable defaults
 	pub fn new(subject_alt_names: impl Into<Vec<String>>) -> Self {
 		let subject_alt_names = subject_alt_names
@@ -598,7 +598,7 @@ impl CertificateParams {
 	///
 	/// See [`from_ca_cert_der`](Self::from_ca_cert_der) for more details.
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
-	pub fn from_ca_cert_pem(pem_str: &str, key_pair: KeyPair) -> Result<Self, Error> {
+	pub fn from_ca_cert_pem(pem_str: &str, key_pair: KeyPair<'a>) -> Result<Self, Error> {
 		let certificate = pem::parse(pem_str).or(Err(Error::CouldNotParseCertificate))?;
 		Self::from_ca_cert_der(certificate.contents(), key_pair)
 	}
@@ -619,7 +619,7 @@ impl CertificateParams {
 	/// for the presence of the `BasicConstraints` extension, or perform any other
 	/// validation.
 	#[cfg(feature = "x509-parser")]
-	pub fn from_ca_cert_der(ca_cert: &[u8], key_pair: KeyPair) -> Result<Self, Error> {
+	pub fn from_ca_cert_der(ca_cert: &[u8], key_pair: KeyPair<'a>) -> Result<Self, Error> {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
 			.or(Err(Error::CouldNotParseCertificate))?;
 
@@ -1510,7 +1510,7 @@ fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[Gener
 	});
 }
 
-impl Certificate {
+impl<'a> Certificate<'a> {
 	/// Generates a new self-signed certificate from the given parameters.
 	///
 	/// If [`CertificateParams::key_pair`] is not set to a pre-generated key, a new key pair
@@ -1553,10 +1553,10 @@ impl Certificate {
 	/// [`Certificate::pem`]. Similarly the private key of the returned [`KeyPair`] may be
 	/// serialized using [`KeyPair::serialize_der`] and [`KeyPair::serialize_pem`].
 	pub fn generate(
-		mut params: CertificateParams,
+		mut params: CertificateParams<'a>,
 		issuer: &Certificate,
 		issuer_key: &KeyPair,
-	) -> Result<CertifiedKey, Error> {
+	) -> Result<CertifiedKey<'a>, Error> {
 		let key_pair = KeyPair::validate_or_generate(&mut params.key_pair, params.alg)?;
 		let subject_public_key_info = key_pair.public_key_der();
 		let der = params.serialize_der_with_signer(
@@ -1587,10 +1587,10 @@ impl Certificate {
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
 	pub fn from_request(
-		request: CertificateSigningRequestParams,
+		request: CertificateSigningRequestParams<'a>,
 		issuer: &Certificate,
 		issuer_key: &KeyPair,
-	) -> Result<Certificate, Error> {
+	) -> Result<Certificate<'a>, Error> {
 		let der = request.params.serialize_der_with_signer(
 			&request.public_key,
 			request.params.alg,
@@ -1722,21 +1722,21 @@ fn write_x509_authority_key_identifier(writer: DERWriter, aki: Vec<u8>) {
 }
 
 #[cfg(feature = "zeroize")]
-impl zeroize::Zeroize for KeyPair {
+impl zeroize::Zeroize for KeyPair<'_> {
 	fn zeroize(&mut self) {
 		self.serialized_der.zeroize();
 	}
 }
 
 #[cfg(feature = "zeroize")]
-impl zeroize::Zeroize for CertificateSigningRequestParams {
+impl zeroize::Zeroize for CertificateSigningRequestParams<'_> {
 	fn zeroize(&mut self) {
 		self.params.zeroize();
 	}
 }
 
 #[cfg(feature = "zeroize")]
-impl zeroize::Zeroize for CertificateParams {
+impl zeroize::Zeroize for CertificateParams<'_> {
 	fn zeroize(&mut self) {
 		self.key_pair.zeroize();
 	}
