@@ -26,7 +26,8 @@ use crate::{Certificate, Error, KeyIdMethod, KeyUsagePurpose, SerialNumber, Sign
 /// let mut issuer_params = CertificateParams::new(vec!["crl.issuer.example.com".to_string()]);
 /// issuer_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 /// issuer_params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::CrlSign];
-/// let issuer = Certificate::generate_self_signed(issuer_params).unwrap();
+/// let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+/// let issuer = Certificate::generate_self_signed(issuer_params, &key_pair).unwrap();
 /// // Describe a revoked certificate.
 /// let revoked_cert = RevokedCertParams{
 ///   serial_number: SerialNumber::from(9999),

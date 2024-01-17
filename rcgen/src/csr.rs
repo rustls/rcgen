@@ -60,7 +60,6 @@ impl CertificateSigningRequestParams {
 
 		let info = &csr.certification_request_info;
 		let mut params = CertificateParams::default();
-		params.alg = alg;
 		params.distinguished_name = DistinguishedName::from_name(&info.subject)?;
 		let raw = info.subject_pki.subject_public_key.data.to_vec();
 

@@ -1,6 +1,6 @@
 use bpaf::Bpaf;
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, CertifiedKey, DistinguishedName, DnType,
+	BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType,
 	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
 };
 use std::{fmt, fs::File, io, path::Path};
@@ -34,6 +34,7 @@ impl PemCertifiedKey {
 #[derive(Default)]
 pub struct CertificateBuilder {
 	params: CertificateParams,
+	alg: KeypairAlgorithm,
 }
 
 impl CertificateBuilder {
@@ -47,13 +48,14 @@ impl CertificateBuilder {
 		let mut params = CertificateParams::default();
 		// override default Common Name
 		params.distinguished_name = DistinguishedName::new();
-		Self { params }
+		Self {
+			params,
+			alg: KeypairAlgorithm::EcdsaP256,
+		}
 	}
 	/// Set signature algorithm (instead of default).
-	pub fn signature_algorithm(mut self, alg: &KeypairAlgorithm) -> anyhow::Result<Self> {
-		let keypair = alg.to_keypair()?;
-		self.params.alg = keypair.algorithm();
-		self.params.key_pair = Some(keypair);
+	pub fn signature_algorithm(mut self, alg: KeypairAlgorithm) -> anyhow::Result<Self> {
+		self.alg = alg;
 		Ok(self)
 	}
 	/// Set options for Ca Certificates
@@ -63,27 +65,28 @@ impl CertificateBuilder {
 	/// let cert = CertificateBuilder::new().certificate_authority();
 	/// ```
 	pub fn certificate_authority(self) -> CaBuilder {
-		CaBuilder::new(self.params)
+		CaBuilder::new(self.params, self.alg)
 	}
 	/// Set options for `EndEntity` Certificates
 	pub fn end_entity(self) -> EndEntityBuilder {
-		EndEntityBuilder::new(self.params)
+		EndEntityBuilder::new(self.params, self.alg)
 	}
 }
 
 /// [CertificateParams] from which an [Ca] [Certificate] can be built
 pub struct CaBuilder {
 	params: CertificateParams,
+	alg: KeypairAlgorithm,
 }
 
 impl CaBuilder {
 	/// Initialize `CaBuilder`
-	pub fn new(mut params: CertificateParams) -> Self {
+	pub fn new(mut params: CertificateParams, alg: KeypairAlgorithm) -> Self {
 		params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
 		params.key_usages.push(KeyUsagePurpose::KeyCertSign);
 		params.key_usages.push(KeyUsagePurpose::CrlSign);
-		Self { params }
+		Self { params, alg }
 	}
 	/// Add CountryName to `distinguished_name`. Multiple calls will
 	/// replace previous value.
@@ -103,7 +106,8 @@ impl CaBuilder {
 	}
 	/// build `Ca` Certificate.
 	pub fn build(self) -> Result<Ca, rcgen::Error> {
-		let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(self.params)?;
+		let key_pair = self.alg.to_keypair()?;
+		let cert = Certificate::generate_self_signed(self.params, &key_pair)?;
 		Ok(Ca { cert, key_pair })
 	}
 }
@@ -148,15 +152,16 @@ impl EndEntity {
 /// [CertificateParams] from which an [EndEntity] [Certificate] can be built
 pub struct EndEntityBuilder {
 	params: CertificateParams,
+	alg: KeypairAlgorithm,
 }
 
 impl EndEntityBuilder {
 	/// Initialize `EndEntityBuilder`
-	pub fn new(mut params: CertificateParams) -> Self {
+	pub fn new(mut params: CertificateParams, alg: KeypairAlgorithm) -> Self {
 		params.is_ca = IsCa::NoCa;
 		params.use_authority_key_identifier_extension = true;
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
-		Self { params }
+		Self { params, alg }
 	}
 	/// Add CommonName to `distinguished_name`. Multiple calls will
 	/// replace previous value.
@@ -191,16 +196,17 @@ impl EndEntityBuilder {
 	}
 	/// build `EndEntity` Certificate.
 	pub fn build(self, issuer: &Ca) -> Result<EndEntity, rcgen::Error> {
-		let CertifiedKey { cert, key_pair } =
-			Certificate::generate(self.params, &issuer.cert, &issuer.key_pair)?;
+		let key_pair = self.alg.to_keypair()?;
+		let cert = Certificate::generate(self.params, &key_pair, &issuer.cert, &issuer.key_pair)?;
 		Ok(EndEntity { cert, key_pair })
 	}
 }
 
-#[derive(Clone, Debug, Bpaf)]
 /// Supported Keypair Algorithms
+#[derive(Clone, Copy, Debug, Default, Bpaf, PartialEq)]
 pub enum KeypairAlgorithm {
 	Ed25519,
+	#[default]
 	EcdsaP256,
 	EcdsaP384,
 }
@@ -292,7 +298,7 @@ mod tests {
 	fn with_sig_algo_default() -> anyhow::Result<()> {
 		let end_entity = CertificateBuilder::new().end_entity();
 
-		assert_eq!(end_entity.params.alg, &rcgen::PKCS_ECDSA_P256_SHA256);
+		assert_eq!(end_entity.alg, KeypairAlgorithm::EcdsaP256);
 		Ok(())
 	}
 	#[test]
@@ -318,7 +324,7 @@ mod tests {
 	fn serialize_end_entity_ecdsa_p384_sha384_sig() -> anyhow::Result<()> {
 		let ca = CertificateBuilder::new().certificate_authority().build()?;
 		let end_entity = CertificateBuilder::new()
-			.signature_algorithm(&KeypairAlgorithm::EcdsaP384)?
+			.signature_algorithm(KeypairAlgorithm::EcdsaP384)?
 			.end_entity()
 			.build(&ca)?
 			.serialize_pem();
@@ -337,7 +343,7 @@ mod tests {
 	fn serialize_end_entity_ed25519_sig() -> anyhow::Result<()> {
 		let ca = CertificateBuilder::new().certificate_authority().build()?;
 		let end_entity = CertificateBuilder::new()
-			.signature_algorithm(&KeypairAlgorithm::Ed25519)?
+			.signature_algorithm(KeypairAlgorithm::Ed25519)?
 			.end_entity()
 			.build(&ca)?
 			.serialize_pem();
@@ -359,7 +365,7 @@ mod tests {
 	#[test]
 	fn init_end_endity() {
 		let params = CertificateParams::default();
-		let cert = EndEntityBuilder::new(params);
+		let cert = EndEntityBuilder::new(params, KeypairAlgorithm::default());
 		assert_eq!(cert.params.is_ca, IsCa::NoCa)
 	}
 	#[test]
@@ -369,7 +375,7 @@ mod tests {
 			.build()
 			.unwrap();
 		let params = CertificateParams::default();
-		let mut cert = EndEntityBuilder::new(params);
+		let mut cert = EndEntityBuilder::new(params, KeypairAlgorithm::default());
 		assert_eq!(cert.params.is_ca, IsCa::NoCa);
 		assert_eq!(
 			cert.client_auth().params.extended_key_usages,
@@ -383,7 +389,7 @@ mod tests {
 			.build()
 			.unwrap();
 		let params = CertificateParams::default();
-		let mut cert = EndEntityBuilder::new(params);
+		let mut cert = EndEntityBuilder::new(params, KeypairAlgorithm::default());
 		assert_eq!(cert.params.is_ca, IsCa::NoCa);
 		assert_eq!(
 			cert.server_auth().params.extended_key_usages,
@@ -399,7 +405,8 @@ mod tests {
 		let name = "unexpected.oomyoo.xyz";
 		let names = vec![SanType::DnsName(name.into())];
 		let params = CertificateParams::default();
-		let cert = EndEntityBuilder::new(params).subject_alternative_names(names);
+		let cert = EndEntityBuilder::new(params, KeypairAlgorithm::default())
+			.subject_alternative_names(names);
 		assert_eq!(
 			cert.params.subject_alt_names,
 			vec![rcgen::SanType::DnsName(name.into())]
@@ -413,7 +420,8 @@ mod tests {
 			.unwrap();
 		let names = vec![];
 		let params = CertificateParams::default();
-		let cert = EndEntityBuilder::new(params).subject_alternative_names(names);
+		let cert = EndEntityBuilder::new(params, KeypairAlgorithm::default())
+			.subject_alternative_names(names);
 		assert_eq!(cert.params.subject_alt_names, vec![]);
 	}
 

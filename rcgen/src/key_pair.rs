@@ -211,26 +211,6 @@ impl KeyPair {
 		}
 	}
 
-	/// Validate a provided key pair's compatibility with `sig_alg` or generate a new one.
-	///
-	/// If a provided `existing_key_pair` is not compatible with the `sig_alg` an error is
-	/// returned.
-	///
-	/// If `None` is provided for `existing_key_pair` a new key pair compatible with `sig_alg`
-	/// is generated from scratch.
-	pub(crate) fn validate_or_generate(
-		existing_key_pair: &mut Option<KeyPair>,
-		sig_alg: &'static SignatureAlgorithm,
-	) -> Result<Self, Error> {
-		match existing_key_pair.take() {
-			Some(kp) if !kp.is_compatible(sig_alg) => {
-				return Err(Error::CertificateKeyPairMismatch)
-			},
-			Some(kp) => Ok(kp),
-			None => KeyPair::generate(sig_alg),
-		}
-	}
-
 	/// Get the raw public key of this key pair
 	///
 	/// The key is in raw format, as how [`ring::signature::KeyPair::public_key`]

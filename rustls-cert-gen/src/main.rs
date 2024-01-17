@@ -9,14 +9,14 @@ fn main() -> anyhow::Result<()> {
 	let opts = options().run();
 
 	let ca = CertificateBuilder::new()
-		.signature_algorithm(&opts.keypair_algorithm)?
+		.signature_algorithm(opts.keypair_algorithm)?
 		.certificate_authority()
 		.country_name(&opts.country_name)
 		.organization_name(&opts.organization_name)
 		.build()?;
 
 	let mut entity = CertificateBuilder::new()
-		.signature_algorithm(&opts.keypair_algorithm)?
+		.signature_algorithm(opts.keypair_algorithm)?
 		.end_entity()
 		.common_name(&opts.common_name)
 		.subject_alternative_names(opts.san);
