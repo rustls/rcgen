@@ -472,7 +472,8 @@ fn test_webpki_imported_ca() {
 		key_pair: cert_key,
 	} = Certificate::generate(params, &imported_ca_cert, &ca_key).unwrap();
 
-	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	let sign_fn =
+		|cert: &KeyPair, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
 		cert.der(),
 		&cert_key,
@@ -520,7 +521,8 @@ fn test_webpki_imported_ca_with_printable_string() {
 		key_pair: cert_key,
 	} = Certificate::generate(params, &imported_ca_cert, &ca_key).unwrap();
 
-	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	let sign_fn =
+		|cert: &KeyPair, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
 		cert.der(),
 		&cert_key,
@@ -556,8 +558,9 @@ fn test_certificate_from_csr() {
 	} = Certificate::generate_self_signed(params).unwrap();
 	let cert = Certificate::from_request(csr, &ca_cert, &ca_key).unwrap();
 
-	let sign_fn =
-		|key_pair, msg| sign_msg_ecdsa(key_pair, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
+	let sign_fn = |key_pair: &KeyPair, msg| {
+		sign_msg_ecdsa(key_pair, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING)
+	};
 	check_cert_ca(
 		cert.der(),
 		&cert_key,

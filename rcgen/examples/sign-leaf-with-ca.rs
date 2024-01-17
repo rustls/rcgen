@@ -16,7 +16,7 @@ fn main() {
 	println!("ca certificate: {ca_cert_pem}",);
 }
 
-fn new_ca() -> CertifiedKey {
+fn new_ca<'a>() -> CertifiedKey<'a> {
 	let mut params = CertificateParams::new(Vec::default());
 	let (yesterday, tomorrow) = validity_period();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
@@ -35,7 +35,7 @@ fn new_ca() -> CertifiedKey {
 	Certificate::generate_self_signed(params).unwrap()
 }
 
-fn new_end_entity() -> Certificate {
+fn new_end_entity<'a>() -> Certificate<'a> {
 	let name = "entity.other.host";
 	let mut params = CertificateParams::new(vec![name.into()]);
 	let (yesterday, tomorrow) = validity_period();

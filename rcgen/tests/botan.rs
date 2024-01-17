@@ -10,7 +10,7 @@ use time::{Duration, OffsetDateTime};
 
 mod util;
 
-fn default_params() -> CertificateParams {
+fn default_params<'a>() -> CertificateParams<'a> {
 	let mut params = util::default_params();
 	// Botan has a sanity check that enforces a maximum expiration date
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
