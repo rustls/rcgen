@@ -1282,10 +1282,12 @@ pub enum ExtendedKeyUsagePurpose {
 	TimeStamping,
 	/// id-kp-OCSPSigning
 	OcspSigning,
+	/// A custom purpose not from the pre-specified list of purposes
+	Other(Vec<u64>),
 }
 
 impl ExtendedKeyUsagePurpose {
-	fn oid(&self) -> &'static [u64] {
+	fn oid(&self) -> &[u64] {
 		use ExtendedKeyUsagePurpose::*;
 		match self {
 			// anyExtendedKeyUsage
@@ -1297,6 +1299,7 @@ impl ExtendedKeyUsagePurpose {
 			EmailProtection => &[1, 3, 6, 1, 5, 5, 7, 3, 4],
 			TimeStamping => &[1, 3, 6, 1, 5, 5, 7, 3, 8],
 			OcspSigning => &[1, 3, 6, 1, 5, 5, 7, 3, 9],
+			Other(oid) => &oid,
 		}
 	}
 }
@@ -1933,6 +1936,33 @@ mod tests {
 		let maybe_extension = cert.extended_key_usage().unwrap();
 		let extension = maybe_extension.unwrap();
 		assert!(extension.value.any);
+	}
+
+	#[test]
+	fn test_with_extended_key_usages_other() {
+		use x509_parser::der_parser::asn1_rs::Oid;
+		let mut params: CertificateParams = Default::default();
+		const OID_1: &[u64] = &[1, 2, 3, 4];
+		const OID_2: &[u64] = &[1, 2, 3, 4, 5, 6];
+
+		// Set extended_key_usages
+		params.extended_key_usages = vec![
+			ExtendedKeyUsagePurpose::Other(Vec::from(OID_1)),
+			ExtendedKeyUsagePurpose::Other(Vec::from(OID_2)),
+		];
+
+		// Make the cert
+		let cert = Certificate::generate_self_signed(params).unwrap().cert;
+
+		// Parse it
+		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
+
+		// Ensure we found it.
+		let maybe_extension = cert.extended_key_usage().unwrap();
+		let extension = maybe_extension.unwrap();
+
+		let expected_oids = vec![Oid::from(OID_1).unwrap(), Oid::from(OID_2).unwrap()];
+		assert_eq!(extension.value.other, expected_oids);
 	}
 
 	#[test]
