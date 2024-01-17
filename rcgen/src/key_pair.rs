@@ -453,7 +453,6 @@ pub(crate) trait PublicKeyData {
 mod test {
 	use super::*;
 
-	use crate::key_pair;
 	use crate::ring_like::rand::SystemRandom;
 	use crate::ring_like::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
 
