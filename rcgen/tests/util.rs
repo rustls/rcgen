@@ -67,7 +67,7 @@ YPTHy8SWRA2sMII3ArhHJ8A=
 -----END PRIVATE KEY-----
 "#;
 
-pub fn default_params() -> CertificateParams {
+pub fn default_params<'a>() -> CertificateParams<'a> {
 	let mut params =
 		CertificateParams::new(vec!["crabs.crabs".to_string(), "localhost".to_string()]);
 	params
@@ -80,7 +80,7 @@ pub fn default_params() -> CertificateParams {
 }
 
 #[allow(unused)] // Used by openssl + x509-parser features.
-pub fn test_crl() -> (CertificateRevocationList, Certificate, KeyPair) {
+pub fn test_crl<'a>() -> (CertificateRevocationList, Certificate<'a>, KeyPair<'a>) {
 	let mut issuer = default_params();
 	issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	issuer.key_usages = vec![

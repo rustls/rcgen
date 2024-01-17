@@ -52,7 +52,7 @@ impl fmt::Debug for KeyPairKind<'_> {
 pub struct KeyPair<'a> {
 	pub(crate) kind: KeyPairKind<'a>,
 	pub(crate) alg: &'static SignatureAlgorithm,
-	pub(crate) serialized_der: Vec<u8>,
+	pub(crate) serialized_der: Option<Vec<u8>>,
 }
 
 impl<'a> KeyPair<'a> {
@@ -81,7 +81,7 @@ impl<'a> KeyPair<'a> {
 		Ok(Self {
 			alg: key_pair.algorithm(),
 			kind: KeyPairKind::Remote(key_pair),
-			serialized_der: Vec::new(),
+			serialized_der: None,
 		})
 	}
 
@@ -148,7 +148,7 @@ impl<'a> KeyPair<'a> {
 		Ok(KeyPair {
 			kind,
 			alg,
-			serialized_der: pkcs8_vec,
+			serialized_der: Some(pkcs8_vec),
 		})
 	}
 
@@ -190,7 +190,7 @@ impl<'a> KeyPair<'a> {
 				Ok(KeyPair {
 					kind: KeyPairKind::Ec(key_pair),
 					alg,
-					serialized_der: key_pair_serialized,
+					serialized_der: Some(key_pair_serialized),
 				})
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
@@ -201,7 +201,7 @@ impl<'a> KeyPair<'a> {
 				Ok(KeyPair {
 					kind: KeyPairKind::Ed(key_pair),
 					alg,
-					serialized_der: key_pair_serialized,
+					serialized_der: Some(key_pair_serialized),
 				})
 			},
 			// Ring doesn't have RSA key generation yet:
@@ -310,11 +310,10 @@ impl<'a> KeyPair<'a> {
 	///
 	/// Panics if called on a remote key pair.
 	pub fn serialize_der(&self) -> Vec<u8> {
-		if let KeyPairKind::Remote(_) = self.kind {
-			panic!("Serializing a remote key pair is not supported")
+		match &self.serialized_der {
+			Some(serialized_der) => serialized_der.clone(),
+			None => panic!("Serializing a remote key pair is not supported")
 		}
-
-		self.serialized_der.clone()
 	}
 
 	/// Returns a reference to the serialized key pair (including the private key)
@@ -322,11 +321,10 @@ impl<'a> KeyPair<'a> {
 	///
 	/// Panics if called on a remote key pair.
 	pub fn serialized_der(&self) -> &[u8] {
-		if let KeyPairKind::Remote(_) = self.kind {
-			panic!("Serializing a remote key pair is not supported")
+		match &self.serialized_der {
+			Some(serialized_der) => serialized_der,
+			None => panic!("Serializing a remote key pair is not supported")
 		}
-
-		&self.serialized_der
 	}
 
 	/// Access the remote key pair if it is a remote one
@@ -368,7 +366,7 @@ impl<'a> TryFrom<Vec<u8>> for KeyPair<'a> {
 		Ok(KeyPair {
 			kind,
 			alg,
-			serialized_der: pkcs8,
+			serialized_der: Some(pkcs8),
 		})
 	}
 }
@@ -479,7 +477,7 @@ mod test {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic = "Serializing a remote key pair is not supported"]
 	fn test_remote_key_pair_is_unserializable() {
 		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
 		let remote_key = KeyPair::from_remote(&key_pair).unwrap();
