@@ -11,7 +11,7 @@ use crate::{
 	write_distinguished_name, write_dt_utc_or_generalized, write_x509_authority_key_identifier,
 	write_x509_extension, DistinguishedName, KeyPair,
 };
-use crate::{Certificate, Error, KeyIdMethod, KeyUsagePurpose, SerialNumber, SignatureAlgorithm};
+use crate::{Certificate, Error, KeyIdMethod, KeyUsagePurpose, SerialNumber};
 
 /// A certificate revocation list (CRL)
 ///
@@ -42,7 +42,6 @@ use crate::{Certificate, Error, KeyIdMethod, KeyUsagePurpose, SerialNumber, Sign
 ///   crl_number: SerialNumber::from(1234),
 ///   issuing_distribution_point: None,
 ///   revoked_certs: vec![revoked_cert],
-///   alg: &PKCS_ECDSA_P256_SHA256,
 ///   key_identifier_method: KeyIdMethod::Sha256,
 /// };
 /// let crl = CertificateRevocationList::from_params(crl).unwrap();
@@ -75,11 +74,8 @@ impl CertificateRevocationList {
 		{
 			return Err(Error::IssuerNotCrlSigner);
 		}
-		self.params.serialize_der_with_signer(
-			self.params.alg,
-			ca_key,
-			&ca.params.distinguished_name,
-		)
+		self.params
+			.serialize_der_with_signer(ca_key, &ca.params.distinguished_name)
 	}
 	/// Serializes the certificate revocation list (CRL) in ASCII PEM format, signed with
 	/// the issuing certificate authority's key.
@@ -176,8 +172,6 @@ pub struct CertificateRevocationListParams {
 	pub issuing_distribution_point: Option<CrlIssuingDistributionPoint>,
 	/// A list of zero or more parameters describing revoked certificates included in the CRL.
 	pub revoked_certs: Vec<RevokedCertParams>,
-	/// Signature algorithm to use when signing the serialized CRL.
-	pub alg: &'static SignatureAlgorithm,
 	/// Method to generate key identifiers from public keys
 	///
 	/// Defaults to SHA-256.
@@ -187,7 +181,6 @@ pub struct CertificateRevocationListParams {
 impl CertificateRevocationListParams {
 	fn serialize_der_with_signer(
 		&self,
-		sig_alg: &SignatureAlgorithm,
 		issuer: &KeyPair,
 		issuer_name: &DistinguishedName,
 	) -> Result<Vec<u8>, Error> {
@@ -195,7 +188,7 @@ impl CertificateRevocationListParams {
 			// https://www.rfc-editor.org/rfc/rfc5280#section-5.1
 			writer.write_sequence(|writer| {
 				let tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
-					self.write_crl(writer, sig_alg, issuer, issuer_name)?;
+					self.write_crl(writer, issuer, issuer_name)?;
 					Ok::<(), Error>(())
 				})?;
 
@@ -203,7 +196,7 @@ impl CertificateRevocationListParams {
 				writer.next().write_der(&tbs_cert_list_serialized);
 
 				// Write signatureAlgorithm
-				sig_alg.write_alg_ident(writer.next());
+				issuer.alg.write_alg_ident(writer.next());
 
 				// Write signature
 				issuer.sign(&tbs_cert_list_serialized, writer.next())?;
@@ -215,7 +208,6 @@ impl CertificateRevocationListParams {
 	fn write_crl(
 		&self,
 		writer: DERWriter,
-		sig_alg: &SignatureAlgorithm,
 		issuer: &KeyPair,
 		issuer_name: &DistinguishedName,
 	) -> Result<(), Error> {
@@ -235,7 +227,7 @@ impl CertificateRevocationListParams {
 			// RFC 5280 §5.1.2.2:
 			//   This field MUST contain the same algorithm identifier as the
 			//   signatureAlgorithm field in the sequence CertificateList
-			sig_alg.write_alg_ident(writer.next());
+			issuer.alg.write_alg_ident(writer.next());
 
 			// Write issuer.
 			// RFC 5280 §5.1.2.3:

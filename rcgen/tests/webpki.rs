@@ -623,7 +623,6 @@ fn test_webpki_crl_revoke() {
 			invalidity_date: None,
 		}],
 		key_identifier_method: rcgen::KeyIdMethod::Sha256,
-		alg,
 	};
 	let crl = CertificateRevocationList::from_params(crl).unwrap();
 	let crl_der = crl.serialize_der_with_signer(&issuer, &issuer_key).unwrap();

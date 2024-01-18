@@ -113,7 +113,6 @@ pub fn test_crl() -> (CertificateRevocationList, Certificate, KeyPair) {
 			scope: Some(CrlScope::UserCertsOnly),
 		}),
 		revoked_certs: vec![revoked_cert],
-		alg: &PKCS_ECDSA_P256_SHA256,
 		key_identifier_method: KeyIdMethod::Sha256,
 	};
 	let crl = CertificateRevocationList::from_params(crl).unwrap();

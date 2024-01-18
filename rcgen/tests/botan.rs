@@ -236,7 +236,6 @@ fn test_botan_crl_parse() {
 			invalidity_date: None,
 		}],
 		key_identifier_method: rcgen::KeyIdMethod::Sha256,
-		alg,
 	};
 	let crl = CertificateRevocationList::from_params(crl).unwrap();
 
