@@ -56,6 +56,42 @@ pub struct KeyPair {
 }
 
 impl KeyPair {
+	/// Generate a new random key pair for the specified signature algorithm
+	///
+	/// If you're not sure which algorithm to use, [`PKCS_ECDSA_P256_SHA256`] is a good choice.
+	pub fn generate_for(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
+		let rng = &SystemRandom::new();
+
+		match alg.sign_alg {
+			SignAlgo::EcDsa(sign_alg) => {
+				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)._err()?;
+				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
+
+				let key_pair = ecdsa_from_pkcs8(&sign_alg, &&key_pair_doc.as_ref(), rng).unwrap();
+				Ok(KeyPair {
+					kind: KeyPairKind::Ec(key_pair),
+					alg,
+					serialized_der: key_pair_serialized,
+				})
+			},
+			SignAlgo::EdDsa(_sign_alg) => {
+				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(rng)._err()?;
+				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
+
+				let key_pair = Ed25519KeyPair::from_pkcs8(&&key_pair_doc.as_ref()).unwrap();
+				Ok(KeyPair {
+					kind: KeyPairKind::Ed(key_pair),
+					alg,
+					serialized_der: key_pair_serialized,
+				})
+			},
+			// Ring doesn't have RSA key generation yet:
+			// https://github.com/briansmith/ring/issues/219
+			// https://github.com/briansmith/ring/pull/733
+			SignAlgo::Rsa() => Err(Error::KeyGenerationUnavailable),
+		}
+	}
+
 	/// Parses the key pair from the DER format
 	///
 	/// Equivalent to using the [`TryFrom`] implementation.
@@ -175,42 +211,6 @@ impl KeyPair {
 			return Err(Error::CouldNotParseKeyPair);
 		};
 		Ok((kind, alg))
-	}
-
-	/// Generate a new random key pair for the specified signature algorithm
-	///
-	/// If you're not sure which algorithm to use, [`PKCS_ECDSA_P256_SHA256`] is a good choice.
-	pub fn generate_for(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
-		let rng = &SystemRandom::new();
-
-		match alg.sign_alg {
-			SignAlgo::EcDsa(sign_alg) => {
-				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)._err()?;
-				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
-
-				let key_pair = ecdsa_from_pkcs8(&sign_alg, &&key_pair_doc.as_ref(), rng).unwrap();
-				Ok(KeyPair {
-					kind: KeyPairKind::Ec(key_pair),
-					alg,
-					serialized_der: key_pair_serialized,
-				})
-			},
-			SignAlgo::EdDsa(_sign_alg) => {
-				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(rng)._err()?;
-				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
-
-				let key_pair = Ed25519KeyPair::from_pkcs8(&&key_pair_doc.as_ref()).unwrap();
-				Ok(KeyPair {
-					kind: KeyPairKind::Ed(key_pair),
-					alg,
-					serialized_der: key_pair_serialized,
-				})
-			},
-			// Ring doesn't have RSA key generation yet:
-			// https://github.com/briansmith/ring/issues/219
-			// https://github.com/briansmith/ring/pull/733
-			SignAlgo::Rsa() => Err(Error::KeyGenerationUnavailable),
-		}
 	}
 
 	/// Get the raw public key of this key pair
