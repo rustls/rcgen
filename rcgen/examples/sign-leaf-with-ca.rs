@@ -33,7 +33,7 @@ fn new_ca() -> Certificate {
 	params.not_before = yesterday;
 	params.not_after = tomorrow;
 
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let key_pair = KeyPair::generate().unwrap();
 	Certificate::generate_self_signed(params, &key_pair).unwrap()
 }
 
@@ -50,7 +50,7 @@ fn new_end_entity() -> Certificate {
 	params.not_before = yesterday;
 	params.not_after = tomorrow;
 
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let key_pair = KeyPair::generate().unwrap();
 	Certificate::generate_self_signed(params, &key_pair).unwrap()
 }
 

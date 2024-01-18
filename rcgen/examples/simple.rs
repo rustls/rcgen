@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		SanType::DnsName("localhost".to_string()),
 	];
 
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+	let key_pair = KeyPair::generate()?;
 	let cert = Certificate::generate_self_signed(params, &key_pair)?;
 
 	let pem_serialized = cert.pem();

@@ -56,6 +56,11 @@ pub struct KeyPair {
 }
 
 impl KeyPair {
+	/// Generate a new random [`PKCS_ECDSA_P256_SHA256`] key pair
+	pub fn generate() -> Result<Self, Error> {
+		Self::generate_for(&PKCS_ECDSA_P256_SHA256)
+	}
+
 	/// Generate a new random key pair for the specified signature algorithm
 	///
 	/// If you're not sure which algorithm to use, [`PKCS_ECDSA_P256_SHA256`] is a good choice.
