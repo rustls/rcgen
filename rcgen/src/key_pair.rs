@@ -180,7 +180,7 @@ impl KeyPair {
 	/// Generate a new random key pair for the specified signature algorithm
 	///
 	/// If you're not sure which algorithm to use, [`PKCS_ECDSA_P256_SHA256`] is a good choice.
-	pub fn generate(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
+	pub fn generate_for(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
 		let rng = &SystemRandom::new();
 
 		match alg.sign_alg {

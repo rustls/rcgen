@@ -59,7 +59,7 @@ fn test_botan() {
 #[test]
 fn test_botan_256() {
 	let (params, _) = default_params();
-	let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
 	let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -69,7 +69,7 @@ fn test_botan_256() {
 #[test]
 fn test_botan_384() {
 	let (params, _) = default_params();
-	let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P384_SHA384).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P384_SHA384).unwrap();
 	let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -79,7 +79,7 @@ fn test_botan_384() {
 #[test]
 fn test_botan_25519() {
 	let (params, _) = default_params();
-	let key_pair = KeyPair::generate(&rcgen::PKCS_ED25519).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ED25519).unwrap();
 	let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -132,7 +132,7 @@ fn test_botan_separate_ca() {
 	// Botan has a sanity check that enforces a maximum expiration date
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
 
-	let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
 	let cert = Certificate::generate(params, &key_pair, &ca_cert, &ca_key).unwrap();
 	check_cert_ca(cert.der(), &cert, ca_cert.der());
 }
@@ -160,7 +160,7 @@ fn test_botan_imported_ca() {
 	// Botan has a sanity check that enforces a maximum expiration date
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
 
-	let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
 	let cert = Certificate::generate(params, &key_pair, &imported_ca_cert, &ca_key).unwrap();
 	check_cert_ca(cert.der(), &cert, ca_cert_der);
 }
@@ -191,7 +191,7 @@ fn test_botan_imported_ca_with_printable_string() {
 		.push(DnType::CommonName, "Dev domain");
 	// Botan has a sanity check that enforces a maximum expiration date
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
-	let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
 	let cert =
 		Certificate::generate(params, &key_pair, &imported_ca_cert, &imported_ca_key).unwrap();
 
@@ -209,7 +209,7 @@ fn test_botan_crl_parse() {
 		KeyUsagePurpose::DigitalSignature,
 		KeyUsagePurpose::CrlSign,
 	];
-	let issuer_key = KeyPair::generate(alg).unwrap();
+	let issuer_key = KeyPair::generate_for(alg).unwrap();
 	let issuer = Certificate::generate_self_signed(issuer, &issuer_key).unwrap();
 
 	// Create an end entity cert issued by the issuer.
@@ -218,7 +218,7 @@ fn test_botan_crl_parse() {
 	ee.serial_number = Some(SerialNumber::from(99999));
 	// Botan has a sanity check that enforces a maximum expiration date
 	ee.not_after = rcgen::date_time_ymd(3016, 1, 1);
-	let ee_key = KeyPair::generate(alg).unwrap();
+	let ee_key = KeyPair::generate_for(alg).unwrap();
 	let ee = Certificate::generate(ee, &ee_key, &issuer, &issuer_key).unwrap();
 	let botan_ee = botan::Certificate::load(ee.der()).unwrap();
 

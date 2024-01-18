@@ -78,7 +78,7 @@ pub fn default_params() -> (CertificateParams, KeyPair) {
 		.distinguished_name
 		.push(DnType::CommonName, "Master CA");
 
-	let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+	let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256).unwrap();
 	(params, key_pair)
 }
 

@@ -116,7 +116,7 @@ println!("{}", key_pair.serialize_pem());
 pub fn generate_simple_self_signed(
 	subject_alt_names: impl Into<Vec<String>>,
 ) -> Result<CertifiedKey, Error> {
-	let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256)?;
+	let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256)?;
 	let cert =
 		Certificate::generate_self_signed(CertificateParams::new(subject_alt_names), &key_pair)?;
 	Ok(CertifiedKey { cert, key_pair })
@@ -1809,7 +1809,7 @@ mod tests {
 		params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
 
 		// Make the cert
-		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+		let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256).unwrap();
 		let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
 
 		// Parse it
@@ -1847,7 +1847,7 @@ mod tests {
 		params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
 
 		// Make the cert
-		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+		let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256).unwrap();
 		let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
 
 		// Parse it
@@ -1882,7 +1882,7 @@ mod tests {
 		params.extended_key_usages = vec![ExtendedKeyUsagePurpose::Any];
 
 		// Make the cert
-		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+		let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256).unwrap();
 		let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
 
 		// Parse it
@@ -1908,7 +1908,7 @@ mod tests {
 		];
 
 		// Make the cert
-		let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+		let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256).unwrap();
 		let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
 
 		// Parse it
@@ -1947,7 +1947,7 @@ mod tests {
 		#[test]
 		#[cfg(windows)]
 		fn test_windows_line_endings() {
-			let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+			let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256).unwrap();
 			let cert =
 				Certificate::generate_self_signed(CertificateParams::default(), &key_pair).unwrap();
 			assert!(cert.pem().contains("\r\n"));
@@ -1956,7 +1956,7 @@ mod tests {
 		#[test]
 		#[cfg(not(windows))]
 		fn test_not_windows_line_endings() {
-			let key_pair = KeyPair::generate(&PKCS_ECDSA_P256_SHA256).unwrap();
+			let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256).unwrap();
 			let cert =
 				Certificate::generate_self_signed(CertificateParams::default(), &key_pair).unwrap();
 			assert!(!cert.pem().contains('\r'));
