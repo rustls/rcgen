@@ -122,7 +122,7 @@ fn test_botan_separate_ca() {
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::generate_self_signed(params, &ca_key).unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
 		.distinguished_name
 		.push(DnType::OrganizationName, "Crab widgits SE");
@@ -150,7 +150,7 @@ fn test_botan_imported_ca() {
 	let imported_ca_cert =
 		Certificate::generate_self_signed(imported_ca_cert_params, &ca_key).unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
 		.distinguished_name
 		.push(DnType::OrganizationName, "Crab widgits SE");
@@ -182,7 +182,7 @@ fn test_botan_imported_ca_with_printable_string() {
 	let imported_ca_cert =
 		Certificate::generate_self_signed(imported_ca_cert_params, &imported_ca_key).unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
 		.distinguished_name
 		.push(DnType::OrganizationName, "Crab widgits SE");

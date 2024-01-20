@@ -68,7 +68,7 @@ YPTHy8SWRA2sMII3ArhHJ8A=
 
 pub fn default_params() -> (CertificateParams, KeyPair) {
 	let mut params =
-		CertificateParams::new(vec!["crabs.crabs".to_string(), "localhost".to_string()]);
+		CertificateParams::new(vec!["crabs.crabs".to_string(), "localhost".to_string()]).unwrap();
 	params
 		.distinguished_name
 		.push(DnType::OrganizationName, "Crab widgits SE");

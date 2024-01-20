@@ -17,7 +17,8 @@ fn main() {
 }
 
 fn new_ca() -> Certificate {
-	let mut params = CertificateParams::new(Vec::default());
+	let mut params =
+		CertificateParams::new(Vec::default()).expect("empty subject alt name can't produce error");
 	let (yesterday, tomorrow) = validity_period();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	params.distinguished_name.push(
@@ -40,7 +41,7 @@ fn new_ca() -> Certificate {
 
 fn new_end_entity() -> Certificate {
 	let name = "entity.other.host";
-	let mut params = CertificateParams::new(vec![name.into()]);
+	let mut params = CertificateParams::new(vec![name.into()]).expect("we know the name is valid");
 	let (yesterday, tomorrow) = validity_period();
 	params.distinguished_name.push(DnType::CommonName, name);
 	params.use_authority_key_identifier_extension = true;

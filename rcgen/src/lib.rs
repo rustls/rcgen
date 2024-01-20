@@ -119,7 +119,7 @@ pub fn generate_simple_self_signed(
 ) -> Result<CertifiedKey, Error> {
 	let key_pair = KeyPair::generate()?;
 	let cert =
-		Certificate::generate_self_signed(CertificateParams::new(subject_alt_names), &key_pair)?;
+		Certificate::generate_self_signed(CertificateParams::new(subject_alt_names)?, &key_pair)?;
 	Ok(CertifiedKey { cert, key_pair })
 }
 
@@ -152,9 +152,9 @@ const ENCODE_CONFIG: pem::EncodeConfig = {
 /// The type of subject alt name
 pub enum SanType {
 	/// Also known as E-Mail address
-	Rfc822Name(String),
-	DnsName(String),
-	URI(String),
+	Rfc822Name(Ia5String),
+	DnsName(Ia5String),
+	URI(Ia5String),
 	IpAddress(IpAddr),
 }
 
@@ -174,10 +174,12 @@ impl SanType {
 	fn try_from_general(name: &x509_parser::extensions::GeneralName<'_>) -> Result<Self, Error> {
 		Ok(match name {
 			x509_parser::extensions::GeneralName::RFC822Name(name) => {
-				SanType::Rfc822Name((*name).into())
+				SanType::Rfc822Name((*name).try_into()?)
 			},
-			x509_parser::extensions::GeneralName::DNSName(name) => SanType::DnsName((*name).into()),
-			x509_parser::extensions::GeneralName::URI(name) => SanType::URI((*name).into()),
+			x509_parser::extensions::GeneralName::DNSName(name) => {
+				SanType::DnsName((*name).try_into()?)
+			},
+			x509_parser::extensions::GeneralName::URI(name) => SanType::URI((*name).try_into()?),
 			x509_parser::extensions::GeneralName::IPAddress(octets) => {
 				SanType::IpAddress(ip_addr_from_octets(octets)?)
 			},
@@ -582,19 +584,21 @@ impl Default for CertificateParams {
 
 impl CertificateParams {
 	/// Generate certificate parameters with reasonable defaults
-	pub fn new(subject_alt_names: impl Into<Vec<String>>) -> Self {
+	pub fn new(subject_alt_names: impl Into<Vec<String>>) -> Result<Self, Error> {
 		let subject_alt_names = subject_alt_names
 			.into()
 			.into_iter()
-			.map(|s| match s.parse() {
-				Ok(ip) => SanType::IpAddress(ip),
-				Err(_) => SanType::DnsName(s),
+			.map(|s| {
+				Ok(match IpAddr::from_str(&s) {
+					Ok(ip) => SanType::IpAddress(ip),
+					Err(_) => SanType::DnsName(s.try_into()?),
+				})
 			})
-			.collect::<Vec<_>>();
-		CertificateParams {
+			.collect::<Result<Vec<_>, _>>()?;
+		Ok(CertificateParams {
 			subject_alt_names,
 			..Default::default()
-		}
+		})
 	}
 
 	/// Parses an existing ca certificate from the ASCII PEM format.
@@ -854,7 +858,7 @@ impl CertificateParams {
 						|writer| match san {
 							SanType::Rfc822Name(name)
 							| SanType::DnsName(name)
-							| SanType::URI(name) => writer.write_ia5_string(name),
+							| SanType::URI(name) => writer.write_ia5_string(name.as_str()),
 							SanType::IpAddress(IpAddr::V4(addr)) => {
 								writer.write_bytes(&addr.octets())
 							},

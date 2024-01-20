@@ -403,13 +403,13 @@ mod tests {
 			.build()
 			.unwrap();
 		let name = "unexpected.oomyoo.xyz";
-		let names = vec![SanType::DnsName(name.into())];
+		let names = vec![SanType::DnsName(name.try_into().unwrap())];
 		let params = CertificateParams::default();
 		let cert = EndEntityBuilder::new(params, KeyPairAlgorithm::default())
 			.subject_alternative_names(names);
 		assert_eq!(
 			cert.params.subject_alt_names,
-			vec![rcgen::SanType::DnsName(name.into())]
+			vec![rcgen::SanType::DnsName(name.try_into().unwrap())]
 		);
 	}
 	#[test]
