@@ -13,16 +13,8 @@ pub enum Error {
 	#[cfg(feature = "x509-parser")]
 	/// Invalid subject alternative name type
 	InvalidNameType,
-	/// Invalid PrintableString type
-	InvalidPrintableString,
-	/// Invalide UniversalString type
-	InvalidUniversalString,
-	/// Invalid Ia5String type
-	InvalidIa5String,
-	/// Invalid TeletexString type
-	InvalidTeletexString,
-	/// Invalid BmpString type
-	InvalidBmpString,
+	/// Invalid ASN.1 string
+	InvalidAsn1String(InvalidAsn1String),
 	/// An IP address was provided as a byte array, but the byte array was an invalid length.
 	InvalidIpAddressOctetLength(usize),
 	/// There is no support for generating
@@ -65,11 +57,7 @@ impl fmt::Display for Error {
 			CouldNotParseKeyPair => write!(f, "Could not parse key pair")?,
 			#[cfg(feature = "x509-parser")]
 			InvalidNameType => write!(f, "Invalid subject alternative name type")?,
-			InvalidPrintableString => write!(f, "Invalid PrintableString")?,
-			InvalidIa5String => write!(f, "Invalid IA5String")?,
-			InvalidBmpString => write!(f, "Invalid BMPString")?,
-			InvalidUniversalString => write!(f, "Invalid UniversalString")?,
-			InvalidTeletexString => write!(f, "Invalid TeletexString")?,
+			InvalidAsn1String(e) => write!(f, "{}", e)?,
 			InvalidIpAddressOctetLength(actual) => {
 				write!(f, "Invalid IP address octet length of {actual} bytes")?
 			},
@@ -104,6 +92,36 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+/// Invalid ASN.1 string type
+#[derive(Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum InvalidAsn1String {
+	/// Invalid PrintableString type
+	PrintableString(String),
+	/// Invalid UniversalString type
+	UniversalString(String),
+	/// Invalid Ia5String type
+	Ia5String(String),
+	/// Invalid TeletexString type
+	TeletexString(String),
+	/// Invalid BmpString type
+	BmpString(String),
+}
+
+impl fmt::Display for InvalidAsn1String {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		use InvalidAsn1String::*;
+		match self {
+			PrintableString(s) => write!(f, "Invalid PrintableString: '{}'", s)?,
+			Ia5String(s) => write!(f, "Invalid IA5String: '{}'", s)?,
+			BmpString(s) => write!(f, "Invalid BMPString: '{}'", s)?,
+			UniversalString(s) => write!(f, "Invalid UniversalString: '{}'", s)?,
+			TeletexString(s) => write!(f, "Invalid TeletexString: '{}'", s)?,
+		};
+		Ok(())
+	}
+}
 
 /// A trait describing an error that can be converted into an `rcgen::Error`.
 ///

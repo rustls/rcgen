@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::{Error, InvalidAsn1String};
 use std::str::FromStr;
 
 /// ASN.1 `PrintableString` type.
@@ -93,7 +93,11 @@ impl TryFrom<String> for PrintableString {
 				| b':'
 				| b'='
 				| b'?' => (),
-				_ => return Err(Error::InvalidPrintableString),
+				_ => {
+					return Err(Error::InvalidAsn1String(
+						InvalidAsn1String::PrintableString(value),
+					))
+				},
 			}
 		}
 		Ok(Self(value))
@@ -168,7 +172,9 @@ impl TryFrom<String> for Ia5String {
 	/// See [`Ia5String`] documentation for more information.
 	fn try_from(input: String) -> Result<Self, Error> {
 		if !input.is_ascii() {
-			return Err(Error::InvalidIa5String);
+			return Err(Error::InvalidAsn1String(InvalidAsn1String::Ia5String(
+				input,
+			)));
 		}
 		Ok(Self(input))
 	}
@@ -251,7 +257,9 @@ impl TryFrom<String> for TeletexString {
 	fn try_from(input: String) -> Result<Self, Error> {
 		// Check all bytes are visible
 		if !input.as_bytes().iter().all(|b| (0x20..=0x7f).contains(b)) {
-			return Err(Error::InvalidTeletexString);
+			return Err(Error::InvalidAsn1String(InvalidAsn1String::TeletexString(
+				input,
+			)));
 		}
 		Ok(Self(input))
 	}
@@ -318,7 +326,9 @@ impl BmpString {
 	/// Decode a UTF-16BE–encoded vector `vec` into a `BmpString`, returning [Err](`std::result::Result::Err`) if `vec` contains any invalid data.
 	pub fn from_utf16be(vec: Vec<u8>) -> Result<Self, Error> {
 		if vec.len() % 2 != 0 {
-			return Err(Error::InvalidBmpString);
+			return Err(Error::InvalidAsn1String(InvalidAsn1String::BmpString(
+				"Invalid UTF-16 encoding".to_string(),
+			)));
 		}
 
 		// FIXME: Update this when `array_chunks` is stabilized.
@@ -331,7 +341,11 @@ impl BmpString {
 				// Character is in the Basic Multilingual Plane
 				Ok(c) if (c as u64) < u64::from(u16::MAX) => (),
 				// Characters outside Basic Multilingual Plane or unpaired surrogates
-				_ => return Err(Error::InvalidBmpString),
+				_ => {
+					return Err(Error::InvalidAsn1String(InvalidAsn1String::BmpString(
+						"Invalid UTF-16 encoding".to_string(),
+					)));
+				},
 			}
 		}
 		Ok(Self(vec.to_vec()))
@@ -348,10 +362,9 @@ impl TryFrom<&str> for BmpString {
 	///
 	/// The result is allocated on the heap.
 	fn try_from(value: &str) -> Result<Self, Self::Error> {
-		let capacity = value
-			.len()
-			.checked_mul(2)
-			.ok_or_else(|| Error::InvalidBmpString)?;
+		let capacity = value.len().checked_mul(2).ok_or_else(|| {
+			Error::InvalidAsn1String(InvalidAsn1String::BmpString(value.to_string()))
+		})?;
 
 		let mut bytes = Vec::with_capacity(capacity);
 
@@ -432,7 +445,9 @@ impl UniversalString {
 	/// Decode a UTF-32BE–encoded vector `vec` into a `UniversalString`, returning [Err](`std::result::Result::Err`) if `vec` contains any invalid data.
 	pub fn from_utf32be(vec: Vec<u8>) -> Result<UniversalString, Error> {
 		if vec.len() % 4 != 0 {
-			return Err(Error::InvalidUniversalString);
+			return Err(Error::InvalidAsn1String(
+				InvalidAsn1String::UniversalString("Invalid UTF-32 encoding".to_string()),
+			));
 		}
 
 		// FIXME: Update this when `array_chunks` is stabilized.
@@ -441,7 +456,9 @@ impl UniversalString {
 			.map(|chunk| u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
 		{
 			if core::char::from_u32(maybe_char).is_none() {
-				return Err(Error::InvalidUniversalString);
+				return Err(Error::InvalidAsn1String(
+					InvalidAsn1String::UniversalString("Invalid UTF-32 encoding".to_string()),
+				));
 			}
 		}
 
@@ -459,10 +476,9 @@ impl TryFrom<&str> for UniversalString {
 	///
 	/// The result is allocated on the heap.
 	fn try_from(value: &str) -> Result<Self, Self::Error> {
-		let capacity = value
-			.len()
-			.checked_mul(4)
-			.ok_or_else(|| Error::InvalidUniversalString)?;
+		let capacity = value.len().checked_mul(4).ok_or_else(|| {
+			Error::InvalidAsn1String(InvalidAsn1String::UniversalString(value.to_string()))
+		})?;
 
 		let mut bytes = Vec::with_capacity(capacity);
 

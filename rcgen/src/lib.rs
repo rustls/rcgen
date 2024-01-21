@@ -56,7 +56,7 @@ pub use crate::crl::{
 	CrlIssuingDistributionPoint, CrlScope, RevocationReason, RevokedCertParams,
 };
 pub use crate::csr::{CertificateSigningRequestParams, PublicKey};
-pub use crate::error::Error;
+pub use crate::error::{Error, InvalidAsn1String};
 use crate::key_pair::PublicKeyData;
 pub use crate::key_pair::{KeyPair, RemoteKeyPair};
 use crate::oid::*;
