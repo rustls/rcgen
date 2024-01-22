@@ -93,6 +93,8 @@ impl KeyPair {
 			// Ring doesn't have RSA key generation yet:
 			// https://github.com/briansmith/ring/issues/219
 			// https://github.com/briansmith/ring/pull/733
+			// Nor does aws-lc-rs:
+			// https://github.com/aws/aws-lc-rs/issues/296
 			SignAlgo::Rsa() => Err(Error::KeyGenerationUnavailable),
 		}
 	}
