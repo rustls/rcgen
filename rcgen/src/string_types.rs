@@ -1,5 +1,5 @@
 use crate::{Error, InvalidAsn1String};
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 /// ASN.1 `PrintableString` type.
 ///
@@ -118,6 +118,36 @@ impl AsRef<str> for PrintableString {
 	}
 }
 
+impl fmt::Display for PrintableString {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		fmt::Display::fmt(self.as_str(), f)
+	}
+}
+
+impl PartialEq<str> for PrintableString {
+	fn eq(&self, other: &str) -> bool {
+		self.as_str() == other
+	}
+}
+
+impl PartialEq<String> for PrintableString {
+	fn eq(&self, other: &String) -> bool {
+		self.as_str() == other.as_str()
+	}
+}
+
+impl PartialEq<&str> for PrintableString {
+	fn eq(&self, other: &&str) -> bool {
+		self.as_str() == *other
+	}
+}
+
+impl PartialEq<&String> for PrintableString {
+	fn eq(&self, other: &&String) -> bool {
+		self.as_str() == other.as_str()
+	}
+}
+
 /// ASN.1 `IA5String` type.
 ///
 /// # Examples
@@ -191,6 +221,36 @@ impl FromStr for Ia5String {
 impl AsRef<str> for Ia5String {
 	fn as_ref(&self) -> &str {
 		&self.0
+	}
+}
+
+impl fmt::Display for Ia5String {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		fmt::Display::fmt(self.as_str(), f)
+	}
+}
+
+impl PartialEq<str> for Ia5String {
+	fn eq(&self, other: &str) -> bool {
+		self.as_str() == other
+	}
+}
+
+impl PartialEq<String> for Ia5String {
+	fn eq(&self, other: &String) -> bool {
+		self.as_str() == other.as_str()
+	}
+}
+
+impl PartialEq<&str> for Ia5String {
+	fn eq(&self, other: &&str) -> bool {
+		self.as_str() == *other
+	}
+}
+
+impl PartialEq<&String> for Ia5String {
+	fn eq(&self, other: &&String) -> bool {
+		self.as_str() == other.as_str()
 	}
 }
 
@@ -276,6 +336,36 @@ impl FromStr for TeletexString {
 impl AsRef<str> for TeletexString {
 	fn as_ref(&self) -> &str {
 		&self.0
+	}
+}
+
+impl fmt::Display for TeletexString {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		fmt::Display::fmt(self.as_str(), f)
+	}
+}
+
+impl PartialEq<str> for TeletexString {
+	fn eq(&self, other: &str) -> bool {
+		self.as_str() == other
+	}
+}
+
+impl PartialEq<String> for TeletexString {
+	fn eq(&self, other: &String) -> bool {
+		self.as_str() == other.as_str()
+	}
+}
+
+impl PartialEq<&str> for TeletexString {
+	fn eq(&self, other: &&str) -> bool {
+		self.as_str() == *other
+	}
+}
+
+impl PartialEq<&String> for TeletexString {
+	fn eq(&self, other: &&String) -> bool {
+		self.as_str() == other.as_str()
 	}
 }
 
@@ -518,7 +608,7 @@ mod tests {
 	fn printable_string() {
 		const EXAMPLE_UTF8: &str = "CertificateTemplate";
 		let printable_string = PrintableString::try_from(EXAMPLE_UTF8).unwrap();
-		assert_eq!(printable_string.as_str(), EXAMPLE_UTF8);
+		assert_eq!(printable_string, EXAMPLE_UTF8);
 		assert!(PrintableString::try_from("@").is_err());
 		assert!(PrintableString::try_from("*").is_err());
 	}
@@ -527,8 +617,7 @@ mod tests {
 	fn ia5_string() {
 		const EXAMPLE_UTF8: &str = "CertificateTemplate";
 		let ia5_string = Ia5String::try_from(EXAMPLE_UTF8).unwrap();
-		assert_eq!(ia5_string.as_str(), EXAMPLE_UTF8);
-		// TODO use an invalid ascii character
+		assert_eq!(ia5_string, EXAMPLE_UTF8);
 		assert!(Ia5String::try_from(String::from('\u{7F}')).is_ok());
 		assert!(Ia5String::try_from(String::from('\u{8F}')).is_err());
 	}
@@ -537,7 +626,7 @@ mod tests {
 	fn teletext_string() {
 		const EXAMPLE_UTF8: &str = "CertificateTemplate";
 		let teletext_string = TeletexString::try_from(EXAMPLE_UTF8).unwrap();
-		assert_eq!(teletext_string.as_str(), EXAMPLE_UTF8);
+		assert_eq!(teletext_string, EXAMPLE_UTF8);
 		assert!(Ia5String::try_from(String::from('\u{7F}')).is_ok());
 		assert!(Ia5String::try_from(String::from('\u{8F}')).is_err());
 	}
