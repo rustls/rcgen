@@ -1,5 +1,3 @@
-use rcgen::CertifiedKey;
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName};
 	use std::fmt::Write;
@@ -10,14 +8,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	params.not_after = date_time_ymd(4096, 1, 1);
 	params.distinguished_name = DistinguishedName::new();
 
-	params.alg = &rcgen::PKCS_RSA_SHA256;
-
 	let pkey: openssl::pkey::PKey<_> = openssl::rsa::Rsa::generate(2048)?.try_into()?;
 	let key_pair_pem = String::from_utf8(pkey.private_key_to_pem_pkcs8()?)?;
 	let key_pair = rcgen::KeyPair::from_pem(&key_pair_pem)?;
-	params.key_pair = Some(key_pair);
 
-	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params)?;
+	let cert = Certificate::generate_self_signed(params, &key_pair)?;
 	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;
 	let der_serialized = pem.contents();

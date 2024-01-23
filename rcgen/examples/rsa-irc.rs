@@ -1,5 +1,3 @@
-use rcgen::CertifiedKey;
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	use rand::rngs::OsRng;
 	use rsa::pkcs8::EncodePrivateKey;
@@ -14,16 +12,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	params.not_after = date_time_ymd(4096, 1, 1);
 	params.distinguished_name = DistinguishedName::new();
 
-	params.alg = &rcgen::PKCS_RSA_SHA256;
-
 	let mut rng = OsRng;
 	let bits = 2048;
 	let private_key = RsaPrivateKey::new(&mut rng, bits)?;
 	let private_key_der = private_key.to_pkcs8_der()?;
 	let key_pair = rcgen::KeyPair::try_from(private_key_der.as_bytes()).unwrap();
-	params.key_pair = Some(key_pair);
 
-	let CertifiedKey { cert, key_pair } = Certificate::generate_self_signed(params)?;
+	let cert = Certificate::generate_self_signed(params, &key_pair)?;
 	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;
 	let der_serialized = pem.contents();
