@@ -281,7 +281,7 @@ mod test_parse_ia5string_subject {
 	fn parse_ia5string_subject() {
 		// Create and serialize a certificate with a subject containing an IA5String email address.
 		let email_address_dn_type = CustomDnType(vec![1, 2, 840, 113549, 1, 9, 1]); // id-emailAddress
-		let email_address_dn_value = DnValue::Ia5String("foo@bar.com".into());
+		let email_address_dn_value = DnValue::Ia5String("foo@bar.com".try_into().unwrap());
 		let (mut params, key_pair) = util::default_params();
 		params.distinguished_name = DistinguishedName::new();
 		params.distinguished_name.push(

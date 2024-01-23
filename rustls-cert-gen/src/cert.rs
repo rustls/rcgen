@@ -90,11 +90,11 @@ impl CaBuilder {
 	}
 	/// Add CountryName to `distinguished_name`. Multiple calls will
 	/// replace previous value.
-	pub fn country_name(mut self, country: &str) -> Self {
+	pub fn country_name(mut self, country: &str) -> Result<Self, rcgen::Error> {
 		self.params
 			.distinguished_name
-			.push(DnType::CountryName, PrintableString(country.into()));
-		self
+			.push(DnType::CountryName, PrintableString(country.try_into()?));
+		Ok(self)
 	}
 	/// Add OrganizationName to `distinguished_name`. Multiple calls will
 	/// replace previous value.
@@ -403,13 +403,13 @@ mod tests {
 			.build()
 			.unwrap();
 		let name = "unexpected.oomyoo.xyz";
-		let names = vec![SanType::DnsName(name.into())];
+		let names = vec![SanType::DnsName(name.try_into().unwrap())];
 		let params = CertificateParams::default();
 		let cert = EndEntityBuilder::new(params, KeyPairAlgorithm::default())
 			.subject_alternative_names(names);
 		assert_eq!(
 			cert.params.subject_alt_names,
-			vec![rcgen::SanType::DnsName(name.into())]
+			vec![rcgen::SanType::DnsName(name.try_into().unwrap())]
 		);
 	}
 	#[test]

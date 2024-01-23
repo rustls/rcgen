@@ -295,7 +295,7 @@ fn test_openssl_separate_ca() {
 	let ca_cert = Certificate::generate_self_signed(params, &ca_key).unwrap();
 	let ca_cert_pem = ca_cert.pem();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
 		.distinguished_name
 		.push(DnType::OrganizationName, "Crab widgits SE");
@@ -314,12 +314,12 @@ fn test_openssl_separate_ca_with_printable_string() {
 	let (mut params, ca_key) = util::default_params();
 	params.distinguished_name.push(
 		DnType::CountryName,
-		DnValue::PrintableString("US".to_string()),
+		DnValue::PrintableString("US".try_into().unwrap()),
 	);
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::generate_self_signed(params, &ca_key).unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
 		.distinguished_name
 		.push(DnType::OrganizationName, "Crab widgits SE");
@@ -340,7 +340,7 @@ fn test_openssl_separate_ca_with_other_signing_alg() {
 	let ca_key = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
 	let ca_cert = Certificate::generate_self_signed(params, &ca_key).unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
 		.distinguished_name
 		.push(DnType::OrganizationName, "Crab widgits SE");
@@ -370,7 +370,7 @@ fn test_openssl_separate_ca_name_constraints() {
 	});
 	let ca_cert = Certificate::generate_self_signed(params, &ca_key).unwrap();
 
-	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]);
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
 		.distinguished_name
 		.push(DnType::OrganizationName, "Crab widgits SE");

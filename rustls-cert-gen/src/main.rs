@@ -1,6 +1,6 @@
 use bpaf::Bpaf;
-use rcgen::SanType;
-use std::{net::IpAddr, path::PathBuf};
+use rcgen::{Error, SanType};
+use std::{net::IpAddr, path::PathBuf, str::FromStr};
 
 mod cert;
 use cert::{key_pair_algorithm, CertificateBuilder, KeyPairAlgorithm};
@@ -11,7 +11,7 @@ fn main() -> anyhow::Result<()> {
 	let ca = CertificateBuilder::new()
 		.signature_algorithm(opts.keypair_algorithm)?
 		.certificate_authority()
-		.country_name(&opts.country_name)
+		.country_name(&opts.country_name)?
 		.organization_name(&opts.organization_name)
 		.build()?;
 
@@ -67,7 +67,7 @@ struct Options {
 	#[bpaf(long, fallback("root-ca".into()), display_fallback)]
 	pub ca_file_name: String,
 	/// Subject Alt Name (apply multiple times for multiple names/Ips)
-	#[bpaf(many, long, argument::<String>("san"), map(parse_sans))]
+	#[bpaf(many, long, argument::<String>("san"), parse(parse_sans))]
 	pub san: Vec<SanType>,
 	/// Common Name (Currently only used for end-entity)
 	#[bpaf(long, fallback("Tls End-Entity Certificate".into()), display_fallback)]
@@ -82,15 +82,14 @@ struct Options {
 
 /// Parse cli input into SanType. Try first `IpAddr`, if that fails
 /// declare it to be a DnsName.
-fn parse_sans(hosts: Vec<String>) -> Vec<SanType> {
+fn parse_sans(hosts: Vec<String>) -> Result<Vec<SanType>, Error> {
 	hosts
 		.into_iter()
-		.map(|host| {
-			if let Ok(ip) = host.parse::<IpAddr>() {
-				SanType::IpAddress(ip)
-			} else {
-				SanType::DnsName(host)
-			}
+		.map(|s| {
+			Ok(match IpAddr::from_str(&s) {
+				Ok(ip) => SanType::IpAddress(ip),
+				Err(_) => SanType::DnsName(s.try_into()?),
+			})
 		})
 		.collect()
 }
@@ -110,9 +109,9 @@ mod tests {
 		.into_iter()
 		.map(Into::into)
 		.collect();
-		let sans: Vec<SanType> = parse_sans(hosts);
-		assert_eq!(SanType::DnsName("my.host.com".into()), sans[0]);
-		assert_eq!(SanType::DnsName("localhost".into()), sans[1]);
+		let sans: Vec<SanType> = parse_sans(hosts).unwrap();
+		assert_eq!(SanType::DnsName("my.host.com".try_into().unwrap()), sans[0]);
+		assert_eq!(SanType::DnsName("localhost".try_into().unwrap()), sans[1]);
 		assert_eq!(
 			SanType::IpAddress("185.199.108.153".parse().unwrap()),
 			sans[2]
