@@ -1,6 +1,15 @@
 
 # Changes
 
+## Release 0.12.1 - January 25th, 2024
+
+- RFC 5280 specifies that a serial number must not be larger than 20 octets in
+  length. Prior to this release an unintended interaction between rcgen and its
+  underlying DER encoding library could result in 21 octet serials. This has now
+  been fixed.
+- A regression that caused build errors when the optional `pem` feature was
+  omitted has been fixed.
+
 ## Release 0.12.0 - December 16, 2023
 
 - Rename `RcgenError` to `Error`. Contributed by [thomaseizinger](https://github.com/thomaseizinger).
