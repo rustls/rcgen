@@ -4,17 +4,18 @@ use yasna::models::ObjectIdentifier;
 use yasna::DERWriter;
 use yasna::Tag;
 
-use crate::oid::*;
+#[cfg(feature = "crypto")]
 use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters};
 use crate::Error;
 
+#[cfg(feature = "crypto")]
 pub(crate) enum SignAlgo {
 	EcDsa(&'static EcdsaSigningAlgorithm),
 	EdDsa(&'static EdDSAParameters),
 	Rsa(),
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Hash)]
 pub(crate) enum SignatureAlgorithmParams {
 	/// Omit the parameters
 	None,
@@ -30,6 +31,7 @@ pub(crate) enum SignatureAlgorithmParams {
 /// Signature algorithm type
 pub struct SignatureAlgorithm {
 	oids_sign_alg: &'static [&'static [u64]],
+	#[cfg(feature = "crypto")]
 	pub(crate) sign_alg: SignAlgo,
 	oid_components: &'static [u64],
 	params: SignatureAlgorithmParams,
@@ -73,7 +75,6 @@ impl Hash for SignatureAlgorithm {
 		self.oids_sign_alg.hash(state);
 	}
 }
-
 impl SignatureAlgorithm {
 	pub(crate) fn iter() -> std::slice::Iter<'static, &'static SignatureAlgorithm> {
 		use algo::*;
@@ -102,11 +103,14 @@ impl SignatureAlgorithm {
 
 /// The list of supported signature algorithms
 pub mod algo {
+	use crate::oid::*;
+
 	use super::*;
 
 	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[&OID_RSA_ENCRYPTION],
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::Rsa(),
 		// sha256WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 11],
@@ -116,6 +120,7 @@ pub mod algo {
 	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[&OID_RSA_ENCRYPTION],
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::Rsa(),
 		// sha384WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 12],
@@ -125,6 +130,7 @@ pub mod algo {
 	/// RSA signing with PKCS#1 1.5 padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_SHA512: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[&OID_RSA_ENCRYPTION],
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::Rsa(),
 		// sha512WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 13],
@@ -141,6 +147,7 @@ pub mod algo {
 		// We could also use OID_RSA_ENCRYPTION here, but it's recommended
 		// to use ID-RSASSA-PSS if possible.
 		oids_sign_alg: &[&OID_RSASSA_PSS],
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::Rsa(),
 		oid_components: &OID_RSASSA_PSS, //&[1, 2, 840, 113549, 1, 1, 13],
 		// rSASSA-PSS-SHA256-Params in RFC 4055
@@ -154,6 +161,7 @@ pub mod algo {
 	/// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	pub static PKCS_ECDSA_P256_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_256_R1],
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P256_SHA256_ASN1_SIGNING),
 		// ecdsa-with-SHA256 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 2],
@@ -163,6 +171,7 @@ pub mod algo {
 	/// ECDSA signing using the P-384 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	pub static PKCS_ECDSA_P384_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_384_R1],
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P384_SHA384_ASN1_SIGNING),
 		// ecdsa-with-SHA384 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 3],
@@ -175,6 +184,7 @@ pub mod algo {
 	pub static PKCS_ED25519: SignatureAlgorithm = SignatureAlgorithm {
 		// id-Ed25519 in RFC 8410
 		oids_sign_alg: &[&[1, 3, 101, 112]],
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::EdDsa(&signature::ED25519),
 		// id-Ed25519 in RFC 8410
 		oid_components: &[1, 3, 101, 112],

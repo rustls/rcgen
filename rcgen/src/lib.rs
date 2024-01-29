@@ -35,6 +35,7 @@ println!("{}", key_pair.serialize_pem());
 
 #[cfg(feature = "pem")]
 use pem::Pem;
+#[cfg(feature = "crypto")]
 use ring_like::digest;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -93,6 +94,7 @@ this function fills in the other generation parameters with
 reasonable defaults and generates a self signed certificate
 and key pair as output.
 */
+#[cfg(feature = "crypto")]
 #[cfg_attr(
 	feature = "pem",
 	doc = r##"
@@ -577,7 +579,10 @@ impl Default for CertificateParams {
 			crl_distribution_points: Vec::new(),
 			custom_extensions: Vec::new(),
 			use_authority_key_identifier_extension: false,
+			#[cfg(feature = "crypto")]
 			key_identifier_method: KeyIdMethod::Sha256,
+			#[cfg(not(feature = "crypto"))]
+			key_identifier_method: KeyIdMethod::PreSpecified(Vec::new()),
 		}
 	}
 }
@@ -638,15 +643,24 @@ impl CertificateParams {
 		let name_constraints = Self::convert_x509_name_constraints(&x509)?;
 		let serial_number = Some(x509.serial.to_bytes_be().into());
 
-		let key_identifier_method = x509
-			.iter_extensions()
-			.find_map(|ext| match ext.parsed_extension() {
-				x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(key_id) => {
-					Some(KeyIdMethod::PreSpecified(key_id.0.into()))
-				},
-				_ => None,
-			})
-			.unwrap_or(KeyIdMethod::Sha256);
+		let key_identifier_method =
+			x509.iter_extensions()
+				.find_map(|ext| match ext.parsed_extension() {
+					x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(key_id) => {
+						Some(KeyIdMethod::PreSpecified(key_id.0.into()))
+					},
+					_ => None,
+				});
+
+		let key_identifier_method = match key_identifier_method {
+			Some(method) => method,
+			None => {
+				#[cfg(not(feature = "crypto"))]
+				return Err(Error::UnsupportedSignatureAlgorithm);
+				#[cfg(feature = "crypto")]
+				KeyIdMethod::Sha256
+			},
+		};
 
 		Ok(CertificateParams {
 			is_ca,
@@ -959,11 +973,18 @@ impl CertificateParams {
 			if let Some(ref serial) = self.serial_number {
 				writer.next().write_bigint_bytes(serial.as_ref(), true);
 			} else {
-				let hash = digest::digest(&digest::SHA256, pub_key.raw_bytes());
-				// RFC 5280 specifies at most 20 bytes for a serial number
-				let mut sl = hash.as_ref()[0..20].to_vec();
-				sl[0] = sl[0] & 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
-				writer.next().write_bigint_bytes(&sl, true);
+				#[cfg(feature = "crypto")]
+				{
+					let hash = digest::digest(&digest::SHA256, pub_key.raw_bytes());
+					// RFC 5280 specifies at most 20 bytes for a serial number
+					let mut sl = hash.as_ref()[0..20].to_vec();
+					sl[0] = sl[0] & 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
+					writer.next().write_bigint_bytes(&sl, true);
+				}
+				#[cfg(not(feature = "crypto"))]
+				if self.serial_number.is_none() {
+					return Err(Error::MissingSerialNumber);
+				}
 			};
 			// Write signature algorithm
 			issuer.alg.write_alg_ident(writer.next());
@@ -1166,7 +1187,6 @@ impl CertificateParams {
 			Ok(())
 		})
 	}
-
 	fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
@@ -1366,10 +1386,13 @@ impl CustomExtension {
 #[non_exhaustive]
 pub enum KeyIdMethod {
 	/// RFC 7093 method 1 - a truncated SHA256 digest.
+	#[cfg(feature = "crypto")]
 	Sha256,
 	/// RFC 7093 method 2 - a truncated SHA384 digest.
+	#[cfg(feature = "crypto")]
 	Sha384,
 	/// RFC 7093 method 3 - a truncated SHA512 digest.
+	#[cfg(feature = "crypto")]
 	Sha512,
 	/// Pre-specified identifier. The exact given value is used as the key identifier.
 	PreSpecified(Vec<u8>),
@@ -1383,17 +1406,24 @@ impl KeyIdMethod {
 	///
 	/// This key identifier is used in the SubjectKeyIdentifier and AuthorityKeyIdentifier
 	/// X.509v3 extensions.
+	#[allow(unused_variables)]
 	pub(crate) fn derive(&self, subject_public_key_info: impl AsRef<[u8]>) -> Vec<u8> {
 		let digest_method = match &self {
+			#[cfg(feature = "crypto")]
 			Self::Sha256 => &digest::SHA256,
+			#[cfg(feature = "crypto")]
 			Self::Sha384 => &digest::SHA384,
+			#[cfg(feature = "crypto")]
 			Self::Sha512 => &digest::SHA512,
 			Self::PreSpecified(b) => {
 				return b.to_vec();
 			},
 		};
-		let digest = digest::digest(digest_method, subject_public_key_info.as_ref());
-		digest.as_ref()[0..20].to_vec()
+		#[cfg(feature = "crypto")]
+		{
+			let digest = digest::digest(digest_method, subject_public_key_info.as_ref());
+			digest.as_ref()[0..20].to_vec()
+		}
 	}
 }
 
@@ -1808,6 +1838,7 @@ mod tests {
 		}
 	}
 
+	#[cfg(crypto)]
 	#[test]
 	fn test_with_key_usages() {
 		let mut params: CertificateParams = Default::default();
@@ -1850,6 +1881,7 @@ mod tests {
 		assert!(found);
 	}
 
+	#[cfg(crypto)]
 	#[test]
 	fn test_with_key_usages_decipheronly_only() {
 		let mut params: CertificateParams = Default::default();
@@ -1888,6 +1920,7 @@ mod tests {
 		assert!(found);
 	}
 
+	#[cfg(crypto)]
 	#[test]
 	fn test_with_extended_key_usages_any() {
 		let mut params: CertificateParams = Default::default();
@@ -1908,6 +1941,7 @@ mod tests {
 		assert!(extension.value.any);
 	}
 
+	#[cfg(crypto)]
 	#[test]
 	fn test_with_extended_key_usages_other() {
 		use x509_parser::der_parser::asn1_rs::Oid;
@@ -2041,7 +2075,7 @@ mod tests {
 		}
 	}
 
-	#[cfg(feature = "x509-parser")]
+	#[cfg(all(feature = "pem", feature = "x509-parser"))]
 	mod test_key_identifier_from_ca {
 		use super::*;
 

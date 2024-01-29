@@ -1,12 +1,15 @@
-#[cfg(feature = "ring")]
+#[cfg(all(feature = "crypto", feature = "ring"))]
 pub(crate) use ring::*;
 
-#[cfg(all(not(feature = "ring"), feature = "aws_lc_rs"))]
+#[cfg(all(feature = "crypto", not(feature = "ring"), feature = "aws_lc_rs"))]
 pub(crate) use aws_lc_rs::*;
 
+#[cfg(feature = "crypto")]
 use crate::error::ExternalError;
+#[cfg(feature = "crypto")]
 use crate::Error;
 
+#[cfg(feature = "crypto")]
 pub(crate) fn ecdsa_from_pkcs8(
 	alg: &'static signature::EcdsaSigningAlgorithm,
 	pkcs8: &[u8],
@@ -23,6 +26,7 @@ pub(crate) fn ecdsa_from_pkcs8(
 	}
 }
 
+#[cfg(feature = "crypto")]
 pub(crate) fn rsa_key_pair_public_modulus_len(kp: &signature::RsaKeyPair) -> usize {
 	#[cfg(feature = "ring")]
 	{
@@ -35,5 +39,5 @@ pub(crate) fn rsa_key_pair_public_modulus_len(kp: &signature::RsaKeyPair) -> usi
 	}
 }
 
-#[cfg(not(any(feature = "ring", feature = "aws_lc_rs")))]
-compile_error!("At least one of the 'ring' or 'aws_lc_rs' features must be activated");
+#[cfg(all(feature = "crypto", not(any(feature = "ring", feature = "aws_lc_rs"))))]
+compile_error!("At least one of the 'ring' or 'aws_lc_rs' features must be activated when the 'crypto' feature is enabled");

@@ -1,3 +1,5 @@
+#![cfg(feature = "crypto")]
+
 use pki_types::{CertificateDer, ServerName, SignatureVerificationAlgorithm, UnixTime};
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DnType, Error, IsCa, KeyPair, RemoteKeyPair,

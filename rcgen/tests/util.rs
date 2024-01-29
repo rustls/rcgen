@@ -1,3 +1,5 @@
+#![cfg(feature = "crypto")]
+
 use rcgen::{BasicConstraints, Certificate, CertificateParams, KeyPair};
 use rcgen::{
 	CertificateRevocationList, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope,

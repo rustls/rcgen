@@ -42,6 +42,9 @@ pub enum Error {
 	InvalidCrlNextUpdate,
 	/// CRL issuer specifies Key Usages that don't include cRLSign.
 	IssuerNotCrlSigner,
+	#[cfg(not(feature = "crypto"))]
+	/// Missing serial number
+	MissingSerialNumber,
 }
 
 impl fmt::Display for Error {
@@ -86,6 +89,8 @@ impl fmt::Display for Error {
 				f,
 				"CRL issuer must specify no key usage, or key usage including cRLSign"
 			)?,
+			#[cfg(not(feature = "crypto"))]
+			MissingSerialNumber => write!(f, "A serial number must be specified")?,
 		};
 		Ok(())
 	}

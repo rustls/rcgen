@@ -1,3 +1,5 @@
+#![cfg(feature = "crypto")]
+
 mod util;
 
 #[cfg(feature = "pem")]
