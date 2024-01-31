@@ -158,6 +158,38 @@ pub enum SanType {
 	DnsName(Ia5String),
 	URI(Ia5String),
 	IpAddress(IpAddr),
+	OtherName((Vec<u64>, OtherNameValue)),
+}
+
+/// An `OtherName` value, defined in [RFC 5280§4.1.2.4].
+///
+/// While the standard specifies this could be any ASN.1 type rcgen limits
+/// the value to a UTF-8 encoded string as this will cover the most common
+/// use cases, for instance smart card user principal names (UPN).
+///
+/// [RFC 5280§4.1.2.4]: https://datatracker.ietf.org/doc/html/rfc5280#section-4.1.2.4
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[non_exhaustive]
+pub enum OtherNameValue {
+	/// A string encoded using UTF-8
+	Utf8String(String),
+}
+
+impl OtherNameValue {
+	fn write_der(&self, writer: DERWriter) {
+		writer.write_tagged(Tag::context(0), |writer| match self {
+			OtherNameValue::Utf8String(s) => writer.write_utf8_string(s),
+		});
+	}
+}
+
+impl<T> From<T> for OtherNameValue
+where
+	T: Into<String>,
+{
+	fn from(t: T) -> Self {
+		OtherNameValue::Utf8String(t.into())
+	}
 }
 
 #[cfg(feature = "x509-parser")]
@@ -174,6 +206,7 @@ fn ip_addr_from_octets(octets: &[u8]) -> Result<IpAddr, Error> {
 impl SanType {
 	#[cfg(feature = "x509-parser")]
 	fn try_from_general(name: &x509_parser::extensions::GeneralName<'_>) -> Result<Self, Error> {
+		use x509_parser::der_parser::asn1_rs::{self, FromDer, Tag, TaggedExplicit};
 		Ok(match name {
 			x509_parser::extensions::GeneralName::RFC822Name(name) => {
 				SanType::Rfc822Name((*name).try_into()?)
@@ -185,6 +218,23 @@ impl SanType {
 			x509_parser::extensions::GeneralName::IPAddress(octets) => {
 				SanType::IpAddress(ip_addr_from_octets(octets)?)
 			},
+			x509_parser::extensions::GeneralName::OtherName(oid, value) => {
+				let oid = oid.iter().ok_or(Error::CouldNotParseCertificate)?;
+				// We first remove the explicit tag ([0] EXPLICIT)
+				let (_, other_name) = TaggedExplicit::<asn1_rs::Any, _, 0>::from_der(&value)
+					.map_err(|_| Error::CouldNotParseCertificate)?;
+				let other_name = other_name.into_inner();
+
+				let other_name_value = match other_name.tag() {
+					Tag::Utf8String => OtherNameValue::Utf8String(
+						std::str::from_utf8(other_name.data)
+							.map_err(|_| Error::CouldNotParseCertificate)?
+							.to_owned(),
+					),
+					_ => return Err(Error::CouldNotParseCertificate),
+				};
+				SanType::OtherName((oid.collect(), other_name_value))
+			},
 			_ => return Err(Error::InvalidNameType),
 		})
 	}
@@ -192,6 +242,7 @@ impl SanType {
 	fn tag(&self) -> u64 {
 		// Defined in the GeneralName list in
 		// https://tools.ietf.org/html/rfc5280#page-38
+		const TAG_OTHER_NAME: u64 = 0;
 		const TAG_RFC822_NAME: u64 = 1;
 		const TAG_DNS_NAME: u64 = 2;
 		const TAG_URI: u64 = 6;
@@ -202,6 +253,7 @@ impl SanType {
 			SanType::DnsName(_name) => TAG_DNS_NAME,
 			SanType::URI(_name) => TAG_URI,
 			SanType::IpAddress(_addr) => TAG_IP_ADDRESS,
+			Self::OtherName(_oid) => TAG_OTHER_NAME,
 		}
 	}
 }
@@ -878,6 +930,14 @@ impl CertificateParams {
 							},
 							SanType::IpAddress(IpAddr::V6(addr)) => {
 								writer.write_bytes(&addr.octets())
+							},
+							SanType::OtherName((oid, value)) => {
+								// otherName SEQUENCE { OID, [0] explicit any defined by oid }
+								// https://datatracker.ietf.org/doc/html/rfc5280#page-38
+								writer.write_sequence(|writer| {
+									writer.next().write_oid(&ObjectIdentifier::from_slice(&oid));
+									value.write_der(writer.next());
+								});
 							},
 						},
 					);
