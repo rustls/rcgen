@@ -39,6 +39,7 @@ default = ["crypto", "pem", "ring"]
 crypto = []
 aws_lc_rs = ["crypto", "dep:aws-lc-rs"]
 ring = ["crypto", "dep:ring"]
+less-safe-getrandom-custom-or-rdrand = ["ring/less-safe-getrandom-custom-or-rdrand"]
 
 
 [package.metadata.docs.rs]
