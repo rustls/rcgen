@@ -38,7 +38,6 @@ use pem::Pem;
 #[cfg(feature = "crypto")]
 use ring_like::digest;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::fmt;
 use std::hash::Hash;
 use std::net::IpAddr;

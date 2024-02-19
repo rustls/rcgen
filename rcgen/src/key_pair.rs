@@ -1,7 +1,5 @@
 #[cfg(feature = "pem")]
 use pem::Pem;
-#[cfg(feature = "crypto")]
-use std::convert::TryFrom;
 use std::fmt;
 use yasna::DERWriter;
 
