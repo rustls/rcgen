@@ -5,6 +5,8 @@ use yasna::DERWriter;
 
 #[cfg(any(feature = "crypto", feature = "pem"))]
 use crate::error::ExternalError;
+#[cfg(all(feature = "crypto", feature = "aws_lc_rs", not(feature = "ring")))]
+use crate::ring_like::rsa::KeySize;
 #[cfg(feature = "crypto")]
 use crate::ring_like::{
 	error as ring_error,
@@ -74,6 +76,9 @@ impl KeyPair {
 	/// Generate a new random key pair for the specified signature algorithm
 	///
 	/// If you're not sure which algorithm to use, [`PKCS_ECDSA_P256_SHA256`] is a good choice.
+	/// If passed an RSA signature algorithm, it depends on the backend whether we return
+	/// a generated key or an error for key generation being unavailable.
+	/// Currently, only `aws-lc-rs` supports RSA key generation.
 	#[cfg(feature = "crypto")]
 	pub fn generate_for(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
 		let rng = &SystemRandom::new();
@@ -101,13 +106,53 @@ impl KeyPair {
 					serialized_der: key_pair_serialized,
 				})
 			},
+			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+			SignAlgo::Rsa(sign_alg) => Self::generate_rsa_inner(alg, sign_alg, KeySize::Rsa2048),
 			// Ring doesn't have RSA key generation yet:
 			// https://github.com/briansmith/ring/issues/219
 			// https://github.com/briansmith/ring/pull/733
-			// Nor does aws-lc-rs:
-			// https://github.com/aws/aws-lc-rs/issues/296
-			SignAlgo::Rsa() => Err(Error::KeyGenerationUnavailable),
+			#[cfg(any(not(feature = "aws_lc_rs"), feature = "ring"))]
+			SignAlgo::Rsa(_sign_alg) => Err(Error::KeyGenerationUnavailable),
 		}
+	}
+
+	/// Generates a new random RSA key pair for the specified key size
+	///
+	/// If passed a signature algorithm that is not RSA, it will return
+	/// [`Error::KeyGenerationUnavailable`].
+	#[cfg(all(feature = "crypto", feature = "aws_lc_rs", not(feature = "ring")))]
+	pub fn generate_rsa_for(
+		alg: &'static SignatureAlgorithm,
+		key_size: RsaKeySize,
+	) -> Result<Self, Error> {
+		match alg.sign_alg {
+			SignAlgo::Rsa(sign_alg) => {
+				let key_size = match key_size {
+					RsaKeySize::_2048 => KeySize::Rsa2048,
+					RsaKeySize::_3072 => KeySize::Rsa3072,
+					RsaKeySize::_4096 => KeySize::Rsa4096,
+				};
+				Self::generate_rsa_inner(alg, sign_alg, key_size)
+			},
+			_ => Err(Error::KeyGenerationUnavailable),
+		}
+	}
+
+	#[cfg(all(feature = "crypto", feature = "aws_lc_rs", not(feature = "ring")))]
+	fn generate_rsa_inner(
+		alg: &'static SignatureAlgorithm,
+		sign_alg: &'static dyn RsaEncoding,
+		key_size: KeySize,
+	) -> Result<Self, Error> {
+		use aws_lc_rs::encoding::AsDer;
+		let key_pair = RsaKeyPair::generate(key_size)._err()?;
+		let key_pair_serialized = key_pair.as_der()._err()?.as_ref().to_vec();
+
+		Ok(KeyPair {
+			kind: KeyPairKind::Rsa(key_pair, sign_alg),
+			alg,
+			serialized_der: key_pair_serialized,
+		})
 	}
 
 	/// Parses the key pair from the DER format
@@ -375,6 +420,16 @@ impl TryFrom<Vec<u8>> for KeyPair {
 			serialized_der: pkcs8,
 		})
 	}
+}
+
+/// The key size used for RSA key generation
+#[cfg(all(feature = "crypto", feature = "aws_lc_rs", not(feature = "ring")))]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum RsaKeySize {
+	_2048,
+	_3072,
+	_4096,
 }
 
 impl PublicKeyData for KeyPair {
