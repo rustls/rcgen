@@ -5,14 +5,14 @@ use yasna::DERWriter;
 use yasna::Tag;
 
 #[cfg(feature = "crypto")]
-use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters};
+use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters, RsaEncoding};
 use crate::Error;
 
 #[cfg(feature = "crypto")]
 pub(crate) enum SignAlgo {
 	EcDsa(&'static EcdsaSigningAlgorithm),
 	EdDsa(&'static EdDSAParameters),
-	Rsa(),
+	Rsa(&'static dyn RsaEncoding),
 }
 
 #[derive(PartialEq, Eq, Hash)]
@@ -111,7 +111,7 @@ pub mod algo {
 	pub static PKCS_RSA_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[&OID_RSA_ENCRYPTION],
 		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::Rsa(),
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA256),
 		// sha256WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 11],
 		params: SignatureAlgorithmParams::Null,
@@ -121,7 +121,7 @@ pub mod algo {
 	pub static PKCS_RSA_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[&OID_RSA_ENCRYPTION],
 		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::Rsa(),
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA384),
 		// sha384WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 12],
 		params: SignatureAlgorithmParams::Null,
@@ -131,7 +131,7 @@ pub mod algo {
 	pub static PKCS_RSA_SHA512: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[&OID_RSA_ENCRYPTION],
 		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::Rsa(),
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA512),
 		// sha512WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 13],
 		params: SignatureAlgorithmParams::Null,
@@ -148,7 +148,7 @@ pub mod algo {
 		// to use ID-RSASSA-PSS if possible.
 		oids_sign_alg: &[&OID_RSASSA_PSS],
 		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::Rsa(),
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PSS_SHA256),
 		oid_components: &OID_RSASSA_PSS, //&[1, 2, 840, 113549, 1, 1, 13],
 		// rSASSA-PSS-SHA256-Params in RFC 4055
 		params: SignatureAlgorithmParams::RsaPss {
