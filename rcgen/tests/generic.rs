@@ -136,8 +136,9 @@ mod test_x509_custom_ext {
 #[cfg(feature = "x509-parser")]
 mod test_x509_parser_crl {
 	use crate::util;
+	use x509_parser::extensions::{DistributionPointName, ParsedExtension};
 	use x509_parser::num_bigint::BigUint;
-	use x509_parser::prelude::{FromDer, X509Certificate};
+	use x509_parser::prelude::{FromDer, GeneralName, IssuingDistributionPoint, X509Certificate};
 	use x509_parser::revocation_list::CertificateRevocationList;
 	use x509_parser::x509::X509Version;
 
@@ -192,7 +193,25 @@ mod test_x509_parser_crl {
 			})
 			.expect("failed to find issuing distribution point extension");
 		assert!(issuing_dp_ext.critical);
-		// TODO: x509-parser does not yet parse the CRL issuing DP extension for further examination.
+
+		// The parsed issuing distribution point extension should match expected.
+		let ParsedExtension::IssuingDistributionPoint(idp) = issuing_dp_ext.parsed_extension()
+		else {
+			panic!("missing parsed CRL IDP ext");
+		};
+		assert_eq!(
+			idp,
+			&IssuingDistributionPoint {
+				only_contains_user_certs: true,
+				only_contains_ca_certs: false,
+				only_contains_attribute_certs: false,
+				indirect_crl: false,
+				only_some_reasons: None,
+				distribution_point: Some(DistributionPointName::FullName(vec![GeneralName::URI(
+					"http://example.com/crl",
+				)])),
+			}
+		);
 
 		// We should be able to verify the CRL signature with the issuer.
 		assert!(x509_crl.verify_signature(x509_issuer.public_key()).is_ok());
