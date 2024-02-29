@@ -388,7 +388,7 @@ fn test_openssl_separate_ca_name_constraints() {
 fn test_openssl_crl_parse() {
 	// Create a CRL with one revoked cert, and an issuer to sign the CRL.
 	let (crl, issuer, issuer_key) = util::test_crl();
-	let revoked_cert = crl.get_params().revoked_certs.first().unwrap();
+	let revoked_cert = crl.params().revoked_certs.first().unwrap();
 	let revoked_cert_serial = &revoked_cert.serial_number;
 
 	// Serialize the CRL signed by the issuer in both PEM and DER.
@@ -404,10 +404,10 @@ fn test_openssl_crl_parse() {
 	// The properties of the CRL should match expected.
 	let openssl_issuer = X509::from_der(issuer.der()).unwrap();
 	let expected_last_update =
-		Asn1Time::from_unix(crl.get_params().this_update.unix_timestamp()).unwrap();
+		Asn1Time::from_unix(crl.params().this_update.unix_timestamp()).unwrap();
 	assert!(openssl_crl.last_update().eq(&expected_last_update));
 	let expected_next_update =
-		Asn1Time::from_unix(crl.get_params().next_update.unix_timestamp()).unwrap();
+		Asn1Time::from_unix(crl.params().next_update.unix_timestamp()).unwrap();
 	assert!(openssl_crl.next_update().unwrap().eq(&expected_next_update));
 	assert!(matches!(
 		openssl_crl
