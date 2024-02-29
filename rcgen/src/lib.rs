@@ -1680,12 +1680,12 @@ impl Certificate {
 		})
 	}
 	/// Returns the certificate parameters
-	pub fn get_params(&self) -> &CertificateParams {
+	pub fn params(&self) -> &CertificateParams {
 		&self.params
 	}
 	/// Calculates a subject key identifier for the certificate subject's public key.
 	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
-	pub fn get_key_identifier(&self) -> Vec<u8> {
+	pub fn key_identifier(&self) -> Vec<u8> {
 		self.params
 			.key_identifier_method
 			.derive(&self.subject_public_key_info)
@@ -1857,7 +1857,7 @@ mod tests {
 
 	use std::panic::catch_unwind;
 
-	fn get_times() -> [OffsetDateTime; 2] {
+	fn times() -> [OffsetDateTime; 2] {
 		let dt_nanos = {
 			let date = Date::from_calendar_date(2020, Month::December, 3).unwrap();
 			let time = Time::from_hms_nano(0, 0, 1, 444).unwrap();
@@ -1874,7 +1874,7 @@ mod tests {
 
 	#[test]
 	fn test_dt_utc_strip_nanos() {
-		let times = get_times();
+		let times = times();
 
 		// No stripping - OffsetDateTime with nanos
 		let res = catch_unwind(|| UTCTime::from_datetime(times[0]));
@@ -1890,7 +1890,7 @@ mod tests {
 
 	#[test]
 	fn test_dt_to_generalized() {
-		let times = get_times();
+		let times = times();
 
 		for dt in times {
 			let _gt = dt_to_generalized(dt);
@@ -2237,7 +2237,7 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 
 			let kp = KeyPair::from_pem(&ca_key).unwrap();
 			let ca_cert = Certificate::generate_self_signed(params, &kp).unwrap();
-			assert_eq!(&expected_ski, &ca_cert.get_key_identifier());
+			assert_eq!(&expected_ski, &ca_cert.key_identifier());
 
 			let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert.der()).unwrap();
 			assert_eq!(

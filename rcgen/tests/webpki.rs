@@ -536,7 +536,7 @@ fn test_webpki_serial_number() {
 fn test_webpki_crl_parse() {
 	// Create a CRL with one revoked cert, and an issuer to sign the CRL.
 	let (crl, issuer, issuer_key) = util::test_crl();
-	let revoked_cert = crl.get_params().revoked_certs.first().unwrap();
+	let revoked_cert = crl.params().revoked_certs.first().unwrap();
 
 	// Serialize the CRL signed by the issuer to DER.
 	let der = crl.serialize_der_with_signer(&issuer, &issuer_key).unwrap();
@@ -619,7 +619,7 @@ fn test_webpki_crl_revoke() {
 		crl_number: rcgen::SerialNumber::from(1234),
 		issuing_distribution_point: None,
 		revoked_certs: vec![RevokedCertParams {
-			serial_number: ee.get_params().serial_number.clone().unwrap(),
+			serial_number: ee.params().serial_number.clone().unwrap(),
 			revocation_time: now,
 			reason_code: Some(RevocationReason::KeyCompromise),
 			invalidity_date: None,

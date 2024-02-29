@@ -76,7 +76,7 @@ impl CertificateRevocationList {
 		Ok(Self { params })
 	}
 	/// Returns the certificate revocation list (CRL) parameters.
-	pub fn get_params(&self) -> &CertificateRevocationListParams {
+	pub fn params(&self) -> &CertificateRevocationListParams {
 		&self.params
 	}
 	/// Serializes the certificate revocation list (CRL) in binary DER format, signed with
