@@ -36,7 +36,7 @@ fn new_ca() -> Certificate {
 	params.not_after = tomorrow;
 
 	let key_pair = KeyPair::generate().unwrap();
-	Certificate::generate_self_signed(params, &key_pair).unwrap()
+	params.self_signed(&key_pair).unwrap()
 }
 
 fn new_end_entity() -> Certificate {
@@ -53,7 +53,7 @@ fn new_end_entity() -> Certificate {
 	params.not_after = tomorrow;
 
 	let key_pair = KeyPair::generate().unwrap();
-	Certificate::generate_self_signed(params, &key_pair).unwrap()
+	params.self_signed(&key_pair).unwrap()
 }
 
 fn validity_period() -> (OffsetDateTime, OffsetDateTime) {

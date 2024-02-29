@@ -3,7 +3,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	use rsa::pkcs8::EncodePrivateKey;
 	use rsa::RsaPrivateKey;
 
-	use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName};
+	use rcgen::{date_time_ymd, CertificateParams, DistinguishedName};
 	use std::fmt::Write;
 	use std::fs;
 
@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let private_key_der = private_key.to_pkcs8_der()?;
 	let key_pair = rcgen::KeyPair::try_from(private_key_der.as_bytes()).unwrap();
 
-	let cert = Certificate::generate_self_signed(params, &key_pair)?;
+	let cert = params.self_signed(&key_pair)?;
 	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;
 	let der_serialized = pem.contents();

@@ -1,6 +1,4 @@
-use rcgen::{
-	date_time_ymd, Certificate, CertificateParams, DistinguishedName, DnType, KeyPair, SanType,
-};
+use rcgen::{date_time_ymd, CertificateParams, DistinguishedName, DnType, KeyPair, SanType};
 use std::fs;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	];
 
 	let key_pair = KeyPair::generate()?;
-	let cert = Certificate::generate_self_signed(params, &key_pair)?;
+	let cert = params.self_signed(&key_pair)?;
 
 	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;
