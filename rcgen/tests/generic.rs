@@ -171,9 +171,8 @@ mod test_x509_parser_crl {
 				.unix_timestamp(),
 			crl.get_params().next_update.unix_timestamp()
 		);
-		// TODO: Waiting on x509-parser 0.15.1 to be released.
-		// let crl_number = BigUint::from_bytes_be(crl.get_params().crl_number.as_ref());
-		// assert_eq!(x509_crl.crl_number().unwrap(), &crl_number);
+		let crl_number = BigUint::from_bytes_be(crl.get_params().crl_number.as_ref());
+		assert_eq!(x509_crl.crl_number().unwrap(), &crl_number);
 
 		// We should find the expected revoked certificate serial with the correct reason code.
 		let x509_revoked_cert = x509_crl
