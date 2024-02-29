@@ -1,8 +1,8 @@
-#[cfg(feature = "x509-parser")]
-use crate::{DistinguishedName, Error, SanType};
 use std::hash::Hash;
 
-use crate::{CertificateParams, PublicKeyData, SignatureAlgorithm};
+use crate::{Certificate, CertificateParams, Error, KeyPair, PublicKeyData, SignatureAlgorithm};
+#[cfg(feature = "x509-parser")]
+use crate::{DistinguishedName, SanType};
 
 /// A public key, extracted from a CSR
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -89,6 +89,38 @@ impl CertificateSigningRequestParams {
 		Ok(Self {
 			params,
 			public_key: PublicKey { alg, raw },
+		})
+	}
+
+	/// Generate a new certificate based on the requested parameters, signed by the provided
+	/// issuer.
+	///
+	/// The returned certificate will have its issuer field set to the subject of the provided
+	/// `issuer`, and the authority key identifier extension will be populated using the subject
+	/// public key of `issuer`. It will be signed by `issuer_key`.
+	///
+	/// Note that no validation of the `issuer` certificate is performed. Rcgen will not require
+	/// the certificate to be a CA certificate, or have key usage extensions that allow signing.
+	///
+	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
+	/// [`Certificate::pem`].
+	pub fn signed_by(
+		self,
+		issuer: &Certificate,
+		issuer_key: &KeyPair,
+	) -> Result<Certificate, Error> {
+		let der = self.params.serialize_der_with_signer(
+			&self.public_key,
+			issuer_key,
+			&issuer.params.distinguished_name,
+		)?;
+		let subject_public_key_info = yasna::construct_der(|writer| {
+			self.public_key.serialize_public_key_der(writer);
+		});
+		Ok(Certificate {
+			params: self.params,
+			subject_public_key_info,
+			der,
 		})
 	}
 }

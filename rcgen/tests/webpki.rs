@@ -501,7 +501,7 @@ fn test_certificate_from_csr() {
 	let (mut params, ca_key) = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::generate_self_signed(params, &ca_key).unwrap();
-	let cert = Certificate::from_request(csr, &ca_cert, &ca_key).unwrap();
+	let cert = csr.signed_by(&ca_cert, &ca_key).unwrap();
 
 	let sign_fn =
 		|key_pair, msg| sign_msg_ecdsa(key_pair, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
