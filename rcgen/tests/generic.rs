@@ -38,7 +38,7 @@ mod test_key_params_mismatch {
 
 #[cfg(feature = "x509-parser")]
 mod test_convert_x509_subject_alternative_name {
-	use rcgen::{BasicConstraints, Certificate, CertificateParams, IsCa, SanType};
+	use rcgen::{BasicConstraints, CertificateParams, IsCa, SanType};
 	use std::net::{IpAddr, Ipv4Addr};
 
 	#[test]
@@ -54,7 +54,7 @@ mod test_convert_x509_subject_alternative_name {
 		// Because we're using a function for CA certificates
 		params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 
-		let cert = Certificate::generate_self_signed(params, &ca_key).unwrap();
+		let cert = params.self_signed(&ca_key).unwrap();
 
 		// Serialize our cert that has our chosen san, so we can testing parsing/deserializing it.
 		let ca_der = cert.der();
@@ -68,7 +68,7 @@ mod test_convert_x509_subject_alternative_name {
 mod test_x509_custom_ext {
 	use crate::util;
 
-	use rcgen::{Certificate, CustomExtension};
+	use rcgen::CustomExtension;
 	use x509_parser::oid_registry::asn1_rs;
 	use x509_parser::prelude::{
 		FromDer, ParsedCriAttribute, X509Certificate, X509CertificationRequest,
@@ -93,7 +93,7 @@ mod test_x509_custom_ext {
 		// Ensure the custom exts. being omitted into a CSR doesn't require SAN ext being present.
 		// See https://github.com/rustls/rcgen/issues/122
 		params.subject_alt_names = Vec::default();
-		let test_cert = Certificate::generate_self_signed(params, &test_key).unwrap();
+		let test_cert = params.self_signed(&test_key).unwrap();
 		let (_, x509_test_cert) = X509Certificate::from_der(test_cert.der()).unwrap();
 
 		// We should be able to find the extension by OID, with expected criticality and value.
@@ -295,7 +295,7 @@ mod test_parse_crl_dps {
 mod test_parse_ia5string_subject {
 	use crate::util;
 	use rcgen::DnType::CustomDnType;
-	use rcgen::{Certificate, CertificateParams, DistinguishedName, DnValue};
+	use rcgen::{CertificateParams, DistinguishedName, DnValue};
 
 	#[test]
 	fn parse_ia5string_subject() {
@@ -308,7 +308,7 @@ mod test_parse_ia5string_subject {
 			email_address_dn_type.clone(),
 			email_address_dn_value.clone(),
 		);
-		let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
 		let cert_der = cert.der();
 
 		// We should be able to parse the certificate with x509-parser.
@@ -329,7 +329,7 @@ mod test_parse_ia5string_subject {
 
 #[cfg(feature = "x509-parser")]
 mod test_parse_other_name_alt_name {
-	use rcgen::{Certificate, CertificateParams, KeyPair, SanType};
+	use rcgen::{CertificateParams, KeyPair, SanType};
 
 	#[test]
 	fn parse_other_name_alt_name() {
@@ -339,7 +339,7 @@ mod test_parse_other_name_alt_name {
 		params.subject_alt_names.push(other_name.clone());
 		let key_pair = KeyPair::generate().unwrap();
 
-		let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
 
 		let cert_der = cert.der();
 

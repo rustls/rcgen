@@ -1,5 +1,5 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName};
+	use rcgen::{date_time_ymd, CertificateParams, DistinguishedName};
 	use std::fmt::Write;
 	use std::fs;
 
@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let key_pair_pem = String::from_utf8(pkey.private_key_to_pem_pkcs8()?)?;
 	let key_pair = rcgen::KeyPair::from_pem(&key_pair_pem)?;
 
-	let cert = Certificate::generate_self_signed(params, &key_pair)?;
+	let cert = params.self_signed(&key_pair)?;
 	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;
 	let der_serialized = pem.contents();

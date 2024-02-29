@@ -5,8 +5,8 @@ This crate provides a way to generate self signed X.509 certificates.
 
 The most simple way of using this crate is by calling the
 [`generate_simple_self_signed`] function.
-For more customization abilities, we provide the lower level
-[`Certificate::generate_self_signed`] and [`Certificate::generate`] functions.
+For more customization abilities, construct a [`CertificateParams`] and
+a key pair to call [`CertificateParams::signed_by()`] or [`CertificateParams::self_signed()`].
 */
 #![cfg_attr(
 	feature = "pem",
@@ -124,8 +124,7 @@ pub fn generate_simple_self_signed(
 	subject_alt_names: impl Into<Vec<String>>,
 ) -> Result<CertifiedKey, Error> {
 	let key_pair = KeyPair::generate()?;
-	let cert =
-		Certificate::generate_self_signed(CertificateParams::new(subject_alt_names)?, &key_pair)?;
+	let cert = CertificateParams::new(subject_alt_names)?.self_signed(&key_pair)?;
 	Ok(CertifiedKey { cert, key_pair })
 }
 

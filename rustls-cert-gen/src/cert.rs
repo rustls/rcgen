@@ -107,7 +107,7 @@ impl CaBuilder {
 	/// build `Ca` Certificate.
 	pub fn build(self) -> Result<Ca, rcgen::Error> {
 		let key_pair = self.alg.to_key_pair()?;
-		let cert = Certificate::generate_self_signed(self.params, &key_pair)?;
+		let cert = self.params.self_signed(&key_pair)?;
 		Ok(Ca { cert, key_pair })
 	}
 }
@@ -197,7 +197,9 @@ impl EndEntityBuilder {
 	/// build `EndEntity` Certificate.
 	pub fn build(self, issuer: &Ca) -> Result<EndEntity, rcgen::Error> {
 		let key_pair = self.alg.to_key_pair()?;
-		let cert = Certificate::generate(self.params, &key_pair, &issuer.cert, &issuer.key_pair)?;
+		let cert = self
+			.params
+			.signed_by(&key_pair, &issuer.cert, &issuer.key_pair)?;
 		Ok(EndEntity { cert, key_pair })
 	}
 }
