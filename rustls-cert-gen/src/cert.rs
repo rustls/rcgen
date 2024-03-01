@@ -205,6 +205,7 @@ impl EndEntityBuilder {
 /// Supported Keypair Algorithms
 #[derive(Clone, Copy, Debug, Default, Bpaf, PartialEq)]
 pub enum KeyPairAlgorithm {
+	Rsa,
 	Ed25519,
 	#[default]
 	EcdsaP256,
@@ -214,6 +215,7 @@ pub enum KeyPairAlgorithm {
 impl fmt::Display for KeyPairAlgorithm {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
+			KeyPairAlgorithm::Rsa => write!(f, "rsa"),
 			KeyPairAlgorithm::Ed25519 => write!(f, "ed25519"),
 			KeyPairAlgorithm::EcdsaP256 => write!(f, "ecdsa-p256"),
 			KeyPairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
@@ -225,6 +227,7 @@ impl KeyPairAlgorithm {
 	/// Return an `rcgen::KeyPair` for the given varient
 	fn to_key_pair(self) -> Result<rcgen::KeyPair, rcgen::Error> {
 		match self {
+			KeyPairAlgorithm::Rsa => rcgen::KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256),
 			KeyPairAlgorithm::Ed25519 => {
 				use ring::signature::Ed25519KeyPair;
 
