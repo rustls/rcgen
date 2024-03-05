@@ -138,6 +138,8 @@ jobs:
       run: cargo test --verbose --features x509-parser --all-targets
     - name: Run the tests with aws_lc_rs backend enabled
       run: cargo test --verbose --no-default-features --features aws_lc_rs,pem --all-targets
+    - name: Run the tests with FIPS aws_lc_rs module
+      run: cargo test --verbose --no-default-features --features fips,pem --all-targets
     - name: Run the tests with no features enabled
       run: cargo test --verbose --no-default-features --all-targets
 
@@ -179,6 +181,8 @@ jobs:
       run: cargo test --verbose --features x509-parser --all-targets
     - name: Run the tests with aws_lc_rs backend enabled
       run: cargo test --verbose --no-default-features --features aws_lc_rs,pem --all-targets
+    - name: Run the tests with FIPS aws_lc_rs module
+      run: cargo test --verbose --no-default-features --features fips,pem --all-targets
 
   # Build rustls-cert-gen as a standalone package, see this PR for why it's needed:
   # https://github.com/rustls/rcgen/pull/206#pullrequestreview-1816197358
