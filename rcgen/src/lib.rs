@@ -32,6 +32,7 @@ println!("{}", key_pair.serialize_pem());
 #![deny(missing_docs)]
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![warn(unreachable_pub)]
 
 use std::collections::HashMap;
 use std::fmt;
