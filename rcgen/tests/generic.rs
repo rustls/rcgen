@@ -105,8 +105,8 @@ mod test_x509_custom_ext {
 		assert_eq!(favorite_drink_ext.value, test_ext);
 
 		// Generate a CSR with the custom extension, parse it with x509-parser.
-		let test_cert_csr_der = test_cert.params().serialize_request_der(&test_key).unwrap();
-		let (_, x509_csr) = X509CertificationRequest::from_der(&test_cert_csr_der).unwrap();
+		let test_cert_csr = test_cert.params().serialize_request(&test_key).unwrap();
+		let (_, x509_csr) = X509CertificationRequest::from_der(test_cert_csr.der()).unwrap();
 
 		// We should find that the CSR contains requested extensions.
 		// Note: we can't use `x509_csr.requested_extensions()` here because it maps the raw extension

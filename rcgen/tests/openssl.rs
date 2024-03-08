@@ -161,7 +161,11 @@ fn verify_cert_ca(cert_pem: &str, key: &[u8], ca_cert_pem: &str) {
 }
 
 fn verify_csr(cert: &Certificate, key_pair: &KeyPair) {
-	let csr = cert.params().serialize_request_pem(key_pair).unwrap();
+	let csr = cert
+		.params()
+		.serialize_request(key_pair)
+		.and_then(|csr| csr.pem())
+		.unwrap();
 	println!("{csr}");
 	let key = key_pair.serialize_der();
 	let pkey = PKey::private_key_from_der(&key).unwrap();
