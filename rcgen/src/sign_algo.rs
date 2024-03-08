@@ -102,7 +102,7 @@ impl SignatureAlgorithm {
 }
 
 /// The list of supported signature algorithms
-pub mod algo {
+pub(crate) mod algo {
 	use crate::oid::*;
 
 	use super::*;
