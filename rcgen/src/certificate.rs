@@ -480,24 +480,11 @@ impl CertificateParams {
 		&self,
 		subject_key: &KeyPair,
 	) -> Result<CertificateSigningRequest, Error> {
-		yasna::try_construct_der(|writer| {
-			writer.write_sequence(|writer| {
-				let cert_data =
-					yasna::try_construct_der(|writer| self.write_request(subject_key, writer))?;
-				writer.next().write_der(&cert_data);
-
-				// Write signatureAlgorithm
-				subject_key.alg.write_alg_ident(writer.next());
-
-				// Write signature
-				subject_key.sign(&cert_data, writer.next())?;
-
-				Ok(())
+		subject_key
+			.sign_der(|writer| self.write_request(subject_key, writer))
+			.map(|der| CertificateSigningRequest {
+				der: CertificateSigningRequestDer::from(der),
 			})
-		})
-		.map(|der| CertificateSigningRequest {
-			der: CertificateSigningRequestDer::from(der),
-		})
 	}
 
 	fn write_request(&self, pub_key: &KeyPair, writer: DERWriter) -> Result<(), Error> {
@@ -813,25 +800,9 @@ impl CertificateParams {
 		issuer: &KeyPair,
 		issuer_name: &DistinguishedName,
 	) -> Result<CertificateDer<'static>, Error> {
-		yasna::try_construct_der(|writer| {
-			writer.write_sequence(|writer| {
-				let tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
-					self.write_cert(writer, pub_key, issuer, issuer_name)?;
-					Ok::<(), Error>(())
-				})?;
-				// Write tbsCertList
-				writer.next().write_der(&tbs_cert_list_serialized);
-
-				// Write signatureAlgorithm
-				issuer.alg.write_alg_ident(writer.next());
-
-				// Write signature
-				issuer.sign(&tbs_cert_list_serialized, writer.next())?;
-
-				Ok(())
-			})
-		})
-		.map(CertificateDer::from)
+		issuer
+			.sign_der(|writer| self.write_cert(writer, pub_key, issuer, issuer_name))
+			.map(CertificateDer::from)
 	}
 }
 

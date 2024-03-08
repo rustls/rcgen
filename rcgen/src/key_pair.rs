@@ -328,6 +328,26 @@ impl KeyPair {
 		std::iter::once(self.alg)
 	}
 
+	pub(crate) fn sign_der(
+		&self,
+		f: impl Fn(DERWriter<'_>) -> Result<(), Error>,
+	) -> Result<Vec<u8>, Error> {
+		yasna::try_construct_der(|writer| {
+			writer.write_sequence(|writer| {
+				let data = yasna::try_construct_der(f)?;
+				writer.next().write_der(&data);
+
+				// Write signatureAlgorithm
+				self.alg.write_alg_ident(writer.next());
+
+				// Write signature
+				self.sign(&data, writer.next())?;
+
+				Ok(())
+			})
+		})
+	}
+
 	pub(crate) fn sign(&self, msg: &[u8], writer: DERWriter) -> Result<(), Error> {
 		match &self.kind {
 			#[cfg(feature = "crypto")]

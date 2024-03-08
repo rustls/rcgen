@@ -192,30 +192,13 @@ impl CertificateRevocationListParams {
 			return Err(Error::IssuerNotCrlSigner);
 		}
 
-		yasna::try_construct_der(|writer| {
-			// https://www.rfc-editor.org/rfc/rfc5280#section-5.1
-			writer.write_sequence(|writer| {
-				let tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
-					self.write_crl(writer, issuer_key, &issuer.params.distinguished_name)?;
-					Ok::<(), Error>(())
-				})?;
-
-				// Write tbsCertList
-				writer.next().write_der(&tbs_cert_list_serialized);
-
-				// Write signatureAlgorithm
-				issuer_key.alg.write_alg_ident(writer.next());
-
-				// Write signature
-				issuer_key.sign(&tbs_cert_list_serialized, writer.next())?;
-
-				Ok(())
+		let issuer_name = &issuer.params.distinguished_name;
+		issuer_key
+			.sign_der(|writer| self.write_crl(writer, issuer_key, issuer_name))
+			.map(|der| CertificateRevocationList {
+				params: self,
+				der: der.into(),
 			})
-		})
-		.map(|der| CertificateRevocationList {
-			params: self,
-			der: der.into(),
-		})
 	}
 
 	fn write_crl(
