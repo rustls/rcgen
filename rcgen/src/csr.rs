@@ -1,11 +1,14 @@
-#[cfg(feature = "x509-parser")]
 use pki_types::CertificateSigningRequestDer;
 
 use std::hash::Hash;
 
+#[cfg(feature = "pem")]
+use crate::ENCODE_CONFIG;
 use crate::{Certificate, CertificateParams, Error, KeyPair, PublicKeyData, SignatureAlgorithm};
 #[cfg(feature = "x509-parser")]
 use crate::{DistinguishedName, SanType};
+#[cfg(feature = "pem")]
+use pem::Pem;
 
 /// A public key, extracted from a CSR
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -21,6 +24,24 @@ impl PublicKeyData for PublicKey {
 
 	fn raw_bytes(&self) -> &[u8] {
 		&self.raw
+	}
+}
+
+pub struct CertificateSigningRequest {
+	pub(crate) der: CertificateSigningRequestDer<'static>,
+}
+
+impl CertificateSigningRequest {
+	/// Get the PEM-encoded bytes of the certificate signing request.
+	#[cfg(feature = "pem")]
+	pub fn pem(&self) -> Result<String, Error> {
+		let p = Pem::new("CERTIFICATE REQUEST", &*self.der);
+		Ok(pem::encode_config(&p, ENCODE_CONFIG))
+	}
+
+	/// Get the DER-encoded bytes of the certificate signing request.
+	pub fn der(&self) -> &CertificateSigningRequestDer<'static> {
+		&self.der
 	}
 }
 

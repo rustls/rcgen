@@ -9,6 +9,7 @@ use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
 use crate::crl::CrlDistributionPoint;
+use crate::csr::CertificateSigningRequest;
 use crate::key_pair::PublicKeyData;
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
@@ -467,20 +468,18 @@ impl CertificateParams {
 		});
 	}
 
-	/// Generate and serialize a certificate signing request (CSR) in binary DER format.
+	/// Generate and serialize a certificate signing request (CSR).
 	///
 	/// The constructed CSR will contain attributes based on the certificate parameters,
 	/// and include the subject public key information from `subject_key`. Additionally,
 	/// the CSR will be self-signed using the subject key.
 	///
-	/// **Important**: since this function generates a new CSR for each invocation you
-	/// should not call `serialize_request_der` and then `serialize_request_pem`. This will
-	/// result in two different CSRs. Instead call only `serialize_request_pem` and base64
-	/// decode the inner content to get the DER encoded CSR using a library like `pem`.
-	pub fn serialize_request_der(
+	/// Note that subsequent invocations of `serialize_request()` will not produce the exact
+	/// same output.
+	pub fn serialize_request(
 		&self,
 		subject_key: &KeyPair,
-	) -> Result<CertificateSigningRequestDer<'static>, Error> {
+	) -> Result<CertificateSigningRequest, Error> {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 				let cert_data =
@@ -496,24 +495,9 @@ impl CertificateParams {
 				Ok(())
 			})
 		})
-		.map(CertificateSigningRequestDer::from)
-	}
-
-	/// Generate and serialize a certificate signing request (CSR) in binary DER format.
-	///
-	/// The constructed CSR will contain attributes based on the certificate parameters,
-	/// and include the subject public key information from `subject_key`. Additionally,
-	/// the CSR will be self-signed using the subject key.
-	///
-	/// **Important**: since this function generates a new CSR for each invocation you
-	/// should not call `serialize_request_pem` and then `serialize_request_der`. This will
-	/// result in two different CSRs. Instead call only `serialize_request_pem` and base64
-	/// decode the inner content to get the DER encoded CSR using a library like `pem`.
-	#[cfg(feature = "pem")]
-	pub fn serialize_request_pem(&self, subject_key: &KeyPair) -> Result<String, Error> {
-		let contents = self.serialize_request_der(subject_key)?;
-		let p = Pem::new("CERTIFICATE REQUEST", contents.to_vec());
-		Ok(pem::encode_config(&p, ENCODE_CONFIG))
+		.map(|der| CertificateSigningRequest {
+			der: CertificateSigningRequestDer::from(der),
+		})
 	}
 
 	fn write_request(&self, pub_key: &KeyPair, writer: DERWriter) -> Result<(), Error> {
