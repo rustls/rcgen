@@ -3,7 +3,7 @@ use pem::Pem;
 #[cfg(feature = "crypto")]
 use pki_types::PrivatePkcs8KeyDer;
 use std::fmt;
-use yasna::DERWriter;
+use yasna::{DERWriter, DERWriterSeq};
 
 #[cfg(any(feature = "crypto", feature = "pem"))]
 use crate::error::ExternalError;
@@ -330,11 +330,11 @@ impl KeyPair {
 
 	pub(crate) fn sign_der(
 		&self,
-		f: impl Fn(DERWriter<'_>) -> Result<(), Error>,
+		f: impl FnOnce(&mut DERWriterSeq<'_>) -> Result<(), Error>,
 	) -> Result<Vec<u8>, Error> {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
-				let data = yasna::try_construct_der(f)?;
+				let data = yasna::try_construct_der(|writer| writer.write_sequence(f))?;
 				writer.next().write_der(&data);
 
 				// Write signatureAlgorithm

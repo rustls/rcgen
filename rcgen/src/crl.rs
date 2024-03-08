@@ -3,6 +3,7 @@ use pem::Pem;
 use pki_types::CertificateRevocationListDer;
 use time::OffsetDateTime;
 use yasna::DERWriter;
+use yasna::DERWriterSeq;
 use yasna::Tag;
 
 #[cfg(feature = "pem")]
@@ -194,7 +195,7 @@ impl CertificateRevocationListParams {
 
 		let issuer_name = &issuer.params.distinguished_name;
 		issuer_key
-			.sign_der(|writer| self.write_crl(writer, issuer_key, issuer_name))
+			.sign_der(|writer| self.write_crl(issuer_key, issuer_name, writer))
 			.map(|der| CertificateRevocationList {
 				params: self,
 				der: der.into(),
@@ -203,93 +204,91 @@ impl CertificateRevocationListParams {
 
 	fn write_crl(
 		&self,
-		writer: DERWriter,
 		issuer: &KeyPair,
 		issuer_name: &DistinguishedName,
+		writer: &mut DERWriterSeq,
 	) -> Result<(), Error> {
-		writer.write_sequence(|writer| {
-			// Write CRL version.
-			// RFC 5280 §5.1.2.1:
-			//   This optional field describes the version of the encoded CRL.  When
-			//   extensions are used, as required by this profile, this field MUST be
-			//   present and MUST specify version 2 (the integer value is 1).
-			// RFC 5280 §5.2:
-			//   Conforming CRL issuers are REQUIRED to include the authority key
-			//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
-			//   extensions in all CRLs issued.
-			writer.next().write_u8(1);
+		// Write CRL version.
+		// RFC 5280 §5.1.2.1:
+		//   This optional field describes the version of the encoded CRL.  When
+		//   extensions are used, as required by this profile, this field MUST be
+		//   present and MUST specify version 2 (the integer value is 1).
+		// RFC 5280 §5.2:
+		//   Conforming CRL issuers are REQUIRED to include the authority key
+		//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
+		//   extensions in all CRLs issued.
+		writer.next().write_u8(1);
 
-			// Write algorithm identifier.
-			// RFC 5280 §5.1.2.2:
-			//   This field MUST contain the same algorithm identifier as the
-			//   signatureAlgorithm field in the sequence CertificateList
-			issuer.alg.write_alg_ident(writer.next());
+		// Write algorithm identifier.
+		// RFC 5280 §5.1.2.2:
+		//   This field MUST contain the same algorithm identifier as the
+		//   signatureAlgorithm field in the sequence CertificateList
+		issuer.alg.write_alg_ident(writer.next());
 
-			// Write issuer.
-			// RFC 5280 §5.1.2.3:
-			//   The issuer field MUST contain a non-empty X.500 distinguished name (DN).
-			write_distinguished_name(writer.next(), issuer_name);
+		// Write issuer.
+		// RFC 5280 §5.1.2.3:
+		//   The issuer field MUST contain a non-empty X.500 distinguished name (DN).
+		write_distinguished_name(writer.next(), issuer_name);
 
-			// Write thisUpdate date.
-			// RFC 5280 §5.1.2.4:
-			//    This field indicates the issue date of this CRL.  thisUpdate may be
-			//    encoded as UTCTime or GeneralizedTime.
-			write_dt_utc_or_generalized(writer.next(), self.this_update);
+		// Write thisUpdate date.
+		// RFC 5280 §5.1.2.4:
+		//    This field indicates the issue date of this CRL.  thisUpdate may be
+		//    encoded as UTCTime or GeneralizedTime.
+		write_dt_utc_or_generalized(writer.next(), self.this_update);
 
-			// Write nextUpdate date.
-			// While OPTIONAL in the ASN.1 module, RFC 5280 §5.1.2.5 says:
-			//   Conforming CRL issuers MUST include the nextUpdate field in all CRLs.
-			write_dt_utc_or_generalized(writer.next(), self.next_update);
+		// Write nextUpdate date.
+		// While OPTIONAL in the ASN.1 module, RFC 5280 §5.1.2.5 says:
+		//   Conforming CRL issuers MUST include the nextUpdate field in all CRLs.
+		write_dt_utc_or_generalized(writer.next(), self.next_update);
 
-			// Write revokedCertificates.
-			// RFC 5280 §5.1.2.6:
-			//   When there are no revoked certificates, the revoked certificates list
-			//   MUST be absent
-			if !self.revoked_certs.is_empty() {
-				writer.next().write_sequence(|writer| {
-					for revoked_cert in &self.revoked_certs {
-						revoked_cert.write_der(writer.next());
-					}
-				});
-			}
-
-			// Write crlExtensions.
-			// RFC 5280 §5.1.2.7:
-			//   This field may only appear if the version is 2 (Section 5.1.2.1).  If
-			//   present, this field is a sequence of one or more CRL extensions.
-			// RFC 5280 §5.2:
-			//   Conforming CRL issuers are REQUIRED to include the authority key
-			//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
-			//   extensions in all CRLs issued.
-			writer.next().write_tagged(Tag::context(0), |writer| {
-				writer.write_sequence(|writer| {
-					// Write authority key identifier.
-					write_x509_authority_key_identifier(
-						writer.next(),
-						self.key_identifier_method.derive(issuer.public_key_der()),
-					);
-
-					// Write CRL number.
-					write_x509_extension(writer.next(), oid::CRL_NUMBER, false, |writer| {
-						writer.write_bigint_bytes(self.crl_number.as_ref(), true);
-					});
-
-					// Write issuing distribution point (if present).
-					if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
-						write_x509_extension(
-							writer.next(),
-							oid::CRL_ISSUING_DISTRIBUTION_POINT,
-							true,
-							|writer| {
-								issuing_distribution_point.write_der(writer);
-							},
-						);
-					}
-				});
+		// Write revokedCertificates.
+		// RFC 5280 §5.1.2.6:
+		//   When there are no revoked certificates, the revoked certificates list
+		//   MUST be absent
+		if !self.revoked_certs.is_empty() {
+			writer.next().write_sequence(|writer| {
+				for revoked_cert in &self.revoked_certs {
+					revoked_cert.write_der(writer.next());
+				}
 			});
+		}
 
-			Ok(())
-		})
+		// Write crlExtensions.
+		// RFC 5280 §5.1.2.7:
+		//   This field may only appear if the version is 2 (Section 5.1.2.1).  If
+		//   present, this field is a sequence of one or more CRL extensions.
+		// RFC 5280 §5.2:
+		//   Conforming CRL issuers are REQUIRED to include the authority key
+		//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
+		//   extensions in all CRLs issued.
+		writer.next().write_tagged(Tag::context(0), |writer| {
+			writer.write_sequence(|writer| {
+				// Write authority key identifier.
+				write_x509_authority_key_identifier(
+					writer.next(),
+					self.key_identifier_method.derive(issuer.public_key_der()),
+				);
+
+				// Write CRL number.
+				write_x509_extension(writer.next(), oid::CRL_NUMBER, false, |writer| {
+					writer.write_bigint_bytes(self.crl_number.as_ref(), true);
+				});
+
+				// Write issuing distribution point (if present).
+				if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
+					write_x509_extension(
+						writer.next(),
+						oid::CRL_ISSUING_DISTRIBUTION_POINT,
+						true,
+						|writer| {
+							issuing_distribution_point.write_der(writer);
+						},
+					);
+				}
+			});
+		});
+
+		Ok(())
 	}
 }
 
