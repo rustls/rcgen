@@ -594,7 +594,7 @@ fn write_x509_authority_key_identifier(writer: DERWriter, aki: Vec<u8>) {
 	// In addition, for CRLs:
 	//    'Conforming CRL issuers MUST use the key identifier method, and MUST
 	//     include this extension in all CRLs issued.'
-	write_x509_extension(writer, OID_AUTHORITY_KEY_IDENTIFIER, false, |writer| {
+	write_x509_extension(writer, AUTHORITY_KEY_IDENTIFIER, false, |writer| {
 		writer.write_sequence(|writer| {
 			writer
 				.next()
