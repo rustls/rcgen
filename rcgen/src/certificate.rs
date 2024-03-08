@@ -504,7 +504,7 @@ impl CertificateParams {
 		Ok(result)
 	}
 	fn write_subject_alt_names(&self, writer: DERWriter) {
-		write_x509_extension(writer, oid::OID_SUBJECT_ALT_NAME, false, |writer| {
+		write_x509_extension(writer, oid::SUBJECT_ALT_NAME, false, |writer| {
 			writer.write_sequence(|writer| {
 				for san in self.subject_alt_names.iter() {
 					writer.next().write_tagged_implicit(
@@ -580,8 +580,7 @@ impl CertificateParams {
 			writer.next().write_tagged(Tag::context(0), |writer| {
 				if !subject_alt_names.is_empty() || !custom_extensions.is_empty() {
 					writer.write_sequence(|writer| {
-						let oid =
-							ObjectIdentifier::from_slice(oid::OID_PKCS_9_AT_EXTENSION_REQUEST);
+						let oid = ObjectIdentifier::from_slice(oid::PKCS_9_AT_EXTENSION_REQUEST);
 						writer.next().write_oid(&oid);
 						writer.next().write_set(|writer| {
 							writer.next().write_sequence(|writer| {
@@ -675,49 +674,44 @@ impl CertificateParams {
 
 						// Write standard key usage
 						if !self.key_usages.is_empty() {
-							write_x509_extension(
-								writer.next(),
-								oid::OID_KEY_USAGE,
-								true,
-								|writer| {
-									let mut bits: u16 = 0;
+							write_x509_extension(writer.next(), oid::KEY_USAGE, true, |writer| {
+								let mut bits: u16 = 0;
 
-									for entry in self.key_usages.iter() {
-										// Map the index to a value
-										let index = match entry {
-											KeyUsagePurpose::DigitalSignature => 0,
-											KeyUsagePurpose::ContentCommitment => 1,
-											KeyUsagePurpose::KeyEncipherment => 2,
-											KeyUsagePurpose::DataEncipherment => 3,
-											KeyUsagePurpose::KeyAgreement => 4,
-											KeyUsagePurpose::KeyCertSign => 5,
-											KeyUsagePurpose::CrlSign => 6,
-											KeyUsagePurpose::EncipherOnly => 7,
-											KeyUsagePurpose::DecipherOnly => 8,
-										};
+								for entry in self.key_usages.iter() {
+									// Map the index to a value
+									let index = match entry {
+										KeyUsagePurpose::DigitalSignature => 0,
+										KeyUsagePurpose::ContentCommitment => 1,
+										KeyUsagePurpose::KeyEncipherment => 2,
+										KeyUsagePurpose::DataEncipherment => 3,
+										KeyUsagePurpose::KeyAgreement => 4,
+										KeyUsagePurpose::KeyCertSign => 5,
+										KeyUsagePurpose::CrlSign => 6,
+										KeyUsagePurpose::EncipherOnly => 7,
+										KeyUsagePurpose::DecipherOnly => 8,
+									};
 
-										bits |= 1 << index;
-									}
+									bits |= 1 << index;
+								}
 
-									// Compute the 1-based most significant bit
-									let msb = 16 - bits.leading_zeros();
-									let nb = if msb <= 8 { 1 } else { 2 };
+								// Compute the 1-based most significant bit
+								let msb = 16 - bits.leading_zeros();
+								let nb = if msb <= 8 { 1 } else { 2 };
 
-									let bits = bits.reverse_bits().to_be_bytes();
+								let bits = bits.reverse_bits().to_be_bytes();
 
-									// Finally take only the bytes != 0
-									let bits = &bits[..nb];
+								// Finally take only the bytes != 0
+								let bits = &bits[..nb];
 
-									writer.write_bitvec_bytes(bits, msb as usize)
-								},
-							);
+								writer.write_bitvec_bytes(bits, msb as usize)
+							});
 						}
 
 						// Write extended key usage
 						if !self.extended_key_usages.is_empty() {
 							write_x509_extension(
 								writer.next(),
-								oid::OID_EXT_KEY_USAGE,
+								oid::EXT_KEY_USAGE,
 								false,
 								|writer| {
 									writer.write_sequence(|writer| {
@@ -734,7 +728,7 @@ impl CertificateParams {
 							if !name_constraints.is_empty() {
 								write_x509_extension(
 									writer.next(),
-									oid::OID_NAME_CONSTRAINTS,
+									oid::NAME_CONSTRAINTS,
 									true,
 									|writer| {
 										writer.write_sequence(|writer| {
@@ -760,7 +754,7 @@ impl CertificateParams {
 						if !self.crl_distribution_points.is_empty() {
 							write_x509_extension(
 								writer.next(),
-								oid::OID_CRL_DISTRIBUTION_POINTS,
+								oid::CRL_DISTRIBUTION_POINTS,
 								false,
 								|writer| {
 									writer.write_sequence(|writer| {
@@ -776,7 +770,7 @@ impl CertificateParams {
 								// Write subject_key_identifier
 								write_x509_extension(
 									writer.next(),
-									oid::OID_SUBJECT_KEY_IDENTIFIER,
+									oid::SUBJECT_KEY_IDENTIFIER,
 									false,
 									|writer| {
 										writer.write_bytes(
@@ -787,7 +781,7 @@ impl CertificateParams {
 								// Write basic_constraints
 								write_x509_extension(
 									writer.next(),
-									oid::OID_BASIC_CONSTRAINTS,
+									oid::BASIC_CONSTRAINTS,
 									true,
 									|writer| {
 										writer.write_sequence(|writer| {
@@ -806,7 +800,7 @@ impl CertificateParams {
 								// Write subject_key_identifier
 								write_x509_extension(
 									writer.next(),
-									oid::OID_SUBJECT_KEY_IDENTIFIER,
+									oid::SUBJECT_KEY_IDENTIFIER,
 									false,
 									|writer| {
 										writer.write_bytes(
@@ -817,7 +811,7 @@ impl CertificateParams {
 								// Write basic_constraints
 								write_x509_extension(
 									writer.next(),
-									oid::OID_BASIC_CONSTRAINTS,
+									oid::BASIC_CONSTRAINTS,
 									true,
 									|writer| {
 										writer.write_sequence(|writer| {
@@ -917,7 +911,7 @@ impl CustomExtension {
 			writer.write_bytes(sha_digest);
 		});
 		Self {
-			oid: oid::OID_PE_ACME.to_owned(),
+			oid: oid::PE_ACME.to_owned(),
 			critical: true,
 			content,
 		}
@@ -971,12 +965,12 @@ pub enum DnType {
 impl DnType {
 	pub(crate) fn to_oid(&self) -> ObjectIdentifier {
 		let sl = match self {
-			DnType::CountryName => oid::OID_COUNTRY_NAME,
-			DnType::LocalityName => oid::OID_LOCALITY_NAME,
-			DnType::StateOrProvinceName => oid::OID_STATE_OR_PROVINCE_NAME,
-			DnType::OrganizationName => oid::OID_ORG_NAME,
-			DnType::OrganizationalUnitName => oid::OID_ORG_UNIT_NAME,
-			DnType::CommonName => oid::OID_COMMON_NAME,
+			DnType::CountryName => oid::COUNTRY_NAME,
+			DnType::LocalityName => oid::LOCALITY_NAME,
+			DnType::StateOrProvinceName => oid::STATE_OR_PROVINCE_NAME,
+			DnType::OrganizationName => oid::ORG_NAME,
+			DnType::OrganizationalUnitName => oid::ORG_UNIT_NAME,
+			DnType::CommonName => oid::COMMON_NAME,
 			DnType::CustomDnType(ref oid) => oid.as_slice(),
 		};
 		ObjectIdentifier::from_slice(sl)
@@ -985,12 +979,12 @@ impl DnType {
 	/// Generate a DnType for the provided OID
 	pub fn from_oid(slice: &[u64]) -> Self {
 		match slice {
-			oid::OID_COUNTRY_NAME => DnType::CountryName,
-			oid::OID_LOCALITY_NAME => DnType::LocalityName,
-			oid::OID_STATE_OR_PROVINCE_NAME => DnType::StateOrProvinceName,
-			oid::OID_ORG_NAME => DnType::OrganizationName,
-			oid::OID_ORG_UNIT_NAME => DnType::OrganizationalUnitName,
-			oid::OID_COMMON_NAME => DnType::CommonName,
+			oid::COUNTRY_NAME => DnType::CountryName,
+			oid::LOCALITY_NAME => DnType::LocalityName,
+			oid::STATE_OR_PROVINCE_NAME => DnType::StateOrProvinceName,
+			oid::ORG_NAME => DnType::OrganizationName,
+			oid::ORG_UNIT_NAME => DnType::OrganizationalUnitName,
+			oid::COMMON_NAME => DnType::CommonName,
 			oid => DnType::CustomDnType(oid.into()),
 		}
 	}
