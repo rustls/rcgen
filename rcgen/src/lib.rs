@@ -60,7 +60,6 @@ pub use crate::csr::{CertificateSigningRequestParams, PublicKey};
 pub use crate::error::{Error, InvalidAsn1String};
 use crate::key_pair::PublicKeyData;
 pub use crate::key_pair::{KeyPair, RemoteKeyPair};
-use crate::oid::*;
 pub use crate::sign_algo::algo::*;
 pub use crate::sign_algo::SignatureAlgorithm;
 pub use crate::string_types::*;
@@ -594,7 +593,7 @@ fn write_x509_authority_key_identifier(writer: DERWriter, aki: Vec<u8>) {
 	// In addition, for CRLs:
 	//    'Conforming CRL issuers MUST use the key identifier method, and MUST
 	//     include this extension in all CRLs issued.'
-	write_x509_extension(writer, AUTHORITY_KEY_IDENTIFIER, false, |writer| {
+	write_x509_extension(writer, oid::AUTHORITY_KEY_IDENTIFIER, false, |writer| {
 		writer.write_sequence(|writer| {
 			writer
 				.next()
