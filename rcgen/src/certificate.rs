@@ -517,7 +517,7 @@ impl CertificateParams {
 			});
 		});
 	}
-	fn write_request<K: PublicKeyData>(&self, pub_key: &K, writer: DERWriter) -> Result<(), Error> {
+	fn write_request(&self, pub_key: &KeyPair, writer: DERWriter) -> Result<(), Error> {
 		// No .. pattern, we use this to ensure every field is used
 		#[deny(unused)]
 		let Self {
