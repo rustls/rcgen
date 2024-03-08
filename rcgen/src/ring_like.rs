@@ -17,7 +17,7 @@ pub(crate) fn ecdsa_from_pkcs8(
 ) -> Result<signature::EcdsaKeyPair, Error> {
 	#[cfg(feature = "ring")]
 	{
-		Ok(signature::EcdsaKeyPair::from_pkcs8(alg, pkcs8, _rng)._err()?)
+		signature::EcdsaKeyPair::from_pkcs8(alg, pkcs8, _rng)._err()
 	}
 
 	#[cfg(all(not(feature = "ring"), feature = "aws_lc_rs"))]
