@@ -4,14 +4,13 @@ use time::OffsetDateTime;
 use yasna::DERWriter;
 use yasna::Tag;
 
-use crate::oid::*;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	write_distinguished_name, write_dt_utc_or_generalized, write_x509_authority_key_identifier,
-	write_x509_extension, DistinguishedName, KeyPair,
+	oid, write_distinguished_name, write_dt_utc_or_generalized,
+	write_x509_authority_key_identifier, write_x509_extension, Certificate, DistinguishedName,
+	Error, KeyIdMethod, KeyPair, KeyUsagePurpose, SerialNumber,
 };
-use crate::{Certificate, Error, KeyIdMethod, KeyUsagePurpose, SerialNumber};
 
 /// A certificate revocation list (CRL)
 ///
@@ -291,7 +290,7 @@ impl CertificateRevocationListParams {
 					);
 
 					// Write CRL number.
-					write_x509_extension(writer.next(), CRL_NUMBER, false, |writer| {
+					write_x509_extension(writer.next(), oid::CRL_NUMBER, false, |writer| {
 						writer.write_bigint_bytes(self.crl_number.as_ref(), true);
 					});
 
@@ -299,7 +298,7 @@ impl CertificateRevocationListParams {
 					if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
 						write_x509_extension(
 							writer.next(),
-							CRL_ISSUING_DISTRIBUTION_POINT,
+							oid::CRL_ISSUING_DISTRIBUTION_POINT,
 							true,
 							|writer| {
 								issuing_distribution_point.write_der(writer);
@@ -402,16 +401,21 @@ impl RevokedCertParams {
 				writer.next().write_sequence(|writer| {
 					// Write reason code if present.
 					if let Some(reason_code) = self.reason_code {
-						write_x509_extension(writer.next(), CRL_REASONS, false, |writer| {
+						write_x509_extension(writer.next(), oid::CRL_REASONS, false, |writer| {
 							writer.write_enum(reason_code as i64);
 						});
 					}
 
 					// Write invalidity date if present.
 					if let Some(invalidity_date) = self.invalidity_date {
-						write_x509_extension(writer.next(), CRL_INVALIDITY_DATE, false, |writer| {
-							write_dt_utc_or_generalized(writer, invalidity_date);
-						})
+						write_x509_extension(
+							writer.next(),
+							oid::CRL_INVALIDITY_DATE,
+							false,
+							|writer| {
+								write_dt_utc_or_generalized(writer, invalidity_date);
+							},
+						)
 					}
 				});
 			}
