@@ -279,7 +279,7 @@ where
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 /**
 Distinguished name used e.g. for the issuer and subject fields of a certificate
 
@@ -298,10 +298,7 @@ pub struct DistinguishedName {
 impl DistinguishedName {
 	/// Creates a new, empty distinguished name
 	pub fn new() -> Self {
-		Self {
-			entries: HashMap::new(),
-			order: Vec::new(),
-		}
+		Self::default()
 	}
 	/// Obtains the attribute value for the given attribute type
 	pub fn get(&self, ty: &DnType) -> Option<&DnValue> {
