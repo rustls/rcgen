@@ -160,7 +160,7 @@ impl KeyPair {
 	/// Equivalent to using the [`TryFrom`] implementation.
 	#[cfg(feature = "crypto")]
 	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
-		Ok(der.try_into()?)
+		der.try_into()
 	}
 
 	/// Returns the key pair's signature algorithm
@@ -173,7 +173,7 @@ impl KeyPair {
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)._err()?;
 		let private_key_der: &[_] = private_key.contents();
-		Ok(private_key_der.try_into()?)
+		private_key_der.try_into()
 	}
 
 	/// Obtains the key pair from a raw public key and a remote private key
@@ -196,7 +196,7 @@ impl KeyPair {
 	) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)._err()?;
 		let private_key_der: &[_] = private_key.contents();
-		Ok(Self::from_der_and_sign_algo(private_key_der, alg)?)
+		Self::from_der_and_sign_algo(private_key_der, alg)
 	}
 
 	/// Obtains the key pair from a DER formatted key
