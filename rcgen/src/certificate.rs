@@ -1111,26 +1111,6 @@ macro_rules! mask {
 }
 
 impl CidrSubnet {
-	/// Obtains the CidrSubnet from the well-known
-	/// addr/prefix notation.
-	/// ```
-	/// # use std::str::FromStr;
-	/// # use rcgen::CidrSubnet;
-	/// // The "192.0.2.0/24" example from
-	/// // https://tools.ietf.org/html/rfc5280#page-42
-	/// let subnet = CidrSubnet::from_str("192.0.2.0/24").unwrap();
-	/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
-	/// ```
-	pub fn from_str(s: &str) -> Result<Self, ()> {
-		let mut iter = s.split('/');
-		if let (Some(addr_s), Some(prefix_s)) = (iter.next(), iter.next()) {
-			let addr = IpAddr::from_str(addr_s).map_err(|_| ())?;
-			let prefix = u8::from_str(prefix_s).map_err(|_| ())?;
-			Ok(Self::from_addr_prefix(addr, prefix))
-		} else {
-			Err(())
-		}
-	}
 	/// Obtains the CidrSubnet from an ip address
 	/// as well as the specified prefix number.
 	///
@@ -1173,6 +1153,31 @@ impl CidrSubnet {
 			},
 		}
 		res
+	}
+}
+
+/// Obtains the CidrSubnet from the well-known
+/// addr/prefix notation.
+/// ```
+/// # use std::str::FromStr;
+/// # use rcgen::CidrSubnet;
+/// // The "192.0.2.0/24" example from
+/// // https://tools.ietf.org/html/rfc5280#page-42
+/// let subnet = CidrSubnet::from_str("192.0.2.0/24").unwrap();
+/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
+/// ```
+impl FromStr for CidrSubnet {
+	type Err = ();
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		let mut iter = s.split('/');
+		if let (Some(addr_s), Some(prefix_s)) = (iter.next(), iter.next()) {
+			let addr = IpAddr::from_str(addr_s).map_err(|_| ())?;
+			let prefix = u8::from_str(prefix_s).map_err(|_| ())?;
+			Ok(Self::from_addr_prefix(addr, prefix))
+		} else {
+			Err(())
+		}
 	}
 }
 
