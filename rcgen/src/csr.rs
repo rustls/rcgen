@@ -59,8 +59,10 @@ impl CertificateSigningRequestParams {
 		let alg = SignatureAlgorithm::from_oid(&alg_oid)?;
 
 		let info = &csr.certification_request_info;
-		let mut params = CertificateParams::default();
-		params.distinguished_name = DistinguishedName::from_name(&info.subject)?;
+		let mut params = CertificateParams {
+			distinguished_name: DistinguishedName::from_name(&info.subject)?,
+			..CertificateParams::default()
+		};
 		let raw = info.subject_pki.subject_public_key.data.to_vec();
 
 		if let Some(extensions) = csr.requested_extensions() {
