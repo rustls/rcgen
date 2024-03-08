@@ -149,7 +149,7 @@ pub mod algo {
 		oids_sign_alg: &[&OID_RSASSA_PSS],
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::Rsa(&signature::RSA_PSS_SHA256),
-		oid_components: &OID_RSASSA_PSS, //&[1, 2, 840, 113549, 1, 1, 13],
+		oid_components: OID_RSASSA_PSS, //&[1, 2, 840, 113549, 1, 1, 13],
 		// rSASSA-PSS-SHA256-Params in RFC 4055
 		params: SignatureAlgorithmParams::RsaPss {
 			// id-sha256 in https://datatracker.ietf.org/doc/html/rfc4055#section-2.1
