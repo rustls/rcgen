@@ -492,8 +492,7 @@ fn test_certificate_from_csr() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert_key = KeyPair::generate().unwrap();
-	let cert = params.self_signed(&cert_key).unwrap();
-	let csr_der = cert.serialize_request_der(&cert_key).unwrap();
+	let csr_der = params.serialize_request_der(&cert_key).unwrap();
 	let csr = CertificateSigningRequestParams::from_der(&csr_der).unwrap();
 
 	let (mut params, ca_key) = util::default_params();

@@ -51,57 +51,6 @@ impl Certificate {
 	pub fn pem(&self) -> String {
 		pem::encode_config(&Pem::new("CERTIFICATE", self.der().to_vec()), ENCODE_CONFIG)
 	}
-	/// Generate and serialize a certificate signing request (CSR) in binary DER format.
-	///
-	/// The constructed CSR will contain attributes based on the certificate parameters,
-	/// and include the subject public key information from `subject_key`. Additionally,
-	/// the CSR will be self-signed using the subject key.
-	///
-	/// **Important**: since this function generates a new CSR for each invocation you
-	/// should not call `serialize_request_der` and then `serialize_request_pem`. This will
-	/// result in two different CSRs. Instead call only `serialize_request_pem` and base64
-	/// decode the inner content to get the DER encoded CSR using a library like `pem`.
-	///
-	/// As the return type implements `Deref<Target = [u8]>`, in can easily be saved
-	/// to a file like a byte slice.
-	pub fn serialize_request_der(
-		&self,
-		subject_key: &KeyPair,
-	) -> Result<CertificateSigningRequestDer<'static>, Error> {
-		yasna::try_construct_der(|writer| {
-			writer.write_sequence(|writer| {
-				let cert_data = yasna::try_construct_der(|writer| {
-					self.params.write_request(subject_key, writer)
-				})?;
-				writer.next().write_der(&cert_data);
-
-				// Write signatureAlgorithm
-				subject_key.alg.write_alg_ident(writer.next());
-
-				// Write signature
-				subject_key.sign(&cert_data, writer.next())?;
-
-				Ok(())
-			})
-		})
-		.map(CertificateSigningRequestDer::from)
-	}
-	/// Generate and serialize a certificate signing request (CSR) in binary DER format.
-	///
-	/// The constructed CSR will contain attributes based on the certificate parameters,
-	/// and include the subject public key information from `subject_key`. Additionally,
-	/// the CSR will be self-signed using the subject key.
-	///
-	/// **Important**: since this function generates a new CSR for each invocation you
-	/// should not call `serialize_request_pem` and then `serialize_request_der`. This will
-	/// result in two different CSRs. Instead call only `serialize_request_pem` and base64
-	/// decode the inner content to get the DER encoded CSR using a library like `pem`.
-	#[cfg(feature = "pem")]
-	pub fn serialize_request_pem(&self, subject_key: &KeyPair) -> Result<String, Error> {
-		let contents = self.serialize_request_der(subject_key)?;
-		let p = Pem::new("CERTIFICATE REQUEST", contents.to_vec());
-		Ok(pem::encode_config(&p, ENCODE_CONFIG))
-	}
 }
 
 /// Parameters used for certificate generation
@@ -517,6 +466,56 @@ impl CertificateParams {
 			});
 		});
 	}
+
+	/// Generate and serialize a certificate signing request (CSR) in binary DER format.
+	///
+	/// The constructed CSR will contain attributes based on the certificate parameters,
+	/// and include the subject public key information from `subject_key`. Additionally,
+	/// the CSR will be self-signed using the subject key.
+	///
+	/// **Important**: since this function generates a new CSR for each invocation you
+	/// should not call `serialize_request_der` and then `serialize_request_pem`. This will
+	/// result in two different CSRs. Instead call only `serialize_request_pem` and base64
+	/// decode the inner content to get the DER encoded CSR using a library like `pem`.
+	pub fn serialize_request_der(
+		&self,
+		subject_key: &KeyPair,
+	) -> Result<CertificateSigningRequestDer<'static>, Error> {
+		yasna::try_construct_der(|writer| {
+			writer.write_sequence(|writer| {
+				let cert_data =
+					yasna::try_construct_der(|writer| self.write_request(subject_key, writer))?;
+				writer.next().write_der(&cert_data);
+
+				// Write signatureAlgorithm
+				subject_key.alg.write_alg_ident(writer.next());
+
+				// Write signature
+				subject_key.sign(&cert_data, writer.next())?;
+
+				Ok(())
+			})
+		})
+		.map(CertificateSigningRequestDer::from)
+	}
+
+	/// Generate and serialize a certificate signing request (CSR) in binary DER format.
+	///
+	/// The constructed CSR will contain attributes based on the certificate parameters,
+	/// and include the subject public key information from `subject_key`. Additionally,
+	/// the CSR will be self-signed using the subject key.
+	///
+	/// **Important**: since this function generates a new CSR for each invocation you
+	/// should not call `serialize_request_pem` and then `serialize_request_der`. This will
+	/// result in two different CSRs. Instead call only `serialize_request_pem` and base64
+	/// decode the inner content to get the DER encoded CSR using a library like `pem`.
+	#[cfg(feature = "pem")]
+	pub fn serialize_request_pem(&self, subject_key: &KeyPair) -> Result<String, Error> {
+		let contents = self.serialize_request_der(subject_key)?;
+		let p = Pem::new("CERTIFICATE REQUEST", contents.to_vec());
+		Ok(pem::encode_config(&p, ENCODE_CONFIG))
+	}
+
 	fn write_request(&self, pub_key: &KeyPair, writer: DERWriter) -> Result<(), Error> {
 		// No .. pattern, we use this to ensure every field is used
 		#[deny(unused)]
