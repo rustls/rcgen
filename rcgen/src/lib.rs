@@ -33,14 +33,13 @@ println!("{}", key_pair.serialize_pem());
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
-#[cfg(feature = "crypto")]
-use ring_like::digest;
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::Hash;
 use std::net::IpAddr;
 #[cfg(feature = "x509-parser")]
 use std::net::{Ipv4Addr, Ipv6Addr};
+
 use time::{OffsetDateTime, Time};
 use yasna::models::ObjectIdentifier;
 use yasna::models::{GeneralizedTime, UTCTime};
@@ -48,21 +47,33 @@ use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
 use yasna::DERWriter;
 use yasna::Tag;
 
-pub use crate::certificate::{
+pub use certificate::{
 	date_time_ymd, BasicConstraints, Certificate, CertificateParams, CidrSubnet, CustomExtension,
 	DnType, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, NameConstraints,
 };
-pub use crate::crl::{
+pub use crl::{
 	CertificateRevocationList, CertificateRevocationListParams, CrlDistributionPoint,
 	CrlIssuingDistributionPoint, CrlScope, RevocationReason, RevokedCertParams,
 };
-pub use crate::csr::{CertificateSigningRequestParams, PublicKey};
-pub use crate::error::{Error, InvalidAsn1String};
-use crate::key_pair::PublicKeyData;
-pub use crate::key_pair::{KeyPair, RemoteKeyPair};
-pub use crate::sign_algo::algo::*;
-pub use crate::sign_algo::SignatureAlgorithm;
-pub use crate::string_types::*;
+pub use csr::{CertificateSigningRequestParams, PublicKey};
+pub use error::{Error, InvalidAsn1String};
+use key_pair::PublicKeyData;
+pub use key_pair::{KeyPair, RemoteKeyPair};
+#[cfg(feature = "crypto")]
+use ring_like::digest;
+pub use sign_algo::algo::*;
+pub use sign_algo::SignatureAlgorithm;
+pub use string_types::*;
+
+mod certificate;
+mod crl;
+mod csr;
+mod error;
+mod key_pair;
+mod oid;
+mod ring_like;
+mod sign_algo;
+mod string_types;
 
 /// Type-alias for the old name of [`Error`].
 #[deprecated(
@@ -118,16 +129,6 @@ pub fn generate_simple_self_signed(
 }
 
 // https://tools.ietf.org/html/rfc5280#section-4.1.1
-
-mod certificate;
-mod crl;
-mod csr;
-mod error;
-mod key_pair;
-mod oid;
-mod ring_like;
-mod sign_algo;
-mod string_types;
 
 // Example certs usable as reference:
 // Uses ECDSA: https://crt.sh/?asn1=607203242
