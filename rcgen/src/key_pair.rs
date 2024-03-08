@@ -88,7 +88,7 @@ impl KeyPair {
 				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)._err()?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
-				let key_pair = ecdsa_from_pkcs8(&sign_alg, &&key_pair_doc.as_ref(), rng).unwrap();
+				let key_pair = ecdsa_from_pkcs8(sign_alg, key_pair_doc.as_ref(), rng).unwrap();
 				Ok(KeyPair {
 					kind: KeyPairKind::Ec(key_pair),
 					alg,
@@ -99,7 +99,7 @@ impl KeyPair {
 				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(rng)._err()?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
-				let key_pair = Ed25519KeyPair::from_pkcs8(&&key_pair_doc.as_ref()).unwrap();
+				let key_pair = Ed25519KeyPair::from_pkcs8(key_pair_doc.as_ref()).unwrap();
 				Ok(KeyPair {
 					kind: KeyPairKind::Ed(key_pair),
 					alg,
@@ -306,13 +306,13 @@ impl KeyPair {
 				let system_random = SystemRandom::new();
 				let signature = kp.sign(&system_random, msg)._err()?;
 				let sig = &signature.as_ref();
-				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
+				writer.write_bitvec_bytes(sig, &sig.len() * 8);
 			},
 			#[cfg(feature = "crypto")]
 			KeyPairKind::Ed(kp) => {
 				let signature = kp.sign(msg);
 				let sig = &signature.as_ref();
-				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
+				writer.write_bitvec_bytes(sig, &sig.len() * 8);
 			},
 			#[cfg(feature = "crypto")]
 			KeyPairKind::Rsa(kp, padding_alg) => {
@@ -321,7 +321,7 @@ impl KeyPair {
 				kp.sign(*padding_alg, &system_random, msg, &mut signature)
 					._err()?;
 				let sig = &signature.as_ref();
-				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
+				writer.write_bitvec_bytes(sig, &sig.len() * 8);
 			},
 			KeyPairKind::Remote(kp) => {
 				let signature = kp.sign(msg)?;
@@ -494,7 +494,7 @@ pub(crate) trait PublicKeyData {
 		writer.write_sequence(|writer| {
 			self.alg().write_oids_sign_alg(writer.next());
 			let pk = self.raw_bytes();
-			writer.next().write_bitvec_bytes(&pk, pk.len() * 8);
+			writer.next().write_bitvec_bytes(pk, pk.len() * 8);
 		})
 	}
 }

@@ -215,7 +215,7 @@ impl SanType {
 			x509_parser::extensions::GeneralName::OtherName(oid, value) => {
 				let oid = oid.iter().ok_or(Error::CouldNotParseCertificate)?;
 				// We first remove the explicit tag ([0] EXPLICIT)
-				let (_, other_name) = TaggedExplicit::<asn1_rs::Any, _, 0>::from_der(&value)
+				let (_, other_name) = TaggedExplicit::<asn1_rs::Any, _, 0>::from_der(value)
 					.map_err(|_| Error::CouldNotParseCertificate)?;
 				let other_name = other_name.into_inner();
 

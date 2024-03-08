@@ -452,13 +452,13 @@ impl CertificateParams {
 
 		if let Some(constraints) = constraints {
 			let permitted_subtrees = if let Some(permitted) = &constraints.permitted_subtrees {
-				Self::convert_x509_general_subtrees(&permitted)?
+				Self::convert_x509_general_subtrees(permitted)?
 			} else {
 				Vec::new()
 			};
 
 			let excluded_subtrees = if let Some(excluded) = &constraints.excluded_subtrees {
-				Self::convert_x509_general_subtrees(&excluded)?
+				Self::convert_x509_general_subtrees(excluded)?
 			} else {
 				Vec::new()
 			};
@@ -485,7 +485,7 @@ impl CertificateParams {
 				GeneralName::RFC822Name(s) => GeneralSubtree::Rfc822Name(s.to_string()),
 				GeneralName::DNSName(s) => GeneralSubtree::DnsName(s.to_string()),
 				GeneralName::DirectoryName(n) => {
-					GeneralSubtree::DirectoryName(DistinguishedName::from_name(&n)?)
+					GeneralSubtree::DirectoryName(DistinguishedName::from_name(n)?)
 				},
 				GeneralName::IPAddress(bytes) if bytes.len() == 8 => {
 					let addr: [u8; 4] = bytes[..4].try_into().unwrap();
@@ -523,7 +523,7 @@ impl CertificateParams {
 								// otherName SEQUENCE { OID, [0] explicit any defined by oid }
 								// https://datatracker.ietf.org/doc/html/rfc5280#page-38
 								writer.write_sequence(|writer| {
-									writer.next().write_oid(&ObjectIdentifier::from_slice(&oid));
+									writer.next().write_oid(&ObjectIdentifier::from_slice(oid));
 									value.write_der(writer.next());
 								});
 							},
@@ -572,7 +572,7 @@ impl CertificateParams {
 			// Write version
 			writer.next().write_u8(0);
 			// Write subject name
-			write_distinguished_name(writer.next(), &distinguished_name);
+			write_distinguished_name(writer.next(), distinguished_name);
 			// Write subjectPublicKeyInfo
 			pub_key.serialize_public_key_der(writer.next());
 			// Write extensions
@@ -708,7 +708,7 @@ impl CertificateParams {
 									// Finally take only the bytes != 0
 									let bits = &bits[..nb];
 
-									writer.write_bitvec_bytes(&bits, msb as usize)
+									writer.write_bitvec_bytes(bits, msb as usize)
 								},
 							);
 						}
@@ -1030,7 +1030,7 @@ impl ExtendedKeyUsagePurpose {
 			EmailProtection => &[1, 3, 6, 1, 5, 5, 7, 3, 4],
 			TimeStamping => &[1, 3, 6, 1, 5, 5, 7, 3, 8],
 			OcspSigning => &[1, 3, 6, 1, 5, 5, 7, 3, 9],
-			Other(oid) => &oid,
+			Other(oid) => oid,
 		}
 	}
 }
@@ -1481,7 +1481,7 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 				params.key_identifier_method
 			);
 
-			let kp = KeyPair::from_pem(&ca_key).unwrap();
+			let kp = KeyPair::from_pem(ca_key).unwrap();
 			let ca_cert = Certificate::generate_self_signed(params, &kp).unwrap();
 			assert_eq!(&expected_ski, &ca_cert.key_identifier());
 
