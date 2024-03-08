@@ -4,9 +4,7 @@ use pki_types::{CertificateDer, ServerName, SignatureVerificationAlgorithm, Unix
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DnType, Error, IsCa, KeyPair, RemoteKeyPair,
 };
-use rcgen::{
-	CertificateRevocationList, CertificateRevocationListParams, RevocationReason, RevokedCertParams,
-};
+use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams};
 #[cfg(feature = "x509-parser")]
 use rcgen::{CertificateSigningRequestParams, DnValue};
 use rcgen::{ExtendedKeyUsagePurpose, KeyUsagePurpose, SerialNumber};
@@ -535,15 +533,12 @@ fn test_webpki_serial_number() {
 #[test]
 fn test_webpki_crl_parse() {
 	// Create a CRL with one revoked cert, and an issuer to sign the CRL.
-	let (crl, issuer, issuer_key) = util::test_crl();
+	let (crl, _) = util::test_crl();
 	let revoked_cert = crl.params().revoked_certs.first().unwrap();
-
-	// Serialize the CRL signed by the issuer to DER.
-	let der = crl.serialize_der_with_signer(&issuer, &issuer_key).unwrap();
 
 	// We should be able to parse the CRL DER without error.
 	let webpki_crl = CertRevocationList::from(
-		BorrowedCertRevocationList::from_der(&der).expect("failed to parse CRL DER"),
+		BorrowedCertRevocationList::from_der(crl.der()).expect("failed to parse CRL DER"),
 	);
 
 	// We should be able to find the revoked cert with the expected properties.
@@ -623,10 +618,11 @@ fn test_webpki_crl_revoke() {
 			invalidity_date: None,
 		}],
 		key_identifier_method: rcgen::KeyIdMethod::Sha256,
-	};
-	let crl = CertificateRevocationList::from_params(crl).unwrap();
-	let crl_der = crl.serialize_der_with_signer(&issuer, &issuer_key).unwrap();
-	let crl = CertRevocationList::from(BorrowedCertRevocationList::from_der(&crl_der).unwrap());
+	}
+	.signed_by(&issuer, &issuer_key)
+	.unwrap();
+
+	let crl = CertRevocationList::from(BorrowedCertRevocationList::from_der(crl.der()).unwrap());
 
 	// The end entity cert should **not** validate when we provide a CRL that revokes the EE cert.
 	let result = end_entity_cert.verify_for_usage(

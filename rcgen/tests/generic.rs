@@ -145,17 +145,14 @@ mod test_x509_parser_crl {
 	#[test]
 	fn parse_crl() {
 		// Create a CRL with one revoked cert, and an issuer to sign the CRL.
-		let (crl, issuer, issuer_key) = util::test_crl();
+		let (crl, issuer) = util::test_crl();
 		let revoked_cert = crl.params().revoked_certs.first().unwrap();
 		let revoked_cert_serial = BigUint::from_bytes_be(revoked_cert.serial_number.as_ref());
 		let (_, x509_issuer) = X509Certificate::from_der(issuer.der()).unwrap();
 
-		// Serialize the CRL signed by the issuer in DER form.
-		let crl_der = crl.serialize_der_with_signer(&issuer, &issuer_key).unwrap();
-
 		// We should be able to parse the CRL with x509-parser without error.
 		let (_, x509_crl) =
-			CertificateRevocationList::from_der(&crl_der).expect("failed to parse CRL DER");
+			CertificateRevocationList::from_der(crl.der()).expect("failed to parse CRL DER");
 
 		// The properties of the CRL should match expected.
 		assert_eq!(x509_crl.version().unwrap(), X509Version(1));

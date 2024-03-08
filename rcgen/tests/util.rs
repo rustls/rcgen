@@ -83,7 +83,7 @@ pub fn default_params() -> (CertificateParams, KeyPair) {
 }
 
 #[allow(unused)] // Used by openssl + x509-parser features.
-pub fn test_crl() -> (CertificateRevocationList, Certificate, KeyPair) {
+pub fn test_crl() -> (CertificateRevocationList, Certificate) {
 	let (mut issuer, key_pair) = default_params();
 	issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	issuer.key_usages = vec![
@@ -114,10 +114,11 @@ pub fn test_crl() -> (CertificateRevocationList, Certificate, KeyPair) {
 		}),
 		revoked_certs: vec![revoked_cert],
 		key_identifier_method: KeyIdMethod::Sha256,
-	};
-	let crl = CertificateRevocationList::from_params(crl).unwrap();
+	}
+	.signed_by(&issuer, &key_pair)
+	.unwrap();
 
-	(crl, issuer, key_pair)
+	(crl, issuer)
 }
 
 #[allow(unused)] // Used by openssl + x509-parser features.
