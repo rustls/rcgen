@@ -610,180 +610,177 @@ impl CertificateParams {
 				|| matches!(self.is_ca, IsCa::ExplicitNoCa)
 				|| matches!(self.is_ca, IsCa::Ca(_))
 				|| !self.custom_extensions.is_empty();
-			if should_write_exts {
-				writer.next().write_tagged(Tag::context(3), |writer| {
-					writer.write_sequence(|writer| {
-						if self.use_authority_key_identifier_extension {
-							write_x509_authority_key_identifier(
-								writer.next(),
-								self.key_identifier_method.derive(issuer.public_key_der()),
-							);
-						}
-						// Write subject_alt_names
-						if !self.subject_alt_names.is_empty() {
-							self.write_subject_alt_names(writer.next());
-						}
+			if !should_write_exts {
+				return Ok(());
+			}
 
-						// Write standard key usage
-						if !self.key_usages.is_empty() {
-							write_x509_extension(writer.next(), oid::KEY_USAGE, true, |writer| {
-								let mut bits: u16 = 0;
+			writer.next().write_tagged(Tag::context(3), |writer| {
+				writer.write_sequence(|writer| {
+					if self.use_authority_key_identifier_extension {
+						write_x509_authority_key_identifier(
+							writer.next(),
+							self.key_identifier_method.derive(issuer.public_key_der()),
+						);
+					}
+					// Write subject_alt_names
+					if !self.subject_alt_names.is_empty() {
+						self.write_subject_alt_names(writer.next());
+					}
 
-								for entry in self.key_usages.iter() {
-									// Map the index to a value
-									let index = match entry {
-										KeyUsagePurpose::DigitalSignature => 0,
-										KeyUsagePurpose::ContentCommitment => 1,
-										KeyUsagePurpose::KeyEncipherment => 2,
-										KeyUsagePurpose::DataEncipherment => 3,
-										KeyUsagePurpose::KeyAgreement => 4,
-										KeyUsagePurpose::KeyCertSign => 5,
-										KeyUsagePurpose::CrlSign => 6,
-										KeyUsagePurpose::EncipherOnly => 7,
-										KeyUsagePurpose::DecipherOnly => 8,
-									};
+					// Write standard key usage
+					if !self.key_usages.is_empty() {
+						write_x509_extension(writer.next(), oid::KEY_USAGE, true, |writer| {
+							let mut bits: u16 = 0;
 
-									bits |= 1 << index;
+							for entry in self.key_usages.iter() {
+								// Map the index to a value
+								let index = match entry {
+									KeyUsagePurpose::DigitalSignature => 0,
+									KeyUsagePurpose::ContentCommitment => 1,
+									KeyUsagePurpose::KeyEncipherment => 2,
+									KeyUsagePurpose::DataEncipherment => 3,
+									KeyUsagePurpose::KeyAgreement => 4,
+									KeyUsagePurpose::KeyCertSign => 5,
+									KeyUsagePurpose::CrlSign => 6,
+									KeyUsagePurpose::EncipherOnly => 7,
+									KeyUsagePurpose::DecipherOnly => 8,
+								};
+
+								bits |= 1 << index;
+							}
+
+							// Compute the 1-based most significant bit
+							let msb = 16 - bits.leading_zeros();
+							let nb = if msb <= 8 { 1 } else { 2 };
+
+							let bits = bits.reverse_bits().to_be_bytes();
+
+							// Finally take only the bytes != 0
+							let bits = &bits[..nb];
+
+							writer.write_bitvec_bytes(bits, msb as usize)
+						});
+					}
+
+					// Write extended key usage
+					if !self.extended_key_usages.is_empty() {
+						write_x509_extension(writer.next(), oid::EXT_KEY_USAGE, false, |writer| {
+							writer.write_sequence(|writer| {
+								for usage in self.extended_key_usages.iter() {
+									let oid = ObjectIdentifier::from_slice(usage.oid());
+									writer.next().write_oid(&oid);
 								}
-
-								// Compute the 1-based most significant bit
-								let msb = 16 - bits.leading_zeros();
-								let nb = if msb <= 8 { 1 } else { 2 };
-
-								let bits = bits.reverse_bits().to_be_bytes();
-
-								// Finally take only the bytes != 0
-								let bits = &bits[..nb];
-
-								writer.write_bitvec_bytes(bits, msb as usize)
 							});
-						}
-
-						// Write extended key usage
-						if !self.extended_key_usages.is_empty() {
+						});
+					}
+					if let Some(name_constraints) = &self.name_constraints {
+						// If both trees are empty, the extension must be omitted.
+						if !name_constraints.is_empty() {
 							write_x509_extension(
 								writer.next(),
-								oid::EXT_KEY_USAGE,
-								false,
+								oid::NAME_CONSTRAINTS,
+								true,
 								|writer| {
 									writer.write_sequence(|writer| {
-										for usage in self.extended_key_usages.iter() {
-											let oid = ObjectIdentifier::from_slice(usage.oid());
-											writer.next().write_oid(&oid);
+										if !name_constraints.permitted_subtrees.is_empty() {
+											write_general_subtrees(
+												writer.next(),
+												0,
+												&name_constraints.permitted_subtrees,
+											);
+										}
+										if !name_constraints.excluded_subtrees.is_empty() {
+											write_general_subtrees(
+												writer.next(),
+												1,
+												&name_constraints.excluded_subtrees,
+											);
 										}
 									});
 								},
 							);
 						}
-						if let Some(name_constraints) = &self.name_constraints {
-							// If both trees are empty, the extension must be omitted.
-							if !name_constraints.is_empty() {
-								write_x509_extension(
-									writer.next(),
-									oid::NAME_CONSTRAINTS,
-									true,
-									|writer| {
-										writer.write_sequence(|writer| {
-											if !name_constraints.permitted_subtrees.is_empty() {
-												write_general_subtrees(
-													writer.next(),
-													0,
-													&name_constraints.permitted_subtrees,
-												);
-											}
-											if !name_constraints.excluded_subtrees.is_empty() {
-												write_general_subtrees(
-													writer.next(),
-													1,
-													&name_constraints.excluded_subtrees,
-												);
-											}
-										});
-									},
-								);
-							}
-						}
-						if !self.crl_distribution_points.is_empty() {
+					}
+					if !self.crl_distribution_points.is_empty() {
+						write_x509_extension(
+							writer.next(),
+							oid::CRL_DISTRIBUTION_POINTS,
+							false,
+							|writer| {
+								writer.write_sequence(|writer| {
+									for distribution_point in &self.crl_distribution_points {
+										distribution_point.write_der(writer.next());
+									}
+								})
+							},
+						);
+					}
+					match self.is_ca {
+						IsCa::Ca(ref constraint) => {
+							// Write subject_key_identifier
 							write_x509_extension(
 								writer.next(),
-								oid::CRL_DISTRIBUTION_POINTS,
+								oid::SUBJECT_KEY_IDENTIFIER,
 								false,
 								|writer| {
-									writer.write_sequence(|writer| {
-										for distribution_point in &self.crl_distribution_points {
-											distribution_point.write_der(writer.next());
-										}
-									})
+									writer.write_bytes(
+										&self.key_identifier_method.derive(pub_key_spki),
+									);
 								},
 							);
-						}
-						match self.is_ca {
-							IsCa::Ca(ref constraint) => {
-								// Write subject_key_identifier
-								write_x509_extension(
-									writer.next(),
-									oid::SUBJECT_KEY_IDENTIFIER,
-									false,
-									|writer| {
-										writer.write_bytes(
-											&self.key_identifier_method.derive(pub_key_spki),
-										);
-									},
-								);
-								// Write basic_constraints
-								write_x509_extension(
-									writer.next(),
-									oid::BASIC_CONSTRAINTS,
-									true,
-									|writer| {
-										writer.write_sequence(|writer| {
-											writer.next().write_bool(true); // cA flag
-											if let BasicConstraints::Constrained(
-												path_len_constraint,
-											) = constraint
-											{
-												writer.next().write_u8(*path_len_constraint);
-											}
-										});
-									},
-								);
-							},
-							IsCa::ExplicitNoCa => {
-								// Write subject_key_identifier
-								write_x509_extension(
-									writer.next(),
-									oid::SUBJECT_KEY_IDENTIFIER,
-									false,
-									|writer| {
-										writer.write_bytes(
-											&self.key_identifier_method.derive(pub_key_spki),
-										);
-									},
-								);
-								// Write basic_constraints
-								write_x509_extension(
-									writer.next(),
-									oid::BASIC_CONSTRAINTS,
-									true,
-									|writer| {
-										writer.write_sequence(|writer| {
-											writer.next().write_bool(false); // cA flag
-										});
-									},
-								);
-							},
-							IsCa::NoCa => {},
-						}
+							// Write basic_constraints
+							write_x509_extension(
+								writer.next(),
+								oid::BASIC_CONSTRAINTS,
+								true,
+								|writer| {
+									writer.write_sequence(|writer| {
+										writer.next().write_bool(true); // cA flag
+										if let BasicConstraints::Constrained(path_len_constraint) =
+											constraint
+										{
+											writer.next().write_u8(*path_len_constraint);
+										}
+									});
+								},
+							);
+						},
+						IsCa::ExplicitNoCa => {
+							// Write subject_key_identifier
+							write_x509_extension(
+								writer.next(),
+								oid::SUBJECT_KEY_IDENTIFIER,
+								false,
+								|writer| {
+									writer.write_bytes(
+										&self.key_identifier_method.derive(pub_key_spki),
+									);
+								},
+							);
+							// Write basic_constraints
+							write_x509_extension(
+								writer.next(),
+								oid::BASIC_CONSTRAINTS,
+								true,
+								|writer| {
+									writer.write_sequence(|writer| {
+										writer.next().write_bool(false); // cA flag
+									});
+								},
+							);
+						},
+						IsCa::NoCa => {},
+					}
 
-						// Write the custom extensions
-						for ext in &self.custom_extensions {
-							write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
-								writer.write_der(ext.content())
-							});
-						}
-					});
+					// Write the custom extensions
+					for ext in &self.custom_extensions {
+						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
+							writer.write_der(ext.content())
+						});
+					}
 				});
-			}
+			});
+
 			Ok(())
 		})?;
 
