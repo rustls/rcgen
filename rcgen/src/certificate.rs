@@ -6,7 +6,7 @@ use pem::Pem;
 use pki_types::{CertificateDer, CertificateSigningRequestDer};
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
 use yasna::models::ObjectIdentifier;
-use yasna::{DERWriter, DERWriterSeq, Tag};
+use yasna::{DERWriter, Tag};
 
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
@@ -480,14 +480,6 @@ impl CertificateParams {
 		&self,
 		subject_key: &KeyPair,
 	) -> Result<CertificateSigningRequest, Error> {
-		subject_key
-			.sign_der(|writer| self.write_request(subject_key, writer))
-			.map(|der| CertificateSigningRequest {
-				der: CertificateSigningRequestDer::from(der),
-			})
-	}
-
-	fn write_request(&self, pub_key: &KeyPair, writer: &mut DERWriterSeq) -> Result<(), Error> {
 		// No .. pattern, we use this to ensure every field is used
 		#[deny(unused)]
 		let Self {
@@ -523,40 +515,46 @@ impl CertificateParams {
 			return Err(Error::UnsupportedInCsr);
 		}
 
-		// Write version
-		writer.next().write_u8(0);
-		// Write subject name
-		write_distinguished_name(writer.next(), distinguished_name);
-		// Write subjectPublicKeyInfo
-		pub_key.serialize_public_key_der(writer.next());
-		// Write extensions
-		// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
-		writer.next().write_tagged(Tag::context(0), |writer| {
-			if !subject_alt_names.is_empty() || !custom_extensions.is_empty() {
-				writer.write_sequence(|writer| {
-					let oid = ObjectIdentifier::from_slice(oid::PKCS_9_AT_EXTENSION_REQUEST);
-					writer.next().write_oid(&oid);
-					writer.next().write_set(|writer| {
-						writer.next().write_sequence(|writer| {
-							// Write subject_alt_names
-							self.write_subject_alt_names(writer.next());
+		let der = subject_key.sign_der(|writer| {
+			// Write version
+			writer.next().write_u8(0);
+			// Write subject name
+			write_distinguished_name(writer.next(), distinguished_name);
+			// Write subjectPublicKeyInfo
+			subject_key.serialize_public_key_der(writer.next());
+			// Write extensions
+			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
+			writer.next().write_tagged(Tag::context(0), |writer| {
+				if !subject_alt_names.is_empty() || !custom_extensions.is_empty() {
+					writer.write_sequence(|writer| {
+						let oid = ObjectIdentifier::from_slice(oid::PKCS_9_AT_EXTENSION_REQUEST);
+						writer.next().write_oid(&oid);
+						writer.next().write_set(|writer| {
+							writer.next().write_sequence(|writer| {
+								// Write subject_alt_names
+								self.write_subject_alt_names(writer.next());
 
-							// Write custom extensions
-							for ext in custom_extensions {
-								write_x509_extension(
-									writer.next(),
-									&ext.oid,
-									ext.critical,
-									|writer| writer.write_der(ext.content()),
-								);
-							}
+								// Write custom extensions
+								for ext in custom_extensions {
+									write_x509_extension(
+										writer.next(),
+										&ext.oid,
+										ext.critical,
+										|writer| writer.write_der(ext.content()),
+									);
+								}
+							});
 						});
 					});
-				});
-			}
-		});
+				}
+			});
 
-		Ok(())
+			Ok(())
+		})?;
+
+		Ok(CertificateSigningRequest {
+			der: CertificateSigningRequestDer::from(der),
+		})
 	}
 	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
