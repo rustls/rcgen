@@ -401,14 +401,14 @@ impl RevokedCertParams {
 			if has_reason_code || has_invalidity_date {
 				writer.next().write_sequence(|writer| {
 					// Write reason code if present.
-					self.reason_code.map(|reason_code| {
+					if let Some(reason_code) = self.reason_code {
 						write_x509_extension(writer.next(), OID_CRL_REASONS, false, |writer| {
 							writer.write_enum(reason_code as i64);
 						});
-					});
+					}
 
 					// Write invalidity date if present.
-					self.invalidity_date.map(|invalidity_date| {
+					if let Some(invalidity_date) = self.invalidity_date {
 						write_x509_extension(
 							writer.next(),
 							OID_CRL_INVALIDITY_DATE,
@@ -417,7 +417,7 @@ impl RevokedCertParams {
 								write_dt_utc_or_generalized(writer, invalidity_date);
 							},
 						)
-					});
+					}
 				});
 			}
 		})
