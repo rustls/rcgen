@@ -755,7 +755,7 @@ mod tests {
 
 		#[test]
 		fn mismatch() {
-			let incorrect: Vec<u8> = (0..10).into_iter().collect();
+			let incorrect = Vec::from_iter(0..10);
 			let actual = ip_addr_from_octets(&incorrect).unwrap_err();
 
 			assert_eq!(Error::InvalidIpAddressOctetLength(10), actual);
@@ -770,7 +770,7 @@ mod tests {
 
 		#[test]
 		fn too_many() {
-			let incorrect: Vec<u8> = (0..20).into_iter().collect();
+			let incorrect = Vec::from_iter(0..20);
 			let actual = ip_addr_from_octets(&incorrect).unwrap_err();
 
 			assert_eq!(Error::InvalidIpAddressOctetLength(20), actual);
