@@ -1,9 +1,7 @@
 #![cfg(all(feature = "crypto", feature = "x509-parser"))]
 
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
-use rcgen::{
-	CertificateRevocationList, CertificateRevocationListParams, RevocationReason, RevokedCertParams,
-};
+use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams};
 use rcgen::{DnValue, KeyPair};
 use rcgen::{KeyUsagePurpose, SerialNumber};
 use time::{Duration, OffsetDateTime};
@@ -240,15 +238,12 @@ fn test_botan_crl_parse() {
 		}],
 		key_identifier_method: rcgen::KeyIdMethod::Sha256,
 	};
-	let crl = CertificateRevocationList::from_params(crl).unwrap();
 
-	// Serialize to both DER and PEM.
-	let crl_der = crl.serialize_der_with_signer(&issuer, &issuer_key).unwrap();
-	let crl_pem = crl.serialize_pem_with_signer(&issuer, &issuer_key).unwrap();
+	let crl = crl.signed_by(&issuer, &issuer_key).unwrap();
 
 	// We should be able to load the CRL in both serializations.
-	botan::CRL::load(crl_pem.as_ref()).unwrap();
-	let crl = botan::CRL::load(crl_der.as_ref()).unwrap();
+	botan::CRL::load(crl.pem().unwrap().as_ref()).unwrap();
+	let crl = botan::CRL::load(crl.der()).unwrap();
 
 	// We should find the EE cert revoked.
 	assert!(crl.is_revoked(&botan_ee).unwrap());

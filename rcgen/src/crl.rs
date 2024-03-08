@@ -1,5 +1,6 @@
 #[cfg(feature = "pem")]
 use pem::Pem;
+use pki_types::CertificateRevocationListDer;
 use time::OffsetDateTime;
 use yasna::DERWriter;
 use yasna::Tag;
@@ -59,42 +60,29 @@ use crate::{
 ///   key_identifier_method: KeyIdMethod::Sha256,
 ///   #[cfg(not(feature = "crypto"))]
 ///   key_identifier_method: KeyIdMethod::PreSpecified(vec![]),
-/// };
-/// let crl = CertificateRevocationList::from_params(crl).unwrap();
+/// }.signed_by(&issuer, &key_pair).unwrap();
 ///# }
 pub struct CertificateRevocationList {
 	params: CertificateRevocationListParams,
+	der: CertificateRevocationListDer<'static>,
 }
 
 impl CertificateRevocationList {
-	/// Generates a new certificate revocation list (CRL) from the given parameters.
-	pub fn from_params(params: CertificateRevocationListParams) -> Result<Self, Error> {
-		Ok(Self { params })
-	}
 	/// Returns the certificate revocation list (CRL) parameters.
 	pub fn params(&self) -> &CertificateRevocationListParams {
 		&self.params
 	}
-	/// Serializes the certificate revocation list (CRL) in binary DER format, signed with
-	/// the issuing certificate authority's key.
-	pub fn serialize_der_with_signer(
-		&self,
-		ca: &Certificate,
-		ca_key: &KeyPair,
-	) -> Result<Vec<u8>, Error> {
-		self.params.serialize_der_with_signer(ca, ca_key)
-	}
-	/// Serializes the certificate revocation list (CRL) in ASCII PEM format, signed with
-	/// the issuing certificate authority's key.
+
+	/// Get the CRL in PEM encoded format.
 	#[cfg(feature = "pem")]
-	pub fn serialize_pem_with_signer(
-		&self,
-		ca: &Certificate,
-		ca_key: &KeyPair,
-	) -> Result<String, Error> {
-		let contents = self.serialize_der_with_signer(ca, ca_key)?;
-		let p = Pem::new("X509 CRL", contents);
+	pub fn pem(&self) -> Result<String, Error> {
+		let p = Pem::new("X509 CRL", &*self.der);
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
+	}
+
+	/// Get the CRL in DER encoded format.
+	pub fn der(&self) -> &CertificateRevocationListDer<'static> {
+		&self.der
 	}
 }
 
@@ -186,11 +174,14 @@ pub struct CertificateRevocationListParams {
 }
 
 impl CertificateRevocationListParams {
-	fn serialize_der_with_signer(
-		&self,
+	/// Serializes the certificate revocation list (CRL).
+	///
+	/// Including a signature from the issuing certificate authority's key.
+	pub fn signed_by(
+		self,
 		issuer: &Certificate,
 		issuer_key: &KeyPair,
-	) -> Result<Vec<u8>, Error> {
+	) -> Result<CertificateRevocationList, Error> {
 		if self.next_update.le(&self.this_update) {
 			return Err(Error::InvalidCrlNextUpdate);
 		}
@@ -221,7 +212,12 @@ impl CertificateRevocationListParams {
 				Ok(())
 			})
 		})
+		.map(|der| CertificateRevocationList {
+			params: self,
+			der: der.into(),
+		})
 	}
+
 	fn write_crl(
 		&self,
 		writer: DERWriter,

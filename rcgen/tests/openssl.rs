@@ -387,19 +387,18 @@ fn test_openssl_separate_ca_name_constraints() {
 #[test]
 fn test_openssl_crl_parse() {
 	// Create a CRL with one revoked cert, and an issuer to sign the CRL.
-	let (crl, issuer, issuer_key) = util::test_crl();
+	let (crl, issuer) = util::test_crl();
 	let revoked_cert = crl.params().revoked_certs.first().unwrap();
 	let revoked_cert_serial = &revoked_cert.serial_number;
 
 	// Serialize the CRL signed by the issuer in both PEM and DER.
-	let crl_pem = crl.serialize_pem_with_signer(&issuer, &issuer_key).unwrap();
-	let crl_der = crl.serialize_der_with_signer(&issuer, &issuer_key).unwrap();
+	let crl_pem = crl.pem().unwrap();
 
 	// We should be able to parse the PEM form without error.
 	assert!(X509Crl::from_pem(crl_pem.as_bytes()).is_ok());
 
 	// We should also be able to parse the DER form without error.
-	let openssl_crl = X509Crl::from_der(&crl_der).expect("failed to parse CRL DER");
+	let openssl_crl = X509Crl::from_der(crl.der()).expect("failed to parse CRL DER");
 
 	// The properties of the CRL should match expected.
 	let openssl_issuer = X509::from_der(issuer.der()).unwrap();
