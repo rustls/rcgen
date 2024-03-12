@@ -1,5 +1,7 @@
 #[cfg(feature = "pem")]
 use pem::Pem;
+#[cfg(feature = "crypto")]
+use pki_types::PrivatePkcs8KeyDer;
 use std::fmt;
 use yasna::DERWriter;
 
@@ -158,8 +160,14 @@ impl KeyPair {
 	/// Parses the key pair from the DER format
 	///
 	/// Equivalent to using the [`TryFrom`] implementation.
+	///
+	/// You can use [`rustls_pemfile::private_key`] to get the `der` input. If
+	/// you have already a byte slice, just calling `into()` and taking a reference
+	/// will convert it to a [`PrivatePkcs8KeyDer`].
+	///
+	/// [`rustls_pemfile::private_key`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.private_key.html
 	#[cfg(feature = "crypto")]
-	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
+	pub fn from_der(der: &PrivatePkcs8KeyDer<'_>) -> Result<Self, Error> {
 		der.try_into()
 	}
 
@@ -169,11 +177,15 @@ impl KeyPair {
 	}
 
 	/// Parses the key pair from the ASCII PEM format
+	///
+	/// The key must be a DER-encoded plaintext private key; as specified in PKCS #8/RFC 5958;
+	///
+	/// Appears as "PRIVATE KEY" in PEM files.
 	#[cfg(all(feature = "pem", feature = "crypto"))]
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)._err()?;
 		let private_key_der: &[_] = private_key.contents();
-		private_key_der.try_into()
+		Self::from_der(&private_key_der.into())
 	}
 
 	/// Obtains the key pair from a raw public key and a remote private key
@@ -188,6 +200,9 @@ impl KeyPair {
 	/// Obtains the key pair from a DER formatted key
 	/// using the specified [`SignatureAlgorithm`]
 	///
+	/// The key must be a DER-encoded plaintext private key; as specified in PKCS #8/RFC 5958;
+	///
+	/// Appears as "PRIVATE KEY" in PEM files
 	/// Same as [from_pem_and_sign_algo](Self::from_pem_and_sign_algo).
 	#[cfg(all(feature = "pem", feature = "crypto"))]
 	pub fn from_pem_and_sign_algo(
@@ -196,7 +211,7 @@ impl KeyPair {
 	) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)._err()?;
 		let private_key_der: &[_] = private_key.contents();
-		Self::from_der_and_sign_algo(private_key_der, alg)
+		Self::from_der_and_sign_algo(&PrivatePkcs8KeyDer::from(private_key_der), alg)
 	}
 
 	/// Obtains the key pair from a DER formatted key
@@ -208,39 +223,45 @@ impl KeyPair {
 	/// key pair. However, sometimes multiple signature algorithms fit for the
 	/// same der key. In that instance, you can use this function to precisely
 	/// specify the `SignatureAlgorithm`.
+	///
+	/// You can use [`rustls_pemfile::private_key`] to get the `pkcs8` input. If
+	/// you have already a byte slice, just calling `into()` and taking a reference
+	/// will convert it to a [`PrivatePkcs8KeyDer`].
+	///
+	/// [`rustls_pemfile::private_key`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.private_key.html
 	#[cfg(feature = "crypto")]
 	pub fn from_der_and_sign_algo(
-		pkcs8: &[u8],
+		pkcs8: &PrivatePkcs8KeyDer<'_>,
 		alg: &'static SignatureAlgorithm,
 	) -> Result<Self, Error> {
 		let rng = &SystemRandom::new();
-		let pkcs8_vec = pkcs8.to_vec();
+		let serialized_der = pkcs8.secret_pkcs8_der().to_vec();
 
 		let kind = if alg == &PKCS_ED25519 {
-			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)._err()?)
+			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(&serialized_der)._err()?)
 		} else if alg == &PKCS_ECDSA_P256_SHA256 {
 			KeyPairKind::Ec(ecdsa_from_pkcs8(
 				&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-				pkcs8,
+				&serialized_der,
 				rng,
 			)?)
 		} else if alg == &PKCS_ECDSA_P384_SHA384 {
 			KeyPairKind::Ec(ecdsa_from_pkcs8(
 				&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
-				pkcs8,
+				&serialized_der,
 				rng,
 			)?)
 		} else if alg == &PKCS_RSA_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
+			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
 		} else if alg == &PKCS_RSA_SHA384 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
+			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
 		} else if alg == &PKCS_RSA_SHA512 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
+			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
 		} else if alg == &PKCS_RSA_PSS_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
+			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
 			panic!("Unknown SignatureAlgorithm specified!");
@@ -249,14 +270,22 @@ impl KeyPair {
 		Ok(KeyPair {
 			kind,
 			alg,
-			serialized_der: pkcs8_vec,
+			serialized_der,
 		})
 	}
 
+	/// Parses the key pair from the DER format
+	///
+	/// You can use [`rustls_pemfile::private_key`] to get the `pkcs8` input. If
+	/// you have already a byte slice, just calling `into()` and taking a reference
+	/// will convert it to a [`PrivatePkcs8KeyDer`].
+	///
+	/// [`rustls_pemfile::private_key`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.private_key.html
 	#[cfg(feature = "crypto")]
 	pub(crate) fn from_raw(
-		pkcs8: &[u8],
+		pkcs8: &PrivatePkcs8KeyDer,
 	) -> Result<(KeyPairKind, &'static SignatureAlgorithm), Error> {
+		let pkcs8 = pkcs8.secret_pkcs8_der();
 		let rng = SystemRandom::new();
 		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
 			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
@@ -399,7 +428,7 @@ impl TryFrom<&[u8]> for KeyPair {
 	type Error = Error;
 
 	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, Error> {
-		let (kind, alg) = KeyPair::from_raw(pkcs8)?;
+		let (kind, alg) = KeyPair::from_raw(&pkcs8.into())?;
 		Ok(KeyPair {
 			kind,
 			alg,
@@ -413,11 +442,25 @@ impl TryFrom<Vec<u8>> for KeyPair {
 	type Error = Error;
 
 	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, Error> {
-		let (kind, alg) = KeyPair::from_raw(pkcs8.as_slice())?;
+		let (kind, alg) = KeyPair::from_raw(&pkcs8.as_slice().into())?;
 		Ok(KeyPair {
 			kind,
 			alg,
 			serialized_der: pkcs8,
+		})
+	}
+}
+
+#[cfg(feature = "crypto")]
+impl TryFrom<&PrivatePkcs8KeyDer<'_>> for KeyPair {
+	type Error = Error;
+
+	fn try_from(pkcs8: &PrivatePkcs8KeyDer) -> Result<KeyPair, Error> {
+		let (kind, alg) = KeyPair::from_raw(pkcs8)?;
+		Ok(KeyPair {
+			kind,
+			alg,
+			serialized_der: pkcs8.secret_pkcs8_der().into(),
 		})
 	}
 }

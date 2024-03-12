@@ -986,6 +986,7 @@ dependencies = [
  "rand",
  "rcgen",
  "ring",
+ "rustls-pki-types",
  "x509-parser",
 ]
 

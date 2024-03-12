@@ -54,7 +54,7 @@ fn sign_msg_rsa(key_pair: &KeyPair, msg: &[u8], encoding: &'static dyn RsaEncodi
 }
 
 fn check_cert<'a, 'b>(
-	cert_der: &[u8],
+	cert_der: &CertificateDer<'_>,
 	cert: &'a Certificate,
 	cert_key: &'a KeyPair,
 	alg: &dyn SignatureVerificationAlgorithm,
@@ -68,18 +68,16 @@ fn check_cert<'a, 'b>(
 }
 
 fn check_cert_ca<'a, 'b>(
-	cert_der: &[u8],
+	cert_der: &CertificateDer<'_>,
 	cert_key: &'a KeyPair,
-	ca_der: &[u8],
+	ca_der: &CertificateDer<'_>,
 	cert_alg: &dyn SignatureVerificationAlgorithm,
 	ca_alg: &dyn SignatureVerificationAlgorithm,
 	sign_fn: impl FnOnce(&'a KeyPair, &'b [u8]) -> Vec<u8>,
 ) {
-	let ca_der = CertificateDer::from(ca_der);
-	let trust_anchor = anchor_from_trusted_cert(&ca_der).unwrap();
+	let trust_anchor = anchor_from_trusted_cert(ca_der).unwrap();
 	let trust_anchor_list = &[trust_anchor];
-	let cert_der = CertificateDer::from(cert_der);
-	let end_entity_cert = EndEntityCert::try_from(&cert_der).unwrap();
+	let end_entity_cert = EndEntityCert::try_from(cert_der).unwrap();
 
 	// Set time to Jan 10, 2004
 	let time = UnixTime::since_unix_epoch(StdDuration::from_secs(0x40_00_00_00));
@@ -592,11 +590,9 @@ fn test_webpki_crl_revoke() {
 	let ee = ee.signed_by(&ee_key, &issuer, &issuer_key).unwrap();
 
 	// Set up webpki's verification requirements.
-	let ca_der = CertificateDer::from(issuer.der());
-	let trust_anchor = anchor_from_trusted_cert(&ca_der).unwrap();
+	let trust_anchor = anchor_from_trusted_cert(issuer.der()).unwrap();
 	let trust_anchor_list = &[trust_anchor];
-	let ee_der = CertificateDer::from(ee.der());
-	let end_entity_cert = EndEntityCert::try_from(&ee_der).unwrap();
+	let end_entity_cert = EndEntityCert::try_from(ee.der()).unwrap();
 	let unix_time = 0x40_00_00_00;
 	let time = UnixTime::since_unix_epoch(StdDuration::from_secs(unix_time));
 

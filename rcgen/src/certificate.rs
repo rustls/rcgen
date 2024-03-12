@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 #[cfg(feature = "pem")]
 use pem::Pem;
+use pki_types::{CertificateDer, CertificateSigningRequestDer};
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
@@ -23,7 +24,7 @@ use crate::{
 pub struct Certificate {
 	pub(crate) params: CertificateParams,
 	pub(crate) subject_public_key_info: Vec<u8>,
-	pub(crate) der: Vec<u8>,
+	pub(crate) der: CertificateDer<'static>,
 }
 
 impl Certificate {
@@ -39,13 +40,16 @@ impl Certificate {
 			.derive(&self.subject_public_key_info)
 	}
 	/// Get the certificate in DER encoded format.
-	pub fn der(&self) -> &[u8] {
+	///
+	/// As the return type implements `Deref<Target = [u8]>`, in can easily be saved
+	/// to a file like a byte slice.
+	pub fn der(&self) -> &CertificateDer<'static> {
 		&self.der
 	}
 	/// Get the certificate in PEM encoded format.
 	#[cfg(feature = "pem")]
 	pub fn pem(&self) -> String {
-		pem::encode_config(&Pem::new("CERTIFICATE", self.der()), ENCODE_CONFIG)
+		pem::encode_config(&Pem::new("CERTIFICATE", self.der().to_vec()), ENCODE_CONFIG)
 	}
 	/// Generate and serialize a certificate signing request (CSR) in binary DER format.
 	///
@@ -57,7 +61,13 @@ impl Certificate {
 	/// should not call `serialize_request_der` and then `serialize_request_pem`. This will
 	/// result in two different CSRs. Instead call only `serialize_request_pem` and base64
 	/// decode the inner content to get the DER encoded CSR using a library like `pem`.
-	pub fn serialize_request_der(&self, subject_key: &KeyPair) -> Result<Vec<u8>, Error> {
+	///
+	/// As the return type implements `Deref<Target = [u8]>`, in can easily be saved
+	/// to a file like a byte slice.
+	pub fn serialize_request_der(
+		&self,
+		subject_key: &KeyPair,
+	) -> Result<CertificateSigningRequestDer<'static>, Error> {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 				let cert_data = yasna::try_construct_der(|writer| {
@@ -74,6 +84,7 @@ impl Certificate {
 				Ok(())
 			})
 		})
+		.map(CertificateSigningRequestDer::from)
 	}
 	/// Generate and serialize a certificate signing request (CSR) in binary DER format.
 	///
@@ -88,7 +99,7 @@ impl Certificate {
 	#[cfg(feature = "pem")]
 	pub fn serialize_request_pem(&self, subject_key: &KeyPair) -> Result<String, Error> {
 		let contents = self.serialize_request_der(subject_key)?;
-		let p = Pem::new("CERTIFICATE REQUEST", contents);
+		let p = Pem::new("CERTIFICATE REQUEST", contents.to_vec());
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}
 }
@@ -218,7 +229,7 @@ impl CertificateParams {
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
 	pub fn from_ca_cert_pem(pem_str: &str) -> Result<Self, Error> {
 		let certificate = pem::parse(pem_str).or(Err(Error::CouldNotParseCertificate))?;
-		Self::from_ca_cert_der(certificate.contents())
+		Self::from_ca_cert_der(&certificate.contents().into())
 	}
 
 	/// Parses an existing ca certificate from the DER format.
@@ -236,8 +247,14 @@ impl CertificateParams {
 	/// This function assumes the provided certificate is a CA. It will not check
 	/// for the presence of the `BasicConstraints` extension, or perform any other
 	/// validation.
+	///
+	/// You can use [`rustls_pemfile::certs`] to get the `ca_cert` input. If
+	/// you have already a byte slice, just calling `into()` and taking a reference
+	/// will convert it to [`CertificateDer`].
+	///
+	/// [`rustls_pemfile::certs`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.certs.html
 	#[cfg(feature = "x509-parser")]
-	pub fn from_ca_cert_der(ca_cert: &[u8]) -> Result<Self, Error> {
+	pub fn from_ca_cert_der(ca_cert: &CertificateDer<'_>) -> Result<Self, Error> {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
 			.or(Err(Error::CouldNotParseCertificate))?;
 
@@ -802,12 +819,17 @@ impl CertificateParams {
 			Ok(())
 		})
 	}
+
+	/// Generate and serialize a certificate signed by the given issuer.
+	///
+	/// As the return type implements `Deref<Target = [u8]>`, in can easily be saved
+	/// to a file like a byte slice.
 	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
 		issuer: &KeyPair,
 		issuer_name: &DistinguishedName,
-	) -> Result<Vec<u8>, Error> {
+	) -> Result<CertificateDer<'static>, Error> {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 				let tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
@@ -826,6 +848,7 @@ impl CertificateParams {
 				Ok(())
 			})
 		})
+		.map(CertificateDer::from)
 	}
 }
 

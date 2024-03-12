@@ -1,3 +1,6 @@
+#[cfg(feature = "x509-parser")]
+use pki_types::CertificateSigningRequestDer;
+
 use std::hash::Hash;
 
 use crate::{Certificate, CertificateParams, Error, KeyPair, PublicKeyData, SignatureAlgorithm};
@@ -36,15 +39,21 @@ impl CertificateSigningRequestParams {
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
 		let csr = pem::parse(pem_str).or(Err(Error::CouldNotParseCertificationRequest))?;
-		Self::from_der(csr.contents())
+		Self::from_der(&csr.contents().into())
 	}
 
 	/// Parse a certificate signing request from DER-encoded bytes
 	///
 	/// Currently, this only supports the `Subject Alternative Name` extension.
 	/// On encountering other extensions, this function will return an error.
+	///
+	/// You can use [`rustls_pemfile::csr`] to get the `csr` input. If
+	/// you have already a byte slice, just calling `into()` and taking a reference
+	/// will convert it to [`CertificateSigningRequestDer`].
+	///
+	/// [`rustls_pemfile::csr`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.csr.html
 	#[cfg(feature = "x509-parser")]
-	pub fn from_der(csr: &[u8]) -> Result<Self, Error> {
+	pub fn from_der(csr: &CertificateSigningRequestDer<'_>) -> Result<Self, Error> {
 		use x509_parser::prelude::FromDer;
 		let csr = x509_parser::certification_request::X509CertificationRequest::from_der(csr)
 			.map_err(|_| Error::CouldNotParseCertificationRequest)?

@@ -10,6 +10,7 @@ keywords.workspace = true
 rcgen = { path = "../rcgen", default-features = false, features = ["pem", "ring"] }
 bpaf = { version = "0.9.5", features = ["derive"] }
 pem = { workspace = true }
+pki-types = { workspace = true }
 ring = { workspace = true }
 rand = { workspace = true }
 anyhow = "1.0.75"
