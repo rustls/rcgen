@@ -214,6 +214,18 @@ fn test_openssl_384() {
 }
 
 #[test]
+#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+fn test_openssl_521() {
+	let (params, _) = util::default_params();
+	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P521_SHA512).unwrap();
+	let cert = params.self_signed(&key_pair).unwrap();
+
+	// Now verify the certificate.
+	verify_cert(&cert, &key_pair);
+	verify_csr(&cert, &key_pair);
+}
+
+#[test]
 fn test_openssl_25519() {
 	let (params, _) = util::default_params();
 	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ED25519).unwrap();

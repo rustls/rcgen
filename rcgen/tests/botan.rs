@@ -76,6 +76,17 @@ fn test_botan_384() {
 }
 
 #[test]
+#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+fn test_botan_521() {
+	let (params, _) = default_params();
+	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P521_SHA512).unwrap();
+	let cert = params.self_signed(&key_pair).unwrap();
+
+	// Now verify the certificate.
+	check_cert(cert.der(), &cert);
+}
+
+#[test]
 fn test_botan_25519() {
 	let (params, _) = default_params();
 	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ED25519).unwrap();
