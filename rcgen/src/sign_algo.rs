@@ -56,6 +56,11 @@ impl fmt::Debug for SignatureAlgorithm {
 		} else if self == &PKCS_ED25519 {
 			write!(f, "PKCS_ED25519")
 		} else {
+			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+			if self == &PKCS_ECDSA_P521_SHA512 {
+				return write!(f, "PKCS_ECDSA_P521_SHA512");
+			}
+
 			write!(f, "Unknown")
 		}
 	}
@@ -86,6 +91,8 @@ impl SignatureAlgorithm {
 			//&PKCS_RSA_PSS_SHA256,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
+			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+			&PKCS_ECDSA_P521_SHA512,
 			&PKCS_ED25519,
 		];
 		ALGORITHMS.iter()
@@ -178,8 +185,17 @@ pub(crate) mod algo {
 		oid_components: &[1, 2, 840, 10045, 4, 3, 3],
 		params: SignatureAlgorithmParams::None,
 	};
-
-	// TODO PKCS_ECDSA_P521_SHA512 https://github.com/briansmith/ring/issues/824
+	/// ECDSA signing using the P-521 curves and SHA-512 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+	/// Currently this is only supported with the `aws_lc_rs` feature
+	#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+	pub static PKCS_ECDSA_P521_SHA512: SignatureAlgorithm = SignatureAlgorithm {
+		oids_sign_alg: &[&EC_PUBLIC_KEY, &EC_SECP_521_R1],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P521_SHA512_ASN1_SIGNING),
+		// ecdsa-with-SHA512 in RFC 5758
+		oid_components: &[1, 2, 840, 10045, 4, 3, 4],
+		params: SignatureAlgorithmParams::None,
+	};
 
 	/// ED25519 curve signing as per [RFC 8410](https://tools.ietf.org/html/rfc8410)
 	pub static PKCS_ED25519: SignatureAlgorithm = SignatureAlgorithm {

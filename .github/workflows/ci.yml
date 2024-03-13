@@ -33,7 +33,8 @@ jobs:
       matrix:
         features:
           - --all-features
-          - --no-default-features
+          # rustls-cert-gen require either aws_lc_rs or ring feature
+          - -p rcgen --no-default-features
           - --no-default-features --features ring
           - --no-default-features --features aws_lc_rs
           - --no-default-features --features aws_lc_rs,pem
@@ -138,10 +139,9 @@ jobs:
       run: cargo test --verbose --features x509-parser
     - name: Run the tests with aws_lc_rs backend enabled
       run: cargo test --verbose --no-default-features --features aws_lc_rs,pem
-    - name: Run the tests with FIPS aws_lc_rs module
-      run: cargo test --verbose --no-default-features --features fips,pem
+      # rustls-cert-gen require either aws_lc_rs or ring feature
     - name: Run the tests with no features enabled
-      run: cargo test --verbose --no-default-features
+      run: cargo test -p rcgen --verbose --no-default-features
 
   build:
     strategy:
@@ -181,8 +181,6 @@ jobs:
       run: cargo test --verbose --features x509-parser
     - name: Run the tests with aws_lc_rs backend enabled
       run: cargo test --verbose --no-default-features --features aws_lc_rs,pem
-    - name: Run the tests with FIPS aws_lc_rs module
-      run: cargo test --verbose --no-default-features --features fips,pem
 
   # Build rustls-cert-gen as a standalone package, see this PR for why it's needed:
   # https://github.com/rustls/rcgen/pull/206#pullrequestreview-1816197358

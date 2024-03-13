@@ -3,6 +3,7 @@ members = ["rcgen", "rustls-cert-gen"]
 resolver = "2"
 
 [workspace.dependencies]
+aws-lc-rs = "1.6.0"
 pem = "3.0.2"
 pki-types = { package = "rustls-pki-types", version = "1.3.0" }
 rand = "0.8"
