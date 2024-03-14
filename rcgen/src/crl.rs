@@ -69,9 +69,6 @@ pub struct CertificateRevocationList {
 impl CertificateRevocationList {
 	/// Generates a new certificate revocation list (CRL) from the given parameters.
 	pub fn from_params(params: CertificateRevocationListParams) -> Result<Self, Error> {
-		if params.next_update.le(&params.this_update) {
-			return Err(Error::InvalidCrlNextUpdate);
-		}
 		Ok(Self { params })
 	}
 	/// Returns the certificate revocation list (CRL) parameters.
@@ -85,11 +82,16 @@ impl CertificateRevocationList {
 		ca: &Certificate,
 		ca_key: &KeyPair,
 	) -> Result<Vec<u8>, Error> {
+		if self.params.next_update.le(&self.params.this_update) {
+			return Err(Error::InvalidCrlNextUpdate);
+		}
+
 		if !ca.params.key_usages.is_empty()
 			&& !ca.params.key_usages.contains(&KeyUsagePurpose::CrlSign)
 		{
 			return Err(Error::IssuerNotCrlSigner);
 		}
+
 		self.params
 			.serialize_der_with_signer(ca_key, &ca.params.distinguished_name)
 	}
