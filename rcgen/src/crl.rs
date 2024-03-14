@@ -82,18 +82,7 @@ impl CertificateRevocationList {
 		ca: &Certificate,
 		ca_key: &KeyPair,
 	) -> Result<Vec<u8>, Error> {
-		if self.params.next_update.le(&self.params.this_update) {
-			return Err(Error::InvalidCrlNextUpdate);
-		}
-
-		if !ca.params.key_usages.is_empty()
-			&& !ca.params.key_usages.contains(&KeyUsagePurpose::CrlSign)
-		{
-			return Err(Error::IssuerNotCrlSigner);
-		}
-
-		self.params
-			.serialize_der_with_signer(ca_key, &ca.params.distinguished_name)
+		self.params.serialize_der_with_signer(ca, ca_key)
 	}
 	/// Serializes the certificate revocation list (CRL) in ASCII PEM format, signed with
 	/// the issuing certificate authority's key.
@@ -199,14 +188,24 @@ pub struct CertificateRevocationListParams {
 impl CertificateRevocationListParams {
 	fn serialize_der_with_signer(
 		&self,
-		issuer: &KeyPair,
-		issuer_name: &DistinguishedName,
+		issuer: &Certificate,
+		issuer_key: &KeyPair,
 	) -> Result<Vec<u8>, Error> {
+		if self.next_update.le(&self.this_update) {
+			return Err(Error::InvalidCrlNextUpdate);
+		}
+
+		if !issuer.params.key_usages.is_empty()
+			&& !issuer.params.key_usages.contains(&KeyUsagePurpose::CrlSign)
+		{
+			return Err(Error::IssuerNotCrlSigner);
+		}
+
 		yasna::try_construct_der(|writer| {
 			// https://www.rfc-editor.org/rfc/rfc5280#section-5.1
 			writer.write_sequence(|writer| {
 				let tbs_cert_list_serialized = yasna::try_construct_der(|writer| {
-					self.write_crl(writer, issuer, issuer_name)?;
+					self.write_crl(writer, issuer_key, &issuer.params.distinguished_name)?;
 					Ok::<(), Error>(())
 				})?;
 
@@ -214,10 +213,10 @@ impl CertificateRevocationListParams {
 				writer.next().write_der(&tbs_cert_list_serialized);
 
 				// Write signatureAlgorithm
-				issuer.alg.write_alg_ident(writer.next());
+				issuer_key.alg.write_alg_ident(writer.next());
 
 				// Write signature
-				issuer.sign(&tbs_cert_list_serialized, writer.next())?;
+				issuer_key.sign(&tbs_cert_list_serialized, writer.next())?;
 
 				Ok(())
 			})
