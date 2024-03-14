@@ -40,7 +40,7 @@ use crate::{
 /// let remote_key_pair = MyKeyPair { public_key: vec![] };
 /// #[cfg(not(feature = "crypto"))]
 /// let key_pair = KeyPair::from_remote(Box::new(remote_key_pair)).unwrap();
-/// let issuer = Certificate::generate_self_signed(issuer_params, &key_pair).unwrap();
+/// let issuer = issuer_params.self_signed(&key_pair).unwrap();
 /// // Describe a revoked certificate.
 /// let revoked_cert = RevokedCertParams{
 ///   serial_number: SerialNumber::from(9999),
