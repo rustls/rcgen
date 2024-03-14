@@ -470,8 +470,11 @@ impl TryFrom<&PrivatePkcs8KeyDer<'_>> for KeyPair {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum RsaKeySize {
+	/// 2048 bits
 	_2048,
+	/// 3072 bits
 	_3072,
+	/// 4096 bits
 	_4096,
 }
 
