@@ -133,15 +133,15 @@ jobs:
     - name: Run cargo check
       run: cargo check --all-targets
     - name: Run the tests
-      run: cargo test --all-targets
+      run: cargo test
     - name: Run the tests with x509-parser enabled
-      run: cargo test --verbose --features x509-parser --all-targets
+      run: cargo test --verbose --features x509-parser
     - name: Run the tests with aws_lc_rs backend enabled
-      run: cargo test --verbose --no-default-features --features aws_lc_rs,pem --all-targets
+      run: cargo test --verbose --no-default-features --features aws_lc_rs,pem
     - name: Run the tests with FIPS aws_lc_rs module
-      run: cargo test --verbose --no-default-features --features fips,pem --all-targets
+      run: cargo test --verbose --no-default-features --features fips,pem
     - name: Run the tests with no features enabled
-      run: cargo test --verbose --no-default-features --all-targets
+      run: cargo test --verbose --no-default-features
 
   build:
     strategy:
@@ -176,13 +176,13 @@ jobs:
     - name: Run cargo check
       run: cargo check --all-targets
     - name: Run the tests
-      run: cargo test --all-targets
+      run: cargo test
     - name: Run the tests with x509-parser enabled
-      run: cargo test --verbose --features x509-parser --all-targets
+      run: cargo test --verbose --features x509-parser
     - name: Run the tests with aws_lc_rs backend enabled
-      run: cargo test --verbose --no-default-features --features aws_lc_rs,pem --all-targets
+      run: cargo test --verbose --no-default-features --features aws_lc_rs,pem
     - name: Run the tests with FIPS aws_lc_rs module
-      run: cargo test --verbose --no-default-features --features fips,pem --all-targets
+      run: cargo test --verbose --no-default-features --features fips,pem
 
   # Build rustls-cert-gen as a standalone package, see this PR for why it's needed:
   # https://github.com/rustls/rcgen/pull/206#pullrequestreview-1816197358
