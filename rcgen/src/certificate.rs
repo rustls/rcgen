@@ -42,8 +42,8 @@ impl Certificate {
 	}
 	/// Get the certificate in DER encoded format.
 	///
-	/// As the return type implements `Deref<Target = [u8]>`, in can easily be saved
-	/// to a file like a byte slice.
+	/// [`CertificateDer`] implements `Deref<Target = [u8]>` and `AsRef<[u8]>`, so you can easily
+	/// extract the DER bytes from the return value.
 	pub fn der(&self) -> &CertificateDer<'static> {
 		&self.der
 	}

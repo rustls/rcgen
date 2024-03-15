@@ -81,6 +81,9 @@ impl CertificateRevocationList {
 	}
 
 	/// Get the CRL in DER encoded format.
+	///
+	/// [`CertificateRevocationListDer`] implements `Deref<Target = [u8]>` and `AsRef<[u8]>`,
+	/// so you can easily extract the DER bytes from the return value.
 	pub fn der(&self) -> &CertificateRevocationListDer<'static> {
 		&self.der
 	}

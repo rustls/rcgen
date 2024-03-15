@@ -40,6 +40,9 @@ impl CertificateSigningRequest {
 	}
 
 	/// Get the DER-encoded bytes of the certificate signing request.
+	///
+	/// [`CertificateSigningRequestDer`] implements `Deref<Target = [u8]>` and `AsRef<[u8]>`,
+	/// so you can easily extract the DER bytes from the return value.
 	pub fn der(&self) -> &CertificateSigningRequestDer<'static> {
 		&self.der
 	}
