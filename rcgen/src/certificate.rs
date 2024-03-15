@@ -198,11 +198,11 @@ impl CertificateParams {
 	/// for the presence of the `BasicConstraints` extension, or perform any other
 	/// validation.
 	///
-	/// You can use [`rustls_pemfile::certs`] to get the `ca_cert` input. If
-	/// you have already a byte slice, just calling `into()` and taking a reference
-	/// will convert it to [`CertificateDer`].
+	/// [`rustls_pemfile::certs()`] is often used to obtain a [`CertificateDer`] from PEM input.
+	/// If you already have a byte slice containing DER, it can trivially be converted into
+	/// [`CertificateDer`] using the [`Into`] trait.
 	///
-	/// [`rustls_pemfile::certs`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.certs.html
+	/// [`rustls_pemfile::certs()`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.certs.html
 	#[cfg(feature = "x509-parser")]
 	pub fn from_ca_cert_der(ca_cert: &CertificateDer<'_>) -> Result<Self, Error> {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)

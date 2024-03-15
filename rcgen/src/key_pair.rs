@@ -202,16 +202,18 @@ impl KeyPair {
 
 	/// Obtains the key pair from a DER formatted key using the specified [`SignatureAlgorithm`]
 	///
-	/// You can use [`rustls_pemfile::private_key`] to get the `pkcs8` input. If
-	/// you have already a byte slice, just calling `into()` and taking a reference
-	/// will convert it to a [`PrivatePkcs8KeyDer`].
-	///
 	/// If you have a [`PrivatePkcs8KeyDer`], you can usually rely on the [`TryFrom`] implementation
 	/// to obtain a [`KeyPair`] -- it will determine the correct [`SignatureAlgorithm`] for you.
 	/// However, sometimes multiple signature algorithms fit for the same DER key. In those instances,
 	/// you can use this function to precisely specify the `SignatureAlgorithm`.
 	///
-	/// [`rustls_pemfile::private_key`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.private_key.html
+	/// [`rustls_pemfile::private_key()`] is often used to obtain a [`PrivateKeyDer`] from PEM
+	/// input. If the obtained [`PrivateKeyDer`] is a `Pkcs8` variant, you can use its contents
+	/// as input for this function. Alternatively, if you already have a byte slice containing DER,
+	/// it can trivially be converted into [`PrivatePkcs8KeyDer`] using the [`Into`] trait.
+	///
+	/// [`rustls_pemfile::private_key()`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.private_key.html
+	/// [`PrivateKeyDer`]: https://docs.rs/rustls-pki-types/latest/rustls_pki_types/enum.PrivateKeyDer.html
 	#[cfg(feature = "crypto")]
 	pub fn from_der_and_sign_algo(
 		pkcs8: &PrivatePkcs8KeyDer<'_>,
@@ -259,11 +261,13 @@ impl KeyPair {
 
 	/// Parses the key pair from the DER format
 	///
-	/// You can use [`rustls_pemfile::private_key`] to get the `pkcs8` input. If
-	/// you have already a byte slice, just calling `into()` and taking a reference
-	/// will convert it to a [`PrivatePkcs8KeyDer`].
+	/// [`rustls_pemfile::private_key()`] is often used to obtain a [`PrivateKeyDer`] from PEM
+	/// input. If the obtained [`PrivateKeyDer`] is a `Pkcs8` variant, you can use its contents
+	/// as input for this function. Alternatively, if you already have a byte slice containing DER,
+	/// it can trivially be converted into [`PrivatePkcs8KeyDer`] using the [`Into`] trait.
 	///
-	/// [`rustls_pemfile::private_key`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.private_key.html
+	/// [`rustls_pemfile::private_key()`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.private_key.html
+	/// [`PrivateKeyDer`]: https://docs.rs/rustls-pki-types/latest/rustls_pki_types/enum.PrivateKeyDer.html
 	#[cfg(feature = "crypto")]
 	pub(crate) fn from_raw(
 		pkcs8: &PrivatePkcs8KeyDer,
