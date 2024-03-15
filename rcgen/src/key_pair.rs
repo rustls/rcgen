@@ -158,20 +158,6 @@ impl KeyPair {
 		})
 	}
 
-	/// Parses the key pair from the DER format
-	///
-	/// Equivalent to using the [`TryFrom`] implementation.
-	///
-	/// You can use [`rustls_pemfile::private_key`] to get the `der` input. If
-	/// you have already a byte slice, just calling `into()` and taking a reference
-	/// will convert it to a [`PrivatePkcs8KeyDer`].
-	///
-	/// [`rustls_pemfile::private_key`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.private_key.html
-	#[cfg(feature = "crypto")]
-	pub fn from_der(der: &PrivatePkcs8KeyDer<'_>) -> Result<Self, Error> {
-		der.try_into()
-	}
-
 	/// Returns the key pair's signature algorithm
 	pub fn algorithm(&self) -> &'static SignatureAlgorithm {
 		self.alg
@@ -185,8 +171,7 @@ impl KeyPair {
 	#[cfg(all(feature = "pem", feature = "crypto"))]
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)._err()?;
-		let private_key_der: &[_] = private_key.contents();
-		Self::from_der(&private_key_der.into())
+		Self::try_from(&PrivatePkcs8KeyDer::from(private_key.contents()))
 	}
 
 	/// Obtains the key pair from a raw public key and a remote private key
@@ -215,19 +200,16 @@ impl KeyPair {
 		Self::from_der_and_sign_algo(&PrivatePkcs8KeyDer::from(private_key_der), alg)
 	}
 
-	/// Obtains the key pair from a DER formatted key
-	/// using the specified [`SignatureAlgorithm`]
-	///
-	/// Usually, calling this function is not neccessary and you can just call
-	/// [`from_der`](Self::from_der) instead. That function will try to figure
-	/// out a fitting [`SignatureAlgorithm`] for the given
-	/// key pair. However, sometimes multiple signature algorithms fit for the
-	/// same der key. In that instance, you can use this function to precisely
-	/// specify the `SignatureAlgorithm`.
+	/// Obtains the key pair from a DER formatted key using the specified [`SignatureAlgorithm`]
 	///
 	/// You can use [`rustls_pemfile::private_key`] to get the `pkcs8` input. If
 	/// you have already a byte slice, just calling `into()` and taking a reference
 	/// will convert it to a [`PrivatePkcs8KeyDer`].
+	///
+	/// If you have a [`PrivatePkcs8KeyDer`], you can usually rely on the [`TryFrom`] implementation
+	/// to obtain a [`KeyPair`] -- it will determine the correct [`SignatureAlgorithm`] for you.
+	/// However, sometimes multiple signature algorithms fit for the same DER key. In those instances,
+	/// you can use this function to precisely specify the `SignatureAlgorithm`.
 	///
 	/// [`rustls_pemfile::private_key`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.private_key.html
 	#[cfg(feature = "crypto")]
