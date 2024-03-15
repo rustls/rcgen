@@ -1,5 +1,6 @@
-use crate::{Error, InvalidAsn1String};
 use std::{fmt, str::FromStr};
+
+use crate::{Error, InvalidAsn1String};
 
 /// ASN.1 `PrintableString` type.
 ///

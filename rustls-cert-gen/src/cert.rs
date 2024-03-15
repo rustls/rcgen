@@ -1,9 +1,10 @@
+use std::{fmt, fs::File, io, path::Path};
+
 use bpaf::Bpaf;
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType,
 	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
 };
-use std::{fmt, fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
 /// PEM serialized Certificate and PEM serialized corresponding private key

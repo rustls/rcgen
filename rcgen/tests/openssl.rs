@@ -1,4 +1,9 @@
 #![cfg(feature = "pem")]
+
+use std::cell::RefCell;
+use std::io::{Error, ErrorKind, Read, Result as ioResult, Write};
+use std::rc::Rc;
+
 use openssl::asn1::{Asn1Integer, Asn1Time};
 use openssl::bn::BigNum;
 use openssl::pkey::PKey;
@@ -6,13 +11,11 @@ use openssl::ssl::{HandshakeError, SslAcceptor, SslConnector, SslMethod};
 use openssl::stack::Stack;
 use openssl::x509::store::{X509Store, X509StoreBuilder};
 use openssl::x509::{CrlStatus, X509Crl, X509Req, X509StoreContext, X509};
+
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DnType, DnValue, GeneralSubtree, IsCa,
 	KeyPair, NameConstraints,
 };
-use std::cell::RefCell;
-use std::io::{Error, ErrorKind, Read, Result as ioResult, Write};
-use std::rc::Rc;
 
 mod util;
 

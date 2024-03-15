@@ -1,6 +1,7 @@
+use std::{net::IpAddr, path::PathBuf, str::FromStr};
+
 use bpaf::Bpaf;
 use rcgen::{Error, SanType};
-use std::{net::IpAddr, path::PathBuf, str::FromStr};
 
 mod cert;
 use cert::{key_pair_algorithm, CertificateBuilder, KeyPairAlgorithm};
