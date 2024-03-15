@@ -1,5 +1,6 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
+
 use yasna::models::ObjectIdentifier;
 use yasna::DERWriter;
 use yasna::Tag;

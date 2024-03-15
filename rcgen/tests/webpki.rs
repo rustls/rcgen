@@ -1,6 +1,18 @@
 #![cfg(feature = "crypto")]
 
+use std::time::Duration as StdDuration;
+
 use pki_types::{CertificateDer, ServerName, SignatureVerificationAlgorithm, UnixTime};
+use ring::rand::SystemRandom;
+use ring::signature::{self, EcdsaKeyPair, EcdsaSigningAlgorithm, Ed25519KeyPair, KeyPair as _};
+#[cfg(feature = "pem")]
+use ring::signature::{RsaEncoding, RsaKeyPair};
+use time::{Duration, OffsetDateTime};
+use webpki::{
+	anchor_from_trusted_cert, BorrowedCertRevocationList, CertRevocationList, EndEntityCert,
+	KeyUsage, RevocationOptionsBuilder,
+};
+
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DnType, Error, IsCa, KeyPair, RemoteKeyPair,
 };
@@ -8,18 +20,6 @@ use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams
 #[cfg(feature = "x509-parser")]
 use rcgen::{CertificateSigningRequestParams, DnValue};
 use rcgen::{ExtendedKeyUsagePurpose, KeyUsagePurpose, SerialNumber};
-use webpki::{
-	anchor_from_trusted_cert, BorrowedCertRevocationList, CertRevocationList, EndEntityCert,
-	KeyUsage, RevocationOptionsBuilder,
-};
-
-use ring::rand::SystemRandom;
-use ring::signature::{self, EcdsaKeyPair, EcdsaSigningAlgorithm, Ed25519KeyPair, KeyPair as _};
-#[cfg(feature = "pem")]
-use ring::signature::{RsaEncoding, RsaKeyPair};
-
-use std::time::Duration as StdDuration;
-use time::{Duration, OffsetDateTime};
 
 mod util;
 

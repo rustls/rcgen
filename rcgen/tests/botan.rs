@@ -1,10 +1,11 @@
 #![cfg(all(feature = "crypto", feature = "x509-parser"))]
 
+use time::{Duration, OffsetDateTime};
+
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
 use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams};
 use rcgen::{DnValue, KeyPair};
 use rcgen::{KeyUsagePurpose, SerialNumber};
-use time::{Duration, OffsetDateTime};
 
 mod util;
 

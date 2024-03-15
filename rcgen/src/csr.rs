@@ -1,14 +1,14 @@
-use pki_types::CertificateSigningRequestDer;
-
 use std::hash::Hash;
+
+#[cfg(feature = "pem")]
+use pem::Pem;
+use pki_types::CertificateSigningRequestDer;
 
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{Certificate, CertificateParams, Error, KeyPair, PublicKeyData, SignatureAlgorithm};
 #[cfg(feature = "x509-parser")]
 use crate::{DistinguishedName, SanType};
-#[cfg(feature = "pem")]
-use pem::Pem;
 
 /// A public key, extracted from a CSR
 #[derive(Debug, PartialEq, Eq, Hash)]

@@ -1,8 +1,9 @@
+use std::fmt;
+
 #[cfg(feature = "pem")]
 use pem::Pem;
 #[cfg(feature = "crypto")]
 use pki_types::PrivatePkcs8KeyDer;
-use std::fmt;
 use yasna::{DERWriter, DERWriterSeq};
 
 #[cfg(any(feature = "crypto", feature = "pem"))]
