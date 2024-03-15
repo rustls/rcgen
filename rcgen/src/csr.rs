@@ -71,11 +71,11 @@ impl CertificateSigningRequestParams {
 	/// Currently, this only supports the `Subject Alternative Name` extension.
 	/// On encountering other extensions, this function will return an error.
 	///
-	/// You can use [`rustls_pemfile::csr`] to get the `csr` input. If
-	/// you have already a byte slice, just calling `into()` and taking a reference
-	/// will convert it to [`CertificateSigningRequestDer`].
+	/// [`rustls_pemfile::csr()`] is often used to obtain a [`CertificateSigningRequestDer`] from
+	/// PEM input. If you already have a byte slice containing DER, it can trivially be converted
+	/// into [`CertificateSigningRequestDer`] using the [`Into`] trait.
 	///
-	/// [`rustls_pemfile::csr`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.csr.html
+	/// [`rustls_pemfile::csr()`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.csr.html
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(csr: &CertificateSigningRequestDer<'_>) -> Result<Self, Error> {
 		use x509_parser::prelude::FromDer;
