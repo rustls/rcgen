@@ -50,7 +50,7 @@ features = ["x509-parser"]
 allowed_external_types = [
     "time::offset_date_time::OffsetDateTime",
     "zeroize::Zeroize",
-    "rustls_pki_types::*"
+    "rustls_pki_types::*",
 ]
 
 [dev-dependencies]
