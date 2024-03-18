@@ -204,9 +204,21 @@ impl KeyPair {
 					serialized_der: key_pair_serialized,
 				})
 			},
+			#[cfg(feature = "rsa")]
+			SignAlgo::Rsa() => {
+				use rsa::pkcs8::EncodePrivateKey;
+				let bits = 4096;
+				let mut rng = rand::thread_rng();
+				let priv_key = rsa::RsaPrivateKey::new(&mut rng, bits).map_err(|_| Error::CouldNotParseKeyPair)?;
+				let pkcs8 = priv_key.to_pkcs8_der().map_err(|_| Error::CouldNotParseKeyPair)?.to_bytes();
+				Ok(
+					KeyPair::from_der(&pkcs8)?
+				)
+			}
 			// Ring doesn't have RSA key generation yet:
 			// https://github.com/briansmith/ring/issues/219
 			// https://github.com/briansmith/ring/pull/733
+			#[cfg(not(feature = "rsa"))]
 			SignAlgo::Rsa() => Err(Error::KeyGenerationUnavailable),
 		}
 	}
