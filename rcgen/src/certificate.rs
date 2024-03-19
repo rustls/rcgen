@@ -1143,6 +1143,7 @@ pub enum BasicConstraints {
 
 #[cfg(test)]
 mod tests {
+	#[cfg(feature = "pem")]
 	use super::*;
 
 	#[cfg(crypto)]
