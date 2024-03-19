@@ -197,7 +197,7 @@ impl KeyPair {
 	) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)._err()?;
 		let private_key_der: &[_] = private_key.contents();
-		Self::from_der_and_sign_algo(&PrivatePkcs8KeyDer::from(private_key_der), alg)
+		Self::from_pkcs8_der_and_sign_algo(&PrivatePkcs8KeyDer::from(private_key_der), alg)
 	}
 
 	/// Obtains the key pair from a DER formatted key using the specified [`SignatureAlgorithm`]
@@ -215,7 +215,7 @@ impl KeyPair {
 	/// [`rustls_pemfile::private_key()`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.private_key.html
 	/// [`PrivateKeyDer`]: https://docs.rs/rustls-pki-types/latest/rustls_pki_types/enum.PrivateKeyDer.html
 	#[cfg(feature = "crypto")]
-	pub fn from_der_and_sign_algo(
+	pub fn from_pkcs8_der_and_sign_algo(
 		pkcs8: &PrivatePkcs8KeyDer<'_>,
 		alg: &'static SignatureAlgorithm,
 	) -> Result<Self, Error> {
