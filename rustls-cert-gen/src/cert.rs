@@ -239,7 +239,7 @@ impl KeyPairAlgorithm {
 				let pkcs8_bytes =
 					Ed25519KeyPair::generate_pkcs8(&rng).or(Err(rcgen::Error::RingUnspecified))?;
 
-				rcgen::KeyPair::from_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
+				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
 			},
 			KeyPairAlgorithm::EcdsaP256 => {
 				use ring::signature::EcdsaKeyPair;
@@ -250,7 +250,7 @@ impl KeyPairAlgorithm {
 				let pkcs8_bytes =
 					EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, &rng)
 						.or(Err(rcgen::Error::RingUnspecified))?;
-				rcgen::KeyPair::from_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
+				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
 			},
 			KeyPairAlgorithm::EcdsaP384 => {
 				use ring::signature::EcdsaKeyPair;
@@ -262,7 +262,7 @@ impl KeyPairAlgorithm {
 					EcdsaKeyPair::generate_pkcs8(&ECDSA_P384_SHA384_ASN1_SIGNING, &rng)
 						.or(Err(rcgen::Error::RingUnspecified))?;
 
-				rcgen::KeyPair::from_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
+				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
 			},
 		}
 	}
