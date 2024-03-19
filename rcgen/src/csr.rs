@@ -9,8 +9,8 @@ use crate::{Certificate, CertificateParams, Error, PublicKeyData, SignatureAlgor
 /// A public key, extracted from a CSR
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct PublicKey {
-	raw: Vec<u8>,
-	alg: &'static SignatureAlgorithm,
+	pub(crate) raw: Vec<u8>,
+	pub(crate) alg: &'static SignatureAlgorithm,
 }
 
 impl PublicKeyData for PublicKey {
