@@ -280,7 +280,8 @@ fn test_openssl_rsa_combinations_given() {
 	];
 	for (i, alg) in alg_list.iter().enumerate() {
 		let (params, _) = util::default_params();
-		let key_pair = KeyPair::from_pem_and_sign_algo(util::RSA_TEST_KEY_PAIR_PEM, alg).unwrap();
+		let key_pair =
+			KeyPair::from_pkcs8_pem_and_sign_algo(util::RSA_TEST_KEY_PAIR_PEM, alg).unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
 
 		// Now verify the certificate.

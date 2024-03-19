@@ -249,7 +249,7 @@ fn test_webpki_rsa_combinations_given() {
 	for c in configs {
 		let (params, _) = util::default_params();
 		let key_pair =
-			rcgen::KeyPair::from_pem_and_sign_algo(util::RSA_TEST_KEY_PAIR_PEM, c.0).unwrap();
+			rcgen::KeyPair::from_pkcs8_pem_and_sign_algo(util::RSA_TEST_KEY_PAIR_PEM, c.0).unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
 
 		// Now verify the certificate.
