@@ -211,9 +211,12 @@ impl KeyPair {
 		}
 	}
 
-	/// Get the public key of this key pair as a [`PublicKey`]
+	/// Get the public key of this key pair as a [`crate::PublicKey`]
 	pub fn public_key(&self) -> crate::PublicKey {
-		crate::PublicKey { raw: self.raw_bytes().to_vec(), alg: self.alg, }
+		crate::PublicKey {
+			raw: self.raw_bytes().to_vec(),
+			alg: self.alg,
+		}
 	}
 
 	/// Get the raw public key of this key pair
