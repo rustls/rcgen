@@ -189,9 +189,9 @@ impl KeyPair {
 	/// The key must be a DER-encoded plaintext private key; as specified in PKCS #8/RFC 5958;
 	///
 	/// Appears as "PRIVATE KEY" in PEM files
-	/// Same as [from_pem_and_sign_algo](Self::from_pem_and_sign_algo).
+	/// Same as [from_pkcs8_pem_and_sign_algo](Self::from_pkcs8_pem_and_sign_algo).
 	#[cfg(all(feature = "pem", feature = "crypto"))]
-	pub fn from_pem_and_sign_algo(
+	pub fn from_pkcs8_pem_and_sign_algo(
 		pem_str: &str,
 		alg: &'static SignatureAlgorithm,
 	) -> Result<Self, Error> {
