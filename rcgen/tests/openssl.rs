@@ -214,7 +214,7 @@ fn test_openssl_384() {
 }
 
 #[test]
-#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+#[cfg(feature = "aws_lc_rs")]
 fn test_openssl_521() {
 	let (params, _) = util::default_params();
 	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P521_SHA512).unwrap();

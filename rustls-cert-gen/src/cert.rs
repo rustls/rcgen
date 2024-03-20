@@ -6,9 +6,9 @@ use rcgen::{
 	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
 };
 
-#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+#[cfg(feature = "aws_lc_rs")]
 use aws_lc_rs as ring_like;
-#[cfg(feature = "ring")]
+#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
 use ring as ring_like;
 
 #[derive(Debug, Clone)]
@@ -218,7 +218,7 @@ pub enum KeyPairAlgorithm {
 	#[default]
 	EcdsaP256,
 	EcdsaP384,
-	#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+	#[cfg(feature = "aws_lc_rs")]
 	EcdsaP521,
 }
 
@@ -229,7 +229,7 @@ impl fmt::Display for KeyPairAlgorithm {
 			KeyPairAlgorithm::Ed25519 => write!(f, "ed25519"),
 			KeyPairAlgorithm::EcdsaP256 => write!(f, "ecdsa-p256"),
 			KeyPairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
-			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+			#[cfg(feature = "aws_lc_rs")]
 			KeyPairAlgorithm::EcdsaP521 => write!(f, "ecdsa-p521"),
 		}
 	}
@@ -273,7 +273,7 @@ impl KeyPairAlgorithm {
 
 				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
 			},
-			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+			#[cfg(feature = "aws_lc_rs")]
 			KeyPairAlgorithm::EcdsaP521 => {
 				use ring_like::signature::EcdsaKeyPair;
 				use ring_like::signature::ECDSA_P521_SHA512_ASN1_SIGNING;
@@ -368,7 +368,7 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+	#[cfg(feature = "aws_lc_rs")]
 	fn serialize_end_entity_ecdsa_p521_sha512_sig() -> anyhow::Result<()> {
 		let ca = CertificateBuilder::new().certificate_authority().build()?;
 		let end_entity = CertificateBuilder::new()
@@ -488,7 +488,7 @@ mod tests {
 			"PKCS_ECDSA_P384_SHA384"
 		);
 
-		#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+		#[cfg(feature = "aws_lc_rs")]
 		{
 			let keypair = KeyPairAlgorithm::EcdsaP521.to_key_pair()?;
 			assert_eq!(

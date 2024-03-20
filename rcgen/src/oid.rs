@@ -22,7 +22,7 @@ pub(crate) const EC_SECP_256_R1: &[u64] = &[1, 2, 840, 10045, 3, 1, 7];
 pub(crate) const EC_SECP_384_R1: &[u64] = &[1, 3, 132, 0, 34];
 /// secp521r1 in [RFC 5480](https://datatracker.ietf.org/doc/html/rfc5480#appendix-A)
 /// Currently this is only supported with the `aws_lc_rs` feature
-#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+#[cfg(feature = "aws_lc_rs")]
 pub(crate) const EC_SECP_521_R1: &[u64] = &[1, 3, 132, 0, 35];
 
 /// rsaEncryption in [RFC 4055](https://www.rfc-editor.org/rfc/rfc4055#section-6)

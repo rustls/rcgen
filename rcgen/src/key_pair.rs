@@ -8,7 +8,7 @@ use yasna::{DERWriter, DERWriterSeq};
 
 #[cfg(any(feature = "crypto", feature = "pem"))]
 use crate::error::ExternalError;
-#[cfg(all(feature = "crypto", feature = "aws_lc_rs", not(feature = "ring")))]
+#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
 use crate::ring_like::rsa::KeySize;
 #[cfg(feature = "crypto")]
 use crate::ring_like::{
@@ -109,12 +109,12 @@ impl KeyPair {
 					serialized_der: key_pair_serialized,
 				})
 			},
-			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+			#[cfg(feature = "aws_lc_rs")]
 			SignAlgo::Rsa(sign_alg) => Self::generate_rsa_inner(alg, sign_alg, KeySize::Rsa2048),
 			// Ring doesn't have RSA key generation yet:
 			// https://github.com/briansmith/ring/issues/219
 			// https://github.com/briansmith/ring/pull/733
-			#[cfg(any(not(feature = "aws_lc_rs"), feature = "ring"))]
+			#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
 			SignAlgo::Rsa(_sign_alg) => Err(Error::KeyGenerationUnavailable),
 		}
 	}
@@ -123,7 +123,7 @@ impl KeyPair {
 	///
 	/// If passed a signature algorithm that is not RSA, it will return
 	/// [`Error::KeyGenerationUnavailable`].
-	#[cfg(all(feature = "crypto", feature = "aws_lc_rs", not(feature = "ring")))]
+	#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
 	pub fn generate_rsa_for(
 		alg: &'static SignatureAlgorithm,
 		key_size: RsaKeySize,
@@ -141,7 +141,7 @@ impl KeyPair {
 		}
 	}
 
-	#[cfg(all(feature = "crypto", feature = "aws_lc_rs", not(feature = "ring")))]
+	#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
 	fn generate_rsa_inner(
 		alg: &'static SignatureAlgorithm,
 		sign_alg: &'static dyn RsaEncoding,
@@ -249,7 +249,7 @@ impl KeyPair {
 			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
-			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+			#[cfg(feature = "aws_lc_rs")]
 			if alg == &PKCS_ECDSA_P521_SHA512 {
 				KeyPairKind::Ec(ecdsa_from_pkcs8(
 					&signature::ECDSA_P521_SHA512_ASN1_SIGNING,
@@ -260,7 +260,7 @@ impl KeyPair {
 				panic!("Unknown SignatureAlgorithm specified!");
 			}
 
-			#[cfg(feature = "ring")]
+			#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
 			panic!("Unknown SignatureAlgorithm specified!");
 		};
 
@@ -302,7 +302,7 @@ impl KeyPair {
 				&PKCS_RSA_SHA256,
 			)
 		} else {
-			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+			#[cfg(feature = "aws_lc_rs")]
 			if let Ok(eckp) =
 				ecdsa_from_pkcs8(&signature::ECDSA_P521_SHA512_ASN1_SIGNING, pkcs8, &rng)
 			{
@@ -311,7 +311,7 @@ impl KeyPair {
 				return Err(Error::CouldNotParseKeyPair);
 			}
 
-			#[cfg(feature = "ring")]
+			#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
 			{
 				return Err(Error::CouldNotParseKeyPair);
 			}
@@ -497,7 +497,7 @@ impl TryFrom<&PrivatePkcs8KeyDer<'_>> for KeyPair {
 }
 
 /// The key size used for RSA key generation
-#[cfg(all(feature = "crypto", feature = "aws_lc_rs", not(feature = "ring")))]
+#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum RsaKeySize {
