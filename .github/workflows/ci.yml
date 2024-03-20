@@ -11,23 +11,8 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
-  rustfmt:
-    name: Format
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - name: Check formatting
-        run: cargo fmt -- --check
-
-  clippy:
-    name: Clippy
+  lint:
+    name: Format & clippy
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -38,7 +23,8 @@ jobs:
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
+      - run: cargo fmt -- --check
       - run: cargo clippy --all-features --all-targets
       # rustls-cert-gen require either aws_lc_rs or ring feature
       - run: cargo clippy -p rcgen --no-default-features --all-targets
