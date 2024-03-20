@@ -23,7 +23,7 @@ required-features = ["pem", "x509-parser"]
 
 [[example]]
 name = "simple"
-required-features = ["crypto"]
+required-features = ["crypto", "pem"]
 
 [dependencies]
 aws-lc-rs = { workspace = true, optional = true }
@@ -41,7 +41,6 @@ crypto = []
 aws_lc_rs = ["crypto", "dep:aws-lc-rs"]
 ring = ["crypto", "dep:ring"]
 fips = ["aws_lc_rs", "aws-lc-rs?/fips"]
-
 
 [package.metadata.docs.rs]
 features = ["x509-parser"]
