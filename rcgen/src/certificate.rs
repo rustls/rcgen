@@ -54,6 +54,12 @@ impl Certificate {
 	}
 }
 
+impl From<Certificate> for CertificateDer<'static> {
+	fn from(cert: Certificate) -> Self {
+		cert.der
+	}
+}
+
 /// Parameters used for certificate generation
 #[allow(missing_docs)]
 #[non_exhaustive]
