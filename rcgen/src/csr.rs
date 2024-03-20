@@ -48,6 +48,12 @@ impl CertificateSigningRequest {
 	}
 }
 
+impl From<CertificateSigningRequest> for CertificateSigningRequestDer<'static> {
+	fn from(csr: CertificateSigningRequest) -> Self {
+		csr.der
+	}
+}
+
 /// Parameters for a certificate signing request
 pub struct CertificateSigningRequestParams {
 	/// Parameters for the certificate to be signed.
