@@ -57,6 +57,7 @@ impl Certificate {
 /// Parameters used for certificate generation
 #[allow(missing_docs)]
 #[non_exhaustive]
+#[derive(Clone)]
 pub struct CertificateParams {
 	pub not_before: OffsetDateTime,
 	pub not_after: OffsetDateTime,
