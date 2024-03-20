@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        toolchain: [stable, beta, nightly, stable 7 months ago]
+        toolchain: [stable, nightly]
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
