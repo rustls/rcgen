@@ -19,7 +19,7 @@ mod test_key_params_mismatch {
 			&rcgen::PKCS_RSA_SHA256,
 			&rcgen::PKCS_ECDSA_P256_SHA256,
 			&rcgen::PKCS_ECDSA_P384_SHA384,
-			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+			#[cfg(feature = "aws_lc_rs")]
 			&rcgen::PKCS_ECDSA_P521_SHA512,
 			&rcgen::PKCS_ED25519,
 		];
