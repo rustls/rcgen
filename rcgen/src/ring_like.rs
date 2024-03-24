@@ -25,6 +25,14 @@ pub(crate) fn ecdsa_from_pkcs8(
 	}
 }
 
+#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+pub(crate) fn ecdsa_from_private_key_der(
+	alg: &'static signature::EcdsaSigningAlgorithm,
+	key: &[u8],
+) -> Result<signature::EcdsaKeyPair, Error> {
+	Ok(signature::EcdsaKeyPair::from_private_key_der(alg, key)._err()?)
+}
+
 #[cfg(feature = "crypto")]
 pub(crate) fn rsa_key_pair_public_modulus_len(kp: &signature::RsaKeyPair) -> usize {
 	#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]

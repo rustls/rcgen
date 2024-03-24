@@ -3,11 +3,13 @@ use std::fmt;
 #[cfg(feature = "pem")]
 use pem::Pem;
 #[cfg(feature = "crypto")]
-use pki_types::PrivatePkcs8KeyDer;
+use pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
 use yasna::{DERWriter, DERWriterSeq};
 
 #[cfg(any(feature = "crypto", feature = "pem"))]
 use crate::error::ExternalError;
+#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+use crate::ring_like::ecdsa_from_private_key_der;
 #[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
 use crate::ring_like::rsa::KeySize;
 #[cfg(feature = "crypto")]
@@ -165,13 +167,15 @@ impl KeyPair {
 
 	/// Parses the key pair from the ASCII PEM format
 	///
-	/// The key must be a DER-encoded plaintext private key; as specified in PKCS #8/RFC 5958;
+	/// If `aws_lc_rs` feature is used, then the key must be a DER-encoded plaintext private key; as specified in PKCS #8/RFC 5958, SEC1/RFC 5915, or PKCS#1/RFC 3447;
+	/// Appears as "PRIVATE KEY", "RSA PRIVATE KEY", or "EC PRIVATE KEY" in PEM files.
 	///
+	/// Otherwise if the `ring` feature is used, then the key must be a DER-encoded plaintext private key; as specified in PKCS #8/RFC 5958;
 	/// Appears as "PRIVATE KEY" in PEM files.
 	#[cfg(all(feature = "pem", feature = "crypto"))]
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)._err()?;
-		Self::try_from(&PrivatePkcs8KeyDer::from(private_key.contents()))
+		Self::try_from(private_key.contents())
 	}
 
 	/// Obtains the key pair from a raw public key and a remote private key
@@ -271,52 +275,108 @@ impl KeyPair {
 		})
 	}
 
-	/// Parses the key pair from the DER format
+	/// Obtains the key pair from a PEM formatted key
+	/// using the specified [`SignatureAlgorithm`]
 	///
-	/// [`rustls_pemfile::private_key()`] is often used to obtain a [`PrivateKeyDer`] from PEM
-	/// input. If the obtained [`PrivateKeyDer`] is a `Pkcs8` variant, you can use its contents
-	/// as input for this function. Alternatively, if you already have a byte slice containing DER,
-	/// it can trivially be converted into [`PrivatePkcs8KeyDer`] using the [`Into`] trait.
+	/// If `aws_lc_rs` feature is used, then the key must be a DER-encoded plaintext private key; as specified in PKCS #8/RFC 5958, SEC1/RFC 5915, or PKCS#1/RFC 3447;
+	/// Appears as "PRIVATE KEY", "RSA PRIVATE KEY", or "EC PRIVATE KEY" in PEM files.
 	///
-	/// [`rustls_pemfile::private_key()`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.private_key.html
-	/// [`PrivateKeyDer`]: https://docs.rs/rustls-pki-types/latest/rustls_pki_types/enum.PrivateKeyDer.html
-	#[cfg(feature = "crypto")]
-	pub(crate) fn from_raw(
-		pkcs8: &PrivatePkcs8KeyDer,
-	) -> Result<(KeyPairKind, &'static SignatureAlgorithm), Error> {
-		let pkcs8 = pkcs8.secret_pkcs8_der();
-		let rng = SystemRandom::new();
-		let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
-			(KeyPairKind::Ed(edkp), &PKCS_ED25519)
-		} else if let Ok(eckp) =
-			ecdsa_from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, &rng)
-		{
-			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
-		} else if let Ok(eckp) =
-			ecdsa_from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8, &rng)
-		{
-			(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
-		} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(pkcs8) {
-			(
-				KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256),
-				&PKCS_RSA_SHA256,
-			)
-		} else {
-			#[cfg(feature = "aws_lc_rs")]
-			if let Ok(eckp) =
-				ecdsa_from_pkcs8(&signature::ECDSA_P521_SHA512_ASN1_SIGNING, pkcs8, &rng)
-			{
-				(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P521_SHA512)
-			} else {
-				return Err(Error::CouldNotParseKeyPair);
-			}
+	/// Otherwise if the `ring` feature is used, then the key must be a DER-encoded plaintext private key; as specified in PKCS #8/RFC 5958;
+	/// Appears as "PRIVATE KEY" in PEM files.
+	///
+	/// Same as [from_pem_and_sign_algo](Self::from_pem_and_sign_algo).
+	#[cfg(all(feature = "pem", feature = "crypto"))]
+	pub fn from_pem_and_sign_algo(
+		pem_str: &str,
+		alg: &'static SignatureAlgorithm,
+	) -> Result<Self, Error> {
+		let private_key = pem::parse(pem_str)._err()?;
+		let private_key: &[_] = private_key.contents();
+		Self::from_der_and_sign_algo(
+			&PrivateKeyDer::try_from(private_key).map_err(|_| Error::CouldNotParseKeyPair)?,
+			alg,
+		)
+	}
 
-			#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
-			{
-				return Err(Error::CouldNotParseKeyPair);
+	/// Obtains the key pair from a DER formatted key
+	/// using the specified [`SignatureAlgorithm`]
+	///
+	/// Note that using the `ring` feature, this function only support [`PrivateKeyDer::Pkcs8`] variant.
+	/// Consider using the `aws_lc_rs` features to support [`PrivateKeyDer`] fully.
+	///
+	/// If you have a [`PrivateKeyDer`], you can usually rely on the [`TryFrom`] implementation
+	/// to obtain a [`KeyPair`] -- it will determine the correct [`SignatureAlgorithm`] for you.
+	/// However, sometimes multiple signature algorithms fit for the same DER key. In those instances,
+	/// you can use this function to precisely specify the `SignatureAlgorithm`.
+	///
+	/// You can use [`rustls_pemfile::private_key`] to get the `key` input. If
+	/// you have already a byte slice, just calling `try_into()` will convert it to a [`PrivateKeyDer`].
+	///
+	/// [`rustls_pemfile::private_key`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.private_key.html
+	#[cfg(feature = "crypto")]
+	pub fn from_der_and_sign_algo(
+		key: &PrivateKeyDer<'_>,
+		alg: &'static SignatureAlgorithm,
+	) -> Result<Self, Error> {
+		#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
+		{
+			if let PrivateKeyDer::Pkcs8(key) = key {
+				Self::from_pkcs8_der_and_sign_algo(key, alg)
+			} else {
+				Err(Error::CouldNotParseKeyPair)
 			}
-		};
-		Ok((kind, alg))
+		}
+		#[cfg(feature = "aws_lc_rs")]
+		{
+			let is_pkcs8 = matches!(key, PrivateKeyDer::Pkcs8(_));
+
+			let rsa_key_pair_from = if is_pkcs8 {
+				RsaKeyPair::from_pkcs8
+			} else {
+				RsaKeyPair::from_der
+			};
+
+			let serialized_der = key.secret_der().to_vec();
+
+			let kind = if alg == &PKCS_ED25519 {
+				KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(&serialized_der)._err()?)
+			} else if alg == &PKCS_ECDSA_P256_SHA256 {
+				KeyPairKind::Ec(ecdsa_from_private_key_der(
+					&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+					&serialized_der,
+				)?)
+			} else if alg == &PKCS_ECDSA_P384_SHA384 {
+				KeyPairKind::Ec(ecdsa_from_private_key_der(
+					&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
+					&serialized_der,
+				)?)
+			} else if alg == &PKCS_ECDSA_P521_SHA512 {
+				KeyPairKind::Ec(ecdsa_from_private_key_der(
+					&signature::ECDSA_P521_SHA512_ASN1_SIGNING,
+					&serialized_der,
+				)?)
+			} else if alg == &PKCS_RSA_SHA256 {
+				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
+				KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
+			} else if alg == &PKCS_RSA_SHA384 {
+				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
+				KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
+			} else if alg == &PKCS_RSA_SHA512 {
+				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
+				KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
+			} else if alg == &PKCS_RSA_PSS_SHA256 {
+				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
+				KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
+			} else {
+				panic!("Unknown SignatureAlgorithm specified!");
+			};
+
+			Ok(KeyPair {
+				kind,
+				alg,
+				serialized_der,
+			})
+		}
 	}
 
 	/// Get the raw public key of this key pair
@@ -458,13 +518,10 @@ impl KeyPair {
 impl TryFrom<&[u8]> for KeyPair {
 	type Error = Error;
 
-	fn try_from(pkcs8: &[u8]) -> Result<KeyPair, Error> {
-		let (kind, alg) = KeyPair::from_raw(&pkcs8.into())?;
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: pkcs8.to_vec(),
-		})
+	fn try_from(key: &[u8]) -> Result<KeyPair, Error> {
+		let key = &PrivateKeyDer::try_from(key).map_err(|_| Error::CouldNotParseKeyPair)?;
+
+		key.try_into()
 	}
 }
 
@@ -472,13 +529,10 @@ impl TryFrom<&[u8]> for KeyPair {
 impl TryFrom<Vec<u8>> for KeyPair {
 	type Error = Error;
 
-	fn try_from(pkcs8: Vec<u8>) -> Result<KeyPair, Error> {
-		let (kind, alg) = KeyPair::from_raw(&pkcs8.as_slice().into())?;
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: pkcs8,
-		})
+	fn try_from(key: Vec<u8>) -> Result<KeyPair, Error> {
+		let key = &PrivateKeyDer::try_from(key).map_err(|_| Error::CouldNotParseKeyPair)?;
+
+		key.try_into()
 	}
 }
 
@@ -486,12 +540,85 @@ impl TryFrom<Vec<u8>> for KeyPair {
 impl TryFrom<&PrivatePkcs8KeyDer<'_>> for KeyPair {
 	type Error = Error;
 
-	fn try_from(pkcs8: &PrivatePkcs8KeyDer) -> Result<KeyPair, Error> {
-		let (kind, alg) = KeyPair::from_raw(pkcs8)?;
+	fn try_from(key: &PrivatePkcs8KeyDer) -> Result<KeyPair, Error> {
+		key.secret_pkcs8_der().try_into()
+	}
+}
+
+#[cfg(feature = "crypto")]
+impl TryFrom<&PrivateKeyDer<'_>> for KeyPair {
+	type Error = Error;
+
+	fn try_from(key: &PrivateKeyDer) -> Result<KeyPair, Error> {
+		#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
+		let (kind, alg) = {
+			let PrivateKeyDer::Pkcs8(pkcs8) = key else {
+				return Err(Error::CouldNotParseKeyPair);
+			};
+			let pkcs8 = pkcs8.secret_pkcs8_der();
+			let rng = SystemRandom::new();
+			let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
+				(KeyPairKind::Ed(edkp), &PKCS_ED25519)
+			} else if let Ok(eckp) =
+				ecdsa_from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, &rng)
+			{
+				(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
+			} else if let Ok(eckp) =
+				ecdsa_from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8, &rng)
+			{
+				(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
+			} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(pkcs8) {
+				(
+					KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256),
+					&PKCS_RSA_SHA256,
+				)
+			} else {
+				return Err(Error::CouldNotParseKeyPair);
+			};
+
+			(kind, alg)
+		};
+		#[cfg(feature = "aws_lc_rs")]
+		let (kind, alg) = {
+			let is_pkcs8 = matches!(key, PrivateKeyDer::Pkcs8(_));
+
+			let key = key.secret_der();
+
+			let rsa_key_pair_from = if is_pkcs8 {
+				RsaKeyPair::from_pkcs8
+			} else {
+				RsaKeyPair::from_der
+			};
+
+			let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(key) {
+				(KeyPairKind::Ed(edkp), &PKCS_ED25519)
+			} else if let Ok(eckp) =
+				ecdsa_from_private_key_der(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, key)
+			{
+				(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
+			} else if let Ok(eckp) =
+				ecdsa_from_private_key_der(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, key)
+			{
+				(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
+			} else if let Ok(eckp) =
+				ecdsa_from_private_key_der(&signature::ECDSA_P521_SHA512_ASN1_SIGNING, key)
+			{
+				(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P521_SHA512)
+			} else if let Ok(rsakp) = rsa_key_pair_from(key) {
+				(
+					KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256),
+					&PKCS_RSA_SHA256,
+				)
+			} else {
+				return Err(Error::CouldNotParseKeyPair);
+			};
+			(kind, alg)
+		};
+
 		Ok(KeyPair {
 			kind,
 			alg,
-			serialized_der: pkcs8.secret_pkcs8_der().into(),
+			serialized_der: key.secret_der().into(),
 		})
 	}
 }

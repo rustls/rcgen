@@ -494,3 +494,33 @@ fn test_openssl_crl_dps_parse() {
 		]
 	);
 }
+
+#[test]
+#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+fn test_openssl_pkcs1_and_sec1_keys() {
+	use openssl::ec::{EcGroup, EcKey};
+	use openssl::nid::Nid;
+	use openssl::pkey::PKey;
+	use openssl::rsa::Rsa;
+	use pki_types::PrivateKeyDer;
+
+	let rsa = Rsa::generate(2048).unwrap();
+	let rsa = PKey::from_rsa(rsa).unwrap();
+
+	let pkcs1_rsa_key_der = PrivateKeyDer::try_from(rsa.private_key_to_der().unwrap()).unwrap();
+	KeyPair::try_from(&pkcs1_rsa_key_der).unwrap();
+
+	let pkcs8_rsa_key_der = PrivateKeyDer::try_from(rsa.private_key_to_pkcs8().unwrap()).unwrap();
+	KeyPair::try_from(&pkcs8_rsa_key_der).unwrap();
+
+	let group = EcGroup::from_curve_name(Nid::SECP521R1).unwrap();
+	let ec_key = EcKey::generate(&group).unwrap();
+
+	let ec_key = PKey::from_ec_key(ec_key).unwrap();
+
+	let sec1_ec_key_der = PrivateKeyDer::try_from(ec_key.private_key_to_der().unwrap()).unwrap();
+	KeyPair::try_from(&sec1_ec_key_der).unwrap();
+
+	let pkcs8_ec_key_der = PrivateKeyDer::try_from(ec_key.private_key_to_pkcs8().unwrap()).unwrap();
+	KeyPair::try_from(&pkcs8_ec_key_der).unwrap();
+}
