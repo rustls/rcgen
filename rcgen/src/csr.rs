@@ -27,6 +27,7 @@ impl PublicKeyData for PublicKey {
 	}
 }
 
+/// A certificate signing request (CSR) that can be encoded to PEM or DER.
 pub struct CertificateSigningRequest {
 	pub(crate) der: CertificateSigningRequestDer<'static>,
 }
