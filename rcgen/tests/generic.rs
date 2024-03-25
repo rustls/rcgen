@@ -357,3 +357,20 @@ mod test_parse_other_name_alt_name {
 		assert_eq!(subject_alt_names, expected_alt_names);
 	}
 }
+
+#[cfg(feature = "x509-parser")]
+mod test_csr {
+	use rcgen::{CertificateParams, CertificateSigningRequestParams, KeyPair};
+
+	#[test]
+	fn test_csr_roundtrip() {
+		// We should be able to serialize a CSR, and then parse the CSR.
+		_ = CertificateSigningRequestParams::from_der(
+			CertificateParams::default()
+				.serialize_request(&KeyPair::generate().unwrap())
+				.unwrap()
+				.der(),
+		)
+		.unwrap();
+	}
+}
