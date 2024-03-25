@@ -1,6 +1,75 @@
 
 # Changes
 
+## Release 0.13.0 - March XX, 2024
+
+Breaking changes:
+
+- The API used to create/issue key pairs, certificates, certificate signing
+  requests (CSRs), and certificate revocation lists (CRLs) has been
+  restructured to emphasize consistency and avoid common errors with
+  serialization.
+
+  For each concrete type (cert, CSR, CRL) the process is now the same:
+
+  0. generate or load a key pair and any information about issuers required.
+  1. create parameters, customizing as appropriate.
+  2. call a generation `fn` on the parameters, providing subject key pair and
+     issuer information and as appropriate.
+  3. call serialization `fn`s on the finalized type, obtaining DER or PEM.
+
+  For more information, see [rcgen/docs/0.12-to-0.13.md].
+
+- Throughout the API DER inputs are now represented using types from the Rustls
+  `rustls-pki-types` crate, e.g. `PrivateKeyDer`, `CertificateDer`,
+  `CertificateSigningRequestDer`. Contributed by
+  [Tudyx](https://github.com/tudyx).
+
+- String types used in `SanType` and `DnValue` enums for non-UTF8 string types
+  have been replaced with more specific types that prevent representation of
+  illegal values. E.g. `Ia5String`, `BmpString`, `PrintableString`,
+  `TeletexString`, and `UniversalString`. Contributed by
+  [Tudyx](https://github.com/tudyx).
+
+- Method names starting with `get_` have been renamed to match Rust convention:
+  `CertificateRevocationList::get_params()` -> `params()`
+  `Certificate::get_params()` -> `params()`
+  `Certificate::get_key_identifier()` -> `Certificate::key_identifier()`
+  `Certificate::get_times()` -> `Certificate::times()`
+
+Added:
+
+- RSA key generation support has been added. This support requires using the
+  `aws-lc-rs` feature. By default using `KeyPair::generate()` with
+  an RSA `SignatureAlgorithm` will generate an RSA 2048 keypair. See
+  `KeyPair::generate_rsa_for()` for support for RSA 2048, 3072 and 4096 key sizes.
+
+- Support for ECDSA P521 signatures and key generation has been added when using
+  the `aws-lc-rs` feature. Contributed by [Alvenix](https://github.com/alvenix).
+
+- Support for loading private keys that may be PKCS8, PKCS1, or SEC1 has been
+  added when using the `aws-lc-rs` feature. Without this feature private keys
+  must be PKCS8. See `KeyPair::from_pem_and_sign_algo()` and
+  `KeyPair::from_der_and_sign_algo()` for more information. Contributed by
+  [Alvenix](https://github.com/alvenix).
+
+- Support has been added for Subject Alternative Name (SAN) names of type
+  `OtherName`. Contributed by [Tudyx](https://github.com/tudyx).
+
+- Support has been added for specifying custom "other" OIDs in extended key
+  usage. Contributed by [Tudyx](https://github.com/tudyx).
+
+- Support has been added for building rcgen _without_ cryptography by omitting
+  the new (default-enabled) `crypto` feature flag. Contributed by
+  [corrideat](https://github.com/corrideat).
+
+- Support for using `aws-lc-rs` in `fips` mode can now be activated by using the
+  `fips` feature in combination with the `aws-lc-rs` feature. Contributed by
+  [BiagioFesta](https://github.com/biagiofesta).
+
+- A small command-line tool for certificate generation (`rustls-cert-gen`) was
+  added. Contributed by [tbro](https://github.com/tbro).
+
 ## Release 0.12.1 - January 25th, 2024
 
 - RFC 5280 specifies that a serial number must not be larger than 20 octets in
