@@ -27,7 +27,7 @@ yasna = { version = "0.5.2", features = ["time", "std"] }
 ring = { version = "0.17", optional = true }
 pem = { workspace = true, optional = true }
 time = { version = "0.3.6", default-features = false }
-x509-parser = { version = "0.15", features = ["verify"], optional = true }
+x509-parser = { version = "0.16", features = ["verify"], optional = true }
 zeroize = { version = "1.2", optional = true }
 
 [features]
@@ -41,7 +41,7 @@ features = ["x509-parser"]
 [package.metadata.cargo_check_external_types]
 allowed_external_types = [
     "time::offset_date_time::OffsetDateTime",
-    "zeroize::Zeroize"
+    "zeroize::Zeroize",
 ]
 
 [dev-dependencies]
