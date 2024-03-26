@@ -46,7 +46,7 @@ allowed_external_types = [
 
 [dev-dependencies]
 openssl = "0.10"
-x509-parser = { version = "0.15", features = ["verify"] }
+x509-parser = { version = "0.16", features = ["verify"] }
 rustls-webpki = { version = "0.101.0", features = ["std"] }
 botan = { version = "0.10", features = ["vendored"] }
 rand = "0.8"
