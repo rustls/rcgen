@@ -2,6 +2,9 @@
 name = "rustls-cert-gen"
 version = "0.1.0"
 description = "Rust X.509 certificate generator CLI"
+documentation = "https://docs.rs/rustls-cert-gen"
+homepage = "https://github.com/rustls/rcgen/tree/main/rustls-cert-gen"
+repository = "https://github.com/rustls/rcgen"
 license.workspace = true
 edition.workspace = true
 keywords.workspace = true
