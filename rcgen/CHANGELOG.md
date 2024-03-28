@@ -40,7 +40,7 @@ Breaking changes:
 Added:
 
 - RSA key generation support has been added. This support requires using the
-  `aws-lc-rs` feature. By default using `KeyPair::generate()` with
+  `aws-lc-rs` feature. By default using `KeyPair::generate_for()` with
   an RSA `SignatureAlgorithm` will generate an RSA 2048 keypair. See
   `KeyPair::generate_rsa_for()` for support for RSA 2048, 3072 and 4096 key sizes.
 
