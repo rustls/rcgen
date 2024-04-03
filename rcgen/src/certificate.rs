@@ -154,11 +154,7 @@ impl CertificateParams {
 		issuer_key: &KeyPair,
 	) -> Result<Certificate, Error> {
 		let subject_public_key_info = key_pair.public_key_der();
-		let der = self.serialize_der_with_signer(
-			key_pair,
-			issuer_key,
-			&issuer.params.distinguished_name,
-		)?;
+		let der = self.serialize_der_with_signer(key_pair, issuer_key, &issuer.params)?;
 		Ok(Certificate {
 			params: self,
 			subject_public_key_info,
@@ -172,7 +168,7 @@ impl CertificateParams {
 	/// [`Certificate::pem`].
 	pub fn self_signed(self, key_pair: &KeyPair) -> Result<Certificate, Error> {
 		let subject_public_key_info = key_pair.public_key_der();
-		let der = self.serialize_der_with_signer(key_pair, key_pair, &self.distinguished_name)?;
+		let der = self.serialize_der_with_signer(key_pair, key_pair, &self)?;
 		Ok(Certificate {
 			params: self,
 			subject_public_key_info,
@@ -567,7 +563,7 @@ impl CertificateParams {
 		&self,
 		pub_key: &K,
 		issuer: &KeyPair,
-		issuer_name: &DistinguishedName,
+		issuer_params: &CertificateParams,
 	) -> Result<CertificateDer<'static>, Error> {
 		let der = issuer.sign_der(|writer| {
 			let pub_key_spki =
@@ -596,7 +592,7 @@ impl CertificateParams {
 			// Write signature algorithm
 			issuer.alg.write_alg_ident(writer.next());
 			// Write issuer name
-			write_distinguished_name(writer.next(), issuer_name);
+			write_distinguished_name(writer.next(), &issuer_params.distinguished_name);
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
@@ -626,7 +622,13 @@ impl CertificateParams {
 					if self.use_authority_key_identifier_extension {
 						write_x509_authority_key_identifier(
 							writer.next(),
-							self.key_identifier_method.derive(issuer.public_key_der()),
+							match &issuer_params.key_identifier_method {
+								KeyIdMethod::PreSpecified(aki) => aki.clone(),
+								#[cfg(feature = "crypto")]
+								_ => issuer_params
+									.key_identifier_method
+									.derive(issuer.public_key_der()),
+							},
 						);
 					}
 					// Write subject_alt_names
@@ -1397,28 +1399,47 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 -----END PRIVATE KEY-----"#;
 
 			let params = CertificateParams::from_ca_cert_pem(ca_cert).unwrap();
-			let expected_ski = vec![
+			let ca_ski = vec![
 				0x97, 0xD4, 0x76, 0xA1, 0x9B, 0x1A, 0x71, 0x35, 0x2A, 0xC7, 0xF4, 0xA1, 0x84, 0x12,
 				0x56, 0x06, 0xBA, 0x5D, 0x61, 0x84,
 			];
 
 			assert_eq!(
-				KeyIdMethod::PreSpecified(expected_ski.clone()),
+				KeyIdMethod::PreSpecified(ca_ski.clone()),
 				params.key_identifier_method
 			);
 
-			let kp = KeyPair::from_pem(ca_key).unwrap();
-			let ca_cert = params.self_signed(&kp).unwrap();
-			assert_eq!(&expected_ski, &ca_cert.key_identifier());
+			let ca_kp = KeyPair::from_pem(ca_key).unwrap();
+			let ca_cert = params.self_signed(&ca_kp).unwrap();
+			assert_eq!(&ca_ski, &ca_cert.key_identifier());
 
-			let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert.der()).unwrap();
+			let (_, x509_ca) = x509_parser::parse_x509_certificate(ca_cert.der()).unwrap();
 			assert_eq!(
-				&expected_ski,
-				&x509
+				&ca_ski,
+				&x509_ca
 					.iter_extensions()
 					.find_map(|ext| match ext.parsed_extension() {
 						x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(key_id) => {
 							Some(key_id.0.to_vec())
+						},
+						_ => None,
+					})
+					.unwrap()
+			);
+
+			let ee_key = KeyPair::generate().unwrap();
+			let mut ee_params = CertificateParams::default();
+			ee_params.use_authority_key_identifier_extension = true;
+			let ee_cert = ee_params.signed_by(&ee_key, &ca_cert, &ee_key).unwrap();
+
+			let (_, x509_ee) = x509_parser::parse_x509_certificate(ee_cert.der()).unwrap();
+			assert_eq!(
+				&ca_ski,
+				&x509_ee
+					.iter_extensions()
+					.find_map(|ext| match ext.parsed_extension() {
+						x509_parser::extensions::ParsedExtension::AuthorityKeyIdentifier(aki) => {
+							aki.key_identifier.as_ref().map(|ki| ki.0.to_vec())
 						},
 						_ => None,
 					})
