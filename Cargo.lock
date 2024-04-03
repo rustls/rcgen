@@ -866,7 +866,7 @@ dependencies = [
 
 [[package]]
 name = "rcgen"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "aws-lc-rs",
  "botan",
