@@ -1,7 +1,15 @@
 
 # Changes
 
-## Release 0.13.0 - March XX, 2024
+## Release 0.13.1 - April 4th, 2024
+
+Fixed:
+
+- Fixed incorrect usage of the subject certificate's parameter's key identifier
+  method when computing the key identifier of the issuer for the subject's
+  authority key identifier (AKI) extension.
+
+## Release 0.13.0 - March 28th, 2024
 
 Breaking changes:
 
