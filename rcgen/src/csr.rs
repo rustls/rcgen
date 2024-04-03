@@ -149,11 +149,9 @@ impl CertificateSigningRequestParams {
 		issuer: &Certificate,
 		issuer_key: &KeyPair,
 	) -> Result<Certificate, Error> {
-		let der = self.params.serialize_der_with_signer(
-			&self.public_key,
-			issuer_key,
-			&issuer.params.distinguished_name,
-		)?;
+		let der =
+			self.params
+				.serialize_der_with_signer(&self.public_key, issuer_key, &issuer.params)?;
 		let subject_public_key_info = yasna::construct_der(|writer| {
 			self.public_key.serialize_public_key_der(writer);
 		});
