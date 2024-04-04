@@ -4,10 +4,10 @@ use rcgen::{
 };
 use time::{Duration, OffsetDateTime};
 
-/// Example demonstrating signing end-endity certificate with ca
+/// Example demonstrating signing end-entity certificate with ca
 fn main() {
-	let ca = new_ca();
-	let end_entity = new_end_entity();
+	let (ca, ca_key) = new_ca();
+	let end_entity = new_end_entity(&ca, &ca_key);
 
 	let end_entity_pem = end_entity.pem();
 	println!("directly signed end-entity certificate: {end_entity_pem}");
@@ -16,7 +16,7 @@ fn main() {
 	println!("ca certificate: {ca_cert_pem}");
 }
 
-fn new_ca() -> Certificate {
+fn new_ca() -> (Certificate, KeyPair) {
 	let mut params =
 		CertificateParams::new(Vec::default()).expect("empty subject alt name can't produce error");
 	let (yesterday, tomorrow) = validity_period();
@@ -36,10 +36,10 @@ fn new_ca() -> Certificate {
 	params.not_after = tomorrow;
 
 	let key_pair = KeyPair::generate().unwrap();
-	params.self_signed(&key_pair).unwrap()
+	(params.self_signed(&key_pair).unwrap(), key_pair)
 }
 
-fn new_end_entity() -> Certificate {
+fn new_end_entity(ca: &Certificate, ca_key: &KeyPair) -> Certificate {
 	let name = "entity.other.host";
 	let mut params = CertificateParams::new(vec![name.into()]).expect("we know the name is valid");
 	let (yesterday, tomorrow) = validity_period();
@@ -53,7 +53,7 @@ fn new_end_entity() -> Certificate {
 	params.not_after = tomorrow;
 
 	let key_pair = KeyPair::generate().unwrap();
-	params.self_signed(&key_pair).unwrap()
+	params.signed_by(&key_pair, ca, ca_key).unwrap()
 }
 
 fn validity_period() -> (OffsetDateTime, OffsetDateTime) {
