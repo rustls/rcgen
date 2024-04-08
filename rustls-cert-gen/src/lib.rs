@@ -5,4 +5,4 @@
 //! whatever purpose you may need a TLS certificate-chain.
 
 mod cert;
-pub use cert::{Ca, CaBuilder, CertificateBuilder, EndEntity, EndEntityBuilder};
+pub use cert::{Ca, CaBuilder, CertificateBuilder, EndEntity, EndEntityBuilder, KeyPairAlgorithm};

@@ -1,23 +1,22 @@
-use std::{net::IpAddr, path::PathBuf, str::FromStr};
+use std::{fmt, net::IpAddr, path::PathBuf, str::FromStr};
 
 use bpaf::Bpaf;
 use rcgen::{Error, SanType};
 
-mod cert;
-use cert::{key_pair_algorithm, CertificateBuilder, KeyPairAlgorithm};
+use rustls_cert_gen::CertificateBuilder;
 
 fn main() -> anyhow::Result<()> {
 	let opts = options().run();
 
 	let ca = CertificateBuilder::new()
-		.signature_algorithm(opts.keypair_algorithm)?
+		.signature_algorithm(opts.keypair_algorithm.into())?
 		.certificate_authority()
 		.country_name(&opts.country_name)?
 		.organization_name(&opts.organization_name)
 		.build()?;
 
 	let mut entity = CertificateBuilder::new()
-		.signature_algorithm(opts.keypair_algorithm)?
+		.signature_algorithm(opts.keypair_algorithm.into())?
 		.end_entity()
 		.common_name(&opts.common_name)
 		.subject_alternative_names(opts.san);
@@ -93,6 +92,57 @@ fn parse_sans(hosts: Vec<String>) -> Result<Vec<SanType>, Error> {
 			})
 		})
 		.collect()
+}
+
+/// Supported Keypair Algorithms
+#[derive(Clone, Copy, Debug, Default, Bpaf, PartialEq)]
+pub enum KeyPairAlgorithm {
+	Rsa,
+	Ed25519,
+	#[default]
+	EcdsaP256,
+	EcdsaP384,
+	#[cfg(feature = "aws_lc_rs")]
+	EcdsaP521,
+}
+
+impl From<KeyPairAlgorithm> for rustls_cert_gen::KeyPairAlgorithm {
+	fn from(value: KeyPairAlgorithm) -> Self {
+		match value {
+			KeyPairAlgorithm::Rsa => rustls_cert_gen::KeyPairAlgorithm::Rsa,
+			KeyPairAlgorithm::Ed25519 => rustls_cert_gen::KeyPairAlgorithm::Ed25519,
+			KeyPairAlgorithm::EcdsaP256 => rustls_cert_gen::KeyPairAlgorithm::EcdsaP256,
+			KeyPairAlgorithm::EcdsaP384 => rustls_cert_gen::KeyPairAlgorithm::EcdsaP384,
+			#[cfg(feature = "aws_lc_rs")]
+			KeyPairAlgorithm::EcdsaP521 => rustls_cert_gen::KeyPairAlgorithm::EcdsaP521,
+		}
+	}
+}
+
+impl From<rustls_cert_gen::KeyPairAlgorithm> for KeyPairAlgorithm {
+	fn from(value: rustls_cert_gen::KeyPairAlgorithm) -> Self {
+		match value {
+			rustls_cert_gen::KeyPairAlgorithm::Rsa => KeyPairAlgorithm::Rsa,
+			rustls_cert_gen::KeyPairAlgorithm::Ed25519 => KeyPairAlgorithm::Ed25519,
+			rustls_cert_gen::KeyPairAlgorithm::EcdsaP256 => KeyPairAlgorithm::EcdsaP256,
+			rustls_cert_gen::KeyPairAlgorithm::EcdsaP384 => KeyPairAlgorithm::EcdsaP384,
+			#[cfg(feature = "aws_lc_rs")]
+			rustls_cert_gen::KeyPairAlgorithm::EcdsaP521 => KeyPairAlgorithm::EcdsaP521,
+		}
+	}
+}
+
+impl fmt::Display for KeyPairAlgorithm {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			KeyPairAlgorithm::Rsa => write!(f, "rsa"),
+			KeyPairAlgorithm::Ed25519 => write!(f, "ed25519"),
+			KeyPairAlgorithm::EcdsaP256 => write!(f, "ecdsa-p256"),
+			KeyPairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
+			#[cfg(feature = "aws_lc_rs")]
+			KeyPairAlgorithm::EcdsaP521 => write!(f, "ecdsa-p521"),
+		}
+	}
 }
 
 #[cfg(test)]

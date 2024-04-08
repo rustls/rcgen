@@ -1,6 +1,5 @@
-use std::{fmt, fs::File, io, path::Path};
+use std::{fs::File, io, path::Path};
 
-use bpaf::Bpaf;
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType,
 	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
@@ -211,28 +210,30 @@ impl EndEntityBuilder {
 }
 
 /// Supported Keypair Algorithms
-#[derive(Clone, Copy, Debug, Default, Bpaf, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum KeyPairAlgorithm {
+	/// RSA
+	///
+	/// See [`PKCS_RSA_SHA256`](rcgen::PKCS_RSA_SHA256).
 	Rsa,
+	/// Ed25519
+	///
+	/// See [`PKCS_ED25519`](rcgen::PKCS_ED25519).
 	Ed25519,
+	/// ECDSA with the P-256 curve
+	///
+	/// See [`PKCS_ECDSA_P256_SHA256`](rcgen::PKCS_ECDSA_P256_SHA256).
 	#[default]
 	EcdsaP256,
+	/// ECDSA with the P-384 curve
+	///
+	/// See [`PKCS_ECDSA_P384_SHA256`](rcgen::PKCS_ECDSA_P384_SHA256).
 	EcdsaP384,
+	/// ECDSA with the P-521 curve
+	///
+	/// See [`PKCS_ECDSA_P521_SHA256`](rcgen::PKCS_ECDSA_P521_SHA256).
 	#[cfg(feature = "aws_lc_rs")]
 	EcdsaP521,
-}
-
-impl fmt::Display for KeyPairAlgorithm {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			KeyPairAlgorithm::Rsa => write!(f, "rsa"),
-			KeyPairAlgorithm::Ed25519 => write!(f, "ed25519"),
-			KeyPairAlgorithm::EcdsaP256 => write!(f, "ecdsa-p256"),
-			KeyPairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
-			#[cfg(feature = "aws_lc_rs")]
-			KeyPairAlgorithm::EcdsaP521 => write!(f, "ecdsa-p521"),
-		}
-	}
 }
 
 impl KeyPairAlgorithm {
