@@ -227,11 +227,11 @@ pub enum KeyPairAlgorithm {
 	EcdsaP256,
 	/// ECDSA with the P-384 curve
 	///
-	/// See [`PKCS_ECDSA_P384_SHA256`](rcgen::PKCS_ECDSA_P384_SHA256).
+	/// See [`PKCS_ECDSA_P384_SHA256`](rcgen::PKCS_ECDSA_P384_SHA384).
 	EcdsaP384,
 	/// ECDSA with the P-521 curve
 	///
-	/// See [`PKCS_ECDSA_P521_SHA256`](rcgen::PKCS_ECDSA_P521_SHA256).
+	/// See [`PKCS_ECDSA_P521_SHA256`](rcgen::PKCS_ECDSA_P521_SHA512).
 	#[cfg(feature = "aws_lc_rs")]
 	EcdsaP521,
 }
