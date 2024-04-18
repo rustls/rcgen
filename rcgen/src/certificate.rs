@@ -17,7 +17,7 @@ use crate::ring_like::digest;
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_authority_key_identifier, write_x509_extension, DistinguishedName, Error,
+	write_x509_authority_key_identifier, write_x509_extension, DistinguishedName, Error, Issuer,
 	KeyIdMethod, KeyPair, KeyUsagePurpose, SanType, SerialNumber,
 };
 
@@ -153,8 +153,14 @@ impl CertificateParams {
 		issuer: &Certificate,
 		issuer_key: &KeyPair,
 	) -> Result<Certificate, Error> {
+		let issuer = Issuer {
+			distinguished_name: &issuer.params.distinguished_name,
+			key_identifier_method: &issuer.params.key_identifier_method,
+			key_pair: issuer_key,
+		};
+
 		let subject_public_key_info = key_pair.public_key_der();
-		let der = self.serialize_der_with_signer(key_pair, issuer_key, &issuer.params)?;
+		let der = self.serialize_der_with_signer(key_pair, issuer)?;
 		Ok(Certificate {
 			params: self,
 			subject_public_key_info,
@@ -167,8 +173,14 @@ impl CertificateParams {
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
 	pub fn self_signed(self, key_pair: &KeyPair) -> Result<Certificate, Error> {
+		let issuer = Issuer {
+			distinguished_name: &self.distinguished_name,
+			key_identifier_method: &self.key_identifier_method,
+			key_pair,
+		};
+
 		let subject_public_key_info = key_pair.public_key_der();
-		let der = self.serialize_der_with_signer(key_pair, key_pair, &self)?;
+		let der = self.serialize_der_with_signer(key_pair, issuer)?;
 		Ok(Certificate {
 			params: self,
 			subject_public_key_info,
@@ -562,10 +574,9 @@ impl CertificateParams {
 	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
-		issuer: &KeyPair,
-		issuer_params: &CertificateParams,
+		issuer: Issuer<'_>,
 	) -> Result<CertificateDer<'static>, Error> {
-		let der = issuer.sign_der(|writer| {
+		let der = issuer.key_pair.sign_der(|writer| {
 			let pub_key_spki =
 				yasna::construct_der(|writer| pub_key.serialize_public_key_der(writer));
 			// Write version
@@ -590,9 +601,9 @@ impl CertificateParams {
 				}
 			};
 			// Write signature algorithm
-			issuer.alg.write_alg_ident(writer.next());
+			issuer.key_pair.alg.write_alg_ident(writer.next());
 			// Write issuer name
-			write_distinguished_name(writer.next(), &issuer_params.distinguished_name);
+			write_distinguished_name(writer.next(), &issuer.distinguished_name);
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
@@ -622,12 +633,12 @@ impl CertificateParams {
 					if self.use_authority_key_identifier_extension {
 						write_x509_authority_key_identifier(
 							writer.next(),
-							match &issuer_params.key_identifier_method {
+							match issuer.key_identifier_method {
 								KeyIdMethod::PreSpecified(aki) => aki.clone(),
 								#[cfg(feature = "crypto")]
-								_ => issuer_params
+								_ => issuer
 									.key_identifier_method
-									.derive(issuer.public_key_der()),
+									.derive(issuer.key_pair.public_key_der()),
 							},
 						);
 					}
