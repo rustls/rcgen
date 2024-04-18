@@ -197,17 +197,24 @@ impl CertificateRevocationListParams {
 			return Err(Error::IssuerNotCrlSigner);
 		}
 
+		if self.next_update.le(&self.this_update) {
+			return Err(Error::InvalidCrlNextUpdate);
+		}
+
 		let issuer = Issuer {
 			distinguished_name: &issuer.params.distinguished_name,
 			key_identifier_method: &issuer.params.key_identifier_method,
 			key_pair: issuer_key,
 		};
 
-		if self.next_update.le(&self.this_update) {
-			return Err(Error::InvalidCrlNextUpdate);
-		}
+		Ok(CertificateRevocationList {
+			der: self.serialize_der(issuer)?.into(),
+			params: self,
+		})
+	}
 
-		let der = issuer_key.sign_der(|writer| {
+	fn serialize_der(&self, issuer: Issuer) -> Result<Vec<u8>, Error> {
+		issuer.key_pair.sign_der(|writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
 			//   This optional field describes the version of the encoded CRL.  When
@@ -290,11 +297,6 @@ impl CertificateRevocationListParams {
 			});
 
 			Ok(())
-		})?;
-
-		Ok(CertificateRevocationList {
-			params: self,
-			der: der.into(),
 		})
 	}
 }
