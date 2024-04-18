@@ -130,6 +130,12 @@ pub fn generate_simple_self_signed(
 	Ok(CertifiedKey { cert, key_pair })
 }
 
+struct Issuer<'a> {
+	distinguished_name: &'a DistinguishedName,
+	key_identifier_method: &'a KeyIdMethod,
+	key_pair: &'a KeyPair,
+}
+
 // https://tools.ietf.org/html/rfc5280#section-4.1.1
 
 // Example certs usable as reference:
