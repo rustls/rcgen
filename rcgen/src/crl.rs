@@ -9,8 +9,8 @@ use yasna::Tag;
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_authority_key_identifier, write_x509_extension, Certificate, Error, KeyIdMethod,
-	KeyPair, KeyUsagePurpose, SerialNumber,
+	write_x509_authority_key_identifier, write_x509_extension, Certificate, Error, Issuer,
+	KeyIdMethod, KeyPair, KeyUsagePurpose, SerialNumber,
 };
 
 /// A certificate revocation list (CRL)
@@ -191,14 +191,20 @@ impl CertificateRevocationListParams {
 		issuer: &Certificate,
 		issuer_key: &KeyPair,
 	) -> Result<CertificateRevocationList, Error> {
-		if self.next_update.le(&self.this_update) {
-			return Err(Error::InvalidCrlNextUpdate);
-		}
-
 		if !issuer.params.key_usages.is_empty()
 			&& !issuer.params.key_usages.contains(&KeyUsagePurpose::CrlSign)
 		{
 			return Err(Error::IssuerNotCrlSigner);
+		}
+
+		let issuer = Issuer {
+			distinguished_name: &issuer.params.distinguished_name,
+			key_identifier_method: &issuer.params.key_identifier_method,
+			key_pair: issuer_key,
+		};
+
+		if self.next_update.le(&self.this_update) {
+			return Err(Error::InvalidCrlNextUpdate);
 		}
 
 		let der = issuer_key.sign_der(|writer| {
@@ -217,12 +223,12 @@ impl CertificateRevocationListParams {
 			// RFC 5280 §5.1.2.2:
 			//   This field MUST contain the same algorithm identifier as the
 			//   signatureAlgorithm field in the sequence CertificateList
-			issuer_key.alg.write_alg_ident(writer.next());
+			issuer.key_pair.alg.write_alg_ident(writer.next());
 
 			// Write issuer.
 			// RFC 5280 §5.1.2.3:
 			//   The issuer field MUST contain a non-empty X.500 distinguished name (DN).
-			write_distinguished_name(writer.next(), &issuer.params.distinguished_name);
+			write_distinguished_name(writer.next(), &issuer.distinguished_name);
 
 			// Write thisUpdate date.
 			// RFC 5280 §5.1.2.4:
@@ -261,7 +267,7 @@ impl CertificateRevocationListParams {
 					write_x509_authority_key_identifier(
 						writer.next(),
 						self.key_identifier_method
-							.derive(issuer_key.public_key_der()),
+							.derive(issuer.key_pair.public_key_der()),
 					);
 
 					// Write CRL number.
