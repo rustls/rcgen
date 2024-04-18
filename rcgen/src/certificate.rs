@@ -156,6 +156,7 @@ impl CertificateParams {
 		let issuer = Issuer {
 			distinguished_name: &issuer.params.distinguished_name,
 			key_identifier_method: &issuer.params.key_identifier_method,
+			key_usages: &issuer.params.key_usages,
 			key_pair: issuer_key,
 		};
 
@@ -176,6 +177,7 @@ impl CertificateParams {
 		let issuer = Issuer {
 			distinguished_name: &self.distinguished_name,
 			key_identifier_method: &self.key_identifier_method,
+			key_usages: &self.key_usages,
 			key_pair,
 		};
 
