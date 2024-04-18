@@ -191,12 +191,6 @@ impl CertificateRevocationListParams {
 		issuer: &Certificate,
 		issuer_key: &KeyPair,
 	) -> Result<CertificateRevocationList, Error> {
-		if !issuer.params.key_usages.is_empty()
-			&& !issuer.params.key_usages.contains(&KeyUsagePurpose::CrlSign)
-		{
-			return Err(Error::IssuerNotCrlSigner);
-		}
-
 		if self.next_update.le(&self.this_update) {
 			return Err(Error::InvalidCrlNextUpdate);
 		}
@@ -204,8 +198,13 @@ impl CertificateRevocationListParams {
 		let issuer = Issuer {
 			distinguished_name: &issuer.params.distinguished_name,
 			key_identifier_method: &issuer.params.key_identifier_method,
+			key_usages: &issuer.params.key_usages,
 			key_pair: issuer_key,
 		};
+
+		if !issuer.key_usages.is_empty() && !issuer.key_usages.contains(&KeyUsagePurpose::CrlSign) {
+			return Err(Error::IssuerNotCrlSigner);
+		}
 
 		Ok(CertificateRevocationList {
 			der: self.serialize_der(issuer)?.into(),
