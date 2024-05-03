@@ -132,6 +132,7 @@ impl fmt::Display for InvalidAsn1String {
 ///
 /// We use this trait to avoid leaking external error types into the public API
 /// through a `From<x> for Error` implementation.
+#[cfg(any(feature = "crypto", feature = "pem"))]
 pub(crate) trait ExternalError<T>: Sized {
 	fn _err(self) -> Result<T, Error>;
 }
