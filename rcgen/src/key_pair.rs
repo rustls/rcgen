@@ -703,25 +703,22 @@ pub(crate) trait PublicKeyData {
 	}
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "crypto"))]
 mod test {
-	#[cfg(crypto)]
 	use super::*;
 
-	#[cfg(crypto)]
 	use crate::ring_like::{
 		rand::SystemRandom,
 		signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING},
 	};
 
-	#[cfg(crypto)]
 	#[test]
 	fn test_algorithm() {
 		let rng = SystemRandom::new();
 		let pkcs8 = EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &rng).unwrap();
 		let der = pkcs8.as_ref().to_vec();
 
-		let key_pair = KeyPair::from_der(&der).unwrap();
+		let key_pair = KeyPair::try_from(der).unwrap();
 		assert_eq!(key_pair.algorithm(), &PKCS_ECDSA_P256_SHA256);
 	}
 }
