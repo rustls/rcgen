@@ -1168,7 +1168,7 @@ mod tests {
 	#[cfg(feature = "pem")]
 	use super::*;
 
-	#[cfg(crypto)]
+	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_key_usages() {
 		let mut params: CertificateParams = Default::default();
@@ -1185,7 +1185,7 @@ mod tests {
 
 		// Make the cert
 		let key_pair = KeyPair::generate().unwrap();
-		let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -1211,7 +1211,7 @@ mod tests {
 		assert!(found);
 	}
 
-	#[cfg(crypto)]
+	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_key_usages_decipheronly_only() {
 		let mut params: CertificateParams = Default::default();
@@ -1224,7 +1224,7 @@ mod tests {
 
 		// Make the cert
 		let key_pair = KeyPair::generate().unwrap();
-		let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -1250,7 +1250,7 @@ mod tests {
 		assert!(found);
 	}
 
-	#[cfg(crypto)]
+	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_extended_key_usages_any() {
 		let mut params: CertificateParams = Default::default();
@@ -1260,7 +1260,7 @@ mod tests {
 
 		// Make the cert
 		let key_pair = KeyPair::generate().unwrap();
-		let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -1271,7 +1271,7 @@ mod tests {
 		assert!(extension.value.any);
 	}
 
-	#[cfg(crypto)]
+	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_extended_key_usages_other() {
 		use x509_parser::der_parser::asn1_rs::Oid;
@@ -1287,7 +1287,7 @@ mod tests {
 
 		// Make the cert
 		let key_pair = KeyPair::generate().unwrap();
-		let cert = Certificate::generate_self_signed(params, &key_pair).unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
