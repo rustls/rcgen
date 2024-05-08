@@ -88,7 +88,7 @@ impl SignatureAlgorithm {
 			&PKCS_RSA_SHA256,
 			&PKCS_RSA_SHA384,
 			&PKCS_RSA_SHA512,
-			//&PKCS_RSA_PSS_SHA256,
+			&PKCS_RSA_PSS_SHA256,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
 			#[cfg(feature = "aws_lc_rs")]
@@ -145,24 +145,24 @@ pub(crate) mod algo {
 		params: SignatureAlgorithmParams::Null,
 	};
 
-	// TODO: not really sure whether the certs we generate actually work.
-	// Both openssl and webpki reject them. It *might* be possible that openssl
-	// accepts the certificate if the key is a proper RSA-PSS key, but ring doesn't
-	// support those: https://github.com/briansmith/ring/issues/1353
-	//
 	/// RSA signing with PKCS#1 2.1 RSASSA-PSS padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
-	pub(crate) static PKCS_RSA_PSS_SHA256: SignatureAlgorithm = SignatureAlgorithm {
+	///
+	/// Note: `*ring*` does not support this signature algorithm, and so it can not be used with the `crypto` feature
+	/// of `rcgen` when verifying signatures using the `ring` backend.
+	pub static PKCS_RSA_PSS_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		// We could also use RSA_ENCRYPTION here, but it's recommended
 		// to use ID-RSASSA-PSS if possible.
-		oids_sign_alg: &[&RSASSA_PSS],
+		oids_sign_alg: &[&RSASSA_PSS_SHA256],
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::Rsa(&signature::RSA_PSS_SHA256),
-		oid_components: RSASSA_PSS, //&[1, 2, 840, 113549, 1, 1, 13],
+		oid_components: RSASSA_PSS_SHA256, //&[1, 2, 840, 113549, 1, 1, 11],
 		// rSASSA-PSS-SHA256-Params in RFC 4055
 		params: SignatureAlgorithmParams::RsaPss {
 			// id-sha256 in https://datatracker.ietf.org/doc/html/rfc4055#section-2.1
 			hash_algorithm: &[2, 16, 840, 1, 101, 3, 4, 2, 1],
-			salt_length: 20,
+			// It's conventional to use a salt length equal to the size of the hash algorithm's digest
+			// (32 bytes for the 256 bit digest produced by SHA256).
+			salt_length: 32,
 		},
 	};
 
