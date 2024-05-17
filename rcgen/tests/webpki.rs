@@ -491,14 +491,57 @@ fn test_certificate_from_csr() {
 	params
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
+
+	let eku_test = vec![
+		ExtendedKeyUsagePurpose::Any,
+		ExtendedKeyUsagePurpose::ClientAuth,
+		ExtendedKeyUsagePurpose::CodeSigning,
+		ExtendedKeyUsagePurpose::EmailProtection,
+		ExtendedKeyUsagePurpose::OcspSigning,
+		ExtendedKeyUsagePurpose::ServerAuth,
+		ExtendedKeyUsagePurpose::TimeStamping,
+	];
+	for eku in &eku_test {
+		params.insert_extended_key_usage(eku.clone());
+	}
+
 	let cert_key = KeyPair::generate().unwrap();
 	let csr = params.serialize_request(&cert_key).unwrap();
 	let csr = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
 
+	let ekus_contained = &csr.params.extended_key_usages;
+	for eku in &eku_test {
+		assert!(ekus_contained.contains(eku));
+	}
+
 	let (mut params, ca_key) = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	for eku in &eku_test {
+		params.insert_extended_key_usage(eku.clone());
+	}
+	let ekus_contained = &params.extended_key_usages;
+	for eku in &eku_test {
+		assert!(ekus_contained.contains(eku));
+	}
+
 	let ca_cert = params.self_signed(&ca_key).unwrap();
+
+	let ekus_contained = &ca_cert.params().extended_key_usages;
+	for eku in &eku_test {
+		assert!(ekus_contained.contains(eku));
+	}
+
 	let cert = csr.signed_by(&ca_cert, &ca_key).unwrap();
+
+	let ekus_contained = &cert.params().extended_key_usages;
+	for eku in &eku_test {
+		assert!(ekus_contained.contains(eku));
+	}
+
+	let eku_cert = &ca_cert.params().extended_key_usages;
+	for eku in &eku_test {
+		assert!(eku_cert.contains(eku));
+	}
 
 	let sign_fn =
 		|key_pair, msg| sign_msg_ecdsa(key_pair, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
