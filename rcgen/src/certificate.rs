@@ -454,6 +454,21 @@ impl CertificateParams {
 		}
 		Ok(result)
 	}
+
+	fn write_extended_key_usage(&self, writer: DERWriter) {
+		if !self.extended_key_usages.is_empty() {
+			write_x509_extension(writer, oid::EXT_KEY_USAGE, false, |writer| {
+				writer.write_sequence(|writer| {
+					for usage in &self.extended_key_usages {
+						writer
+							.next()
+							.write_oid(&ObjectIdentifier::from_slice(usage.oid()));
+					}
+				});
+			});
+		}
+	}
+
 	fn write_subject_alt_names(&self, writer: DERWriter) {
 		write_x509_extension(writer, oid::SUBJECT_ALT_NAME, false, |writer| {
 			writer.write_sequence(|writer| {
@@ -516,15 +531,20 @@ impl CertificateParams {
 		} = self;
 		// - alg and key_pair will be used by the caller
 		// - not_before and not_after cannot be put in a CSR
+		// - key_identifier_method is here because self.write_extended_key_usage uses it
 		// - There might be a use case for specifying the key identifier
 		// in the CSR, but in the current API it can't be distinguished
 		// from the defaults so this is left for a later version if
 		// needed.
-		let _ = (not_before, not_after, key_identifier_method);
+		let _ = (
+			not_before,
+			not_after,
+			key_identifier_method,
+			extended_key_usages,
+		);
 		if serial_number.is_some()
 			|| *is_ca != IsCa::NoCa
 			|| !key_usages.is_empty()
-			|| !extended_key_usages.is_empty()
 			|| name_constraints.is_some()
 			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
@@ -550,6 +570,7 @@ impl CertificateParams {
 							writer.next().write_sequence(|writer| {
 								// Write subject_alt_names
 								self.write_subject_alt_names(writer.next());
+								self.write_extended_key_usage(writer.next());
 
 								// Write custom extensions
 								for ext in custom_extensions {
@@ -807,6 +828,13 @@ impl CertificateParams {
 		})?;
 
 		Ok(der.into())
+	}
+
+	/// Insert an extended key usage (EKU) into the parameters if it does not already exist
+	pub fn insert_extended_key_usage(&mut self, eku: ExtendedKeyUsagePurpose) {
+		if !self.extended_key_usages.contains(&eku) {
+			self.extended_key_usages.push(eku);
+		}
 	}
 }
 

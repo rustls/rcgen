@@ -117,6 +117,44 @@ impl CertificateSigningRequestParams {
 								.push(SanType::try_from_general(name)?);
 						}
 					},
+					x509_parser::extensions::ParsedExtension::ExtendedKeyUsage(eku) => {
+						if eku.any {
+							params.insert_extended_key_usage(crate::ExtendedKeyUsagePurpose::Any);
+						}
+						if eku.server_auth {
+							params.insert_extended_key_usage(
+								crate::ExtendedKeyUsagePurpose::ServerAuth,
+							);
+						}
+						if eku.client_auth {
+							params.insert_extended_key_usage(
+								crate::ExtendedKeyUsagePurpose::ClientAuth,
+							);
+						}
+						if eku.code_signing {
+							params.insert_extended_key_usage(
+								crate::ExtendedKeyUsagePurpose::CodeSigning,
+							);
+						}
+						if eku.email_protection {
+							params.insert_extended_key_usage(
+								crate::ExtendedKeyUsagePurpose::EmailProtection,
+							);
+						}
+						if eku.time_stamping {
+							params.insert_extended_key_usage(
+								crate::ExtendedKeyUsagePurpose::TimeStamping,
+							);
+						}
+						if eku.ocsp_signing {
+							params.insert_extended_key_usage(
+								crate::ExtendedKeyUsagePurpose::OcspSigning,
+							);
+						}
+						if !eku.other.is_empty() {
+							return Err(Error::UnsupportedExtension);
+						}
+					},
 					_ => return Err(Error::UnsupportedExtension),
 				}
 			}
