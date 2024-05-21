@@ -29,16 +29,6 @@ pub struct Certificate {
 }
 
 impl Certificate {
-	/// TODO
-	pub fn from_der(der: CertificateDer<'static>, keypair: KeyPair) -> Result<Self, Error> {
-		let params = CertificateParams::from_ca_cert_der(&der)?;
-		Ok(Self {
-			params,
-			subject_public_key_info: keypair.public_key_der(),
-			der,
-		})
-	}
-
 	/// Returns the certificate parameters
 	pub fn params(&self) -> &CertificateParams {
 		&self.params
