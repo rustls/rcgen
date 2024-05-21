@@ -46,8 +46,13 @@ impl Issuer {
 	}
 
 	/// TODO
-	pub fn pem(&self) -> String {
-		todo!();
+	pub fn cert_pem(&self) -> String {
+		todo!("required for `rustls-cert-gen`");
+	}
+
+	/// TODO
+	pub fn key_pem(&self) -> String {
+		todo!("seems a fitting complement to `Self::cert_pem`");
 	}
 
 	/// TODO
