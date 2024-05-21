@@ -160,19 +160,7 @@ impl CertificateParams {
 	///
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
-	pub fn signed_by(
-		self,
-		key_pair: &KeyPair,
-		issuer: &Certificate,
-		issuer_key: &KeyPair,
-	) -> Result<Certificate, Error> {
-		let issuer = Issuer {
-			distinguished_name: &issuer.params.distinguished_name,
-			key_identifier_method: &issuer.params.key_identifier_method,
-			key_usages: &issuer.params.key_usages,
-			key_pair: issuer_key,
-		};
-
+	pub fn signed_by(self, key_pair: &KeyPair, issuer: &Issuer) -> Result<Certificate, Error> {
 		let subject_public_key_info = key_pair.public_key_der();
 		let der = self.serialize_der_with_signer(key_pair, issuer)?;
 		Ok(Certificate {
@@ -188,14 +176,14 @@ impl CertificateParams {
 	/// [`Certificate::pem`].
 	pub fn self_signed(self, key_pair: &KeyPair) -> Result<Certificate, Error> {
 		let issuer = Issuer {
-			distinguished_name: &self.distinguished_name,
-			key_identifier_method: &self.key_identifier_method,
-			key_usages: &self.key_usages,
-			key_pair,
+			distinguished_name: self.distinguished_name,
+			key_identifier_method: self.key_identifier_method,
+			key_usages: self.key_usages,
+			key_pair: todo!(), // TODO: Do we `KeyPair::Clone` or do we make this field a `Cow`?
 		};
 
 		let subject_public_key_info = key_pair.public_key_der();
-		let der = self.serialize_der_with_signer(key_pair, issuer)?;
+		let der = self.serialize_der_with_signer(key_pair, &issuer)?;
 		Ok(Certificate {
 			params: self,
 			subject_public_key_info,
@@ -610,7 +598,7 @@ impl CertificateParams {
 	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
-		issuer: Issuer<'_>,
+		issuer: &Issuer,
 	) -> Result<CertificateDer<'static>, Error> {
 		let der = issuer.key_pair.sign_der(|writer| {
 			let pub_key_spki =
@@ -669,7 +657,7 @@ impl CertificateParams {
 					if self.use_authority_key_identifier_extension {
 						write_x509_authority_key_identifier(
 							writer.next(),
-							match issuer.key_identifier_method {
+							match &issuer.key_identifier_method {
 								KeyIdMethod::PreSpecified(aki) => aki.clone(),
 								#[cfg(feature = "crypto")]
 								_ => issuer

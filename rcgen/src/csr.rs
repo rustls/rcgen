@@ -184,21 +184,10 @@ impl CertificateSigningRequestParams {
 	///
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
-	pub fn signed_by(
-		self,
-		issuer: &Certificate,
-		issuer_key: &KeyPair,
-	) -> Result<Certificate, Error> {
-		let issuer = Issuer {
-			distinguished_name: &issuer.params.distinguished_name,
-			key_identifier_method: &issuer.params.key_identifier_method,
-			key_usages: &issuer.params.key_usages,
-			key_pair: issuer_key,
-		};
-
+	pub fn signed_by(self, issuer: &Issuer) -> Result<Certificate, Error> {
 		let der = self
 			.params
-			.serialize_der_with_signer(&self.public_key, issuer)?;
+			.serialize_der_with_signer(&self.public_key, &issuer)?;
 		let subject_public_key_info = yasna::construct_der(|writer| {
 			self.public_key.serialize_public_key_der(writer);
 		});
