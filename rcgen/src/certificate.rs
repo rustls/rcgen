@@ -29,10 +29,21 @@ pub struct Certificate {
 }
 
 impl Certificate {
+	/// TODO
+	pub fn from_der(der: CertificateDer<'static>, keypair: KeyPair) -> Result<Self, Error> {
+		let params = CertificateParams::from_ca_cert_der(&der)?;
+		Ok(Self {
+			params,
+			subject_public_key_info: keypair.public_key_der(),
+			der,
+		})
+	}
+
 	/// Returns the certificate parameters
 	pub fn params(&self) -> &CertificateParams {
 		&self.params
 	}
+
 	/// Calculates a subject key identifier for the certificate subject's public key.
 	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
 	pub fn key_identifier(&self) -> Vec<u8> {
@@ -40,6 +51,7 @@ impl Certificate {
 			.key_identifier_method
 			.derive(&self.subject_public_key_info)
 	}
+
 	/// Get the certificate in DER encoded format.
 	///
 	/// [`CertificateDer`] implements `Deref<Target = [u8]>` and `AsRef<[u8]>`, so you can easily
@@ -47,6 +59,7 @@ impl Certificate {
 	pub fn der(&self) -> &CertificateDer<'static> {
 		&self.der
 	}
+
 	/// Get the certificate in PEM encoded format.
 	#[cfg(feature = "pem")]
 	pub fn pem(&self) -> String {
