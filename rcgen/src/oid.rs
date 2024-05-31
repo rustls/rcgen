@@ -31,6 +31,12 @@ pub(crate) const RSA_ENCRYPTION: &[u64] = &[1, 2, 840, 113549, 1, 1, 1];
 /// id-RSASSA-PSS in [RFC 4055](https://www.rfc-editor.org/rfc/rfc4055#section-6) with sha256WithRSAEncryption
 pub(crate) const RSASSA_PSS_SHA256: &[u64] = &[1, 2, 840, 113549, 1, 1, 11];
 
+/// id-RSASSA-PSS in [RFC 4055](https://www.rfc-editor.org/rfc/rfc4055#section-6) with sha384WithRSAEncryption
+pub(crate) const RSASSA_PSS_SHA384: &[u64] = &[1, 2, 840, 113549, 1, 1, 12];
+
+/// id-RSASSA-PSS in [RFC 4055](https://www.rfc-editor.org/rfc/rfc4055#section-6) with sha512WithRSAEncryption
+pub(crate) const RSASSA_PSS_SHA512: &[u64] = &[1, 2, 840, 113549, 1, 1, 13];
+
 /// id-ce-keyUsage in [RFC 5280](https://tools.ietf.org/html/rfc5280#appendix-A.2)
 pub(crate) const KEY_USAGE: &[u64] = &[2, 5, 29, 15];
 

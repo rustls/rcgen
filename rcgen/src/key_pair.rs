@@ -252,6 +252,12 @@ impl KeyPair {
 		} else if alg == &PKCS_RSA_PSS_SHA256 {
 			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
+		} else if alg == &PKCS_RSA_PSS_SHA384 {
+			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
+			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA384)
+		} else if alg == &PKCS_RSA_PSS_SHA512 {
+			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
+			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA512)
 		} else {
 			#[cfg(feature = "aws_lc_rs")]
 			if alg == &PKCS_ECDSA_P521_SHA512 {
@@ -367,6 +373,12 @@ impl KeyPair {
 			} else if alg == &PKCS_RSA_PSS_SHA256 {
 				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
 				KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
+			} else if alg == &PKCS_RSA_PSS_SHA384 {
+				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
+				KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA384)
+			} else if alg == &PKCS_RSA_PSS_SHA512 {
+				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
+				KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA512)
 			} else {
 				panic!("Unknown SignatureAlgorithm specified!");
 			};
