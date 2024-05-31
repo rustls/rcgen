@@ -288,25 +288,21 @@ fn test_openssl_rsa_combinations_given() {
 		&rcgen::PKCS_RSA_SHA256,
 		&rcgen::PKCS_RSA_SHA384,
 		&rcgen::PKCS_RSA_SHA512,
-		//&rcgen::PKCS_RSA_PSS_SHA256,
-		//&rcgen::PKCS_RSA_PSS_SHA384,
-		//&rcgen::PKCS_RSA_PSS_SHA512,
+		#[cfg(feature = "aws_lc_rs")]
+		&rcgen::PKCS_RSA_PSS_SHA256,
+		// #[cfg(feature = "aws_lc_rs")]
+		// &rcgen::PKCS_RSA_PSS_SHA384,
+		// #[cfg(feature = "aws_lc_rs")]
+		// &rcgen::PKCS_RSA_PSS_SHA512,
 	];
-	for (i, alg) in alg_list.iter().enumerate() {
+	for (_i, alg) in alg_list.iter().enumerate() {
 		let (params, _) = util::default_params();
 		let key_pair =
 			KeyPair::from_pkcs8_pem_and_sign_algo(util::RSA_TEST_KEY_PAIR_PEM, alg).unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
 
-		// Now verify the certificate.
-		if i >= 4 {
-			verify_cert(&cert, &key_pair);
-			verify_csr(&cert, &key_pair);
-		} else {
-			// The PSS key types are not fully supported.
-			// An attempt to use them gives a handshake error.
-			verify_cert_basic(&cert);
-		}
+		verify_cert(&cert, &key_pair);
+		verify_csr(&cert, &key_pair);
 	}
 }
 
