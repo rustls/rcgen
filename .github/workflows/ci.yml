@@ -155,8 +155,7 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
-        # TODO(XXX): Revert to "matrix.toolchain" after rust-lang/rust#125474 is fixed.
-        toolchain: ${{ matrix.toolchain == 'nightly' && 'nightly-2024-05-22' || matrix.toolchain }}
+        toolchain: ${{ matrix.toolchain }}
     - name: Run cargo check
       run: cargo check --all-targets
     - name: Run the tests
