@@ -19,6 +19,13 @@ pub struct PublicKey {
 	alg: &'static SignatureAlgorithm,
 }
 
+impl PublicKey {
+	/// The algorithm used to generate the public key and sign the CSR.
+	pub fn algorithm(&self) -> &SignatureAlgorithm {
+		self.alg
+	}
+}
+
 impl PublicKeyData for PublicKey {
 	fn alg(&self) -> &SignatureAlgorithm {
 		self.alg
