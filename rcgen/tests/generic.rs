@@ -364,13 +364,15 @@ mod test_csr {
 
 	#[test]
 	fn test_csr_roundtrip() {
+		let key_pair = KeyPair::generate().unwrap();
+
 		// We should be able to serialize a CSR, and then parse the CSR.
-		_ = CertificateSigningRequestParams::from_der(
-			CertificateParams::default()
-				.serialize_request(&KeyPair::generate().unwrap())
-				.unwrap()
-				.der(),
-		)
-		.unwrap();
+		let csr = CertificateParams::default()
+			.serialize_request(&key_pair)
+			.unwrap();
+		let csrp = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
+
+		// Ensure algorithms match.
+		assert_eq!(key_pair.algorithm(), csrp.public_key.algorithm());
 	}
 }
