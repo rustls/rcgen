@@ -4,11 +4,10 @@ use std::hash::Hash;
 use pem::Pem;
 use pki_types::CertificateSigningRequestDer;
 
+use crate::key_pair::{serialize_public_key_der, KeyPair, PublicKeyData};
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
-use crate::{
-	Certificate, CertificateParams, Error, Issuer, KeyPair, PublicKeyData, SignatureAlgorithm,
-};
+use crate::{Certificate, CertificateParams, Error, Issuer, SignatureAlgorithm};
 #[cfg(feature = "x509-parser")]
 use crate::{DistinguishedName, SanType};
 
@@ -207,7 +206,7 @@ impl CertificateSigningRequestParams {
 			.params
 			.serialize_der_with_signer(&self.public_key, issuer)?;
 		let subject_public_key_info = yasna::construct_der(|writer| {
-			self.public_key.serialize_public_key_der(writer);
+			serialize_public_key_der(&self.public_key, writer);
 		});
 		Ok(Certificate {
 			params: self.params,
