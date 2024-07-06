@@ -142,9 +142,9 @@ fn write_distribution_point_name_uris<'a>(
 }
 
 /// Identifies the reason a certificate was revoked.
-/// See RFC 5280 §5.3.1[^1]
+/// See [RFC 5280 §5.3.1][1]
 ///
-/// [^1] <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
+/// [1]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 #[allow(missing_docs)] // Not much to add above the code name.
 pub enum RevocationReason {
