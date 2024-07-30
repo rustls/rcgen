@@ -38,9 +38,9 @@ zeroize = { version = "1.2", optional = true }
 [features]
 default = ["crypto", "pem", "ring"]
 crypto = []
-aws_lc_rs = ["crypto", "dep:aws-lc-rs"]
+aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys"]
 ring = ["crypto", "dep:ring"]
-fips = ["aws_lc_rs", "aws-lc-rs?/fips"]
+fips = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/fips"]
 
 [package.metadata.docs.rs]
 features = ["x509-parser"]
