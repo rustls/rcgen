@@ -11,9 +11,9 @@ keywords.workspace = true
 
 [features]
 default = ["ring"]
-aws_lc_rs = ["dep:aws-lc-rs", "rcgen/aws_lc_rs"]
+aws_lc_rs = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/aws-lc-sys"]
 ring = ["dep:ring", "rcgen/ring"]
-fips = ["aws_lc_rs", "aws-lc-rs?/fips"]
+fips = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/fips"]
 
 [dependencies]
 rcgen = { version = "0.13", path = "../rcgen", default-features = false, features = ["pem"] }
