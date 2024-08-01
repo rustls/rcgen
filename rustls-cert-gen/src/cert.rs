@@ -3,7 +3,8 @@ use std::{fmt, fs::File, io, path::Path};
 use bpaf::Bpaf;
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType,
-	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
+	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair, KeyUsagePurpose,
+	SanType,
 };
 
 #[cfg(feature = "aws_lc_rs")]
@@ -113,29 +114,25 @@ impl CaBuilder {
 	/// build `Ca` Certificate.
 	pub fn build(self) -> Result<Ca, rcgen::Error> {
 		let key_pair = self.alg.to_key_pair()?;
-		let cert = self.params.self_signed(&key_pair)?;
-		Ok(Ca { cert, key_pair })
+		Ok(Ca(Issuer::from_params(self.params, key_pair)))
 	}
 }
 
 /// End-entity [Certificate]
-pub struct Ca {
-	cert: Certificate,
-	key_pair: KeyPair,
-}
+pub struct Ca(Issuer);
 
 impl Ca {
 	/// Self-sign and serialize
 	pub fn serialize_pem(&self) -> PemCertifiedKey {
 		PemCertifiedKey {
-			cert_pem: self.cert.pem(),
-			private_key_pem: self.key_pair.serialize_pem(),
+			cert_pem: self.0.pem(),
+			private_key_pem: self.0.key_pair().serialize_pem(),
 		}
 	}
-	/// Return `&Certificate`
+	/// Return `Certificate`
 	#[allow(dead_code)]
-	pub fn cert(&self) -> &Certificate {
-		&self.cert
+	pub fn cert(&self) -> Certificate {
+		self.0.certificate()
 	}
 }
 
@@ -203,9 +200,7 @@ impl EndEntityBuilder {
 	/// build `EndEntity` Certificate.
 	pub fn build(self, issuer: &Ca) -> Result<EndEntity, rcgen::Error> {
 		let key_pair = self.alg.to_key_pair()?;
-		let cert = self
-			.params
-			.signed_by(&key_pair, &issuer.cert, &issuer.key_pair)?;
+		let cert = self.params.signed_by(&key_pair, &issuer.0)?;
 		Ok(EndEntity { cert, key_pair })
 	}
 }
