@@ -672,36 +672,18 @@ impl CertificateParams {
 
 					// Write standard key usage
 					if !self.key_usages.is_empty() {
+						// RFC 5280 defines 9 key usages, which we detail in our key usage enum
+						// We could use std::mem::variant_count here, but it's experimental
+						const KEY_USAGE_BITS: usize = 9;
+
+						// "When present, conforming CAs SHOULD mark this extension as critical."
 						write_x509_extension(writer.next(), oid::KEY_USAGE, true, |writer| {
-							let mut bits: u16 = 0;
-
-							for entry in self.key_usages.iter() {
-								// Map the index to a value
-								let index = match entry {
-									KeyUsagePurpose::DigitalSignature => 0,
-									KeyUsagePurpose::ContentCommitment => 1,
-									KeyUsagePurpose::KeyEncipherment => 2,
-									KeyUsagePurpose::DataEncipherment => 3,
-									KeyUsagePurpose::KeyAgreement => 4,
-									KeyUsagePurpose::KeyCertSign => 5,
-									KeyUsagePurpose::CrlSign => 6,
-									KeyUsagePurpose::EncipherOnly => 7,
-									KeyUsagePurpose::DecipherOnly => 8,
-								};
-
-								bits |= 1 << index;
-							}
-
-							// Compute the 1-based most significant bit
-							let msb = 16 - bits.leading_zeros();
-							let nb = if msb <= 8 { 1 } else { 2 };
-
-							let bits = bits.reverse_bits().to_be_bytes();
-
-							// Finally take only the bytes != 0
-							let bits = &bits[..nb];
-
-							writer.write_bitvec_bytes(bits, msb as usize)
+							// u16 is large enough to encode the largest possible key usage (two-bytes)
+							let bit_string =
+								self.key_usages.iter().fold(0u16, |bit_string, key_usage| {
+									bit_string | key_usage.to_u16()
+								});
+							writer.write_bitvec_bytes(&bit_string.to_be_bytes(), KEY_USAGE_BITS);
 						});
 					}
 
