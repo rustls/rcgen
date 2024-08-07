@@ -413,7 +413,7 @@ impl<'a> Iterator for DistinguishedNameIterator<'a> {
 }
 
 /// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum KeyUsagePurpose {
 	/// digitalSignature
 	DigitalSignature,
@@ -433,6 +433,48 @@ pub enum KeyUsagePurpose {
 	EncipherOnly,
 	/// decipherOnly
 	DecipherOnly,
+}
+
+impl KeyUsagePurpose {
+	/// Encode a key usage as the value of a BIT STRING as defined by RFC 5280.
+	/// [`u16`] is sufficient to encode the largest possible key usage value (two bytes).
+	fn to_u16(&self) -> u16 {
+		const FLAG: u16 = 0b1000_0000_0000_0000;
+		FLAG >> match self {
+			KeyUsagePurpose::DigitalSignature => 0,
+			KeyUsagePurpose::ContentCommitment => 1,
+			KeyUsagePurpose::KeyEncipherment => 2,
+			KeyUsagePurpose::DataEncipherment => 3,
+			KeyUsagePurpose::KeyAgreement => 4,
+			KeyUsagePurpose::KeyCertSign => 5,
+			KeyUsagePurpose::CrlSign => 6,
+			KeyUsagePurpose::EncipherOnly => 7,
+			KeyUsagePurpose::DecipherOnly => 8,
+		}
+	}
+
+	/// Parse a collection of key usages from a [`u16`] representing the value
+	/// of a KeyUsage BIT STRING as defined by RFC 5280.
+	#[cfg(feature = "x509-parser")]
+	fn from_u16(value: u16) -> Vec<Self> {
+		[
+			KeyUsagePurpose::DigitalSignature,
+			KeyUsagePurpose::ContentCommitment,
+			KeyUsagePurpose::KeyEncipherment,
+			KeyUsagePurpose::DataEncipherment,
+			KeyUsagePurpose::KeyAgreement,
+			KeyUsagePurpose::KeyCertSign,
+			KeyUsagePurpose::CrlSign,
+			KeyUsagePurpose::EncipherOnly,
+			KeyUsagePurpose::DecipherOnly,
+		]
+		.iter()
+		.filter_map(|key_usage| {
+			let present = key_usage.to_u16() & value != 0;
+			present.then_some(*key_usage)
+		})
+		.collect()
+	}
 }
 
 /// Method to generate key identifiers from public keys.

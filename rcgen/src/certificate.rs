@@ -324,38 +324,9 @@ impl CertificateParams {
 			.key_usage()
 			.or(Err(Error::CouldNotParseCertificate))?
 			.map(|ext| ext.value);
-
-		let mut key_usages = Vec::new();
-		if let Some(key_usage) = key_usage {
-			if key_usage.digital_signature() {
-				key_usages.push(KeyUsagePurpose::DigitalSignature);
-			}
-			if key_usage.non_repudiation() {
-				key_usages.push(KeyUsagePurpose::ContentCommitment);
-			}
-			if key_usage.key_encipherment() {
-				key_usages.push(KeyUsagePurpose::KeyEncipherment);
-			}
-			if key_usage.data_encipherment() {
-				key_usages.push(KeyUsagePurpose::DataEncipherment);
-			}
-			if key_usage.key_agreement() {
-				key_usages.push(KeyUsagePurpose::KeyAgreement);
-			}
-			if key_usage.key_cert_sign() {
-				key_usages.push(KeyUsagePurpose::KeyCertSign);
-			}
-			if key_usage.crl_sign() {
-				key_usages.push(KeyUsagePurpose::CrlSign);
-			}
-			if key_usage.encipher_only() {
-				key_usages.push(KeyUsagePurpose::EncipherOnly);
-			}
-			if key_usage.decipher_only() {
-				key_usages.push(KeyUsagePurpose::DecipherOnly);
-			}
-		}
-		Ok(key_usages)
+		// This x509 parser stores flags in reversed bit BIT STRING order
+		let flags = key_usage.map_or(0u16, |k| k.flags).reverse_bits();
+		Ok(KeyUsagePurpose::from_u16(flags))
 	}
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_extended_key_usages(
@@ -455,6 +426,25 @@ impl CertificateParams {
 		Ok(result)
 	}
 
+	/// Write a certificate's KeyUsage as defined in RFC 5280.
+	fn write_key_usage(&self, writer: DERWriter) {
+		// RFC 5280 defines 9 key usages, which we detail in our key usage enum
+		// We could use std::mem::variant_count here, but it's experimental
+		const KEY_USAGE_BITS: usize = 9;
+		if self.key_usages.is_empty() {
+			return;
+		}
+
+		// "When present, conforming CAs SHOULD mark this extension as critical."
+		write_x509_extension(writer, oid::KEY_USAGE, true, |writer| {
+			// u16 is large enough to encode the largest possible key usage (two-bytes)
+			let bit_string = self.key_usages.iter().fold(0u16, |bit_string, key_usage| {
+				bit_string | key_usage.to_u16()
+			});
+			writer.write_bitvec_bytes(&bit_string.to_be_bytes(), KEY_USAGE_BITS);
+		});
+	}
+
 	fn write_extended_key_usage(&self, writer: DERWriter) {
 		if !self.extended_key_usages.is_empty() {
 			write_x509_extension(writer, oid::EXT_KEY_USAGE, false, |writer| {
@@ -544,7 +534,6 @@ impl CertificateParams {
 		);
 		if serial_number.is_some()
 			|| *is_ca != IsCa::NoCa
-			|| !key_usages.is_empty()
 			|| name_constraints.is_some()
 			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
@@ -562,12 +551,17 @@ impl CertificateParams {
 			// Write extensions
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
 			writer.next().write_tagged(Tag::context(0), |writer| {
-				if !subject_alt_names.is_empty() || !custom_extensions.is_empty() {
+				if !key_usages.is_empty()
+					|| !subject_alt_names.is_empty()
+					|| !custom_extensions.is_empty()
+				{
 					writer.write_sequence(|writer| {
 						let oid = ObjectIdentifier::from_slice(oid::PKCS_9_AT_EXTENSION_REQUEST);
 						writer.next().write_oid(&oid);
 						writer.next().write_set(|writer| {
 							writer.next().write_sequence(|writer| {
+								// Write key_usage
+								self.write_key_usage(writer.next());
 								// Write subject_alt_names
 								self.write_subject_alt_names(writer.next());
 								self.write_extended_key_usage(writer.next());
@@ -594,6 +588,7 @@ impl CertificateParams {
 			der: CertificateSigningRequestDer::from(der),
 		})
 	}
+
 	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
@@ -671,39 +666,7 @@ impl CertificateParams {
 					}
 
 					// Write standard key usage
-					if !self.key_usages.is_empty() {
-						write_x509_extension(writer.next(), oid::KEY_USAGE, true, |writer| {
-							let mut bits: u16 = 0;
-
-							for entry in self.key_usages.iter() {
-								// Map the index to a value
-								let index = match entry {
-									KeyUsagePurpose::DigitalSignature => 0,
-									KeyUsagePurpose::ContentCommitment => 1,
-									KeyUsagePurpose::KeyEncipherment => 2,
-									KeyUsagePurpose::DataEncipherment => 3,
-									KeyUsagePurpose::KeyAgreement => 4,
-									KeyUsagePurpose::KeyCertSign => 5,
-									KeyUsagePurpose::CrlSign => 6,
-									KeyUsagePurpose::EncipherOnly => 7,
-									KeyUsagePurpose::DecipherOnly => 8,
-								};
-
-								bits |= 1 << index;
-							}
-
-							// Compute the 1-based most significant bit
-							let msb = 16 - bits.leading_zeros();
-							let nb = if msb <= 8 { 1 } else { 2 };
-
-							let bits = bits.reverse_bits().to_be_bytes();
-
-							// Finally take only the bytes != 0
-							let bits = &bits[..nb];
-
-							writer.write_bitvec_bytes(bits, msb as usize)
-						});
-					}
+					self.write_key_usage(writer.next());
 
 					// Write extended key usage
 					if !self.extended_key_usages.is_empty() {

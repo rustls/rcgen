@@ -117,6 +117,11 @@ impl CertificateSigningRequestParams {
 		if let Some(extensions) = csr.requested_extensions() {
 			for ext in extensions {
 				match ext {
+					x509_parser::extensions::ParsedExtension::KeyUsage(key_usage) => {
+						// This x509 parser stores flags in reversed bit BIT STRING order
+						params.key_usages =
+							crate::KeyUsagePurpose::from_u16(key_usage.flags.reverse_bits());
+					},
 					x509_parser::extensions::ParsedExtension::SubjectAlternativeName(san) => {
 						for name in &san.general_names {
 							params
