@@ -563,7 +563,6 @@ impl CertificateParams {
 		);
 		if serial_number.is_some()
 			|| *is_ca != IsCa::NoCa
-			|| !key_usages.is_empty()
 			|| name_constraints.is_some()
 			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
@@ -581,12 +580,17 @@ impl CertificateParams {
 			// Write extensions
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
 			writer.next().write_tagged(Tag::context(0), |writer| {
-				if !subject_alt_names.is_empty() || !custom_extensions.is_empty() {
+				if !key_usages.is_empty()
+					|| !subject_alt_names.is_empty()
+					|| !custom_extensions.is_empty()
+				{
 					writer.write_sequence(|writer| {
 						let oid = ObjectIdentifier::from_slice(oid::PKCS_9_AT_EXTENSION_REQUEST);
 						writer.next().write_oid(&oid);
 						writer.next().write_set(|writer| {
 							writer.next().write_sequence(|writer| {
+								// Write key_usage
+								self.write_key_usage(writer.next());
 								// Write subject_alt_names
 								self.write_subject_alt_names(writer.next());
 								self.write_extended_key_usage(writer.next());
@@ -613,6 +617,7 @@ impl CertificateParams {
 			der: CertificateSigningRequestDer::from(der),
 		})
 	}
+
 	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
