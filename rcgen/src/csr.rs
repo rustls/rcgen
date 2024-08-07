@@ -94,7 +94,9 @@ impl CertificateSigningRequestParams {
 	/// [`rustls_pemfile::csr()`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.csr.html
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(csr: &CertificateSigningRequestDer<'_>) -> Result<Self, Error> {
+		use crate::KeyUsagePurpose;
 		use x509_parser::prelude::FromDer;
+
 		let csr = x509_parser::certification_request::X509CertificationRequest::from_der(csr)
 			.map_err(|_| Error::CouldNotParseCertificationRequest)?
 			.1;
@@ -117,6 +119,11 @@ impl CertificateSigningRequestParams {
 		if let Some(extensions) = csr.requested_extensions() {
 			for ext in extensions {
 				match ext {
+					x509_parser::extensions::ParsedExtension::KeyUsage(key_usage) => {
+						// This x509 parser stores flags in reversed bit BIT STRING order
+						params.key_usages =
+							KeyUsagePurpose::from_u16(key_usage.flags.reverse_bits());
+					},
 					x509_parser::extensions::ParsedExtension::SubjectAlternativeName(san) => {
 						for name in &san.general_names {
 							params
