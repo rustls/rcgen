@@ -455,6 +455,25 @@ impl CertificateParams {
 		Ok(result)
 	}
 
+	/// Write a certificate's KeyUsage as defined in RFC 5280.
+	fn write_key_usage(&self, writer: DERWriter) {
+		// RFC 5280 defines 9 key usages, which we detail in our key usage enum
+		// We could use std::mem::variant_count here, but it's experimental
+		const KEY_USAGE_BITS: usize = 9;
+		if self.key_usages.is_empty() {
+			return;
+		}
+
+		// "When present, conforming CAs SHOULD mark this extension as critical."
+		write_x509_extension(writer, oid::KEY_USAGE, true, |writer| {
+			// u16 is large enough to encode the largest possible key usage (two-bytes)
+			let bit_string = self.key_usages.iter().fold(0u16, |bit_string, key_usage| {
+				bit_string | key_usage.to_u16()
+			});
+			writer.write_bitvec_bytes(&bit_string.to_be_bytes(), KEY_USAGE_BITS);
+		});
+	}
+
 	fn write_extended_key_usage(&self, writer: DERWriter) {
 		if !self.extended_key_usages.is_empty() {
 			write_x509_extension(writer, oid::EXT_KEY_USAGE, false, |writer| {
@@ -671,21 +690,7 @@ impl CertificateParams {
 					}
 
 					// Write standard key usage
-					if !self.key_usages.is_empty() {
-						// RFC 5280 defines 9 key usages, which we detail in our key usage enum
-						// We could use std::mem::variant_count here, but it's experimental
-						const KEY_USAGE_BITS: usize = 9;
-
-						// "When present, conforming CAs SHOULD mark this extension as critical."
-						write_x509_extension(writer.next(), oid::KEY_USAGE, true, |writer| {
-							// u16 is large enough to encode the largest possible key usage (two-bytes)
-							let bit_string =
-								self.key_usages.iter().fold(0u16, |bit_string, key_usage| {
-									bit_string | key_usage.to_u16()
-								});
-							writer.write_bitvec_bytes(&bit_string.to_be_bytes(), KEY_USAGE_BITS);
-						});
-					}
+					self.write_key_usage(writer.next());
 
 					// Write extended key usage
 					if !self.extended_key_usages.is_empty() {
