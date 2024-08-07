@@ -412,11 +412,16 @@ fn test_webpki_separate_ca_name_constraints() {
 fn test_webpki_imported_ca() {
 	let (mut params, ca_key) = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	params.key_usages.push(KeyUsagePurpose::KeyCertSign);
 	let ca_cert = params.self_signed(&ca_key).unwrap();
 
 	let ca_cert_der = ca_cert.der();
 
 	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der).unwrap();
+	assert_eq!(
+		imported_ca_cert_params.key_usages,
+		vec![KeyUsagePurpose::KeyCertSign]
+	);
 	let imported_ca_cert = imported_ca_cert_params.self_signed(&ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();

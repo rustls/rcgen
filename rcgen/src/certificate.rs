@@ -324,38 +324,9 @@ impl CertificateParams {
 			.key_usage()
 			.or(Err(Error::CouldNotParseCertificate))?
 			.map(|ext| ext.value);
-
-		let mut key_usages = Vec::new();
-		if let Some(key_usage) = key_usage {
-			if key_usage.digital_signature() {
-				key_usages.push(KeyUsagePurpose::DigitalSignature);
-			}
-			if key_usage.non_repudiation() {
-				key_usages.push(KeyUsagePurpose::ContentCommitment);
-			}
-			if key_usage.key_encipherment() {
-				key_usages.push(KeyUsagePurpose::KeyEncipherment);
-			}
-			if key_usage.data_encipherment() {
-				key_usages.push(KeyUsagePurpose::DataEncipherment);
-			}
-			if key_usage.key_agreement() {
-				key_usages.push(KeyUsagePurpose::KeyAgreement);
-			}
-			if key_usage.key_cert_sign() {
-				key_usages.push(KeyUsagePurpose::KeyCertSign);
-			}
-			if key_usage.crl_sign() {
-				key_usages.push(KeyUsagePurpose::CrlSign);
-			}
-			if key_usage.encipher_only() {
-				key_usages.push(KeyUsagePurpose::EncipherOnly);
-			}
-			if key_usage.decipher_only() {
-				key_usages.push(KeyUsagePurpose::DecipherOnly);
-			}
-		}
-		Ok(key_usages)
+		// This x509 parser stores flags in reversed bit BIT STRING order
+		let flags = key_usage.map_or(0u16, |k| k.flags).reverse_bits();
+		Ok(KeyUsagePurpose::from_u16(flags))
 	}
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_extended_key_usages(

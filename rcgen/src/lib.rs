@@ -413,7 +413,7 @@ impl<'a> Iterator for DistinguishedNameIterator<'a> {
 }
 
 /// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum KeyUsagePurpose {
 	/// digitalSignature
 	DigitalSignature,
@@ -451,6 +451,29 @@ impl KeyUsagePurpose {
 			KeyUsagePurpose::EncipherOnly => 7,
 			KeyUsagePurpose::DecipherOnly => 8,
 		}
+	}
+
+	/// Parse a collection of key usages from a [`u16`] representing the value
+	/// of a KeyUsage BIT STRING as defined by RFC 5280.
+	#[cfg(feature = "x509-parser")]
+	fn from_u16(value: u16) -> Vec<Self> {
+		[
+			KeyUsagePurpose::DigitalSignature,
+			KeyUsagePurpose::ContentCommitment,
+			KeyUsagePurpose::KeyEncipherment,
+			KeyUsagePurpose::DataEncipherment,
+			KeyUsagePurpose::KeyAgreement,
+			KeyUsagePurpose::KeyCertSign,
+			KeyUsagePurpose::CrlSign,
+			KeyUsagePurpose::EncipherOnly,
+			KeyUsagePurpose::DecipherOnly,
+		]
+		.iter()
+		.filter_map(|key_usage| {
+			let present = key_usage.to_u16() & value != 0;
+			present.then_some(*key_usage)
+		})
+		.collect()
 	}
 }
 
