@@ -360,7 +360,7 @@ mod test_parse_other_name_alt_name {
 
 #[cfg(feature = "x509-parser")]
 mod test_csr {
-	use rcgen::{CertificateParams, CertificateSigningRequestParams, KeyPair};
+	use rcgen::{CertificateParams, CertificateSigningRequestParams, KeyPair, KeyUsagePurpose};
 
 	#[test]
 	fn test_csr_roundtrip() {
@@ -374,5 +374,33 @@ mod test_csr {
 
 		// Ensure algorithms match.
 		assert_eq!(key_pair.algorithm(), csrp.public_key.algorithm());
+	}
+
+	#[test]
+	fn test_nontrivial_csr_roundtrip() {
+		let key_pair = KeyPair::generate().unwrap();
+
+		// We should be able to serialize a CSR, and then parse the CSR.
+		let mut params = CertificateParams::default();
+		params.key_usages = vec![
+			KeyUsagePurpose::DigitalSignature,
+			KeyUsagePurpose::ContentCommitment,
+			KeyUsagePurpose::KeyEncipherment,
+			KeyUsagePurpose::DataEncipherment,
+			KeyUsagePurpose::KeyAgreement,
+			KeyUsagePurpose::KeyCertSign,
+			KeyUsagePurpose::CrlSign,
+			// It doesn't make sense to have both encipher and decipher only
+			// So we'll take this opportunity to test omitting a key usage
+			// KeyUsagePurpose::EncipherOnly,
+			KeyUsagePurpose::DecipherOnly,
+		];
+		let csr = params.serialize_request(&key_pair).unwrap();
+		let csrp = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
+
+		// Ensure algorithms match.
+		assert_eq!(key_pair.algorithm(), csrp.public_key.algorithm());
+		// Ensure key usages match.
+		assert_eq!(csrp.params.key_usages, params.key_usages);
 	}
 }
