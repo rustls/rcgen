@@ -69,16 +69,25 @@ pub struct SubjectPublicKey {
 
 #[cfg(feature = "x509-parser")]
 impl SubjectPublicKey {
-	/// Create a `PublicKey` value from a PEM string
-	pub fn from_pem_and_sign_algo(
-		pem_str: &str,
-		alg: &'static SignatureAlgorithm,
-	) -> Result<Self, Error> {
+	/// Create a `SubjectPublicKey` value from a PEM-encoded SubjectPublicKeyInfo string
+	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
 		let spki_der = pem::parse(pem_str)._err()?.into_contents();
-		let (rem, spki) = SubjectPublicKeyInfo::from_der(&spki_der).map_err(|_| Error::X509)?;
+		Self::from_der(&spki_der)
+	}
+
+	/// Create a `SubjectPublicKey` value from DER-encoded SubjectPublicKeyInfo bytes
+	pub fn from_der(spki_der: &[u8]) -> Result<Self, Error> {
+		let (rem, spki) = SubjectPublicKeyInfo::from_der(spki_der).map_err(|_| Error::X509)?;
 		if !rem.is_empty() {
 			return Err(Error::X509);
 		}
+		let alg_oid = spki
+			.algorithm
+			.oid()
+			.iter()
+			.ok_or(Error::X509)?
+			.collect::<Vec<u64>>();
+		let alg = SignatureAlgorithm::from_oid(&alg_oid)?;
 		Ok(Self {
 			alg,
 			subject_public_key: Vec::from(spki.subject_public_key.as_ref()),
