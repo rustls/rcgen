@@ -36,7 +36,7 @@ x509-parser = { workspace = true, features = ["verify"], optional = true }
 zeroize = { version = "1.2", optional = true }
 
 [features]
-default = ["crypto", "pem", "ring"]
+default = ["crypto", "pem", "ring", "x509-parser"]
 crypto = []
 aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys"]
 ring = ["crypto", "dep:ring"]

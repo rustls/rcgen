@@ -4,6 +4,8 @@ use std::fmt;
 use pem::Pem;
 #[cfg(feature = "crypto")]
 use pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+#[cfg(feature = "x509-parser")]
+use x509_parser::{prelude::FromDer, x509::SubjectPublicKeyInfo};
 use yasna::{DERWriter, DERWriterSeq};
 
 #[cfg(any(feature = "crypto", feature = "pem"))]
@@ -54,6 +56,43 @@ impl fmt::Debug for KeyPairKind {
 			Self::Rsa(key_pair, _) => write!(f, "{:?}", key_pair),
 			Self::Remote(_) => write!(f, "Box<dyn RemotePrivateKey>"),
 		}
+	}
+}
+
+/// A public key
+#[cfg(feature = "x509-parser")]
+#[derive(Debug)]
+pub struct SubjectPublicKey {
+	pub(crate) alg: &'static SignatureAlgorithm,
+	pub(crate) subject_public_key: Vec<u8>,
+}
+
+#[cfg(feature = "x509-parser")]
+impl SubjectPublicKey {
+	/// Create a `PublicKey` value from a PEM string
+	pub fn from_pem_and_sign_algo(
+		pem_str: &str,
+		alg: &'static SignatureAlgorithm,
+	) -> Result<Self, Error> {
+		let spki_der = pem::parse(pem_str)._err()?.into_contents();
+		let (rem, spki) = SubjectPublicKeyInfo::from_der(&spki_der).map_err(|_| Error::X509)?;
+		if !rem.is_empty() {
+			return Err(Error::X509);
+		}
+		Ok(Self {
+			alg,
+			subject_public_key: Vec::from(spki.subject_public_key.as_ref()),
+		})
+	}
+}
+
+#[cfg(feature = "x509-parser")]
+impl PublicKeyData for SubjectPublicKey {
+	fn alg(&self) -> &SignatureAlgorithm {
+		self.alg
+	}
+	fn raw_bytes(&self) -> &[u8] {
+		&self.subject_public_key
 	}
 }
 
@@ -689,7 +728,7 @@ impl<T> ExternalError<T> for Result<T, pem::PemError> {
 	}
 }
 
-pub(crate) trait PublicKeyData {
+pub trait PublicKeyData {
 	fn alg(&self) -> &SignatureAlgorithm;
 
 	fn raw_bytes(&self) -> &[u8];
