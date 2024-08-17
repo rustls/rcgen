@@ -4,8 +4,6 @@ use std::fmt;
 use pem::Pem;
 #[cfg(feature = "crypto")]
 use pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
-#[cfg(feature = "x509-parser")]
-use x509_parser::{prelude::FromDer, x509::SubjectPublicKeyInfo};
 use yasna::{DERWriter, DERWriterSeq};
 
 #[cfg(any(feature = "crypto", feature = "pem"))]
@@ -77,17 +75,29 @@ impl SubjectPublicKey {
 
 	/// Create a `SubjectPublicKey` value from DER-encoded SubjectPublicKeyInfo bytes
 	pub fn from_der(spki_der: &[u8]) -> Result<Self, Error> {
+		use x509_parser::{
+			prelude::FromDer,
+			x509::{AlgorithmIdentifier, SubjectPublicKeyInfo},
+		};
+
 		let (rem, spki) = SubjectPublicKeyInfo::from_der(spki_der).map_err(|_| Error::X509)?;
 		if !rem.is_empty() {
 			return Err(Error::X509);
 		}
-		let alg_oid = spki
-			.algorithm
-			.oid()
-			.iter()
-			.ok_or(Error::X509)?
-			.collect::<Vec<u64>>();
-		let alg = SignatureAlgorithm::from_oid(&alg_oid)?;
+		let alg = SignatureAlgorithm::iter()
+			.find(|alg| {
+				let bytes = yasna::construct_der(|writer| {
+					alg.write_oids_sign_alg(writer);
+				});
+				let Ok((rest, aid)) = AlgorithmIdentifier::from_der(&bytes) else {
+					return false;
+				};
+				if !rest.is_empty() {
+					return false;
+				}
+				aid == spki.algorithm
+			})
+			.ok_or(Error::UnsupportedSignatureAlgorithm)?;
 		Ok(Self {
 			alg,
 			subject_public_key: Vec::from(spki.subject_public_key.as_ref()),
@@ -102,6 +112,32 @@ impl PublicKeyData for SubjectPublicKey {
 	}
 	fn raw_bytes(&self) -> &[u8] {
 		&self.subject_public_key
+	}
+}
+
+#[cfg(all(test, feature = "x509-parser", feature = "pem"))]
+mod pkd_test {
+	use super::{KeyPair, PublicKeyData, SubjectPublicKey};
+	use crate::{PKCS_ECDSA_P256_SHA256, PKCS_ECDSA_P384_SHA384, PKCS_ED25519};
+
+	#[test]
+	fn test_subject_public_key_parsing() {
+		// NOTE: the other algorithms supported by this crate don't support keygen
+		for alg in [
+			&PKCS_ED25519,
+			&PKCS_ECDSA_P256_SHA256,
+			&PKCS_ECDSA_P384_SHA384,
+		] {
+			let kp = KeyPair::generate_for(alg).expect("keygen");
+			let pem = kp.public_key_pem();
+			let der = kp.public_key_der();
+
+			let pkd_pem = SubjectPublicKey::from_pem(&pem).expect("from pem");
+			assert_eq!(kp.raw_bytes(), pkd_pem.raw_bytes());
+
+			let pkd_der = SubjectPublicKey::from_der(&der).expect("from der");
+			assert_eq!(kp.raw_bytes(), pkd_der.raw_bytes());
+		}
 	}
 }
 
