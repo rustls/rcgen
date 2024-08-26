@@ -439,7 +439,7 @@ impl CertificateParams {
 		write_x509_extension(writer, oid::KEY_USAGE, true, |writer| {
 			// u16 is large enough to encode the largest possible key usage (two-bytes)
 			let bit_string = self.key_usages.iter().fold(0u16, |bit_string, key_usage| {
-				bit_string | key_usage.to_u16()
+				bit_string | u16::from(*key_usage)
 			});
 			writer.write_bitvec_bytes(&bit_string.to_be_bytes(), KEY_USAGE_BITS);
 		});
