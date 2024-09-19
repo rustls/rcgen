@@ -422,11 +422,27 @@ fn test_openssl_crl_parse() {
 
 	// The properties of the CRL should match expected.
 	let openssl_issuer = X509::from_der(issuer.der()).unwrap();
-	let expected_last_update =
-		Asn1Time::from_unix(crl.params().this_update.unix_timestamp()).unwrap();
+	// Asn1Time::from_unix takes i64 or i32 (depending on CPU architecture)
+	#[allow(clippy::useless_conversion)]
+	let expected_last_update = Asn1Time::from_unix(
+		crl.params()
+			.this_update
+			.unix_timestamp()
+			.try_into()
+			.unwrap(),
+	)
+	.unwrap();
 	assert!(openssl_crl.last_update().eq(&expected_last_update));
-	let expected_next_update =
-		Asn1Time::from_unix(crl.params().next_update.unix_timestamp()).unwrap();
+	// Asn1Time::from_unix takes i64 or i32 (depending on CPU architecture)
+	#[allow(clippy::useless_conversion)]
+	let expected_next_update = Asn1Time::from_unix(
+		crl.params()
+			.next_update
+			.unix_timestamp()
+			.try_into()
+			.unwrap(),
+	)
+	.unwrap();
 	assert!(openssl_crl.next_update().unwrap().eq(&expected_next_update));
 	assert!(matches!(
 		openssl_crl
