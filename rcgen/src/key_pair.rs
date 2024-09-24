@@ -457,7 +457,7 @@ impl KeyPair {
 	/// X.509.
 	/// See [RFC 5280 section 4.1](https://tools.ietf.org/html/rfc5280#section-4.1).
 	pub fn public_key_der(&self) -> Vec<u8> {
-		yasna::construct_der(|writer| self.serialize_public_key_der(writer))
+		yasna::construct_der(|writer| serialize_public_key_der(self, writer))
 	}
 
 	/// Return the key pair's public key in PEM format
@@ -691,17 +691,17 @@ impl<T> ExternalError<T> for Result<T, pem::PemError> {
 }
 
 pub(crate) trait PublicKeyData {
-	fn serialize_public_key_der(&self, writer: DERWriter) {
-		writer.write_sequence(|writer| {
-			self.algorithm().write_oids_sign_alg(writer.next());
-			let pk = self.der_bytes();
-			writer.next().write_bitvec_bytes(pk, pk.len() * 8);
-		})
-	}
-
 	fn der_bytes(&self) -> &[u8];
 
 	fn algorithm(&self) -> &SignatureAlgorithm;
+}
+
+pub(crate) fn serialize_public_key_der(key: &impl PublicKeyData, writer: DERWriter) {
+	writer.write_sequence(|writer| {
+		key.algorithm().write_oids_sign_alg(writer.next());
+		let pk = key.der_bytes();
+		writer.next().write_bitvec_bytes(pk, pk.len() * 8);
+	})
 }
 
 #[cfg(all(test, feature = "crypto"))]
