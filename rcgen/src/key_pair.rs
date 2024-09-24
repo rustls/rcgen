@@ -690,6 +690,68 @@ impl<T> ExternalError<T> for Result<T, pem::PemError> {
 	}
 }
 
+/// A public key
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SubjectPublicKeyInfo {
+	pub(crate) alg: &'static SignatureAlgorithm,
+	pub(crate) subject_public_key: Vec<u8>,
+}
+
+impl SubjectPublicKeyInfo {
+	/// Create a `SubjectPublicKey` value from a PEM-encoded SubjectPublicKeyInfo string
+	#[cfg(all(feature = "x509-parser", feature = "pem"))]
+	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
+		Self::from_der(&pem::parse(pem_str)._err()?.into_contents())
+	}
+
+	/// Create a `SubjectPublicKey` value from DER-encoded SubjectPublicKeyInfo bytes
+	#[cfg(feature = "x509-parser")]
+	pub fn from_der(spki_der: &[u8]) -> Result<Self, Error> {
+		use x509_parser::{
+			prelude::FromDer,
+			x509::{AlgorithmIdentifier, SubjectPublicKeyInfo},
+		};
+
+		let (rem, spki) =
+			SubjectPublicKeyInfo::from_der(spki_der).map_err(|e| Error::X509(e.to_string()))?;
+		if !rem.is_empty() {
+			return Err(Error::X509(
+				"trailing bytes in SubjectPublicKeyInfo".to_string(),
+			));
+		}
+
+		let alg = SignatureAlgorithm::iter()
+			.find(|alg| {
+				let bytes = yasna::construct_der(|writer| {
+					alg.write_oids_sign_alg(writer);
+				});
+				let Ok((rest, aid)) = AlgorithmIdentifier::from_der(&bytes) else {
+					return false;
+				};
+				if !rest.is_empty() {
+					return false;
+				}
+				aid == spki.algorithm
+			})
+			.ok_or(Error::UnsupportedSignatureAlgorithm)?;
+
+		Ok(Self {
+			alg,
+			subject_public_key: Vec::from(spki.subject_public_key.as_ref()),
+		})
+	}
+}
+
+impl PublicKeyData for SubjectPublicKeyInfo {
+	fn der_bytes(&self) -> &[u8] {
+		&self.subject_public_key
+	}
+
+	fn algorithm(&self) -> &SignatureAlgorithm {
+		self.alg
+	}
+}
+
 /// The public key data of a key pair
 pub trait PublicKeyData {
 	/// The public key in DER format
@@ -715,6 +777,30 @@ mod test {
 		rand::SystemRandom,
 		signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING},
 	};
+
+	#[cfg(all(feature = "x509-parser", feature = "pem"))]
+	#[test]
+	fn test_subject_public_key_parsing() {
+		for alg in [
+			&PKCS_ED25519,
+			&PKCS_ECDSA_P256_SHA256,
+			&PKCS_ECDSA_P384_SHA384,
+			#[cfg(feature = "aws_lc_rs")]
+			&PKCS_ECDSA_P521_SHA512,
+			#[cfg(feature = "aws_lc_rs")]
+			&PKCS_RSA_SHA256,
+		] {
+			let kp = KeyPair::generate_for(alg).expect("keygen");
+			let pem = kp.public_key_pem();
+			let der = kp.public_key_der();
+
+			let pkd_pem = SubjectPublicKeyInfo::from_pem(&pem).expect("from pem");
+			assert_eq!(kp.der_bytes(), pkd_pem.der_bytes());
+
+			let pkd_der = SubjectPublicKeyInfo::from_der(&der).expect("from der");
+			assert_eq!(kp.der_bytes(), pkd_der.der_bytes());
+		}
+	}
 
 	#[test]
 	fn test_algorithm() {
