@@ -27,12 +27,12 @@ impl PublicKey {
 }
 
 impl PublicKeyData for PublicKey {
-	fn algorithm(&self) -> &SignatureAlgorithm {
-		self.alg
-	}
-
 	fn der_bytes(&self) -> &[u8] {
 		&self.raw
+	}
+
+	fn algorithm(&self) -> &SignatureAlgorithm {
+		self.alg
 	}
 }
 
