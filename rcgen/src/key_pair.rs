@@ -385,7 +385,7 @@ impl KeyPair {
 	/// would output, and how [`ring::signature::UnparsedPublicKey::verify`]
 	/// would accept.
 	pub fn public_key_raw(&self) -> &[u8] {
-		self.raw_bytes()
+		self.der_bytes()
 	}
 
 	/// Check if this key pair can be used with the given signature algorithm
@@ -637,10 +637,10 @@ pub enum RsaKeySize {
 }
 
 impl PublicKeyData for KeyPair {
-	fn alg(&self) -> &SignatureAlgorithm {
+	fn algorithm(&self) -> &SignatureAlgorithm {
 		self.alg
 	}
-	fn raw_bytes(&self) -> &[u8] {
+	fn der_bytes(&self) -> &[u8] {
 		match &self.kind {
 			#[cfg(feature = "crypto")]
 			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
@@ -690,14 +690,14 @@ impl<T> ExternalError<T> for Result<T, pem::PemError> {
 }
 
 pub(crate) trait PublicKeyData {
-	fn alg(&self) -> &SignatureAlgorithm;
+	fn algorithm(&self) -> &SignatureAlgorithm;
 
-	fn raw_bytes(&self) -> &[u8];
+	fn der_bytes(&self) -> &[u8];
 
 	fn serialize_public_key_der(&self, writer: DERWriter) {
 		writer.write_sequence(|writer| {
-			self.alg().write_oids_sign_alg(writer.next());
-			let pk = self.raw_bytes();
+			self.algorithm().write_oids_sign_alg(writer.next());
+			let pk = self.der_bytes();
 			writer.next().write_bitvec_bytes(pk, pk.len() * 8);
 		})
 	}
