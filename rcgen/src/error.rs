@@ -45,6 +45,9 @@ pub enum Error {
 	#[cfg(not(feature = "crypto"))]
 	/// Missing serial number
 	MissingSerialNumber,
+	/// X509 parsing error
+	#[cfg(feature = "x509-parser")]
+	X509(String),
 }
 
 impl fmt::Display for Error {
@@ -91,6 +94,8 @@ impl fmt::Display for Error {
 			)?,
 			#[cfg(not(feature = "crypto"))]
 			MissingSerialNumber => write!(f, "A serial number must be specified")?,
+			#[cfg(feature = "x509-parser")]
+			X509(e) => write!(f, "X.509 parsing error: {e}")?,
 		};
 		Ok(())
 	}
