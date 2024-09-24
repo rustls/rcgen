@@ -149,7 +149,7 @@ impl CertificateParams {
 	/// [`Certificate::pem`].
 	pub fn signed_by(
 		self,
-		key_pair: &KeyPair,
+		public_key: &impl PublicKeyData,
 		issuer: &Certificate,
 		issuer_key: &KeyPair,
 	) -> Result<Certificate, Error> {
@@ -160,8 +160,9 @@ impl CertificateParams {
 			key_pair: issuer_key,
 		};
 
-		let subject_public_key_info = key_pair.public_key_der();
-		let der = self.serialize_der_with_signer(key_pair, issuer)?;
+		let subject_public_key_info =
+			yasna::construct_der(|writer| serialize_public_key_der(public_key, writer));
+		let der = self.serialize_der_with_signer(public_key, issuer)?;
 		Ok(Certificate {
 			params: self,
 			subject_public_key_info,
