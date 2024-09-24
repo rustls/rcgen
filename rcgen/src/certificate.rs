@@ -607,7 +607,7 @@ impl CertificateParams {
 			} else {
 				#[cfg(feature = "crypto")]
 				{
-					let hash = digest::digest(&digest::SHA256, pub_key.raw_bytes());
+					let hash = digest::digest(&digest::SHA256, pub_key.der_bytes());
 					// RFC 5280 specifies at most 20 bytes for a serial number
 					let mut sl = hash.as_ref()[0..20].to_vec();
 					sl[0] &= 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
