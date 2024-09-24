@@ -10,7 +10,7 @@ use yasna::{DERWriter, Tag};
 
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
-use crate::key_pair::PublicKeyData;
+use crate::key_pair::{serialize_public_key_der, PublicKeyData};
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
 #[cfg(feature = "pem")]
@@ -547,7 +547,7 @@ impl CertificateParams {
 			// Write subject name
 			write_distinguished_name(writer.next(), distinguished_name);
 			// Write subjectPublicKeyInfo
-			subject_key.serialize_public_key_der(writer.next());
+			serialize_public_key_der(subject_key, writer.next());
 			// Write extensions
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
 			writer.next().write_tagged(Tag::context(0), |writer| {
@@ -596,7 +596,7 @@ impl CertificateParams {
 	) -> Result<CertificateDer<'static>, Error> {
 		let der = issuer.key_pair.sign_der(|writer| {
 			let pub_key_spki =
-				yasna::construct_der(|writer| pub_key.serialize_public_key_der(writer));
+				yasna::construct_der(|writer| serialize_public_key_der(pub_key, writer));
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
 				writer.write_u8(2);
@@ -633,7 +633,7 @@ impl CertificateParams {
 			// Write subject
 			write_distinguished_name(writer.next(), &self.distinguished_name);
 			// Write subjectPublicKeyInfo
-			pub_key.serialize_public_key_der(writer.next());
+			serialize_public_key_der(pub_key, writer.next());
 			// write extensions
 			let should_write_exts = self.use_authority_key_identifier_extension
 				|| !self.subject_alt_names.is_empty()
