@@ -690,9 +690,12 @@ impl<T> ExternalError<T> for Result<T, pem::PemError> {
 	}
 }
 
-pub(crate) trait PublicKeyData {
+/// The public key data of a key pair
+pub trait PublicKeyData {
+	/// The public key in DER format
 	fn der_bytes(&self) -> &[u8];
 
+	/// The algorithm used by the key pair
 	fn algorithm(&self) -> &SignatureAlgorithm;
 }
 
