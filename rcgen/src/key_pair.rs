@@ -637,9 +637,6 @@ pub enum RsaKeySize {
 }
 
 impl PublicKeyData for KeyPair {
-	fn algorithm(&self) -> &SignatureAlgorithm {
-		self.alg
-	}
 	fn der_bytes(&self) -> &[u8] {
 		match &self.kind {
 			#[cfg(feature = "crypto")]
@@ -650,6 +647,10 @@ impl PublicKeyData for KeyPair {
 			KeyPairKind::Rsa(kp, _) => kp.public_key().as_ref(),
 			KeyPairKind::Remote(kp) => kp.public_key(),
 		}
+	}
+
+	fn algorithm(&self) -> &SignatureAlgorithm {
+		self.alg
 	}
 }
 
@@ -690,10 +691,6 @@ impl<T> ExternalError<T> for Result<T, pem::PemError> {
 }
 
 pub(crate) trait PublicKeyData {
-	fn algorithm(&self) -> &SignatureAlgorithm;
-
-	fn der_bytes(&self) -> &[u8];
-
 	fn serialize_public_key_der(&self, writer: DERWriter) {
 		writer.write_sequence(|writer| {
 			self.algorithm().write_oids_sign_alg(writer.next());
@@ -701,6 +698,10 @@ pub(crate) trait PublicKeyData {
 			writer.next().write_bitvec_bytes(pk, pk.len() * 8);
 		})
 	}
+
+	fn der_bytes(&self) -> &[u8];
+
+	fn algorithm(&self) -> &SignatureAlgorithm;
 }
 
 #[cfg(all(test, feature = "crypto"))]
