@@ -29,6 +29,19 @@ pub struct Certificate {
 }
 
 impl Certificate {
+
+	/// create a new Certificate with given parameter
+	pub fn new(params: CertificateParams,
+		subject_public_key_info: Vec<u8>,
+		der: CertificateDer<'static>,
+	) -> Self {
+		Certificate {
+			params,
+			subject_public_key_info,
+			der,
+		}		
+	}
+
 	/// Returns the certificate parameters
 	pub fn params(&self) -> &CertificateParams {
 		&self.params
