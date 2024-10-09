@@ -882,6 +882,7 @@ name = "rcgen"
 version = "0.13.1"
 dependencies = [
  "aws-lc-rs",
+ "base64",
  "botan",
  "openssl",
  "pem",

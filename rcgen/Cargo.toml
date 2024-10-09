@@ -34,6 +34,7 @@ pki-types = { workspace = true }
 time = { version = "0.3.6", default-features = false }
 x509-parser = { workspace = true, features = ["verify"], optional = true }
 zeroize = { version = "1.2", optional = true }
+base64 = "0.22.1"
 
 [features]
 default = ["crypto", "pem", "ring"]
