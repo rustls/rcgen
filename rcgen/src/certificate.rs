@@ -33,12 +33,15 @@ impl Certificate {
 	/// Create a `Certificate` from a DER encoded certificate.
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
+    	use x509_parser::prelude::{FromDer, X509Certificate};
+
+
 		let der = der.to_owned().into();
 		let params = CertificateParams::from_ca_cert_der(&der)?;
-		let (_, x509_cert) = X509Certificate::from_der(der_certificate).unwrap();
-		let x509_spki_der = x509_cert.public_key().raw();
+		let (_, x509_cert) = X509Certificate::from_der(&der).unwrap();
+		let x509_spki_der = x509_cert.public_key().raw;
 
-		let subj = crate::SubjectPublicKeyInfo::from_der(&x509_spki_der)?;
+		let subj = crate::SubjectPublicKeyInfo::from_der(x509_spki_der)?;
 		Ok(Certificate {
 			params,
 			subject_public_key_info: subj.subject_public_key,
