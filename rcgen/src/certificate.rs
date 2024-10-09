@@ -40,11 +40,11 @@ impl Certificate {
 		let (_, x509_cert) = X509Certificate::from_der(&der).unwrap();
 		let x509_spki_der = x509_cert.public_key().raw;
 
-		let subj = crate::SubjectPublicKeyInfo::from_der(x509_spki_der)?;
+		// let subj = crate::SubjectPublicKeyInfo::from_der(x509_spki_der)?;
 		Ok(Certificate {
 			params,
 			// subject_public_key_info: subj.subject_public_key,
-			subject_public_key_info: subj,
+			subject_public_key_info: x509_spki_der,
 			der,
 		})
 	}
