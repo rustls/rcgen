@@ -49,7 +49,7 @@ impl Certificate {
 		Ok(Certificate {
 			params,
 			// subject_public_key_info: subj.subject_public_key,
-			subject_public_key_info: spki_base64,
+			subject_public_key_info: x509_spki_der,
 			der,
 		})
 	}
