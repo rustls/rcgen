@@ -30,6 +30,19 @@ pub struct Certificate {
 
 impl Certificate {
 
+	/// Create a `Certificate` from a DER encoded certificate.
+	#[cfg(feature = "x509-parser")]
+	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
+		let der = der.to_owned().into();
+		let params = CertificateParams::from_ca_cert_der(&der)?;
+		let subj = crate::SubjectPublicKeyInfo::from_der(&der)?;
+		Ok(Certificate {
+			params,
+			subject_public_key_info: subj.subject_public_key,
+			der,
+		})
+	}
+
 	/// create a new Certificate with given parameter
 	pub fn new(params: CertificateParams,
 		subject_public_key_info: Vec<u8>,
