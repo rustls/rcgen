@@ -38,6 +38,8 @@ impl Certificate {
 		let der = der.to_owned().into();
 		let params = CertificateParams::from_ca_cert_der(&der)?;
 		let (_, x509_cert) = X509Certificate::from_der(&der).unwrap();
+
+		println!("spki : {:?}", x509_cert.public_key());
 		let x509_spki_der = x509_cert.public_key().raw.to_vec();
 
 		// let subj = crate::SubjectPublicKeyInfo::from_der(x509_spki_der)?;
