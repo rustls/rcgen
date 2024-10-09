@@ -34,16 +34,12 @@ impl Certificate {
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
     	use x509_parser::prelude::{FromDer, X509Certificate};
-		use base64::{engine::general_purpose::STANDARD, Engine};
 
 		let der = der.to_owned().into();
 		let params = CertificateParams::from_ca_cert_der(&der)?;
 		let (_, x509_cert) = X509Certificate::from_der(&der).unwrap();
 
-		println!("spki : {:?}", x509_cert.public_key());
 		let x509_spki_der = x509_cert.public_key().raw.to_vec();
-		let spki_base64 = STANDARD.encode(&x509_spki_der);
-		println!("spki_base64: {:?}", spki_base64.into_bytes());
 
 		// let subj = crate::SubjectPublicKeyInfo::from_der(x509_spki_der)?;
 		Ok(Certificate {
