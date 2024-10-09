@@ -35,7 +35,6 @@ impl Certificate {
 	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
     	use x509_parser::prelude::{FromDer, X509Certificate};
 
-
 		let der = der.to_owned().into();
 		let params = CertificateParams::from_ca_cert_der(&der)?;
 		let (_, x509_cert) = X509Certificate::from_der(&der).unwrap();
@@ -44,7 +43,8 @@ impl Certificate {
 		let subj = crate::SubjectPublicKeyInfo::from_der(x509_spki_der)?;
 		Ok(Certificate {
 			params,
-			subject_public_key_info: subj.subject_public_key,
+			// subject_public_key_info: subj.subject_public_key,
+			subject_public_key_info: subj,
 			der,
 		})
 	}
