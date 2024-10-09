@@ -34,6 +34,7 @@ impl Certificate {
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
     	use x509_parser::prelude::{FromDer, X509Certificate};
+		use base64::{engine::general_purpose::STANDARD, Engine};
 
 		let der = der.to_owned().into();
 		let params = CertificateParams::from_ca_cert_der(&der)?;
