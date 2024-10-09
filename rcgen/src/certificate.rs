@@ -43,7 +43,7 @@ impl Certificate {
 		println!("spki : {:?}", x509_cert.public_key());
 		let x509_spki_der = x509_cert.public_key().raw.to_vec();
 		let spki_base64 = STANDARD.encode(&x509_spki_der);
-		println!("spki_base64: {:?}", spki_base64);
+		println!("spki_base64: {:?}", spki_base64.into_bytes());
 
 		// let subj = crate::SubjectPublicKeyInfo::from_der(x509_spki_der)?;
 		Ok(Certificate {
