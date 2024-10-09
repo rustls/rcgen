@@ -259,6 +259,8 @@ impl CertificateParams {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
 			.or(Err(Error::CouldNotParseCertificate))?;
 
+		println!("x509 info: {:?}", x509);
+
 		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
 		let is_ca = Self::convert_x509_is_ca(&x509)?;
 		let validity = x509.validity();
