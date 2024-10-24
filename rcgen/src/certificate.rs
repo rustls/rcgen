@@ -31,6 +31,9 @@ pub struct Certificate {
 impl Certificate {
 
 	/// Create a `Certificate` from a DER encoded certificate.
+	/// Make sure the certificate match the format of x509-parser in rcgen,
+	/// or the generated `Certificate` will be different.
+	/// A safe way is to load the DER certificate generated from rcgen.
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(der: &[u8]) -> Result<Self, Error> {
     	use x509_parser::prelude::{FromDer, X509Certificate};
@@ -41,25 +44,11 @@ impl Certificate {
 
 		let x509_spki_der = x509_cert.public_key().raw.to_vec();
 
-		// let subj = crate::SubjectPublicKeyInfo::from_der(x509_spki_der)?;
 		Ok(Certificate {
 			params,
-			// subject_public_key_info: subj.subject_public_key,
 			subject_public_key_info: x509_spki_der,
 			der,
 		})
-	}
-
-	/// create a new Certificate with given parameter
-	pub fn new(params: CertificateParams,
-		subject_public_key_info: Vec<u8>,
-		der: CertificateDer<'static>,
-	) -> Self {
-		Certificate {
-			params,
-			subject_public_key_info,
-			der,
-		}		
 	}
 
 	/// Returns the certificate parameters
@@ -258,8 +247,6 @@ impl CertificateParams {
 	pub fn from_ca_cert_der(ca_cert: &CertificateDer<'_>) -> Result<Self, Error> {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
 			.or(Err(Error::CouldNotParseCertificate))?;
-
-		// println!("x509 info: {:?}", x509);
 
 		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
 		let is_ca = Self::convert_x509_is_ca(&x509)?;
