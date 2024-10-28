@@ -495,7 +495,7 @@ impl CertificateParams {
 	///
 	/// The constructed CSR will contain attributes based on the certificate parameters,
 	/// and include the subject public key information from `subject_key`. Additionally,
-	/// the CSR will be self-signed using the subject key.
+	/// the CSR will be signed using the subject key.
 	///
 	/// Note that subsequent invocations of `serialize_request()` will not produce the exact
 	/// same output.
