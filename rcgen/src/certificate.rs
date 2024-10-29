@@ -81,6 +81,11 @@ pub struct CertificateParams {
 	/// [^1]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13>
 	pub crl_distribution_points: Vec<CrlDistributionPoint>,
 	pub custom_extensions: Vec<CustomExtension>,
+	/// An optional set of custom PKCS #10 certificate signing request (CSR) attributes as
+	/// defined in [RFC 2986][1].
+	///
+	/// [1]: <https://datatracker.ietf.org/doc/html/rfc2986#section-4>
+	pub custom_csr_attributes: Vec<Attribute>,
 	/// If `true`, the 'Authority Key Identifier' extension will be added to the generated cert
 	pub use_authority_key_identifier_extension: bool,
 	/// Method to generate key identifiers from public keys
@@ -108,6 +113,7 @@ impl Default for CertificateParams {
 			name_constraints: None,
 			crl_distribution_points: Vec::new(),
 			custom_extensions: Vec::new(),
+			custom_csr_attributes: Vec::new(),
 			use_authority_key_identifier_extension: false,
 			#[cfg(feature = "crypto")]
 			key_identifier_method: KeyIdMethod::Sha256,
@@ -461,6 +467,10 @@ impl CertificateParams {
 	}
 
 	fn write_subject_alt_names(&self, writer: DERWriter) {
+		if self.subject_alt_names.is_empty() {
+			return;
+		}
+
 		write_x509_extension(writer, oid::SUBJECT_ALT_NAME, false, |writer| {
 			writer.write_sequence(|writer| {
 				for san in self.subject_alt_names.iter() {
@@ -517,6 +527,7 @@ impl CertificateParams {
 			name_constraints,
 			crl_distribution_points,
 			custom_extensions,
+			custom_csr_attributes: custom_attributes,
 			use_authority_key_identifier_extension,
 			key_identifier_method,
 		} = self;
@@ -550,37 +561,57 @@ impl CertificateParams {
 			// Write subjectPublicKeyInfo
 			serialize_public_key_der(subject_key, writer.next());
 			// Write extensions
-			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
-			writer.next().write_tagged(Tag::context(0), |writer| {
-				if !key_usages.is_empty()
-					|| !subject_alt_names.is_empty()
-					|| !custom_extensions.is_empty()
-				{
-					writer.write_sequence(|writer| {
-						let oid = ObjectIdentifier::from_slice(oid::PKCS_9_AT_EXTENSION_REQUEST);
-						writer.next().write_oid(&oid);
-						writer.next().write_set(|writer| {
-							writer.next().write_sequence(|writer| {
-								// Write key_usage
-								self.write_key_usage(writer.next());
-								// Write subject_alt_names
-								self.write_subject_alt_names(writer.next());
-								self.write_extended_key_usage(writer.next());
 
-								// Write custom extensions
-								for ext in custom_extensions {
-									write_x509_extension(
-										writer.next(),
-										&ext.oid,
-										ext.critical,
-										|writer| writer.write_der(ext.content()),
-									);
-								}
+			// Whether or not to write an extension request attribute
+			let write_extension_request = !key_usages.is_empty()
+				|| !subject_alt_names.is_empty()
+				|| !extended_key_usages.is_empty()
+				|| !custom_extensions.is_empty();
+
+			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
+			writer
+				.next()
+				.write_tagged_implicit(Tag::context(0), |writer| {
+					// RFC 2986 specifies that attributes are a SET OF Attribute
+					writer.write_set_of(|writer| {
+						// Write the extension request CSR attribute
+						if write_extension_request {
+							writer.next().write_sequence(|writer| {
+								let oid =
+									ObjectIdentifier::from_slice(oid::PKCS_9_AT_EXTENSION_REQUEST);
+								writer.next().write_oid(&oid);
+								writer.next().write_set(|writer| {
+									writer.next().write_sequence(|writer| {
+										// Write key_usage
+										self.write_key_usage(writer.next());
+										// Write subject_alt_names
+										self.write_subject_alt_names(writer.next());
+										self.write_extended_key_usage(writer.next());
+
+										// Write custom extensions
+										for ext in custom_extensions {
+											write_x509_extension(
+												writer.next(),
+												&ext.oid,
+												ext.critical,
+												|writer| writer.write_der(ext.content()),
+											);
+										}
+									});
+								});
 							});
-						});
+						}
+
+						// Write any custom CSR attributes
+						for Attribute { oid, values } in custom_attributes {
+							writer.next().write_sequence(|writer| {
+								let oid = ObjectIdentifier::from_slice(oid);
+								writer.next().write_oid(&oid);
+								writer.next().write_der(&values);
+							});
+						}
 					});
-				}
-			});
+				});
 
 			Ok(())
 		})?;
@@ -827,6 +858,25 @@ fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[Gener
 			}
 		});
 	});
+}
+
+/// A PKCS #10 CSR attribute, as defined in [RFC 5280][1] and constrained
+/// by [RFC 2986][2].
+///
+/// [1]: <https://datatracker.ietf.org/doc/html/rfc5280#appendix-A.1>
+/// [2]: <https://datatracker.ietf.org/doc/html/rfc2986#section-4>
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct Attribute {
+	/// `AttributeType` of the `Attribute`, defined as an `OBJECT IDENTIFIER`.
+	pub oid: Vec<u64>,
+	/// DER-encoded values of the `Attribute`, defined by [RFC 2986][1] as:
+	///
+	/// ```text
+	/// SET SIZE(1..MAX) OF ATTRIBUTE.&Type({IOSet}{@type})
+	/// ```
+	///
+	/// [1]: https://datatracker.ietf.org/doc/html/rfc2986#section-4
+	pub values: Vec<u8>,
 }
 
 /// A custom extension of a certificate, as specified in
