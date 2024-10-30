@@ -136,6 +136,70 @@ mod test_x509_custom_ext {
 }
 
 #[cfg(feature = "x509-parser")]
+mod test_csr_custom_attributes {
+	use rcgen::{Attribute, CertificateParams, KeyPair};
+	use x509_parser::{
+		der_parser::{asn1_rs, Oid},
+		prelude::{FromDer, X509CertificationRequest},
+	};
+
+	/// Test serializing a CSR with custom attributes.
+	/// This test case uses `challengePassword` from [RFC 2985][1], a simple
+	/// ATTRIBUTE that contains a single UTF8String.
+	///
+	/// [1]: <https://datatracker.ietf.org/doc/html/rfc2985>
+	#[test]
+	fn test_csr_custom_attributes() {
+		// OID for challengePassword
+		let challenge_pwd_oid = asn1_rs::Oid::from(&[1, 2, 840, 113549, 1, 9, 7])
+			.unwrap()
+			.iter()
+			.unwrap()
+			.collect::<Vec<u64>>();
+
+		// Attribute values for challengePassword
+		let challenge_pwd_values = yasna::try_construct_der::<_, ()>(|writer| {
+			// Reminder: CSR attribute values are contained in a SET
+			writer.write_set(|writer| {
+				// Challenge passwords only have one value, a UTF8String
+				writer
+					.next()
+					.write_utf8_string("nobody uses challenge passwords anymore");
+				Ok(())
+			})
+		})
+		.unwrap();
+
+		// Challenge password attribute
+		let challenge_password_attribute = Attribute {
+			oid: challenge_pwd_oid.clone(),
+			values: challenge_pwd_values.clone(),
+		};
+
+		// Serialize a DER-encoded CSR
+		let mut params = CertificateParams::default();
+		params
+			.custom_csr_attributes
+			.push(challenge_password_attribute);
+		// params.key_usages.push(KeyUsagePurpose::DigitalSignature);
+		let key_pair = KeyPair::generate().unwrap();
+		let csr = params.serialize_request(&key_pair).unwrap();
+		eprintln!("{}", csr.pem().unwrap());
+
+		// Parse the CSR
+		let (_, x509_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
+		let parsed_attribute_value = x509_csr
+			.certification_request_info
+			.attributes_map()
+			.unwrap()
+			.get(&Oid::from(&challenge_pwd_oid).unwrap())
+			.unwrap()
+			.value;
+		assert_eq!(parsed_attribute_value, challenge_pwd_values);
+	}
+}
+
+#[cfg(feature = "x509-parser")]
 mod test_x509_parser_crl {
 	use crate::util;
 	use x509_parser::extensions::{DistributionPointName, ParsedExtension};
@@ -360,27 +424,20 @@ mod test_parse_other_name_alt_name {
 
 #[cfg(feature = "x509-parser")]
 mod test_csr {
-	use rcgen::{CertificateParams, CertificateSigningRequestParams, KeyPair, KeyUsagePurpose};
+	use rcgen::{
+		CertificateParams, CertificateSigningRequestParams, ExtendedKeyUsagePurpose, KeyPair,
+		KeyUsagePurpose,
+	};
 
 	#[test]
 	fn test_csr_roundtrip() {
-		let key_pair = KeyPair::generate().unwrap();
-
 		// We should be able to serialize a CSR, and then parse the CSR.
-		let csr = CertificateParams::default()
-			.serialize_request(&key_pair)
-			.unwrap();
-		let csrp = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
-
-		// Ensure algorithms match.
-		assert_eq!(key_pair.algorithm(), csrp.public_key.algorithm());
+		let params = CertificateParams::default();
+		generate_and_test_parsed_csr(&params);
 	}
 
 	#[test]
-	fn test_nontrivial_csr_roundtrip() {
-		let key_pair = KeyPair::generate().unwrap();
-
-		// We should be able to serialize a CSR, and then parse the CSR.
+	fn test_csr_with_key_usages_roundtrip() {
 		let mut params = CertificateParams::default();
 		params.key_usages = vec![
 			KeyUsagePurpose::DigitalSignature,
@@ -395,12 +452,63 @@ mod test_csr {
 			// KeyUsagePurpose::EncipherOnly,
 			KeyUsagePurpose::DecipherOnly,
 		];
+		generate_and_test_parsed_csr(&params);
+	}
+
+	#[test]
+	fn test_csr_with_extended_key_usages_roundtrip() {
+		let mut params = CertificateParams::default();
+		params.extended_key_usages = vec![
+			ExtendedKeyUsagePurpose::ServerAuth,
+			ExtendedKeyUsagePurpose::ClientAuth,
+		];
+		generate_and_test_parsed_csr(&params);
+	}
+
+	#[test]
+	fn test_csr_with_key_usgaes_and_extended_key_usages_roundtrip() {
+		let mut params = CertificateParams::default();
+		params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
+		params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
+		generate_and_test_parsed_csr(&params);
+	}
+
+	fn generate_and_test_parsed_csr(params: &CertificateParams) {
+		// Generate a key pair for the CSR
+		let key_pair = KeyPair::generate().unwrap();
+		// Serialize the CSR into DER from the given parameters
 		let csr = params.serialize_request(&key_pair).unwrap();
+		// Parse the CSR we just serialized
 		let csrp = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
 
-		// Ensure algorithms match.
+		// Assert that our parsed parameters match our initial parameters
+		// Certificate parameters are #[non_exhaustive] and don't implement equality
 		assert_eq!(key_pair.algorithm(), csrp.public_key.algorithm());
-		// Ensure key usages match.
-		assert_eq!(csrp.params.key_usages, params.key_usages);
+		assert_eq!(params.not_before, csrp.params.not_before);
+		assert_eq!(params.not_after, csrp.params.not_after);
+		assert_eq!(params.serial_number, csrp.params.serial_number);
+		assert_eq!(params.subject_alt_names, csrp.params.subject_alt_names);
+		assert_eq!(params.distinguished_name, csrp.params.distinguished_name);
+		assert_eq!(params.is_ca, csrp.params.is_ca);
+		assert_eq!(params.key_usages, csrp.params.key_usages);
+		assert_eq!(params.extended_key_usages, csrp.params.extended_key_usages);
+		assert_eq!(params.name_constraints, csrp.params.name_constraints);
+		assert_eq!(
+			params.crl_distribution_points,
+			csrp.params.crl_distribution_points
+		);
+		assert_eq!(params.custom_extensions, csrp.params.custom_extensions);
+		assert_eq!(
+			params.custom_csr_attributes,
+			csrp.params.custom_csr_attributes
+		);
+		assert_eq!(
+			params.use_authority_key_identifier_extension,
+			csrp.params.use_authority_key_identifier_extension,
+		);
+		assert_eq!(
+			params.key_identifier_method,
+			csrp.params.key_identifier_method
+		);
 	}
 }
