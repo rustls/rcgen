@@ -561,33 +561,39 @@ impl CertificateParams {
 			serialize_public_key_der(subject_key, writer.next());
 			// Write extensions
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
-			writer.next().write_tagged(Tag::context(0), |writer| {
-				if write_extension_request {
-					writer.write_sequence(|writer| {
-						let oid = ObjectIdentifier::from_slice(oid::PKCS_9_AT_EXTENSION_REQUEST);
-						writer.next().write_oid(&oid);
-						writer.next().write_set(|writer| {
+			writer
+				.next()
+				.write_tagged_implicit(Tag::context(0), |writer| {
+					// RFC 2986 specifies that attributes are a SET OF Attribute
+					writer.write_set_of(|writer| {
+						if write_extension_request {
 							writer.next().write_sequence(|writer| {
-								// Write key_usage
-								self.write_key_usage(writer.next());
-								// Write subject_alt_names
-								self.write_subject_alt_names(writer.next());
-								self.write_extended_key_usage(writer.next());
+								let oid =
+									ObjectIdentifier::from_slice(oid::PKCS_9_AT_EXTENSION_REQUEST);
+								writer.next().write_oid(&oid);
+								writer.next().write_set(|writer| {
+									writer.next().write_sequence(|writer| {
+										// Write key_usage
+										self.write_key_usage(writer.next());
+										// Write subject_alt_names
+										self.write_subject_alt_names(writer.next());
+										self.write_extended_key_usage(writer.next());
 
-								// Write custom extensions
-								for ext in custom_extensions {
-									write_x509_extension(
-										writer.next(),
-										&ext.oid,
-										ext.critical,
-										|writer| writer.write_der(ext.content()),
-									);
-								}
+										// Write custom extensions
+										for ext in custom_extensions {
+											write_x509_extension(
+												writer.next(),
+												&ext.oid,
+												ext.critical,
+												|writer| writer.write_der(ext.content()),
+											);
+										}
+									});
+								});
 							});
-						});
+						}
 					});
-				}
-			});
+				});
 
 			Ok(())
 		})?;
