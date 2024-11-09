@@ -461,6 +461,10 @@ impl CertificateParams {
 	}
 
 	fn write_subject_alt_names(&self, writer: DERWriter) {
+		if self.subject_alt_names.is_empty() {
+			return;
+		}
+
 		write_x509_extension(writer, oid::SUBJECT_ALT_NAME, false, |writer| {
 			writer.write_sequence(|writer| {
 				for san in self.subject_alt_names.iter() {

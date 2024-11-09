@@ -359,6 +359,25 @@ mod test_parse_other_name_alt_name {
 }
 
 #[cfg(feature = "x509-parser")]
+mod test_csr_extension_request {
+	use rcgen::{CertificateParams, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose};
+	use x509_parser::prelude::{FromDer, ParsedExtension, X509CertificationRequest};
+
+	#[test]
+	fn dont_write_sans_extension_if_no_sans_are_present() {
+		let mut params = CertificateParams::default();
+		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
+		let key_pair = KeyPair::generate().unwrap();
+		let csr = params.serialize_request(&key_pair).unwrap();
+		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
+		assert!(!parsed_csr
+			.requested_extensions()
+			.unwrap()
+			.any(|ext| matches!(ext, ParsedExtension::SubjectAlternativeName(_))));
+	}
+}
+
+#[cfg(feature = "x509-parser")]
 mod test_csr {
 	use rcgen::{
 		CertificateParams, CertificateSigningRequestParams, ExtendedKeyUsagePurpose, KeyPair,
