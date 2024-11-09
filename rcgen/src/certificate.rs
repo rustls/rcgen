@@ -427,6 +427,33 @@ impl CertificateParams {
 		Ok(result)
 	}
 
+	/// Write a CSR extension request attribute as defined in [RFC 2985].
+	///
+	/// [RFC 2985]: <https://datatracker.ietf.org/doc/html/rfc2985>
+	fn write_extension_request_attribute(&self, writer: DERWriter) {
+		writer.write_sequence(|writer| {
+			writer.next().write_oid(&ObjectIdentifier::from_slice(
+				oid::PKCS_9_AT_EXTENSION_REQUEST,
+			));
+			writer.next().write_set(|writer| {
+				writer.next().write_sequence(|writer| {
+					// Write key_usage
+					self.write_key_usage(writer.next());
+					// Write subject_alt_names
+					self.write_subject_alt_names(writer.next());
+					self.write_extended_key_usage(writer.next());
+
+					// Write custom extensions
+					for ext in &self.custom_extensions {
+						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
+							writer.write_der(ext.content())
+						});
+					}
+				});
+			});
+		});
+	}
+
 	/// Write a certificate's KeyUsage as defined in RFC 5280.
 	fn write_key_usage(&self, writer: DERWriter) {
 		// RFC 5280 defines 9 key usages, which we detail in our key usage enum
@@ -567,30 +594,7 @@ impl CertificateParams {
 					// RFC 2986 specifies that attributes are a SET OF Attribute
 					writer.write_set_of(|writer| {
 						if write_extension_request {
-							writer.next().write_sequence(|writer| {
-								let oid =
-									ObjectIdentifier::from_slice(oid::PKCS_9_AT_EXTENSION_REQUEST);
-								writer.next().write_oid(&oid);
-								writer.next().write_set(|writer| {
-									writer.next().write_sequence(|writer| {
-										// Write key_usage
-										self.write_key_usage(writer.next());
-										// Write subject_alt_names
-										self.write_subject_alt_names(writer.next());
-										self.write_extended_key_usage(writer.next());
-
-										// Write custom extensions
-										for ext in custom_extensions {
-											write_x509_extension(
-												writer.next(),
-												&ext.oid,
-												ext.critical,
-												|writer| writer.write_der(ext.content()),
-											);
-										}
-									});
-								});
-							});
+							self.write_extension_request_attribute(writer.next());
 						}
 					});
 				});
