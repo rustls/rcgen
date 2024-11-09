@@ -136,6 +136,63 @@ mod test_x509_custom_ext {
 }
 
 #[cfg(feature = "x509-parser")]
+mod test_csr_custom_attributes {
+	use rcgen::{Attribute, CertificateParams, KeyPair};
+	use x509_parser::{
+		der_parser::Oid,
+		prelude::{FromDer, X509CertificationRequest},
+	};
+
+	/// Test serializing a CSR with custom attributes.
+	/// This test case uses `challengePassword` from [RFC 2985], a simple
+	/// ATTRIBUTE that contains a single UTF8String.
+	///
+	/// [RFC 2985]: <https://datatracker.ietf.org/doc/html/rfc2985>
+	#[test]
+	fn test_csr_custom_attributes() {
+		// OID for challengePassword
+		const CHALLENGE_PWD_OID: &[u64] = &[1, 2, 840, 113549, 1, 9, 7];
+
+		// Attribute values for challengePassword
+		let challenge_pwd_values = yasna::try_construct_der::<_, ()>(|writer| {
+			// Reminder: CSR attribute values are contained in a SET
+			writer.write_set(|writer| {
+				// Challenge passwords only have one value, a UTF8String
+				writer
+					.next()
+					.write_utf8_string("nobody uses challenge passwords anymore");
+				Ok(())
+			})
+		})
+		.unwrap();
+
+		// Challenge password attribute
+		let challenge_password_attribute = Attribute {
+			oid: CHALLENGE_PWD_OID,
+			values: challenge_pwd_values.clone(),
+		};
+
+		// Serialize a DER-encoded CSR
+		let params = CertificateParams::default();
+		let key_pair = KeyPair::generate().unwrap();
+		let csr = params
+			.serialize_request_with_attributes(&key_pair, vec![challenge_password_attribute])
+			.unwrap();
+
+		// Parse the CSR
+		let (_, x509_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
+		let parsed_attribute_value = x509_csr
+			.certification_request_info
+			.attributes_map()
+			.unwrap()
+			.get(&Oid::from(CHALLENGE_PWD_OID).unwrap())
+			.unwrap()
+			.value;
+		assert_eq!(parsed_attribute_value, challenge_pwd_values);
+	}
+}
+
+#[cfg(feature = "x509-parser")]
 mod test_x509_parser_crl {
 	use crate::util;
 	use x509_parser::extensions::{DistributionPointName, ParsedExtension};
