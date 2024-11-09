@@ -534,6 +534,25 @@ impl CertificateParams {
 		&self,
 		subject_key: &KeyPair,
 	) -> Result<CertificateSigningRequest, Error> {
+		self.serialize_request_with_attributes(subject_key, Vec::new())
+	}
+
+	/// Generate and serialize a certificate signing request (CSR) with custom PKCS #10 attributes.
+	/// as defined in [RFC 2986].
+	///
+	/// The constructed CSR will contain attributes based on the certificate parameters,
+	/// and include the subject public key information from `subject_key`. Additionally,
+	/// the CSR will be self-signed using the subject key.
+	///
+	/// Note that subsequent invocations of `serialize_request_with_attributes()` will not produce the exact
+	/// same output.
+	///
+	/// [RFC 2986]: <https://datatracker.ietf.org/doc/html/rfc2986#section-4>
+	pub fn serialize_request_with_attributes(
+		&self,
+		subject_key: &KeyPair,
+		attrs: Vec<Attribute>,
+	) -> Result<CertificateSigningRequest, Error> {
 		// No .. pattern, we use this to ensure every field is used
 		#[deny(unused)]
 		let Self {
@@ -582,11 +601,9 @@ impl CertificateParams {
 		let der = subject_key.sign_der(|writer| {
 			// Write version
 			writer.next().write_u8(0);
-			// Write subject name
 			write_distinguished_name(writer.next(), distinguished_name);
-			// Write subjectPublicKeyInfo
 			serialize_public_key_der(subject_key, writer.next());
-			// Write extensions
+
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
 			writer
 				.next()
@@ -595,6 +612,13 @@ impl CertificateParams {
 					writer.write_set_of(|writer| {
 						if write_extension_request {
 							self.write_extension_request_attribute(writer.next());
+						}
+
+						for Attribute { oid, values } in attrs {
+							writer.next().write_sequence(|writer| {
+								writer.next().write_oid(&ObjectIdentifier::from_slice(&oid));
+								writer.next().write_der(&values);
+							});
 						}
 					});
 				});
@@ -844,6 +868,25 @@ fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[Gener
 			}
 		});
 	});
+}
+
+/// A PKCS #10 CSR attribute, as defined in [RFC 5280] and constrained
+/// by [RFC 2986].
+///
+/// [RFC 5280]: <https://datatracker.ietf.org/doc/html/rfc5280#appendix-A.1>
+/// [RFC 2986]: <https://datatracker.ietf.org/doc/html/rfc2986#section-4>
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct Attribute {
+	/// `AttributeType` of the `Attribute`, defined as an `OBJECT IDENTIFIER`.
+	pub oid: &'static [u64],
+	/// DER-encoded values of the `Attribute`, defined by [RFC 2986] as:
+	///
+	/// ```text
+	/// SET SIZE(1..MAX) OF ATTRIBUTE.&Type({IOSet}{@type})
+	/// ```
+	///
+	/// [RFC 2986]: https://datatracker.ietf.org/doc/html/rfc2986#section-4
+	pub values: Vec<u8>,
 }
 
 /// A custom extension of a certificate, as specified in

@@ -49,8 +49,8 @@ use yasna::DERWriter;
 use yasna::Tag;
 
 pub use certificate::{
-	date_time_ymd, BasicConstraints, Certificate, CertificateParams, CidrSubnet, CustomExtension,
-	DnType, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, NameConstraints,
+	date_time_ymd, Attribute, BasicConstraints, Certificate, CertificateParams, CidrSubnet,
+	CustomExtension, DnType, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, NameConstraints,
 };
 pub use crl::{
 	CertificateRevocationList, CertificateRevocationListParams, CrlDistributionPoint,
