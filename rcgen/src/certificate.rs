@@ -546,6 +546,12 @@ impl CertificateParams {
 			return Err(Error::UnsupportedInCsr);
 		}
 
+		// Whether or not to write an extension request attribute
+		let write_extension_request = !key_usages.is_empty()
+			|| !subject_alt_names.is_empty()
+			|| !extended_key_usages.is_empty()
+			|| !custom_extensions.is_empty();
+
 		let der = subject_key.sign_der(|writer| {
 			// Write version
 			writer.next().write_u8(0);
@@ -556,10 +562,7 @@ impl CertificateParams {
 			// Write extensions
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
 			writer.next().write_tagged(Tag::context(0), |writer| {
-				if !key_usages.is_empty()
-					|| !subject_alt_names.is_empty()
-					|| !custom_extensions.is_empty()
-				{
+				if write_extension_request {
 					writer.write_sequence(|writer| {
 						let oid = ObjectIdentifier::from_slice(oid::PKCS_9_AT_EXTENSION_REQUEST);
 						writer.next().write_oid(&oid);
