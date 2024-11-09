@@ -375,6 +375,25 @@ mod test_csr_extension_request {
 			.unwrap()
 			.any(|ext| matches!(ext, ParsedExtension::SubjectAlternativeName(_))));
 	}
+
+	#[test]
+	fn write_extension_request_if_ekus_are_present() {
+		let mut params = CertificateParams::default();
+		params
+			.extended_key_usages
+			.push(ExtendedKeyUsagePurpose::ClientAuth);
+		let key_pair = KeyPair::generate().unwrap();
+		let csr = params.serialize_request(&key_pair).unwrap();
+		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
+		let requested_extensions = parsed_csr
+			.requested_extensions()
+			.unwrap()
+			.collect::<Vec<_>>();
+		assert!(matches!(
+			requested_extensions.first().unwrap(),
+			ParsedExtension::ExtendedKeyUsage(_)
+		));
+	}
 }
 
 #[cfg(feature = "x509-parser")]
