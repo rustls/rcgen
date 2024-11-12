@@ -364,16 +364,9 @@ mod test_csr {
 
 	#[test]
 	fn test_csr_roundtrip() {
-		let key_pair = KeyPair::generate().unwrap();
-
 		// We should be able to serialize a CSR, and then parse the CSR.
-		let csr = CertificateParams::default()
-			.serialize_request(&key_pair)
-			.unwrap();
-		let csrp = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
-
-		// Ensure algorithms match.
-		assert_eq!(key_pair.algorithm(), csrp.public_key.algorithm());
+		let params = CertificateParams::default();
+		generate_and_test_parsed_csr(&params);
 	}
 
 	#[test]
@@ -395,7 +388,15 @@ mod test_csr {
 			// KeyUsagePurpose::EncipherOnly,
 			KeyUsagePurpose::DecipherOnly,
 		];
+		generate_and_test_parsed_csr(&params);
+	}
+
+	fn generate_and_test_parsed_csr(params: &CertificateParams) {
+		// Generate a key pair for the CSR
+		let key_pair = KeyPair::generate().unwrap();
+		// Serialize the CSR into DER from the given parameters
 		let csr = params.serialize_request(&key_pair).unwrap();
+		// Parse the CSR we just serialized
 		let csrp = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
 
 		// Ensure algorithms match.
