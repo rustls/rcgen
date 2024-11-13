@@ -63,7 +63,7 @@ impl From<Certificate> for CertificateDer<'static> {
 /// Parameters used for certificate generation
 #[allow(missing_docs)]
 #[non_exhaustive]
-#[derive(Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CertificateParams {
 	pub not_before: OffsetDateTime,
 	pub not_after: OffsetDateTime,
