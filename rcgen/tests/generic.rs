@@ -401,7 +401,7 @@ mod test_csr {
 
 		// Ensure algorithms match.
 		assert_eq!(key_pair.algorithm(), csrp.public_key.algorithm());
-		// Ensure key usages match.
-		assert_eq!(csrp.params.key_usages, params.key_usages);
+		// Assert that our parsed parameters match our initial parameters
+		assert_eq!(*params, csrp.params);
 	}
 }
