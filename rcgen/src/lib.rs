@@ -14,7 +14,6 @@ a key pair to call [`CertificateParams::signed_by()`] or [`CertificateParams::se
 ## Example
 
 ```
-extern crate rcgen;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
