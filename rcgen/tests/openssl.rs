@@ -1,9 +1,5 @@
 #![cfg(feature = "pem")]
 
-use std::cell::RefCell;
-use std::io::{Error, ErrorKind, Read, Result as ioResult, Write};
-use std::rc::Rc;
-
 use openssl::asn1::{Asn1Integer, Asn1Time};
 use openssl::bn::BigNum;
 use openssl::pkey::PKey;
@@ -11,11 +7,13 @@ use openssl::ssl::{HandshakeError, SslAcceptor, SslConnector, SslMethod};
 use openssl::stack::Stack;
 use openssl::x509::store::{X509Store, X509StoreBuilder};
 use openssl::x509::{CrlStatus, X509Crl, X509Req, X509StoreContext, X509};
-
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DnType, DnValue, GeneralSubtree, IsCa,
 	KeyPair, NameConstraints,
 };
+use std::cell::RefCell;
+use std::io::{Error, ErrorKind, Read, Result as ioResult, Write};
+use std::rc::Rc;
 
 mod util;
 
@@ -539,4 +537,66 @@ fn test_openssl_pkcs1_and_sec1_keys() {
 
 	let pkcs8_ec_key_der = PrivateKeyDer::try_from(ec_key.private_key_to_pkcs8().unwrap()).unwrap();
 	KeyPair::try_from(&pkcs8_ec_key_der).unwrap();
+}
+
+#[test]
+#[cfg(feature = "x509-parser")]
+fn test_parse_certificate_with_multiple_domain_components() {
+	use rcgen::Ia5String;
+	use std::str::FromStr;
+
+	/// Command used to generate:
+	/// `openssl req -x509 -newkey rsa:4096 -nodes -out mycert.pem -keyout mykey.pem -days 365 -subj "/C=US/ST=California/L=San Francisco/O=Example Company/OU=IT Department/CN=www.example.com/DC=example/DC=com"`
+	/// Contains two distinct "DC" entries.
+	const CERT_WITH_MULTI_DC: &str = r#"-----BEGIN CERTIFICATE-----
+MIIGSzCCBDOgAwIBAgIUECjoFzATY6rTCtu7HKjBtfXnB/owDQYJKoZIhvcNAQEL
+BQAwgbQxCzAJBgNVBAYTAlVTMRMwEQYDVQQIDApDYWxpZm9ybmlhMRYwFAYDVQQH
+DA1TYW4gRnJhbmNpc2NvMRgwFgYDVQQKDA9FeGFtcGxlIENvbXBhbnkxFjAUBgNV
+BAsMDUlUIERlcGFydG1lbnQxGDAWBgNVBAMMD3d3dy5leGFtcGxlLmNvbTEXMBUG
+CgmSJomT8ixkARkWB2V4YW1wbGUxEzARBgoJkiaJk/IsZAEZFgNjb20wHhcNMjQx
+MTIxMDkxNTE2WhcNMjUxMTIxMDkxNTE2WjCBtDELMAkGA1UEBhMCVVMxEzARBgNV
+BAgMCkNhbGlmb3JuaWExFjAUBgNVBAcMDVNhbiBGcmFuY2lzY28xGDAWBgNVBAoM
+D0V4YW1wbGUgQ29tcGFueTEWMBQGA1UECwwNSVQgRGVwYXJ0bWVudDEYMBYGA1UE
+AwwPd3d3LmV4YW1wbGUuY29tMRcwFQYKCZImiZPyLGQBGRYHZXhhbXBsZTETMBEG
+CgmSJomT8ixkARkWA2NvbTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIB
+ANla4cBCTS+6JdEw6kVQHskanjtHbw7F25TZ2tZWC1f/UJuQnpF/JJqADdV6R3ta
+xjcGj2ubJnKS1npcdiVN6A95jYggbQqjfZV+Z0cxjL8L4dQ+UPDsNyP8W0+S6UnK
++W813DG/QGXxEFrT8nZIfhyD4qZEtOSFGgp/ZA2f687Svx1+SKiutHeRovEf/OTb
+fK4NHhewa1IxiV7shYNy7hhJmDqcsRIhVfuiWn4TU++qB6JTiPATYmzFRALli7B6
+g5m8KhvWcdAssgb2+bNpbs3fTcytrqwiNnNYtZ5a7DV0WWH4+wfor7KlomPMviPg
+jiFwWWKW/N5dQ+f9vpo7SDOT9Jl26BWj0vJYTceLgkOGwYMXsg7pbWmPH4sL+GNv
+WpRG7fDmual98y4DFwD8vHp4Mvax2OWKxfxe6xPqdn7or7D3ZSSyBu//ZlhQ6yMd
+F6tLTl2/5VcWdJy0W+FDEnZIHnPm3zyCiplEP4bxY2Blpdnqf5Cx80mz8YSQhddn
+gVNrM7iaNnIvRLjFS88w4KMOKbYSPbxEt2eWO4ggVcn1akcifDFTpyInRKQxQkXa
+SXH/iu2dm7kuyGwSwrIW1l41vUkT+Lsm/9TFQ3a+UWWzut4oux9oGmcuUP5EiUZb
+rWw2GIP2DaluKsZNUh8QIWVccBmX6AaKw3+K0r/tFqShAgMBAAGjUzBRMB0GA1Ud
+DgQWBBTru/FFL1lBGB6d1a1xe3Tn3wV/RzAfBgNVHSMEGDAWgBTru/FFL1lBGB6d
+1a1xe3Tn3wV/RzAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4ICAQCY
+dKu+CYxHb7drJqDhfMXUq2ogZiYI0fYyPEf+rpNpM5A8C0PyG9Um7WZwKAfp38IE
+a/McBidxI7TuNq9ojruIyY79LCThz64Z1Nc5rb3sthcygZLd1t98Zh8vaG07kk7s
+n2/BMLgHPvm47cUJ1VaQpLwx2tSBaFB+Osroq0ZXMqyO6s7Gyk+hrI+l6b+gqryA
+b8kHzbeslxPK6QkDz9Kt+qPkZVRgfKgyqyd0YGoe1LaAwctMdrTPZRzkFRDLYDls
+JK/PFi027oljJJzFZ07k9c8WJBeM3xiIHFlxIJ5XehVpLLFEhxX1ypnvku7GeINq
+I9356ueSmMPn1BIsLonTOYR3k1hue+giO5AiD6J3yl8OhJStouG3FOZbB5dDRae+
+9bdhU4npsmKTmBX/CDUFYJl4yqavEGfvw40p77gaqIOShEBB54ASKDaSyuLSeYbi
+3TQsa+JyWmJ5iNmqVsAy8YfioKveNmyl023hRTjtqJgKQY1UzY6M0bnHa0IlgZq/
+l4A7hDDsvi3rDFiqvKg/WTEZd5G87E9hwIcHF/bJPc+0+MjelRoxFTSty2bpbniR
+p3mmtsYxi+XCHdwUwRLhbBrdu93z5Iy3AWIb7vGeTKznnnDweJzYpfHCXuWZdr/d
+z6cbmudPzN1l99Op5eH9i1JikA+DQ8BQv1OgkNBw2A==
+-----END CERTIFICATE-----
+"#;
+
+	let param = CertificateParams::from_ca_cert_pem(CERT_WITH_MULTI_DC).unwrap();
+
+	let domain_component_values = param.distinguished_name.get(&DnType::CustomDnType(vec![
+		0, 9, 2342, 19200300, 100, 1, 25,
+	]));
+
+	assert_eq!(
+		domain_component_values,
+		vec![
+			&DnValue::Ia5String(Ia5String::from_str("example").unwrap()),
+			&DnValue::Ia5String(Ia5String::from_str("com").unwrap()),
+		]
+	)
 }

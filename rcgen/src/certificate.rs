@@ -611,7 +611,7 @@ impl CertificateParams {
 		let der = subject_key.sign_der(|writer| {
 			// Write version
 			writer.next().write_u8(0);
-			write_distinguished_name(writer.next(), distinguished_name);
+			write_distinguished_name(writer.next(), distinguished_name.clone());
 			serialize_public_key_der(subject_key, writer.next());
 
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
@@ -673,7 +673,7 @@ impl CertificateParams {
 			// Write signature algorithm
 			issuer.key_pair.alg.write_alg_ident(writer.next());
 			// Write issuer name
-			write_distinguished_name(writer.next(), &issuer.distinguished_name);
+			write_distinguished_name(writer.next(), issuer.distinguished_name.clone());
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
@@ -683,7 +683,7 @@ impl CertificateParams {
 				Ok::<(), Error>(())
 			})?;
 			// Write subject
-			write_distinguished_name(writer.next(), &self.distinguished_name);
+			write_distinguished_name(writer.next(), self.distinguished_name.clone());
 			// Write subjectPublicKeyInfo
 			serialize_public_key_der(pub_key, writer.next());
 			// write extensions
@@ -872,7 +872,7 @@ fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[Gener
 								GeneralSubtree::Rfc822Name(name)
 								| GeneralSubtree::DnsName(name) => writer.write_ia5_string(name),
 								GeneralSubtree::DirectoryName(name) => {
-									write_distinguished_name(writer, name)
+									write_distinguished_name(writer, name.clone())
 								},
 								GeneralSubtree::IpAddress(subnet) => {
 									writer.write_bytes(&subnet.to_bytes())
