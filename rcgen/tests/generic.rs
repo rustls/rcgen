@@ -374,11 +374,9 @@ mod test_parse_ia5string_subject {
 		let params_from_cert = CertificateParams::from_ca_cert_der(cert_der).unwrap();
 
 		// We should find the expected distinguished name in the reconstituted params.
-		let expected_names = &[(&email_address_dn_type, &email_address_dn_value)];
-		let names = params_from_cert
-			.distinguished_name
-			.iter()
-			.collect::<Vec<(_, _)>>();
+		let expected_names = &[(email_address_dn_type, email_address_dn_value)];
+		let names = params_from_cert.distinguished_name.collect::<Vec<(_, _)>>();
+
 		assert_eq!(names, expected_names);
 	}
 }
