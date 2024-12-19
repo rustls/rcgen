@@ -52,6 +52,27 @@ impl Certificate {
 	pub fn pem(&self) -> String {
 		pem::encode_config(&Pem::new("CERTIFICATE", self.der().to_vec()), ENCODE_CONFIG)
 	}
+	/// restore from DER encoded format.
+	#[cfg(feature = "x509-parser")]
+	pub fn from_der(der: &CertificateDer<'_>) -> Result<Self, Error> {
+		let (_remainder, x509) = x509_parser::parse_x509_certificate(der)
+			.or(Err(Error::CouldNotParseCertificate))?;
+		let subject_public_key_info = x509.subject_pki.raw.to_vec();
+		let params = CertificateParams::from_ca_cert_der(der)?;
+
+		Ok(Self {
+			params,
+			subject_public_key_info,
+			der: der.clone().into_owned(),
+		})
+	}
+	/// restore from PEM encoded format.
+	#[cfg(all(feature = "pem", feature = "x509-parser"))]
+	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
+		let certificate = pem::parse(pem_str).or(Err(Error::CouldNotParseCertificate))?;
+
+		Self::from_der(&certificate.contents().into())
+	}
 }
 
 impl From<Certificate> for CertificateDer<'static> {
@@ -1352,6 +1373,51 @@ mod tests {
 		assert_eq!(extension.value.other, expected_oids);
 	}
 
+	#[cfg(feature = "x509-parser")]
+	fn test_certificate_from_der() {
+		for alg in [
+			&crate::PKCS_ED25519,
+			&crate::PKCS_ECDSA_P256_SHA256,
+			&crate::PKCS_ECDSA_P384_SHA384,
+			#[cfg(feature = "aws_lc_rs")]
+			&crate::PKCS_ECDSA_P521_SHA512,
+			#[cfg(feature = "aws_lc_rs")]
+			&crate::PKCS_RSA_SHA256,
+		] {
+			let origin_kp = KeyPair::generate_for(alg).expect("keygen");
+			let origin_params = CertificateParams::new(vec!["example.com".into()]).unwrap();
+			let origin_cert = origin_params.self_signed(&origin_kp).expect("self signed");
+			let origin_cert_der = origin_cert.der();
+
+			let cert = Certificate::from_der(&origin_cert_der).expect("certificate from der");
+			let cert_der = cert.der();
+
+			assert_eq!(origin_cert_der, cert_der);
+		}
+	}
+
+	#[cfg(all(feature = "pem", feature = "x509-parser"))]
+	fn test_certificate_from_pem() {
+		for alg in [
+			&crate::PKCS_ED25519,
+			&crate::PKCS_ECDSA_P256_SHA256,
+			&crate::PKCS_ECDSA_P384_SHA384,
+			#[cfg(feature = "aws_lc_rs")]
+			&crate::PKCS_ECDSA_P521_SHA512,
+			#[cfg(feature = "aws_lc_rs")]
+			&crate::PKCS_RSA_SHA256,
+		] {
+			let origin_kp = KeyPair::generate_for(alg).expect("keygen");
+			let origin_params = CertificateParams::new(vec!["example.com".into()]).unwrap();
+			let origin_cert = origin_params.self_signed(&origin_kp).expect("self signed");
+			let origin_cert_pem = origin_cert.pem();
+
+			let cert = Certificate::from_pem(&origin_cert_pem).expect("certificate from pem");
+
+			assert_eq!(origin_cert.der(), cert.der());
+		}
+	}
+	
 	#[cfg(feature = "pem")]
 	mod test_pem_serialization {
 		use super::*;
