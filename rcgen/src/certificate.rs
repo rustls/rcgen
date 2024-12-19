@@ -1419,7 +1419,7 @@ mod tests {
 			assert_eq!(origin_cert.der(), cert.der());
 		}
 	}
-	
+
 	#[cfg(feature = "pem")]
 	mod test_pem_serialization {
 		use super::*;
