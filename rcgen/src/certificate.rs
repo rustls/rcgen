@@ -55,8 +55,8 @@ impl Certificate {
 	/// restore from DER encoded format.
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(der: &CertificateDer<'_>) -> Result<Self, Error> {
-		let (_remainder, x509) = x509_parser::parse_x509_certificate(der)
-			.or(Err(Error::CouldNotParseCertificate))?;
+		let (_remainder, x509) =
+			x509_parser::parse_x509_certificate(der).or(Err(Error::CouldNotParseCertificate))?;
 		let subject_public_key_info = x509.subject_pki.raw.to_vec();
 		let params = CertificateParams::from_ca_cert_der(der)?;
 
@@ -1374,6 +1374,7 @@ mod tests {
 	}
 
 	#[cfg(feature = "x509-parser")]
+	#[test]
 	fn test_certificate_from_der() {
 		for alg in [
 			&crate::PKCS_ED25519,
@@ -1397,6 +1398,7 @@ mod tests {
 	}
 
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
+	#[test]
 	fn test_certificate_from_pem() {
 		for alg in [
 			&crate::PKCS_ED25519,
