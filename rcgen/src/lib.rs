@@ -33,7 +33,7 @@ println!("{}", key_pair.serialize_pem());
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![warn(unreachable_pub)]
 
-use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::fmt;
 use std::hash::Hash;
 use std::net::IpAddr;
@@ -299,8 +299,7 @@ See also the RFC 5280 sections on the [issuer](https://tools.ietf.org/html/rfc52
 and [subject](https://tools.ietf.org/html/rfc5280#section-4.1.2.6) fields.
 */
 pub struct DistinguishedName {
-	entries: HashMap<DnType, DnValue>,
-	order: Vec<DnType>,
+	entries: VecDeque<(DnType, DnValue)>,
 }
 
 impl DistinguishedName {
@@ -309,8 +308,11 @@ impl DistinguishedName {
 		Self::default()
 	}
 	/// Obtains the attribute value for the given attribute type
-	pub fn get(&self, ty: &DnType) -> Option<&DnValue> {
-		self.entries.get(ty)
+	pub fn get(&self, ty: &DnType) -> Vec<&DnValue> {
+		self.entries
+			.iter()
+			.filter_map(|(dn_type, dn_value)| if ty == dn_type { Some(dn_value) } else { None })
+			.collect()
 	}
 	/// Removes the attribute with the specified DnType
 	///
@@ -318,11 +320,20 @@ impl DistinguishedName {
 	/// when no attribute with the specified DnType was
 	/// found.
 	pub fn remove(&mut self, ty: DnType) -> bool {
-		let removed = self.entries.remove(&ty).is_some();
-		if removed {
-			self.order.retain(|ty_o| &ty != ty_o);
+		let mut remove_indices = vec![];
+		for (index, (dn_type, _dn_val)) in self.entries.iter().enumerate() {
+			if dn_type == &ty {
+				remove_indices.push(index);
+			}
 		}
-		removed
+
+		let is_remove_indices = !remove_indices.is_empty();
+
+		for index in remove_indices {
+			self.entries.remove(index);
+		}
+
+		is_remove_indices
 	}
 	/// Inserts or updates an attribute that consists of type and name
 	///
@@ -331,21 +342,35 @@ impl DistinguishedName {
 	/// let mut dn = DistinguishedName::new();
 	/// dn.push(DnType::OrganizationName, "Crab widgits SE");
 	/// dn.push(DnType::CommonName, DnValue::PrintableString("Master Cert".try_into().unwrap()));
-	/// assert_eq!(dn.get(&DnType::OrganizationName), Some(&DnValue::Utf8String("Crab widgits SE".to_string())));
-	/// assert_eq!(dn.get(&DnType::CommonName), Some(&DnValue::PrintableString("Master Cert".try_into().unwrap())));
+	/// assert_eq!(dn.get(&DnType::OrganizationName).get(0), Some(&DnValue::Utf8String("Crab widgits SE".to_string())).as_ref());
+	/// assert_eq!(dn.get(&DnType::CommonName).get(0), Some(&DnValue::PrintableString("Master Cert".try_into().unwrap())).as_ref());
 	/// ```
 	pub fn push(&mut self, ty: DnType, s: impl Into<DnValue>) {
-		if !self.entries.contains_key(&ty) {
-			self.order.push(ty.clone());
-		}
-		self.entries.insert(ty, s.into());
+		self.entries.push_front((ty, s.into()));
 	}
-	/// Iterate over the entries
-	pub fn iter(&self) -> DistinguishedNameIterator<'_> {
-		DistinguishedNameIterator {
-			distinguished_name: self,
-			iter: self.order.iter(),
+
+	/// Replaces the *fist occurrence* of a type with a new value.
+	/// This is a convenience function to avoid duplicating values.
+	///
+	/// If there are multiple occurrences of a type there is currently no way of changing the besides iterating over the types and values of an existing instance and creating a new instance.
+	///
+	/// ```
+	/// # use rcgen::{DistinguishedName, DnType, DnValue};
+	/// let mut dn = DistinguishedName::new();
+	/// dn.push(DnType::CommonName, DnValue::PrintableString("Master Cert".try_into().unwrap()));
+	/// assert_eq!(dn.get(&DnType::CommonName).get(0), Some(&DnValue::PrintableString("Master Cert".try_into().unwrap())).as_ref());
+	/// dn.push(DnType::CommonName, DnValue::PrintableString("Other Master Cert".try_into().unwrap()));
+	/// assert_eq!(dn.get(&DnType::CommonName).get(0), Some(&DnValue::PrintableString("Other Master Cert".try_into().unwrap())).as_ref());
+	/// ```
+	pub fn replace_or_push(&mut self, ty: DnType, s: impl Into<DnValue>) {
+		for (dn_type, dn_value) in self.entries.iter_mut() {
+			if *dn_type == ty {
+				*dn_value = s.into();
+				return;
+			}
 		}
+
+		self.push(ty, s)
 	}
 
 	#[cfg(feature = "x509-parser")]
@@ -393,21 +418,15 @@ impl DistinguishedName {
 	}
 }
 
-/**
-Iterator over [`DistinguishedName`] entries
-*/
-pub struct DistinguishedNameIterator<'a> {
-	distinguished_name: &'a DistinguishedName,
-	iter: std::slice::Iter<'a, DnType>,
-}
-
-impl<'a> Iterator for DistinguishedNameIterator<'a> {
-	type Item = (&'a DnType, &'a DnValue);
+impl Iterator for DistinguishedName {
+	type Item = (DnType, DnValue);
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.iter
-			.next()
-			.and_then(|ty| self.distinguished_name.entries.get(ty).map(|v| (ty, v)))
+		self.entries.pop_back()
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.entries.iter().size_hint()
 	}
 }
 
@@ -568,9 +587,9 @@ fn write_dt_utc_or_generalized(writer: DERWriter, dt: OffsetDateTime) {
 	}
 }
 
-fn write_distinguished_name(writer: DERWriter, dn: &DistinguishedName) {
+fn write_distinguished_name(writer: DERWriter, dn: DistinguishedName) {
 	writer.write_sequence(|writer| {
-		for (ty, content) in dn.iter() {
+		for (ty, content) in dn.into_iter() {
 			writer.next().write_set(|writer| {
 				writer.next().write_sequence(|writer| {
 					writer.next().write_oid(&ty.to_oid());
@@ -596,7 +615,7 @@ fn write_distinguished_name(writer: DERWriter, dn: &DistinguishedName) {
 							.write_tagged_implicit(TAG_UNIVERSALSTRING, |writer| {
 								writer.write_bytes(s.as_bytes())
 							}),
-						DnValue::Utf8String(s) => writer.next().write_utf8_string(s),
+						DnValue::Utf8String(s) => writer.next().write_utf8_string(s.as_str()),
 					}
 				});
 			});
