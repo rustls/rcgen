@@ -1,6 +1,8 @@
 
 # Changes
 
+Newer releases can be found [on GitHub](https://github.com/rustls/rcgen/releases).
+
 ## Release 0.13.1 - April 4th, 2024
 
 Fixed:
