@@ -146,7 +146,8 @@ impl CertificateParams {
 	///
 	/// The returned certificate will have its issuer field set to the subject of the
 	/// provided `issuer`, and the authority key identifier extension will be populated using
-	/// the subject public key of `issuer`. It will be signed by `issuer_key`.
+	/// the subject public key of `issuer` (typically either a [`CertificateParams`] or
+	/// [`Certificate`]). It will be signed by `issuer_key`.
 	///
 	/// Note that no validation of the `issuer` certificate is performed. Rcgen will not require
 	/// the certificate to be a CA certificate, or have key usage extensions that allow signing.
