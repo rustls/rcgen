@@ -499,7 +499,10 @@ impl CertificateParams {
 			return;
 		}
 
-		write_x509_extension(writer, oid::SUBJECT_ALT_NAME, false, |writer| {
+		// Per https://tools.ietf.org/html/rfc5280#section-4.1.2.6, SAN must be marked
+		// as critical if subject is empty.
+		let critical = self.distinguished_name.entries.is_empty();
+		write_x509_extension(writer, oid::SUBJECT_ALT_NAME, critical, |writer| {
 			writer.write_sequence(|writer| {
 				for san in self.subject_alt_names.iter() {
 					writer.next().write_tagged_implicit(
