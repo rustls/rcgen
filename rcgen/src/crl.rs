@@ -9,7 +9,7 @@ use yasna::Tag;
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_authority_key_identifier, write_x509_extension, Certificate, Error, Issuer,
+	write_x509_authority_key_identifier, write_x509_extension, CertificateParams, Error, Issuer,
 	KeyIdMethod, KeyPair, KeyUsagePurpose, SerialNumber,
 };
 
@@ -188,7 +188,7 @@ impl CertificateRevocationListParams {
 	/// Including a signature from the issuing certificate authority's key.
 	pub fn signed_by(
 		self,
-		issuer: &Certificate,
+		issuer: &impl AsRef<CertificateParams>,
 		issuer_key: &KeyPair,
 	) -> Result<CertificateRevocationList, Error> {
 		if self.next_update.le(&self.this_update) {
@@ -196,9 +196,9 @@ impl CertificateRevocationListParams {
 		}
 
 		let issuer = Issuer {
-			distinguished_name: &issuer.params.distinguished_name,
-			key_identifier_method: &issuer.params.key_identifier_method,
-			key_usages: &issuer.params.key_usages,
+			distinguished_name: &issuer.as_ref().distinguished_name,
+			key_identifier_method: &issuer.as_ref().key_identifier_method,
+			key_usages: &issuer.as_ref().key_usages,
 			key_pair: issuer_key,
 		};
 
