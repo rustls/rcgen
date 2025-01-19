@@ -518,3 +518,54 @@ mod test_csr {
 		assert_eq!(*params, csrp.params);
 	}
 }
+
+#[cfg(feature = "x509-parser")]
+mod test_subject_alternative_name_criticality {
+	use x509_parser::certificate::X509Certificate;
+	use x509_parser::extensions::X509Extension;
+	use x509_parser::{oid_registry, parse_x509_certificate};
+
+	use crate::util::default_params;
+
+	#[test]
+	fn with_subject_sans_not_critical() {
+		let (params, keypair) = default_params();
+		assert!(
+			!params
+				.distinguished_name
+				.iter()
+				.collect::<Vec<_>>()
+				.is_empty(),
+			"non-empty subject required for test"
+		);
+
+		let cert = params.self_signed(&keypair).unwrap();
+		let cert = cert.der();
+		let (_, parsed) = parse_x509_certificate(cert).unwrap();
+		assert!(
+			!san_ext(&parsed).critical,
+			"with subject, SAN ext should not be critical"
+		);
+	}
+
+	#[test]
+	fn without_subject_sans_critical() {
+		let (mut params, keypair) = default_params();
+		params.distinguished_name = Default::default();
+
+		let cert = params.self_signed(&keypair).unwrap();
+		let cert = cert.der();
+		let (_, parsed) = parse_x509_certificate(cert).unwrap();
+		assert!(
+			san_ext(&parsed).critical,
+			"without subject, SAN ext should be critical"
+		);
+	}
+
+	fn san_ext<'cert>(cert: &'cert X509Certificate) -> &'cert X509Extension<'cert> {
+		cert.extensions()
+			.iter()
+			.find(|ext| ext.oid == oid_registry::OID_X509_EXT_SUBJECT_ALT_NAME)
+			.expect("missing SAN extension")
+	}
+}
