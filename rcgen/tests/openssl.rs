@@ -1,5 +1,11 @@
 #![cfg(feature = "pem")]
 
+use std::cell::RefCell;
+use std::io::{Error, ErrorKind, Read, Result as ioResult, Write};
+use std::rc::Rc;
+#[cfg(feature = "x509-parser")]
+use std::str::FromStr;
+
 use openssl::asn1::{Asn1Integer, Asn1Time};
 use openssl::bn::BigNum;
 use openssl::pkey::PKey;
@@ -7,13 +13,13 @@ use openssl::ssl::{HandshakeError, SslAcceptor, SslConnector, SslMethod};
 use openssl::stack::Stack;
 use openssl::x509::store::{X509Store, X509StoreBuilder};
 use openssl::x509::{CrlStatus, X509Crl, X509Req, X509StoreContext, X509};
+
+#[cfg(feature = "x509-parser")]
+use rcgen::Ia5String;
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DnType, DnValue, GeneralSubtree, IsCa,
 	KeyPair, NameConstraints,
 };
-use std::cell::RefCell;
-use std::io::{Error, ErrorKind, Read, Result as ioResult, Write};
-use std::rc::Rc;
 
 mod util;
 
@@ -542,9 +548,6 @@ fn test_openssl_pkcs1_and_sec1_keys() {
 #[test]
 #[cfg(feature = "x509-parser")]
 fn test_parse_certificate_with_multiple_domain_components() {
-	use rcgen::Ia5String;
-	use std::str::FromStr;
-
 	/// Command used to generate:
 	/// `openssl req -x509 -newkey rsa:4096 -nodes -out mycert.pem -keyout mykey.pem -days 365 -subj "/C=US/ST=California/L=San Francisco/O=Example Company/OU=IT Department/CN=www.example.com/DC=example/DC=com"`
 	/// Contains two distinct "DC" entries.

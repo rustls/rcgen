@@ -338,10 +338,10 @@ impl DistinguishedName {
 		self.entries.push((ty, s.into()));
 	}
 
-	/// Replaces the *fist occurrence* of a type with a new value.
+	/// Replaces the *first occurrence* of a type with a new value.
 	/// This is a convenience function to avoid duplicating values.
 	///
-	/// If there are multiple occurrences of a type there is currently no way of changing the besides iterating over the types and values of an existing instance and creating a new instance.
+	/// If there are multiple occurrences of a type there is currently no way of changing them besides iterating over the types and values of an existing instance and creating a new instance.
 	///
 	/// ```
 	/// # use rcgen::{DistinguishedName, DnType, DnValue};
@@ -586,7 +586,7 @@ fn write_dt_utc_or_generalized(writer: DERWriter, dt: OffsetDateTime) {
 	}
 }
 
-fn write_distinguished_name(writer: DERWriter, dn: DistinguishedName) {
+fn write_distinguished_name(writer: DERWriter, dn: &DistinguishedName) {
 	writer.write_sequence(|writer| {
 		for (ty, content) in dn.iter() {
 			writer.next().write_set(|writer| {
