@@ -64,11 +64,20 @@ impl fmt::Debug for KeyPairKind {
 /// `openssl genrsa` doesn't work. See ring's [documentation](ring::signature::RsaKeyPair::from_pkcs8)
 /// for how to generate RSA keys in the wanted format
 /// and conversion between the formats.
-#[derive(Debug)]
 pub struct KeyPair {
 	pub(crate) kind: KeyPairKind,
 	pub(crate) alg: &'static SignatureAlgorithm,
 	pub(crate) serialized_der: Vec<u8>,
+}
+
+impl fmt::Debug for KeyPair {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("KeyPair")
+			.field("kind", &self.kind)
+			.field("alg", &self.alg)
+			.field("serialized_der", &"[secret key elided]")
+			.finish()
+	}
 }
 
 impl KeyPair {
