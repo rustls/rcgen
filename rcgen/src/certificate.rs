@@ -673,7 +673,7 @@ impl CertificateParams {
 			// Write signature algorithm
 			issuer.key_pair.alg.write_alg_ident(writer.next());
 			// Write issuer name
-			write_distinguished_name(writer.next(), &issuer.distinguished_name);
+			write_distinguished_name(writer.next(), issuer.distinguished_name);
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
