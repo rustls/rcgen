@@ -22,6 +22,7 @@ use crate::{
 };
 
 /// An issued certificate together with the parameters used to generate it.
+#[derive(Debug)]
 pub struct Certificate {
 	pub(crate) params: CertificateParams,
 	pub(crate) subject_public_key_info: Vec<u8>,
