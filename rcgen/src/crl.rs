@@ -62,6 +62,7 @@ use crate::{
 ///   key_identifier_method: KeyIdMethod::PreSpecified(vec![]),
 /// }.signed_by(&issuer, &key_pair).unwrap();
 ///# }
+#[derive(Debug)]
 pub struct CertificateRevocationList {
 	params: CertificateRevocationListParams,
 	der: CertificateRevocationListDer<'static>,
@@ -162,6 +163,7 @@ pub enum RevocationReason {
 }
 
 /// Parameters used for certificate revocation list (CRL) generation
+#[derive(Debug)]
 pub struct CertificateRevocationListParams {
 	/// Issue date of the CRL.
 	pub this_update: OffsetDateTime,
@@ -302,6 +304,7 @@ impl CertificateRevocationListParams {
 
 /// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
 /// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
+#[derive(Debug)]
 pub struct CrlIssuingDistributionPoint {
 	/// The CRL's distribution point, containing a sequence of URIs the CRL can be retrieved from.
 	pub distribution_point: CrlDistributionPoint,
@@ -344,6 +347,7 @@ pub enum CrlScope {
 }
 
 /// Parameters used for describing a revoked certificate included in a [`CertificateRevocationList`].
+#[derive(Debug)]
 pub struct RevokedCertParams {
 	/// Serial number identifying the revoked certificate.
 	pub serial_number: SerialNumber,

@@ -38,6 +38,7 @@ impl PublicKeyData for PublicKey {
 }
 
 /// A certificate signing request (CSR) that can be encoded to PEM or DER.
+#[derive(Debug)]
 pub struct CertificateSigningRequest {
 	pub(crate) der: CertificateSigningRequestDer<'static>,
 }
@@ -66,6 +67,7 @@ impl From<CertificateSigningRequest> for CertificateSigningRequestDer<'static> {
 }
 
 /// Parameters for a certificate signing request
+#[derive(Debug)]
 pub struct CertificateSigningRequestParams {
 	/// Parameters for the certificate to be signed.
 	pub params: CertificateParams,
