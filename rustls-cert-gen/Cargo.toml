@@ -21,7 +21,6 @@ bpaf = { version = "0.9.5", features = ["derive"] }
 pem = { workspace = true }
 pki-types = { workspace = true }
 ring = { workspace = true, optional = true }
-rand = { workspace = true }
 anyhow = "1.0.75"
 aws-lc-rs = { workspace = true, optional = true }
 
