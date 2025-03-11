@@ -10,10 +10,6 @@ edition.workspace = true
 keywords.workspace = true
 
 [[example]]
-name = "rsa-irc"
-required-features = ["pem"]
-
-[[example]]
 name = "rsa-irc-openssl"
 required-features = ["pem"]
 
@@ -59,5 +55,4 @@ x509-parser = { workspace = true, features = ["verify"] }
 rustls-webpki = { version = "0.102", features = ["std"] }
 botan = { version = "0.11", features = ["vendored"] }
 rand = { workspace = true }
-rsa = "0.9"
 ring = { workspace = true }
