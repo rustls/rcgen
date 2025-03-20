@@ -61,12 +61,6 @@ impl From<Certificate> for CertificateDer<'static> {
 	}
 }
 
-impl AsRef<CertificateParams> for Certificate {
-	fn as_ref(&self) -> &CertificateParams {
-		&self.params
-	}
-}
-
 /// Parameters used for certificate generation
 #[allow(missing_docs)]
 #[non_exhaustive]
@@ -158,13 +152,13 @@ impl CertificateParams {
 	pub fn signed_by(
 		self,
 		public_key: &impl PublicKeyData,
-		issuer: &impl AsRef<Self>,
+		issuer: &Certificate,
 		issuer_key: &KeyPair,
 	) -> Result<Certificate, Error> {
 		let issuer = Issuer {
-			distinguished_name: &issuer.as_ref().distinguished_name,
-			key_identifier_method: &issuer.as_ref().key_identifier_method,
-			key_usages: &issuer.as_ref().key_usages,
+			distinguished_name: &issuer.params.distinguished_name,
+			key_identifier_method: &issuer.params.key_identifier_method,
+			key_usages: &issuer.params.key_usages,
 			key_pair: issuer_key,
 		};
 
@@ -851,12 +845,6 @@ impl CertificateParams {
 		if !self.extended_key_usages.contains(&eku) {
 			self.extended_key_usages.push(eku);
 		}
-	}
-}
-
-impl AsRef<CertificateParams> for CertificateParams {
-	fn as_ref(&self) -> &CertificateParams {
-		self
 	}
 }
 
