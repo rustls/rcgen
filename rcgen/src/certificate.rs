@@ -158,7 +158,7 @@ impl CertificateParams {
 	pub fn signed_by(
 		self,
 		public_key: &impl PublicKeyData,
-		issuer: &impl AsRef<CertificateParams>,
+		issuer: &impl AsRef<Self>,
 		issuer_key: &KeyPair,
 	) -> Result<Certificate, Error> {
 		let issuer = Issuer {
