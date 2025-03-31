@@ -61,6 +61,12 @@ impl From<Certificate> for CertificateDer<'static> {
 	}
 }
 
+impl AsRef<CertificateParams> for Certificate {
+	fn as_ref(&self) -> &CertificateParams {
+		&self.params
+	}
+}
+
 /// Parameters used for certificate generation
 #[allow(missing_docs)]
 #[non_exhaustive]
@@ -845,6 +851,12 @@ impl CertificateParams {
 		if !self.extended_key_usages.contains(&eku) {
 			self.extended_key_usages.push(eku);
 		}
+	}
+}
+
+impl AsRef<CertificateParams> for CertificateParams {
+	fn as_ref(&self) -> &CertificateParams {
+		self
 	}
 }
 
