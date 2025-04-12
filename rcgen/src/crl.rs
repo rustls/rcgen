@@ -202,6 +202,7 @@ impl CertificateRevocationListParams {
 			key_identifier_method: &issuer.params.key_identifier_method,
 			key_usages: &issuer.params.key_usages,
 			key_pair: issuer_key,
+			certificate: Some(issuer.clone()),
 		};
 
 		if !issuer.key_usages.is_empty() && !issuer.key_usages.contains(&KeyUsagePurpose::CrlSign) {

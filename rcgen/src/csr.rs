@@ -211,6 +211,7 @@ impl CertificateSigningRequestParams {
 			key_identifier_method: &issuer.params.key_identifier_method,
 			key_usages: &issuer.params.key_usages,
 			key_pair: issuer_key,
+			certificate: Some(issuer.clone()),
 		};
 
 		let der = self

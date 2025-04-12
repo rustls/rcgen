@@ -166,6 +166,7 @@ impl CertificateParams {
 			key_identifier_method: &issuer.params.key_identifier_method,
 			key_usages: &issuer.params.key_usages,
 			key_pair: issuer_key,
+			certificate: Some(issuer.clone()),
 		};
 
 		let subject_public_key_info =
@@ -188,6 +189,7 @@ impl CertificateParams {
 			key_identifier_method: &self.key_identifier_method,
 			key_usages: &self.key_usages,
 			key_pair,
+			certificate: None,
 		};
 
 		let subject_public_key_info = key_pair.public_key_der();
