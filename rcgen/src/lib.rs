@@ -57,6 +57,7 @@ pub use crl::{
 };
 pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
 pub use error::{Error, InvalidAsn1String};
+pub use issuer::Issuer;
 pub use key_pair::PublicKeyData;
 #[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
 pub use key_pair::RsaKeySize;
@@ -71,6 +72,7 @@ mod certificate;
 mod crl;
 mod csr;
 mod error;
+mod issuer;
 mod key_pair;
 mod oid;
 mod ring_like;
@@ -127,13 +129,6 @@ pub fn generate_simple_self_signed(
 	let key_pair = KeyPair::generate()?;
 	let cert = CertificateParams::new(subject_alt_names)?.self_signed(&key_pair)?;
 	Ok(CertifiedKey { cert, key_pair })
-}
-
-struct Issuer<'a> {
-	distinguished_name: &'a DistinguishedName,
-	key_identifier_method: &'a KeyIdMethod,
-	key_usages: &'a [KeyUsagePurpose],
-	key_pair: &'a KeyPair,
 }
 
 // https://tools.ietf.org/html/rfc5280#section-4.1.1
