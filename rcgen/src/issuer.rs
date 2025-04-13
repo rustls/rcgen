@@ -84,6 +84,12 @@ impl Issuer {
 	pub fn public_key_der(&self) -> Vec<u8> {
 		self.key_pair.public_key_der()
 	}
+
+	/// Returns the private key of the issuer. The caller had access to this key when creating the issuer, so it is not
+	/// an increase in privilege to return it.
+	pub fn key_pair(&self) -> &KeyPair {
+		&self.key_pair
+	}
 }
 
 impl PublicKeyData for Issuer {

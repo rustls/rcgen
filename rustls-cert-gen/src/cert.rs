@@ -3,7 +3,8 @@ use std::{fmt, fs::File, io, path::Path};
 use bpaf::Bpaf;
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType,
-	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
+	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair, KeyUsagePurpose,
+	SanType,
 };
 
 #[cfg(feature = "aws_lc_rs")]
@@ -112,30 +113,48 @@ impl CaBuilder {
 	}
 	/// build `Ca` Certificate.
 	pub fn build(self) -> Result<Ca, rcgen::Error> {
+		// Create the CA key pair.
 		let key_pair = self.alg.to_key_pair()?;
-		let cert = self.params.self_signed(&key_pair)?;
-		Ok(Ca { cert, key_pair })
+
+		// Our certificate will be self-signed (issued by the CA itself).
+		let temp_issuer = Issuer::new_from_params(&self.params, &key_pair);
+
+		// Sign the certificate with the CA key pair.
+		let cert = self.params.self_signed(&temp_issuer)?;
+
+		// The CA is now an Issuer in its own right and can be used to issue other certificates.
+		Ok(Ca {
+			issuer: Issuer::new(cert.der(), &key_pair)?,
+		})
 	}
 }
 
-/// End-entity [Certificate]
+/// The root [Certificate]
 pub struct Ca {
-	cert: Certificate,
-	key_pair: KeyPair,
+	issuer: Issuer,
 }
 
 impl Ca {
 	/// Self-sign and serialize
 	pub fn serialize_pem(&self) -> PemCertifiedKey {
 		PemCertifiedKey {
-			cert_pem: self.cert.pem(),
-			private_key_pem: self.key_pair.serialize_pem(),
+			cert_pem: self
+				.issuer
+				.certificate()
+				.expect("The CA should always have a certificate")
+				.pem(),
+			private_key_pem: self.issuer.key_pair().serialize_pem(),
 		}
 	}
+
 	/// Return `&Certificate`
 	#[allow(dead_code)]
 	pub fn cert(&self) -> &Certificate {
-		&self.cert
+		// The CA is constructed from a certificate, so this should be safe.
+		&self
+			.issuer
+			.certificate()
+			.expect("The CA should always have a certificate")
 	}
 }
 
@@ -201,11 +220,9 @@ impl EndEntityBuilder {
 		self
 	}
 	/// build `EndEntity` Certificate.
-	pub fn build(self, issuer: &Ca) -> Result<EndEntity, rcgen::Error> {
+	pub fn build(self, ca: &Ca) -> Result<EndEntity, rcgen::Error> {
 		let key_pair = self.alg.to_key_pair()?;
-		let cert = self
-			.params
-			.signed_by(&key_pair, &issuer.cert, &issuer.key_pair)?;
+		let cert = self.params.signed_by(&key_pair, &ca.issuer)?;
 		Ok(EndEntity { cert, key_pair })
 	}
 }
