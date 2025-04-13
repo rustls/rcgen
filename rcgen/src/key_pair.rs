@@ -1,4 +1,5 @@
 use std::fmt;
+use std::rc::Rc;
 
 #[cfg(feature = "pem")]
 use pem::Pem;
@@ -57,6 +58,12 @@ impl fmt::Debug for KeyPairKind {
 	}
 }
 
+struct KeyPairInner {
+	kind: KeyPairKind,
+	alg: &'static SignatureAlgorithm,
+	serialized_der: Vec<u8>,
+}
+
 /// A key pair used to sign certificates and CSRs
 ///
 /// Note that ring, the underlying library to handle RSA keys
@@ -64,17 +71,16 @@ impl fmt::Debug for KeyPairKind {
 /// `openssl genrsa` doesn't work. See ring's [documentation](ring::signature::RsaKeyPair::from_pkcs8)
 /// for how to generate RSA keys in the wanted format
 /// and conversion between the formats.
+#[derive(Clone)]
 pub struct KeyPair {
-	kind: KeyPairKind,
-	alg: &'static SignatureAlgorithm,
-	serialized_der: Vec<u8>,
+	inner: Rc<KeyPairInner>,
 }
 
 impl fmt::Debug for KeyPair {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("KeyPair")
-			.field("kind", &self.kind)
-			.field("alg", &self.alg)
+			.field("kind", &self.inner.kind)
+			.field("alg", &self.inner.alg)
 			.field("serialized_der", &"[secret key elided]")
 			.finish()
 	}
@@ -104,9 +110,11 @@ impl KeyPair {
 
 				let key_pair = ecdsa_from_pkcs8(sign_alg, key_pair_doc.as_ref(), rng).unwrap();
 				Ok(KeyPair {
-					kind: KeyPairKind::Ec(key_pair),
-					alg,
-					serialized_der: key_pair_serialized,
+					inner: Rc::new(KeyPairInner {
+						kind: KeyPairKind::Ec(key_pair),
+						alg,
+						serialized_der: key_pair_serialized,
+					}),
 				})
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
@@ -115,9 +123,11 @@ impl KeyPair {
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(key_pair_doc.as_ref()).unwrap();
 				Ok(KeyPair {
-					kind: KeyPairKind::Ed(key_pair),
-					alg,
-					serialized_der: key_pair_serialized,
+					inner: Rc::new(KeyPairInner {
+						kind: KeyPairKind::Ed(key_pair),
+						alg,
+						serialized_der: key_pair_serialized,
+					}),
 				})
 			},
 			#[cfg(feature = "aws_lc_rs")]
@@ -163,15 +173,17 @@ impl KeyPair {
 		let key_pair_serialized = key_pair.as_der()._err()?.as_ref().to_vec();
 
 		Ok(KeyPair {
-			kind: KeyPairKind::Rsa(key_pair, sign_alg),
-			alg,
-			serialized_der: key_pair_serialized,
+			inner: Rc::new(KeyPairInner {
+				kind: KeyPairKind::Rsa(key_pair, sign_alg),
+				alg,
+				serialized_der: key_pair_serialized,
+			}),
 		})
 	}
 
 	/// Returns the key pair's signature algorithm
 	pub fn algorithm(&self) -> &'static SignatureAlgorithm {
-		self.alg
+		self.inner.alg
 	}
 
 	/// Parses the key pair from the ASCII PEM format
@@ -190,9 +202,11 @@ impl KeyPair {
 	/// Obtains the key pair from a raw public key and a remote private key
 	pub fn from_remote(key_pair: Box<dyn RemoteKeyPair + Send + Sync>) -> Result<Self, Error> {
 		Ok(Self {
-			alg: key_pair.algorithm(),
-			kind: KeyPairKind::Remote(key_pair),
-			serialized_der: Vec::new(),
+			inner: Rc::new(KeyPairInner {
+				alg: key_pair.algorithm(),
+				kind: KeyPairKind::Remote(key_pair),
+				serialized_der: Vec::new(),
+			}),
 		})
 	}
 
@@ -278,9 +292,11 @@ impl KeyPair {
 		};
 
 		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der,
+			inner: Rc::new(KeyPairInner {
+				kind,
+				alg,
+				serialized_der,
+			}),
 		})
 	}
 
@@ -381,9 +397,11 @@ impl KeyPair {
 			};
 
 			Ok(KeyPair {
-				kind,
-				alg,
-				serialized_der,
+				inner: Rc::new(KeyPairInner {
+					kind,
+					alg,
+					serialized_der,
+				}),
 			})
 		}
 	}
@@ -399,13 +417,13 @@ impl KeyPair {
 
 	/// Check if this key pair can be used with the given signature algorithm
 	pub fn is_compatible(&self, signature_algorithm: &SignatureAlgorithm) -> bool {
-		self.alg == signature_algorithm
+		self.inner.alg == signature_algorithm
 	}
 
 	/// Returns (possibly multiple) compatible [`SignatureAlgorithm`]'s
 	/// that the key can be used with
 	pub fn compatible_algs(&self) -> impl Iterator<Item = &'static SignatureAlgorithm> {
-		std::iter::once(self.alg)
+		std::iter::once(self.inner.alg)
 	}
 
 	pub(crate) fn sign_der(
@@ -418,7 +436,7 @@ impl KeyPair {
 				writer.next().write_der(&data);
 
 				// Write signatureAlgorithm
-				self.alg.write_alg_ident(writer.next());
+				self.inner.alg.write_alg_ident(writer.next());
 
 				// Write signature
 				self.sign(&data, writer.next())?;
@@ -429,7 +447,7 @@ impl KeyPair {
 	}
 
 	pub(crate) fn sign(&self, msg: &[u8], writer: DERWriter) -> Result<(), Error> {
-		match &self.kind {
+		match &self.inner.kind {
 			#[cfg(feature = "crypto")]
 			KeyPairKind::Ec(kp) => {
 				let system_random = SystemRandom::new();
@@ -484,11 +502,11 @@ impl KeyPair {
 	/// Panics if called on a remote key pair.
 	pub fn serialize_der(&self) -> Vec<u8> {
 		#[cfg_attr(not(feature = "crypto"), allow(irrefutable_let_patterns))]
-		if let KeyPairKind::Remote(_) = self.kind {
+		if let KeyPairKind::Remote(_) = self.inner.kind {
 			panic!("Serializing a remote key pair is not supported")
 		}
 
-		self.serialized_der.clone()
+		self.inner.serialized_der.clone()
 	}
 
 	/// Returns a reference to the serialized key pair (including the private key)
@@ -497,17 +515,17 @@ impl KeyPair {
 	/// Panics if called on a remote key pair.
 	pub fn serialized_der(&self) -> &[u8] {
 		#[cfg_attr(not(feature = "crypto"), allow(irrefutable_let_patterns))]
-		if let KeyPairKind::Remote(_) = self.kind {
+		if let KeyPairKind::Remote(_) = self.inner.kind {
 			panic!("Serializing a remote key pair is not supported")
 		}
 
-		&self.serialized_der
+		&self.inner.serialized_der
 	}
 
 	/// Access the remote key pair if it is a remote one
 	pub fn as_remote(&self) -> Option<&(dyn RemoteKeyPair + Send + Sync)> {
 		#[cfg_attr(not(feature = "crypto"), allow(irrefutable_let_patterns))]
-		if let KeyPairKind::Remote(remote) = &self.kind {
+		if let KeyPairKind::Remote(remote) = &self.inner.kind {
 			Some(remote.as_ref())
 		} else {
 			None
@@ -625,9 +643,11 @@ impl TryFrom<&PrivateKeyDer<'_>> for KeyPair {
 		};
 
 		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: key.secret_der().into(),
+			inner: Rc::new(KeyPairInner {
+				kind,
+				alg,
+				serialized_der: key.secret_der().into(),
+			}),
 		})
 	}
 }
@@ -647,7 +667,7 @@ pub enum RsaKeySize {
 
 impl PublicKeyData for KeyPair {
 	fn der_bytes(&self) -> &[u8] {
-		match &self.kind {
+		match &self.inner.kind {
 			#[cfg(feature = "crypto")]
 			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
 			#[cfg(feature = "crypto")]
@@ -659,7 +679,7 @@ impl PublicKeyData for KeyPair {
 	}
 
 	fn algorithm(&self) -> &SignatureAlgorithm {
-		self.alg
+		self.inner.alg
 	}
 }
 
