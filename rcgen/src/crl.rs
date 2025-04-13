@@ -5,6 +5,7 @@ use time::OffsetDateTime;
 use yasna::DERWriter;
 use yasna::Tag;
 
+use crate::key_pair::sign_der;
 use crate::CertificateParams;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
@@ -216,7 +217,7 @@ impl CertificateRevocationListParams {
 	}
 
 	fn serialize_der(&self, issuer: Issuer) -> Result<Vec<u8>, Error> {
-		issuer.key_pair.sign_der(|writer| {
+		sign_der(&issuer.key_pair, |writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
 			//   This optional field describes the version of the encoded CRL.  When

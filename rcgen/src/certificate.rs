@@ -10,7 +10,7 @@ use yasna::{DERWriter, Tag};
 
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
-use crate::key_pair::{serialize_public_key_der, PublicKeyData};
+use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
 #[cfg(feature = "pem")]
@@ -580,7 +580,7 @@ impl CertificateParams {
 			|| !extended_key_usages.is_empty()
 			|| !custom_extensions.is_empty();
 
-		let der = subject_key.sign_der(|writer| {
+		let der = sign_der(subject_key, |writer| {
 			// Write version
 			writer.next().write_u8(0);
 			write_distinguished_name(writer.next(), distinguished_name);
@@ -618,7 +618,7 @@ impl CertificateParams {
 		pub_key: &K,
 		issuer: Issuer<'_>,
 	) -> Result<CertificateDer<'static>, Error> {
-		let der = issuer.key_pair.sign_der(|writer| {
+		let der = sign_der(&issuer.key_pair, |writer| {
 			let pub_key_spki =
 				yasna::construct_der(|writer| serialize_public_key_der(pub_key, writer));
 			// Write version

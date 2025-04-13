@@ -408,26 +408,6 @@ impl KeyPair {
 		std::iter::once(self.alg)
 	}
 
-	pub(crate) fn sign_der(
-		&self,
-		f: impl FnOnce(&mut DERWriterSeq<'_>) -> Result<(), Error>,
-	) -> Result<Vec<u8>, Error> {
-		yasna::try_construct_der(|writer| {
-			writer.write_sequence(|writer| {
-				let data = yasna::try_construct_der(|writer| writer.write_sequence(f))?;
-				writer.next().write_der(&data);
-
-				// Write signatureAlgorithm
-				self.alg.write_alg_ident(writer.next());
-
-				// Write signature
-				self.sign(&data, writer.next())?;
-
-				Ok(())
-			})
-		})
-	}
-
 	pub(crate) fn sign(&self, msg: &[u8], writer: DERWriter) -> Result<(), Error> {
 		match &self.kind {
 			#[cfg(feature = "crypto")]
@@ -661,6 +641,26 @@ pub enum RsaKeySize {
 	_3072,
 	/// 4096 bits
 	_4096,
+}
+
+pub(crate) fn sign_der(
+	key: &KeyPair,
+	f: impl FnOnce(&mut DERWriterSeq<'_>) -> Result<(), Error>,
+) -> Result<Vec<u8>, Error> {
+	yasna::try_construct_der(|writer| {
+		writer.write_sequence(|writer| {
+			let data = yasna::try_construct_der(|writer| writer.write_sequence(f))?;
+			writer.next().write_der(&data);
+
+			// Write signatureAlgorithm
+			key.alg.write_alg_ident(writer.next());
+
+			// Write signature
+			key.sign(&data, writer.next())?;
+
+			Ok(())
+		})
+	})
 }
 
 /// A private key that is not directly accessible, but can be used to sign messages
