@@ -25,8 +25,11 @@ use crate::{
 /// struct MyKeyPair { public_key: Vec<u8> }
 /// #[cfg(not(feature = "crypto"))]
 /// impl SigningKey for MyKeyPair {
-///   fn public_key(&self) -> &[u8] { &self.public_key }
 ///   fn sign(&self, _: &[u8]) -> Result<Vec<u8>, rcgen::Error> { Ok(vec![]) }
+/// }
+/// #[cfg(not(feature = "crypto"))]
+/// impl PublicKeyData for MyKeyPair {
+///	  fn der_bytes(&self) -> &[u8] { &self.public_key }
 ///   fn algorithm(&self) -> &'static SignatureAlgorithm { &PKCS_ED25519 }
 /// }
 /// # fn main () {

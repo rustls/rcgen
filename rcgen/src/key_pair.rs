@@ -523,7 +523,7 @@ impl PublicKeyData for KeyPair {
 			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
 			#[cfg(feature = "crypto")]
 			KeyPairKind::Rsa(kp, _) => kp.public_key().as_ref(),
-			KeyPairKind::Remote(kp) => kp.public_key(),
+			KeyPairKind::Remote(kp) => kp.der_bytes(),
 		}
 	}
 
@@ -658,15 +658,9 @@ pub enum RsaKeySize {
 ///
 /// Trait objects based on this trait can be passed to the [`KeyPair::from_remote`] function for generating certificates
 /// from a remote and raw private key, for example an HSM.
-pub trait SigningKey {
-	/// Returns the public key of this key pair in the binary format as in [`KeyPair::public_key_raw`]
-	fn public_key(&self) -> &[u8];
-
+pub trait SigningKey: PublicKeyData {
 	/// Signs `msg` using the selected algorithm
 	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
-
-	/// Reveals the algorithm to be used when calling `sign()`
-	fn algorithm(&self) -> &'static SignatureAlgorithm;
 }
 
 #[cfg(feature = "crypto")]
