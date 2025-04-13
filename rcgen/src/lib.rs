@@ -57,10 +57,12 @@ pub use crl::{
 };
 pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
 pub use error::{Error, InvalidAsn1String};
+#[cfg(feature = "crypto")]
+pub use key_pair::KeyPair;
 pub use key_pair::PublicKeyData;
 #[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
 pub use key_pair::RsaKeySize;
-pub use key_pair::{KeyPair, SigningKey, SubjectPublicKeyInfo};
+pub use key_pair::{SigningKey, SubjectPublicKeyInfo};
 #[cfg(feature = "crypto")]
 use ring_like::digest;
 pub use sign_algo::algo::*;
@@ -84,11 +86,11 @@ mod string_types;
 pub type RcgenError = Error;
 
 /// An issued certificate, together with the subject keypair.
-pub struct CertifiedKey {
+pub struct CertifiedKey<S: SigningKey> {
 	/// An issued certificate.
 	pub cert: Certificate,
 	/// The certificate's subject key pair.
-	pub key_pair: KeyPair,
+	pub key_pair: S,
 }
 
 /**
@@ -123,17 +125,17 @@ println!("{}", key_pair.serialize_pem());
 )]
 pub fn generate_simple_self_signed(
 	subject_alt_names: impl Into<Vec<String>>,
-) -> Result<CertifiedKey, Error> {
+) -> Result<CertifiedKey<KeyPair>, Error> {
 	let key_pair = KeyPair::generate()?;
 	let cert = CertificateParams::new(subject_alt_names)?.self_signed(&key_pair)?;
 	Ok(CertifiedKey { cert, key_pair })
 }
 
-struct Issuer<'a> {
+struct Issuer<'a, S> {
 	distinguished_name: &'a DistinguishedName,
 	key_identifier_method: &'a KeyIdMethod,
 	key_usages: &'a [KeyUsagePurpose],
-	key_pair: &'a KeyPair,
+	key_pair: &'a S,
 }
 
 // https://tools.ietf.org/html/rfc5280#section-4.1.1

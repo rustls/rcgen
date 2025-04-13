@@ -7,11 +7,12 @@ use yasna::Tag;
 
 use crate::key_pair::sign_der;
 use crate::CertificateParams;
+use crate::SigningKey;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_authority_key_identifier, write_x509_extension, Error, Issuer, KeyIdMethod, KeyPair,
+	write_x509_authority_key_identifier, write_x509_extension, Error, Issuer, KeyIdMethod,
 	KeyUsagePurpose, SerialNumber,
 };
 
@@ -193,7 +194,7 @@ impl CertificateRevocationListParams {
 	pub fn signed_by(
 		self,
 		issuer: &CertificateParams,
-		issuer_key: &KeyPair,
+		issuer_key: &impl SigningKey,
 	) -> Result<CertificateRevocationList, Error> {
 		if self.next_update.le(&self.this_update) {
 			return Err(Error::InvalidCrlNextUpdate);
@@ -216,8 +217,8 @@ impl CertificateRevocationListParams {
 		})
 	}
 
-	fn serialize_der(&self, issuer: Issuer) -> Result<Vec<u8>, Error> {
-		sign_der(&issuer.key_pair, |writer| {
+	fn serialize_der(&self, issuer: Issuer<'_, impl SigningKey>) -> Result<Vec<u8>, Error> {
+		sign_der(issuer.key_pair, |writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
 			//   This optional field describes the version of the encoded CRL.  When
@@ -233,7 +234,7 @@ impl CertificateRevocationListParams {
 			// RFC 5280 §5.1.2.2:
 			//   This field MUST contain the same algorithm identifier as the
 			//   signatureAlgorithm field in the sequence CertificateList
-			issuer.key_pair.alg.write_alg_ident(writer.next());
+			issuer.key_pair.algorithm().write_alg_ident(writer.next());
 
 			// Write issuer.
 			// RFC 5280 §5.1.2.3:
@@ -277,7 +278,7 @@ impl CertificateRevocationListParams {
 					write_x509_authority_key_identifier(
 						writer.next(),
 						self.key_identifier_method
-							.derive(issuer.key_pair.public_key_der()),
+							.derive(issuer.key_pair.der_bytes()),
 					);
 
 					// Write CRL number.
