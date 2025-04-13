@@ -117,15 +117,14 @@ impl CaBuilder {
 		let key_pair = self.alg.to_key_pair()?;
 
 		// Our certificate will be self-signed (issued by the CA itself).
-		let temp_issuer = Issuer::new_from_params(&self.params, &key_pair);
+		let mut issuer = Issuer::new_from_params(&self.params, &key_pair);
 
 		// Sign the certificate with the CA key pair.
-		let cert = self.params.self_signed(&temp_issuer)?;
+		let cert = self.params.self_signed(&issuer)?;
+		issuer.set_certificate(cert);
 
 		// The CA is now an Issuer in its own right and can be used to issue other certificates.
-		Ok(Ca {
-			issuer: Issuer::new(cert.der(), &key_pair)?,
-		})
+		Ok(Ca { issuer })
 	}
 }
 
