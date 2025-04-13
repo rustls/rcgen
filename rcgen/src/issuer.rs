@@ -1,8 +1,9 @@
+#[cfg(feature = "x509-parser")]
 use pki_types::CertificateDer;
 
 use crate::{
-	Certificate, CertificateParams, DistinguishedName, Error, KeyIdMethod, KeyPair,
-	KeyUsagePurpose, PublicKeyData, SignatureAlgorithm,
+	Certificate, CertificateParams, DistinguishedName, KeyIdMethod, KeyPair, KeyUsagePurpose,
+	PublicKeyData, SignatureAlgorithm,
 };
 
 /// Holds the information necessary for an issuer of a certificate to sign other certificates. Specifically, it must
@@ -33,7 +34,7 @@ impl Issuer {
 	/// Creates a new issuer from a certificate in DER format and a key pair. The certificate must be a CA certificate
 	/// and the key pair must contain the private key associated with the certificate.
 	#[cfg(feature = "x509-parser")]
-	pub fn new(der: &CertificateDer, key_pair: &KeyPair) -> Result<Self, Error> {
+	pub fn new(der: &CertificateDer, key_pair: &KeyPair) -> Result<Self, crate::Error> {
 		// TODO: The certificate contains the public key, which must match the public key in the key pair, or this
 		// issuer is invalid. We should check this error condition.
 
