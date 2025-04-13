@@ -31,7 +31,7 @@ impl PublicKeyData for PublicKey {
 		&self.raw
 	}
 
-	fn algorithm(&self) -> &SignatureAlgorithm {
+	fn algorithm(&self) -> &'static SignatureAlgorithm {
 		self.alg
 	}
 }

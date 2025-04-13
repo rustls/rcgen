@@ -527,7 +527,7 @@ impl PublicKeyData for KeyPair {
 		}
 	}
 
-	fn algorithm(&self) -> &SignatureAlgorithm {
+	fn algorithm(&self) -> &'static SignatureAlgorithm {
 		self.alg
 	}
 }
@@ -747,7 +747,7 @@ impl PublicKeyData for SubjectPublicKeyInfo {
 		&self.subject_public_key
 	}
 
-	fn algorithm(&self) -> &SignatureAlgorithm {
+	fn algorithm(&self) -> &'static SignatureAlgorithm {
 		self.alg
 	}
 }
@@ -766,7 +766,7 @@ pub trait PublicKeyData {
 	fn der_bytes(&self) -> &[u8];
 
 	/// The algorithm used by the key pair
-	fn algorithm(&self) -> &SignatureAlgorithm;
+	fn algorithm(&self) -> &'static SignatureAlgorithm;
 }
 
 pub(crate) fn serialize_public_key_der(key: &(impl PublicKeyData + ?Sized), writer: DERWriter) {
