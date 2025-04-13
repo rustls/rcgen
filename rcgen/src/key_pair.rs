@@ -1,3 +1,4 @@
+#[cfg(feature = "crypto")]
 use std::fmt;
 
 #[cfg(feature = "pem")]
@@ -29,30 +30,23 @@ use crate::{sign_algo::SignatureAlgorithm, Error};
 
 /// A key pair variant
 #[allow(clippy::large_enum_variant)]
+#[cfg(feature = "crypto")]
 pub(crate) enum KeyPairKind {
 	/// A Ecdsa key pair
-	#[cfg(feature = "crypto")]
 	Ec(EcdsaKeyPair),
 	/// A Ed25519 key pair
-	#[cfg(feature = "crypto")]
 	Ed(Ed25519KeyPair),
 	/// A RSA key pair
-	#[cfg(feature = "crypto")]
 	Rsa(RsaKeyPair, &'static dyn RsaEncoding),
-	/// A remote key pair
-	Remote(Box<dyn SigningKey + Send + Sync>),
 }
 
+#[cfg(feature = "crypto")]
 impl fmt::Debug for KeyPairKind {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			#[cfg(feature = "crypto")]
 			Self::Ec(key_pair) => write!(f, "{:?}", key_pair),
-			#[cfg(feature = "crypto")]
 			Self::Ed(key_pair) => write!(f, "{:?}", key_pair),
-			#[cfg(feature = "crypto")]
 			Self::Rsa(key_pair, _) => write!(f, "{:?}", key_pair),
-			Self::Remote(_) => write!(f, "Box<dyn RemotePrivateKey>"),
 		}
 	}
 }
@@ -64,12 +58,14 @@ impl fmt::Debug for KeyPairKind {
 /// `openssl genrsa` doesn't work. See ring's [documentation](ring::signature::RsaKeyPair::from_pkcs8)
 /// for how to generate RSA keys in the wanted format
 /// and conversion between the formats.
+#[cfg(feature = "crypto")]
 pub struct KeyPair {
 	pub(crate) kind: KeyPairKind,
 	pub(crate) alg: &'static SignatureAlgorithm,
 	pub(crate) serialized_der: Vec<u8>,
 }
 
+#[cfg(feature = "crypto")]
 impl fmt::Debug for KeyPair {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("KeyPair")
@@ -80,6 +76,7 @@ impl fmt::Debug for KeyPair {
 	}
 }
 
+#[cfg(feature = "crypto")]
 impl KeyPair {
 	/// Generate a new random [`PKCS_ECDSA_P256_SHA256`] key pair
 	#[cfg(feature = "crypto")]
@@ -185,15 +182,6 @@ impl KeyPair {
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)._err()?;
 		Self::try_from(private_key.contents())
-	}
-
-	/// Obtains the key pair from a raw public key and a remote private key
-	pub fn from_remote(key_pair: Box<dyn SigningKey + Send + Sync>) -> Result<Self, Error> {
-		Ok(Self {
-			alg: key_pair.algorithm(),
-			kind: KeyPairKind::Remote(key_pair),
-			serialized_der: Vec::new(),
-		})
 	}
 
 	/// Obtains the key pair from a DER formatted key
@@ -419,38 +407,14 @@ impl KeyPair {
 	}
 
 	/// Serializes the key pair (including the private key) in PKCS#8 format in DER
-	///
-	/// Panics if called on a remote key pair.
 	pub fn serialize_der(&self) -> Vec<u8> {
-		#[cfg_attr(not(feature = "crypto"), allow(irrefutable_let_patterns))]
-		if let KeyPairKind::Remote(_) = self.kind {
-			panic!("Serializing a remote key pair is not supported")
-		}
-
 		self.serialized_der.clone()
 	}
 
 	/// Returns a reference to the serialized key pair (including the private key)
 	/// in PKCS#8 format in DER
-	///
-	/// Panics if called on a remote key pair.
 	pub fn serialized_der(&self) -> &[u8] {
-		#[cfg_attr(not(feature = "crypto"), allow(irrefutable_let_patterns))]
-		if let KeyPairKind::Remote(_) = self.kind {
-			panic!("Serializing a remote key pair is not supported")
-		}
-
 		&self.serialized_der
-	}
-
-	/// Access the remote key pair if it is a remote one
-	pub fn as_remote(&self) -> Option<&(dyn SigningKey + Send + Sync)> {
-		#[cfg_attr(not(feature = "crypto"), allow(irrefutable_let_patterns))]
-		if let KeyPairKind::Remote(remote) = &self.kind {
-			Some(remote.as_ref())
-		} else {
-			None
-		}
 	}
 
 	/// Serializes the key pair (including the private key) in PKCS#8 format in PEM
@@ -479,21 +443,17 @@ impl SigningKey for KeyPair {
 					._err()?;
 				signature
 			},
-			KeyPairKind::Remote(kp) => kp.sign(msg)?,
 		})
 	}
 }
 
+#[cfg(feature = "crypto")]
 impl PublicKeyData for KeyPair {
 	fn der_bytes(&self) -> &[u8] {
 		match &self.kind {
-			#[cfg(feature = "crypto")]
 			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
-			#[cfg(feature = "crypto")]
 			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
-			#[cfg(feature = "crypto")]
 			KeyPairKind::Rsa(kp, _) => kp.public_key().as_ref(),
-			KeyPairKind::Remote(kp) => kp.der_bytes(),
 		}
 	}
 
@@ -647,9 +607,6 @@ pub(crate) fn sign_der(
 }
 
 /// A key that can be used to sign messages
-///
-/// Trait objects based on this trait can be passed to the [`KeyPair::from_remote`] function for generating certificates
-/// from a remote and raw private key, for example an HSM.
 pub trait SigningKey: PublicKeyData {
 	/// Signs `msg` using the selected algorithm
 	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
