@@ -40,7 +40,7 @@ pub(crate) enum KeyPairKind {
 	#[cfg(feature = "crypto")]
 	Rsa(RsaKeyPair, &'static dyn RsaEncoding),
 	/// A remote key pair
-	Remote(Box<dyn RemoteKeyPair + Send + Sync>),
+	Remote(Box<dyn SigningKey + Send + Sync>),
 }
 
 impl fmt::Debug for KeyPairKind {
@@ -188,7 +188,7 @@ impl KeyPair {
 	}
 
 	/// Obtains the key pair from a raw public key and a remote private key
-	pub fn from_remote(key_pair: Box<dyn RemoteKeyPair + Send + Sync>) -> Result<Self, Error> {
+	pub fn from_remote(key_pair: Box<dyn SigningKey + Send + Sync>) -> Result<Self, Error> {
 		Ok(Self {
 			alg: key_pair.algorithm(),
 			kind: KeyPairKind::Remote(key_pair),
@@ -505,7 +505,7 @@ impl KeyPair {
 	}
 
 	/// Access the remote key pair if it is a remote one
-	pub fn as_remote(&self) -> Option<&(dyn RemoteKeyPair + Send + Sync)> {
+	pub fn as_remote(&self) -> Option<&(dyn SigningKey + Send + Sync)> {
 		#[cfg_attr(not(feature = "crypto"), allow(irrefutable_let_patterns))]
 		if let KeyPairKind::Remote(remote) = &self.kind {
 			Some(remote.as_ref())
@@ -667,7 +667,7 @@ impl PublicKeyData for KeyPair {
 ///
 /// Trait objects based on this trait can be passed to the [`KeyPair::from_remote`] function for generating certificates
 /// from a remote and raw private key, for example an HSM.
-pub trait RemoteKeyPair {
+pub trait SigningKey {
 	/// Returns the public key of this key pair in the binary format as in [`KeyPair::public_key_raw`]
 	fn public_key(&self) -> &[u8];
 
