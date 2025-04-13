@@ -52,12 +52,12 @@ fn sign_msg_rsa(key_pair: &KeyPair, msg: &[u8], encoding: &'static dyn RsaEncodi
 	signature
 }
 
-fn check_cert<'a, 'b>(
+fn check_cert<'a, 'b, S: SigningKey + 'a>(
 	cert_der: &CertificateDer<'_>,
 	cert: &'a Certificate,
-	cert_key: &'a KeyPair,
+	cert_key: &'a S,
 	alg: &dyn SignatureVerificationAlgorithm,
-	sign_fn: impl FnOnce(&'a KeyPair, &'b [u8]) -> Vec<u8>,
+	sign_fn: impl FnOnce(&'a S, &'b [u8]) -> Vec<u8>,
 ) {
 	#[cfg(feature = "pem")]
 	{
@@ -66,13 +66,13 @@ fn check_cert<'a, 'b>(
 	check_cert_ca(cert_der, cert_key, cert_der, alg, alg, sign_fn);
 }
 
-fn check_cert_ca<'a, 'b>(
+fn check_cert_ca<'a, 'b, S: SigningKey + 'a>(
 	cert_der: &CertificateDer<'_>,
-	cert_key: &'a KeyPair,
+	cert_key: &'a S,
 	ca_der: &CertificateDer<'_>,
 	cert_alg: &dyn SignatureVerificationAlgorithm,
 	ca_alg: &dyn SignatureVerificationAlgorithm,
-	sign_fn: impl FnOnce(&'a KeyPair, &'b [u8]) -> Vec<u8>,
+	sign_fn: impl FnOnce(&'a S, &'b [u8]) -> Vec<u8>,
 ) {
 	let trust_anchor = anchor_from_trusted_cert(ca_der).unwrap();
 	let trust_anchor_list = &[trust_anchor];
@@ -352,7 +352,7 @@ fn from_remote() {
 		&rng,
 	)
 	.unwrap();
-	let remote = KeyPair::from_remote(Box::new(Remote(remote))).unwrap();
+	let remote = Remote(remote);
 
 	let (params, _) = util::default_params();
 	let cert = params.self_signed(&remote).unwrap();
