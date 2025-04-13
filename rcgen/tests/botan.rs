@@ -128,9 +128,9 @@ fn test_botan_rsa_given() {
 
 #[test]
 fn test_botan_separate_ca() {
-	let (mut params, ca_key) = default_params();
-	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-	let ca_cert = params.self_signed(&ca_key).unwrap();
+	let (mut ca_params, ca_key) = default_params();
+	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
@@ -143,7 +143,7 @@ fn test_botan_separate_ca() {
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
 
 	let key_pair = KeyPair::generate().unwrap();
-	let cert = params.signed_by(&key_pair, &ca_cert, &ca_key).unwrap();
+	let cert = params.signed_by(&key_pair, &ca_params, &ca_key).unwrap();
 	check_cert_ca(cert.der(), &cert, ca_cert.der());
 }
 
@@ -157,7 +157,6 @@ fn test_botan_imported_ca() {
 	let ca_cert_der = ca_cert.der();
 
 	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der).unwrap();
-	let imported_ca_cert = imported_ca_cert_params.self_signed(&ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
@@ -171,7 +170,7 @@ fn test_botan_imported_ca() {
 
 	let key_pair = KeyPair::generate().unwrap();
 	let cert = params
-		.signed_by(&key_pair, &imported_ca_cert, &ca_key)
+		.signed_by(&key_pair, &imported_ca_cert_params, &ca_key)
 		.unwrap();
 	check_cert_ca(cert.der(), &cert, ca_cert_der);
 }
@@ -190,9 +189,6 @@ fn test_botan_imported_ca_with_printable_string() {
 	let ca_cert_der = ca_cert.der();
 
 	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der).unwrap();
-	let imported_ca_cert = imported_ca_cert_params
-		.self_signed(&imported_ca_key)
-		.unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
@@ -205,7 +201,7 @@ fn test_botan_imported_ca_with_printable_string() {
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
 	let key_pair = KeyPair::generate().unwrap();
 	let cert = params
-		.signed_by(&key_pair, &imported_ca_cert, &imported_ca_key)
+		.signed_by(&key_pair, &imported_ca_cert_params, &imported_ca_key)
 		.unwrap();
 
 	check_cert_ca(cert.der(), &cert, ca_cert_der);
@@ -223,7 +219,6 @@ fn test_botan_crl_parse() {
 		KeyUsagePurpose::CrlSign,
 	];
 	let issuer_key = KeyPair::generate_for(alg).unwrap();
-	let issuer = issuer.self_signed(&issuer_key).unwrap();
 
 	// Create an end entity cert issued by the issuer.
 	let (mut ee, _) = util::default_params();
@@ -232,8 +227,8 @@ fn test_botan_crl_parse() {
 	// Botan has a sanity check that enforces a maximum expiration date
 	ee.not_after = rcgen::date_time_ymd(3016, 1, 1);
 	let ee_key = KeyPair::generate_for(alg).unwrap();
-	let ee = ee.signed_by(&ee_key, &issuer, &issuer_key).unwrap();
-	let botan_ee = botan::Certificate::load(ee.der()).unwrap();
+	let ee_cert = ee.signed_by(&ee_key, &issuer, &issuer_key).unwrap();
+	let botan_ee = botan::Certificate::load(ee_cert.der()).unwrap();
 
 	// Generate a CRL with the issuer that revokes the EE cert.
 	let now = OffsetDateTime::now_utc();
@@ -243,7 +238,7 @@ fn test_botan_crl_parse() {
 		crl_number: rcgen::SerialNumber::from(1234),
 		issuing_distribution_point: None,
 		revoked_certs: vec![RevokedCertParams {
-			serial_number: ee.params().serial_number.clone().unwrap(),
+			serial_number: ee.serial_number.clone().unwrap(),
 			revocation_time: now,
 			reason_code: Some(RevocationReason::KeyCompromise),
 			invalidity_date: None,

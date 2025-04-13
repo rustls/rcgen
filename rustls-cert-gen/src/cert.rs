@@ -114,13 +114,18 @@ impl CaBuilder {
 	pub fn build(self) -> Result<Ca, rcgen::Error> {
 		let key_pair = self.alg.to_key_pair()?;
 		let cert = self.params.self_signed(&key_pair)?;
-		Ok(Ca { cert, key_pair })
+		Ok(Ca {
+			params: self.params,
+			cert,
+			key_pair,
+		})
 	}
 }
 
 /// End-entity [Certificate]
 pub struct Ca {
 	cert: Certificate,
+	params: CertificateParams,
 	key_pair: KeyPair,
 }
 
@@ -205,7 +210,7 @@ impl EndEntityBuilder {
 		let key_pair = self.alg.to_key_pair()?;
 		let cert = self
 			.params
-			.signed_by(&key_pair, &issuer.cert, &issuer.key_pair)?;
+			.signed_by(&key_pair, &issuer.params, &issuer.key_pair)?;
 		Ok(EndEntity { cert, key_pair })
 	}
 }

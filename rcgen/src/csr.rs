@@ -201,24 +201,21 @@ impl CertificateSigningRequestParams {
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
 	pub fn signed_by(
-		self,
-		issuer: &Certificate,
+		&self,
+		issuer: &CertificateParams,
 		issuer_key: &impl SigningKey,
 	) -> Result<Certificate, Error> {
 		let issuer = Issuer {
-			distinguished_name: &issuer.params.distinguished_name,
-			key_identifier_method: &issuer.params.key_identifier_method,
-			key_usages: &issuer.params.key_usages,
+			distinguished_name: &issuer.distinguished_name,
+			key_identifier_method: &issuer.key_identifier_method,
+			key_usages: &issuer.key_usages,
 			key_pair: issuer_key,
 		};
 
-		let der = self
-			.params
-			.serialize_der_with_signer(&self.public_key, issuer)?;
-
 		Ok(Certificate {
-			params: self.params,
-			der,
+			der: self
+				.params
+				.serialize_der_with_signer(&self.public_key, issuer)?,
 		})
 	}
 }
