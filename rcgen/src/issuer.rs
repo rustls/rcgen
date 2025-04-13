@@ -65,6 +65,11 @@ impl Issuer {
 		}
 	}
 
+	/// Sets the certificate of the issuer.
+	pub fn set_certificate(&mut self, certificate: Certificate) {
+		self.certificate = Some(certificate);
+	}
+
 	/// Returns the certificate of the issuer, if available. This is typically `None` for root certificates issuers
 	pub fn certificate(&self) -> Option<&Certificate> {
 		self.certificate.as_ref()
