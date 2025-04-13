@@ -14,7 +14,8 @@ use webpki::{
 };
 
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DnType, Error, IsCa, KeyPair, SigningKey,
+	BasicConstraints, Certificate, CertificateParams, DnType, Error, IsCa, KeyPair, PublicKeyData,
+	SigningKey,
 };
 use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams};
 #[cfg(feature = "x509-parser")]
@@ -318,16 +319,18 @@ fn from_remote() {
 	struct Remote(EcdsaKeyPair);
 
 	impl SigningKey for Remote {
-		fn public_key(&self) -> &[u8] {
-			self.0.public_key().as_ref()
-		}
-
 		fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, rcgen::Error> {
 			let system_random = SystemRandom::new();
 			self.0
 				.sign(&system_random, msg)
 				.map(|s| s.as_ref().to_owned())
 				.map_err(|_| Error::RingUnspecified)
+		}
+	}
+
+	impl PublicKeyData for Remote {
+		fn der_bytes(&self) -> &[u8] {
+			self.0.public_key().as_ref()
 		}
 
 		fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
