@@ -408,58 +408,6 @@ impl KeyPair {
 		std::iter::once(self.alg)
 	}
 
-	pub(crate) fn sign_der(
-		&self,
-		f: impl FnOnce(&mut DERWriterSeq<'_>) -> Result<(), Error>,
-	) -> Result<Vec<u8>, Error> {
-		yasna::try_construct_der(|writer| {
-			writer.write_sequence(|writer| {
-				let data = yasna::try_construct_der(|writer| writer.write_sequence(f))?;
-				writer.next().write_der(&data);
-
-				// Write signatureAlgorithm
-				self.alg.write_alg_ident(writer.next());
-
-				// Write signature
-				self.sign(&data, writer.next())?;
-
-				Ok(())
-			})
-		})
-	}
-
-	pub(crate) fn sign(&self, msg: &[u8], writer: DERWriter) -> Result<(), Error> {
-		match &self.kind {
-			#[cfg(feature = "crypto")]
-			KeyPairKind::Ec(kp) => {
-				let system_random = SystemRandom::new();
-				let signature = kp.sign(&system_random, msg)._err()?;
-				let sig = &signature.as_ref();
-				writer.write_bitvec_bytes(sig, &sig.len() * 8);
-			},
-			#[cfg(feature = "crypto")]
-			KeyPairKind::Ed(kp) => {
-				let signature = kp.sign(msg);
-				let sig = &signature.as_ref();
-				writer.write_bitvec_bytes(sig, &sig.len() * 8);
-			},
-			#[cfg(feature = "crypto")]
-			KeyPairKind::Rsa(kp, padding_alg) => {
-				let system_random = SystemRandom::new();
-				let mut signature = vec![0; rsa_key_pair_public_modulus_len(kp)];
-				kp.sign(*padding_alg, &system_random, msg, &mut signature)
-					._err()?;
-				let sig = &signature.as_ref();
-				writer.write_bitvec_bytes(sig, &sig.len() * 8);
-			},
-			KeyPairKind::Remote(kp) => {
-				let signature = kp.sign(msg)?;
-				writer.write_bitvec_bytes(&signature, &signature.len() * 8);
-			},
-		}
-		Ok(())
-	}
-
 	/// Return the key pair's public key in PEM format
 	///
 	/// The returned string can be interpreted with `openssl pkey --inform PEM -pubout -pubin -text`
@@ -511,6 +459,28 @@ impl KeyPair {
 		let contents = self.serialize_der();
 		let p = Pem::new("PRIVATE KEY", contents);
 		pem::encode_config(&p, ENCODE_CONFIG)
+	}
+}
+
+#[cfg(feature = "crypto")]
+impl SigningKey for KeyPair {
+	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
+		Ok(match &self.kind {
+			KeyPairKind::Ec(kp) => {
+				let system_random = SystemRandom::new();
+				let signature = kp.sign(&system_random, msg)._err()?;
+				signature.as_ref().to_owned()
+			},
+			KeyPairKind::Ed(kp) => kp.sign(msg).as_ref().to_owned(),
+			KeyPairKind::Rsa(kp, padding_alg) => {
+				let system_random = SystemRandom::new();
+				let mut signature = vec![0; rsa_key_pair_public_modulus_len(kp)];
+				kp.sign(*padding_alg, &system_random, msg, &mut signature)
+					._err()?;
+				signature
+			},
+			KeyPairKind::Remote(kp) => kp.sign(msg)?,
+		})
 	}
 }
 
@@ -652,6 +622,28 @@ pub enum RsaKeySize {
 	_3072,
 	/// 4096 bits
 	_4096,
+}
+
+pub(crate) fn sign_der(
+	key: &impl SigningKey,
+	f: impl FnOnce(&mut DERWriterSeq<'_>) -> Result<(), Error>,
+) -> Result<Vec<u8>, Error> {
+	yasna::try_construct_der(|writer| {
+		writer.write_sequence(|writer| {
+			let data = yasna::try_construct_der(|writer| writer.write_sequence(f))?;
+			writer.next().write_der(&data);
+
+			// Write signatureAlgorithm
+			key.algorithm().write_alg_ident(writer.next());
+
+			// Write signature
+			let sig = key.sign(&data)?;
+			let writer = writer.next();
+			writer.write_bitvec_bytes(&sig, sig.len() * 8);
+
+			Ok(())
+		})
+	})
 }
 
 /// A key that can be used to sign messages

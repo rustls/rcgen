@@ -10,7 +10,7 @@ use yasna::{DERWriter, Tag};
 
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
-use crate::key_pair::{serialize_public_key_der, PublicKeyData};
+use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
 #[cfg(feature = "pem")]
@@ -18,7 +18,7 @@ use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
 	write_x509_authority_key_identifier, write_x509_extension, DistinguishedName, Error, Issuer,
-	KeyIdMethod, KeyPair, KeyUsagePurpose, SanType, SerialNumber,
+	KeyIdMethod, KeyUsagePurpose, SanType, SerialNumber, SigningKey,
 };
 
 /// An issued certificate together with the parameters used to generate it.
@@ -151,7 +151,7 @@ impl CertificateParams {
 		self,
 		public_key: &impl PublicKeyData,
 		issuer: &Certificate,
-		issuer_key: &KeyPair,
+		issuer_key: &impl SigningKey,
 	) -> Result<Certificate, Error> {
 		let issuer = Issuer {
 			distinguished_name: &issuer.params.distinguished_name,
@@ -168,7 +168,7 @@ impl CertificateParams {
 	///
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
-	pub fn self_signed(self, key_pair: &KeyPair) -> Result<Certificate, Error> {
+	pub fn self_signed(self, key_pair: &impl SigningKey) -> Result<Certificate, Error> {
 		let issuer = Issuer {
 			distinguished_name: &self.distinguished_name,
 			key_identifier_method: &self.key_identifier_method,
@@ -531,7 +531,7 @@ impl CertificateParams {
 	/// same output.
 	pub fn serialize_request(
 		&self,
-		subject_key: &KeyPair,
+		subject_key: &impl SigningKey,
 	) -> Result<CertificateSigningRequest, Error> {
 		self.serialize_request_with_attributes(subject_key, Vec::new())
 	}
@@ -549,7 +549,7 @@ impl CertificateParams {
 	/// [RFC 2986]: <https://datatracker.ietf.org/doc/html/rfc2986#section-4>
 	pub fn serialize_request_with_attributes(
 		&self,
-		subject_key: &KeyPair,
+		subject_key: &impl SigningKey,
 		attrs: Vec<Attribute>,
 	) -> Result<CertificateSigningRequest, Error> {
 		// No .. pattern, we use this to ensure every field is used
@@ -597,7 +597,7 @@ impl CertificateParams {
 			|| !extended_key_usages.is_empty()
 			|| !custom_extensions.is_empty();
 
-		let der = subject_key.sign_der(|writer| {
+		let der = sign_der(subject_key, |writer| {
 			// Write version
 			writer.next().write_u8(0);
 			write_distinguished_name(writer.next(), distinguished_name);
@@ -633,9 +633,9 @@ impl CertificateParams {
 	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
-		issuer: Issuer<'_>,
+		issuer: Issuer<'_, impl SigningKey>,
 	) -> Result<CertificateDer<'static>, Error> {
-		let der = issuer.key_pair.sign_der(|writer| {
+		let der = sign_der(issuer.key_pair, |writer| {
 			let pub_key_spki = pub_key.subject_public_key_info();
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
@@ -659,7 +659,7 @@ impl CertificateParams {
 				}
 			};
 			// Write signature algorithm
-			issuer.key_pair.alg.write_alg_ident(writer.next());
+			issuer.key_pair.algorithm().write_alg_ident(writer.next());
 			// Write issuer name
 			write_distinguished_name(writer.next(), &issuer.distinguished_name);
 			// Write validity
@@ -1223,6 +1223,8 @@ pub enum BasicConstraints {
 mod tests {
 	#[cfg(feature = "pem")]
 	use super::*;
+	#[cfg(feature = "crypto")]
+	use crate::KeyPair;
 
 	#[cfg(feature = "crypto")]
 	#[test]

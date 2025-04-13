@@ -7,7 +7,7 @@ use pki_types::CertificateSigningRequestDer;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	Certificate, CertificateParams, Error, Issuer, KeyPair, PublicKeyData, SignatureAlgorithm,
+	Certificate, CertificateParams, Error, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey,
 };
 #[cfg(feature = "x509-parser")]
 use crate::{DistinguishedName, SanType};
@@ -203,7 +203,7 @@ impl CertificateSigningRequestParams {
 	pub fn signed_by(
 		self,
 		issuer: &Certificate,
-		issuer_key: &KeyPair,
+		issuer_key: &impl SigningKey,
 	) -> Result<Certificate, Error> {
 		let issuer = Issuer {
 			distinguished_name: &issuer.params.distinguished_name,
