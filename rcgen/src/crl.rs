@@ -5,12 +5,13 @@ use time::OffsetDateTime;
 use yasna::DERWriter;
 use yasna::Tag;
 
+use crate::key_pair::sign_der;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
 	write_x509_authority_key_identifier, write_x509_extension, Certificate, Error, Issuer,
-	KeyIdMethod, KeyPair, KeyUsagePurpose, PublicKeyData, SerialNumber,
+	KeyIdMethod, KeyUsagePurpose, SerialNumber, SigningKey,
 };
 
 /// A certificate revocation list (CRL)
@@ -41,9 +42,7 @@ use crate::{
 /// #[cfg(feature = "crypto")]
 /// let key_pair = KeyPair::generate().unwrap();
 /// #[cfg(not(feature = "crypto"))]
-/// let remote_key_pair = MyKeyPair { public_key: vec![] };
-/// #[cfg(not(feature = "crypto"))]
-/// let key_pair = KeyPair::from_remote(Box::new(remote_key_pair)).unwrap();
+/// let key_pair = MyKeyPair { public_key: vec![] };
 /// let issuer = issuer_params.self_signed(&key_pair).unwrap();
 /// // Describe a revoked certificate.
 /// let revoked_cert = RevokedCertParams{
@@ -194,7 +193,7 @@ impl CertificateRevocationListParams {
 	pub fn signed_by(
 		self,
 		issuer: &Certificate,
-		issuer_key: &KeyPair,
+		issuer_key: &impl SigningKey,
 	) -> Result<CertificateRevocationList, Error> {
 		if self.next_update.le(&self.this_update) {
 			return Err(Error::InvalidCrlNextUpdate);
@@ -217,8 +216,8 @@ impl CertificateRevocationListParams {
 		})
 	}
 
-	fn serialize_der(&self, issuer: Issuer) -> Result<Vec<u8>, Error> {
-		issuer.key_pair.sign_der(|writer| {
+	fn serialize_der(&self, issuer: Issuer<'_, impl SigningKey>) -> Result<Vec<u8>, Error> {
+		sign_der(issuer.key_pair, |writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
 			//   This optional field describes the version of the encoded CRL.  When
@@ -234,7 +233,7 @@ impl CertificateRevocationListParams {
 			// RFC 5280 §5.1.2.2:
 			//   This field MUST contain the same algorithm identifier as the
 			//   signatureAlgorithm field in the sequence CertificateList
-			issuer.key_pair.alg.write_alg_ident(writer.next());
+			issuer.key_pair.algorithm().write_alg_ident(writer.next());
 
 			// Write issuer.
 			// RFC 5280 §5.1.2.3:
