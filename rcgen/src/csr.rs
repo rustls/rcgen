@@ -7,7 +7,7 @@ use pki_types::CertificateSigningRequestDer;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	key_pair::serialize_public_key_der, Certificate, CertificateParams, Error, Issuer, KeyPair,
+	key_pair::serialize_public_key_der, Certificate, CertificateParams, Error, Issuer,
 	PublicKeyData, SignatureAlgorithm,
 };
 #[cfg(feature = "x509-parser")]
@@ -201,19 +201,7 @@ impl CertificateSigningRequestParams {
 	///
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
-	pub fn signed_by(
-		self,
-		issuer: &Certificate,
-		issuer_key: &KeyPair,
-	) -> Result<Certificate, Error> {
-		let issuer = Issuer {
-			distinguished_name: &issuer.params.distinguished_name,
-			key_identifier_method: &issuer.params.key_identifier_method,
-			key_usages: &issuer.params.key_usages,
-			key_pair: issuer_key,
-			certificate: Some(issuer.clone()),
-		};
-
+	pub fn signed_by(self, issuer: &Issuer) -> Result<Certificate, Error> {
 		let der = self
 			.params
 			.serialize_der_with_signer(&self.public_key, issuer)?;

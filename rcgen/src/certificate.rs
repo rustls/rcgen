@@ -158,17 +158,8 @@ impl CertificateParams {
 	pub fn signed_by(
 		self,
 		public_key: &impl PublicKeyData,
-		issuer: &Certificate,
-		issuer_key: &KeyPair,
+		issuer: &Issuer,
 	) -> Result<Certificate, Error> {
-		let issuer = Issuer {
-			distinguished_name: &issuer.params.distinguished_name,
-			key_identifier_method: &issuer.params.key_identifier_method,
-			key_usages: &issuer.params.key_usages,
-			key_pair: issuer_key,
-			certificate: Some(issuer.clone()),
-		};
-
 		let subject_public_key_info =
 			yasna::construct_der(|writer| serialize_public_key_der(public_key, writer));
 		let der = self.serialize_der_with_signer(public_key, issuer)?;
@@ -183,17 +174,9 @@ impl CertificateParams {
 	///
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
-	pub fn self_signed(self, key_pair: &KeyPair) -> Result<Certificate, Error> {
-		let issuer = Issuer {
-			distinguished_name: &self.distinguished_name,
-			key_identifier_method: &self.key_identifier_method,
-			key_usages: &self.key_usages,
-			key_pair,
-			certificate: None,
-		};
-
-		let subject_public_key_info = key_pair.public_key_der();
-		let der = self.serialize_der_with_signer(key_pair, issuer)?;
+	pub fn self_signed(self, issuer: &Issuer) -> Result<Certificate, Error> {
+		let subject_public_key_info = issuer.public_key_der();
+		let der = self.serialize_der_with_signer(issuer, &issuer)?;
 		Ok(Certificate {
 			params: self,
 			subject_public_key_info,
@@ -647,7 +630,7 @@ impl CertificateParams {
 	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
-		issuer: Issuer<'_>,
+		issuer: &Issuer,
 	) -> Result<CertificateDer<'static>, Error> {
 		let der = issuer.key_pair.sign_der(|writer| {
 			let pub_key_spki =
@@ -706,7 +689,7 @@ impl CertificateParams {
 					if self.use_authority_key_identifier_extension {
 						write_x509_authority_key_identifier(
 							writer.next(),
-							match issuer.key_identifier_method {
+							match &issuer.key_identifier_method {
 								KeyIdMethod::PreSpecified(aki) => aki.clone(),
 								#[cfg(feature = "crypto")]
 								_ => issuer
@@ -1496,6 +1479,7 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 			let ca_kp = KeyPair::from_pem(ca_key).unwrap();
 			let ca_cert = params.self_signed(&ca_kp).unwrap();
 			assert_eq!(&ca_ski, &ca_cert.key_identifier());
+			let ca_issuer = Issuer::new(ca_cert, &ca_kp);
 
 			let (_, x509_ca) = x509_parser::parse_x509_certificate(ca_cert.der()).unwrap();
 			assert_eq!(
@@ -1514,7 +1498,7 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 			let ee_key = KeyPair::generate().unwrap();
 			let mut ee_params = CertificateParams::default();
 			ee_params.use_authority_key_identifier_extension = true;
-			let ee_cert = ee_params.signed_by(&ee_key, &ca_cert, &ee_key).unwrap();
+			let ee_cert = ee_params.signed_by(&ee_key, &ca_issuer).unwrap();
 
 			let (_, x509_ee) = x509_parser::parse_x509_certificate(ee_cert.der()).unwrap();
 			assert_eq!(

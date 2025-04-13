@@ -127,7 +127,9 @@ pub fn generate_simple_self_signed(
 	subject_alt_names: impl Into<Vec<String>>,
 ) -> Result<CertifiedKey, Error> {
 	let key_pair = KeyPair::generate()?;
-	let cert = CertificateParams::new(subject_alt_names)?.self_signed(&key_pair)?;
+	let params = CertificateParams::new(subject_alt_names)?;
+	let issuer = Issuer::new_from_params(&params, &key_pair);
+	let cert = params.self_signed(&issuer)?;
 	Ok(CertifiedKey { cert, key_pair })
 }
 

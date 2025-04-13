@@ -9,8 +9,8 @@ use yasna::Tag;
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_authority_key_identifier, write_x509_extension, Certificate, Error, Issuer,
-	KeyIdMethod, KeyPair, KeyUsagePurpose, SerialNumber,
+	write_x509_authority_key_identifier, write_x509_extension, Error, Issuer, KeyIdMethod,
+	KeyUsagePurpose, SerialNumber,
 };
 
 /// A certificate revocation list (CRL)
@@ -188,22 +188,10 @@ impl CertificateRevocationListParams {
 	/// Serializes the certificate revocation list (CRL).
 	///
 	/// Including a signature from the issuing certificate authority's key.
-	pub fn signed_by(
-		self,
-		issuer: &Certificate,
-		issuer_key: &KeyPair,
-	) -> Result<CertificateRevocationList, Error> {
+	pub fn signed_by(self, issuer: &Issuer) -> Result<CertificateRevocationList, Error> {
 		if self.next_update.le(&self.this_update) {
 			return Err(Error::InvalidCrlNextUpdate);
 		}
-
-		let issuer = Issuer {
-			distinguished_name: &issuer.params.distinguished_name,
-			key_identifier_method: &issuer.params.key_identifier_method,
-			key_usages: &issuer.params.key_usages,
-			key_pair: issuer_key,
-			certificate: Some(issuer.clone()),
-		};
 
 		if !issuer.key_usages.is_empty() && !issuer.key_usages.contains(&KeyUsagePurpose::CrlSign) {
 			return Err(Error::IssuerNotCrlSigner);
@@ -215,7 +203,7 @@ impl CertificateRevocationListParams {
 		})
 	}
 
-	fn serialize_der(&self, issuer: Issuer) -> Result<Vec<u8>, Error> {
+	fn serialize_der(&self, issuer: &Issuer) -> Result<Vec<u8>, Error> {
 		issuer.key_pair.sign_der(|writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
