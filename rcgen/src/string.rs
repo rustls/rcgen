@@ -1,3 +1,5 @@
+//! ASN.1 string types
+
 use std::{fmt, str::FromStr};
 
 use crate::{Error, InvalidAsn1String};
@@ -14,7 +16,7 @@ use crate::{Error, InvalidAsn1String};
 /// You can create a `PrintableString` from [a literal string][`&str`] with [`PrintableString::try_from`]:
 ///
 /// ```
-/// use rcgen::PrintableString;
+/// use rcgen::string::PrintableString;
 /// let hello = PrintableString::try_from("hello").unwrap();
 /// ```
 ///
@@ -156,7 +158,7 @@ impl PartialEq<&String> for PrintableString {
 /// You can create a `Ia5String` from [a literal string][`&str`] with [`Ia5String::try_from`]:
 ///
 /// ```
-/// use rcgen::Ia5String;
+/// use rcgen::string::Ia5String;
 /// let hello = Ia5String::try_from("hello").unwrap();
 /// ```
 ///
@@ -262,7 +264,7 @@ impl PartialEq<&String> for Ia5String {
 /// You can create a `TeletexString` from [a literal string][`&str`] with [`TeletexString::try_from`]:
 ///
 /// ```
-/// use rcgen::TeletexString;
+/// use rcgen::string::TeletexString;
 /// let hello = TeletexString::try_from("hello").unwrap();
 /// ```
 ///
@@ -377,7 +379,7 @@ impl PartialEq<&String> for TeletexString {
 /// You can create a `BmpString` from [a literal string][`&str`] with [`BmpString::try_from`]:
 ///
 /// ```
-/// use rcgen::BmpString;
+/// use rcgen::string::BmpString;
 /// let hello = BmpString::try_from("hello").unwrap();
 /// ```
 ///
@@ -405,7 +407,7 @@ impl BmpString {
 	/// # Examples
 	///
 	/// ```
-	/// use rcgen::BmpString;
+	/// use rcgen::string::BmpString;
 	/// let s = BmpString::try_from("hello").unwrap();
 	///
 	/// assert_eq!(&[0, 104, 0, 101, 0, 108, 0, 108, 0, 111], s.as_bytes());
@@ -496,7 +498,7 @@ impl FromStr for BmpString {
 /// You can create a `UniversalString` from [a literal string][`&str`] with [`UniversalString::try_from`]:
 ///
 /// ```
-/// use rcgen::UniversalString;
+/// use rcgen::string::UniversalString;
 /// let hello = UniversalString::try_from("hello").unwrap();
 /// ```
 ///
@@ -524,7 +526,7 @@ impl UniversalString {
 	/// # Examples
 	///
 	/// ```
-	/// use rcgen::UniversalString;
+	/// use rcgen::string::UniversalString;
 	/// let s = UniversalString::try_from("hello").unwrap();
 	///
 	/// assert_eq!(&[0, 0, 0, 104, 0, 0, 0, 101, 0, 0, 0, 108, 0, 0, 0, 108, 0, 0, 0, 111], s.as_bytes());
