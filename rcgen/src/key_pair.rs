@@ -514,6 +514,24 @@ impl KeyPair {
 	}
 }
 
+impl PublicKeyData for KeyPair {
+	fn der_bytes(&self) -> &[u8] {
+		match &self.kind {
+			#[cfg(feature = "crypto")]
+			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
+			#[cfg(feature = "crypto")]
+			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
+			#[cfg(feature = "crypto")]
+			KeyPairKind::Rsa(kp, _) => kp.public_key().as_ref(),
+			KeyPairKind::Remote(kp) => kp.public_key(),
+		}
+	}
+
+	fn algorithm(&self) -> &SignatureAlgorithm {
+		self.alg
+	}
+}
+
 #[cfg(feature = "crypto")]
 impl TryFrom<&[u8]> for KeyPair {
 	type Error = Error;
@@ -634,24 +652,6 @@ pub enum RsaKeySize {
 	_3072,
 	/// 4096 bits
 	_4096,
-}
-
-impl PublicKeyData for KeyPair {
-	fn der_bytes(&self) -> &[u8] {
-		match &self.kind {
-			#[cfg(feature = "crypto")]
-			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
-			#[cfg(feature = "crypto")]
-			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
-			#[cfg(feature = "crypto")]
-			KeyPairKind::Rsa(kp, _) => kp.public_key().as_ref(),
-			KeyPairKind::Remote(kp) => kp.public_key(),
-		}
-	}
-
-	fn algorithm(&self) -> &SignatureAlgorithm {
-		self.alg
-	}
 }
 
 /// A key that can be used to sign messages
