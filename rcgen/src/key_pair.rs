@@ -81,11 +81,6 @@ impl fmt::Debug for KeyPair {
 }
 
 impl KeyPair {
-	/// Returns the key pair's signature algorithm
-	pub fn signature_algorithm(&self) -> &'static SignatureAlgorithm {
-		self.alg
-	}
-
 	/// Generate a new random [`PKCS_ECDSA_P256_SHA256`] key pair
 	#[cfg(feature = "crypto")]
 	pub fn generate() -> Result<Self, Error> {
