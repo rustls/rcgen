@@ -47,6 +47,8 @@ use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
 use yasna::DERWriter;
 use yasna::Tag;
 
+use crate::string::{BmpString, Ia5String, PrintableString, TeletexString, UniversalString};
+
 pub use certificate::{
 	date_time_ymd, Attribute, BasicConstraints, Certificate, CertificateParams, CidrSubnet,
 	CustomExtension, DnType, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, NameConstraints,
@@ -65,7 +67,6 @@ pub use key_pair::{KeyPair, RemoteKeyPair, SubjectPublicKeyInfo};
 use ring_like::digest;
 pub use sign_algo::algo::*;
 pub use sign_algo::SignatureAlgorithm;
-pub use string_types::*;
 
 mod certificate;
 mod crl;
@@ -75,7 +76,7 @@ mod key_pair;
 mod oid;
 mod ring_like;
 mod sign_algo;
-mod string_types;
+pub mod string;
 
 /// Type-alias for the old name of [`Error`].
 #[deprecated(
