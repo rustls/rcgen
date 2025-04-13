@@ -107,7 +107,7 @@ mod test_x509_custom_ext {
 		assert_eq!(favorite_drink_ext.value, test_ext);
 
 		// Generate a CSR with the custom extension, parse it with x509-parser.
-		let test_cert_csr = test_cert.params().serialize_request(&test_key).unwrap();
+		let test_cert_csr = params.serialize_request(&test_key).unwrap();
 		let (_, x509_csr) = X509CertificationRequest::from_der(test_cert_csr.der()).unwrap();
 
 		// We should find that the CSR contains requested extensions.
@@ -204,8 +204,8 @@ mod test_x509_parser_crl {
 	#[test]
 	fn parse_crl() {
 		// Create a CRL with one revoked cert, and an issuer to sign the CRL.
-		let (crl, issuer) = util::test_crl();
-		let revoked_cert = crl.params().revoked_certs.first().unwrap();
+		let (crl_params, crl, issuer) = util::test_crl();
+		let revoked_cert = crl_params.revoked_certs.first().unwrap();
 		let revoked_cert_serial = BigUint::from_bytes_be(revoked_cert.serial_number.as_ref());
 		let (_, x509_issuer) = X509Certificate::from_der(issuer.der()).unwrap();
 
@@ -218,7 +218,7 @@ mod test_x509_parser_crl {
 		assert_eq!(x509_crl.issuer(), x509_issuer.subject());
 		assert_eq!(
 			x509_crl.last_update().to_datetime().unix_timestamp(),
-			crl.params().this_update.unix_timestamp()
+			crl_params.this_update.unix_timestamp()
 		);
 		assert_eq!(
 			x509_crl
@@ -226,9 +226,9 @@ mod test_x509_parser_crl {
 				.unwrap()
 				.to_datetime()
 				.unix_timestamp(),
-			crl.params().next_update.unix_timestamp()
+			crl_params.next_update.unix_timestamp()
 		);
-		let crl_number = BigUint::from_bytes_be(crl.params().crl_number.as_ref());
+		let crl_number = BigUint::from_bytes_be(crl_params.crl_number.as_ref());
 		assert_eq!(x509_crl.crl_number().unwrap(), &crl_number);
 
 		// We should find the expected revoked certificate serial with the correct reason code.

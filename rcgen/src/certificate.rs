@@ -21,18 +21,13 @@ use crate::{
 	KeyIdMethod, KeyUsagePurpose, SanType, SerialNumber, SigningKey,
 };
 
-/// An issued certificate together with the parameters used to generate it.
+/// An issued certificate
 #[derive(Debug, Clone)]
 pub struct Certificate {
-	pub(crate) params: CertificateParams,
 	pub(crate) der: CertificateDer<'static>,
 }
 
 impl Certificate {
-	/// Returns the certificate parameters
-	pub fn params(&self) -> &CertificateParams {
-		&self.params
-	}
 	/// Get the certificate in DER encoded format.
 	///
 	/// [`CertificateDer`] implements `Deref<Target = [u8]>` and `AsRef<[u8]>`, so you can easily
@@ -40,6 +35,7 @@ impl Certificate {
 	pub fn der(&self) -> &CertificateDer<'static> {
 		&self.der
 	}
+
 	/// Get the certificate in PEM encoded format.
 	#[cfg(feature = "pem")]
 	pub fn pem(&self) -> String {
@@ -50,12 +46,6 @@ impl Certificate {
 impl From<Certificate> for CertificateDer<'static> {
 	fn from(cert: Certificate) -> Self {
 		cert.der
-	}
-}
-
-impl AsRef<CertificateParams> for Certificate {
-	fn as_ref(&self) -> &CertificateParams {
-		&self.params
 	}
 }
 
@@ -148,27 +138,28 @@ impl CertificateParams {
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
 	pub fn signed_by(
-		self,
+		&self,
 		public_key: &impl PublicKeyData,
-		issuer: &Certificate,
+		issuer: &CertificateParams,
 		issuer_key: &impl SigningKey,
 	) -> Result<Certificate, Error> {
 		let issuer = Issuer {
-			distinguished_name: &issuer.params.distinguished_name,
-			key_identifier_method: &issuer.params.key_identifier_method,
-			key_usages: &issuer.params.key_usages,
+			distinguished_name: &issuer.distinguished_name,
+			key_identifier_method: &issuer.key_identifier_method,
+			key_usages: &issuer.key_usages,
 			key_pair: issuer_key,
 		};
 
-		let der = self.serialize_der_with_signer(public_key, issuer)?;
-		Ok(Certificate { params: self, der })
+		Ok(Certificate {
+			der: self.serialize_der_with_signer(public_key, issuer)?,
+		})
 	}
 
 	/// Generates a new self-signed certificate from the given parameters.
 	///
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
-	pub fn self_signed(self, key_pair: &impl SigningKey) -> Result<Certificate, Error> {
+	pub fn self_signed(&self, key_pair: &impl SigningKey) -> Result<Certificate, Error> {
 		let issuer = Issuer {
 			distinguished_name: &self.distinguished_name,
 			key_identifier_method: &self.key_identifier_method,
@@ -176,8 +167,9 @@ impl CertificateParams {
 			key_pair,
 		};
 
-		let der = self.serialize_der_with_signer(key_pair, issuer)?;
-		Ok(Certificate { params: self, der })
+		Ok(Certificate {
+			der: self.serialize_der_with_signer(key_pair, issuer)?,
+		})
 	}
 
 	/// Calculates a subject key identifier for the certificate subject's public key.
@@ -1481,9 +1473,8 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 			);
 
 			let ca_kp = KeyPair::from_pem(ca_key).unwrap();
-			let key_id = params.key_identifier(&ca_kp);
 			let ca_cert = params.self_signed(&ca_kp).unwrap();
-			assert_eq!(&ca_ski, &key_id);
+			assert_eq!(ca_ski, params.key_identifier(&ca_kp));
 
 			let (_, x509_ca) = x509_parser::parse_x509_certificate(ca_cert.der()).unwrap();
 			assert_eq!(
@@ -1502,7 +1493,7 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 			let ee_key = KeyPair::generate().unwrap();
 			let mut ee_params = CertificateParams::default();
 			ee_params.use_authority_key_identifier_extension = true;
-			let ee_cert = ee_params.signed_by(&ee_key, &ca_cert, &ee_key).unwrap();
+			let ee_cert = ee_params.signed_by(&ee_key, &params, &ee_key).unwrap();
 
 			let (_, x509_ee) = x509_parser::parse_x509_certificate(ee_cert.der()).unwrap();
 			assert_eq!(
