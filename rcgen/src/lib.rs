@@ -62,7 +62,7 @@ pub use error::{Error, InvalidAsn1String};
 pub use key_pair::PublicKeyData;
 #[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
 pub use key_pair::RsaKeySize;
-pub use key_pair::{KeyPair, RemoteKeyPair, SubjectPublicKeyInfo};
+pub use key_pair::{KeyPair, SigningKey, SubjectPublicKeyInfo};
 #[cfg(feature = "crypto")]
 use ring_like::digest;
 pub use sign_algo::algo::*;

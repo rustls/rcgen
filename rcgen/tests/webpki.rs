@@ -14,7 +14,7 @@ use webpki::{
 };
 
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DnType, Error, IsCa, KeyPair, RemoteKeyPair,
+	BasicConstraints, Certificate, CertificateParams, DnType, Error, IsCa, KeyPair, SigningKey,
 };
 use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams};
 #[cfg(feature = "x509-parser")]
@@ -317,7 +317,7 @@ fn test_webpki_separate_ca_with_other_signing_alg() {
 fn from_remote() {
 	struct Remote(EcdsaKeyPair);
 
-	impl RemoteKeyPair for Remote {
+	impl SigningKey for Remote {
 		fn public_key(&self) -> &[u8] {
 			self.0.public_key().as_ref()
 		}
