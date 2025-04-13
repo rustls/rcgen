@@ -674,7 +674,7 @@ impl CertificateParams {
 				}
 			};
 			// Write signature algorithm
-			issuer.key_pair.alg.write_alg_ident(writer.next());
+			issuer.key_pair.algorithm().write_alg_ident(writer.next());
 			// Write issuer name
 			write_distinguished_name(writer.next(), &issuer.distinguished_name);
 			// Write validity

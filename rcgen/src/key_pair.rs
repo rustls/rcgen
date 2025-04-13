@@ -65,9 +65,9 @@ impl fmt::Debug for KeyPairKind {
 /// for how to generate RSA keys in the wanted format
 /// and conversion between the formats.
 pub struct KeyPair {
-	pub(crate) kind: KeyPairKind,
-	pub(crate) alg: &'static SignatureAlgorithm,
-	pub(crate) serialized_der: Vec<u8>,
+	kind: KeyPairKind,
+	alg: &'static SignatureAlgorithm,
+	serialized_der: Vec<u8>,
 }
 
 impl fmt::Debug for KeyPair {
@@ -81,6 +81,11 @@ impl fmt::Debug for KeyPair {
 }
 
 impl KeyPair {
+	/// Returns the key pair's signature algorithm
+	pub fn signature_algorithm(&self) -> &'static SignatureAlgorithm {
+		self.alg
+	}
+
 	/// Generate a new random [`PKCS_ECDSA_P256_SHA256`] key pair
 	#[cfg(feature = "crypto")]
 	pub fn generate() -> Result<Self, Error> {
