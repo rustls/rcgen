@@ -5,12 +5,13 @@ use time::OffsetDateTime;
 use yasna::DERWriter;
 use yasna::Tag;
 
+use crate::CertificateParams;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_authority_key_identifier, write_x509_extension, Certificate, Error, Issuer,
-	KeyIdMethod, KeyPair, KeyUsagePurpose, SerialNumber,
+	write_x509_authority_key_identifier, write_x509_extension, Error, Issuer, KeyIdMethod, KeyPair,
+	KeyUsagePurpose, SerialNumber,
 };
 
 /// A certificate revocation list (CRL)
@@ -60,7 +61,7 @@ use crate::{
 ///   key_identifier_method: KeyIdMethod::Sha256,
 ///   #[cfg(not(feature = "crypto"))]
 ///   key_identifier_method: KeyIdMethod::PreSpecified(vec![]),
-/// }.signed_by(&issuer, &key_pair).unwrap();
+/// }.signed_by(&issuer_params, &key_pair).unwrap();
 ///# }
 #[derive(Debug)]
 pub struct CertificateRevocationList {
@@ -190,7 +191,7 @@ impl CertificateRevocationListParams {
 	/// Including a signature from the issuing certificate authority's key.
 	pub fn signed_by(
 		self,
-		issuer: &Certificate,
+		issuer: &CertificateParams,
 		issuer_key: &KeyPair,
 	) -> Result<CertificateRevocationList, Error> {
 		if self.next_update.le(&self.this_update) {
@@ -198,9 +199,9 @@ impl CertificateRevocationListParams {
 		}
 
 		let issuer = Issuer {
-			distinguished_name: &issuer.params.distinguished_name,
-			key_identifier_method: &issuer.params.key_identifier_method,
-			key_usages: &issuer.params.key_usages,
+			distinguished_name: &issuer.distinguished_name,
+			key_identifier_method: &issuer.key_identifier_method,
+			key_usages: &issuer.key_usages,
 			key_pair: issuer_key,
 		};
 

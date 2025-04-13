@@ -92,7 +92,7 @@ pub fn test_crl() -> (CertificateRevocationList, Certificate) {
 		KeyUsagePurpose::DigitalSignature,
 		KeyUsagePurpose::CrlSign,
 	];
-	let issuer = issuer.self_signed(&key_pair).unwrap();
+	let issuer_cert = issuer.self_signed(&key_pair).unwrap();
 
 	let now = OffsetDateTime::now_utc();
 	let next_week = now + Duration::weeks(1);
@@ -119,7 +119,7 @@ pub fn test_crl() -> (CertificateRevocationList, Certificate) {
 	.signed_by(&issuer, &key_pair)
 	.unwrap();
 
-	(crl, issuer)
+	(crl, issuer_cert)
 }
 
 #[allow(unused)] // Used by openssl + x509-parser features.
