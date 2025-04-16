@@ -16,7 +16,7 @@ ring = ["dep:ring", "rcgen/ring"]
 fips = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/fips"]
 
 [dependencies]
-rcgen = { version = "0.13", path = "../rcgen", default-features = false, features = ["pem"] }
+rcgen = { version = "0.14", path = "../rcgen", default-features = false, features = ["pem"] }
 bpaf = { version = "0.9.5", features = ["derive"] }
 pem = { workspace = true }
 pki-types = { workspace = true }
