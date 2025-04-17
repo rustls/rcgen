@@ -165,7 +165,7 @@ fn verify_cert_ca(cert_pem: &str, key: &[u8], ca_cert_pem: &str) {
 
 fn verify_csr(params: &CertificateParams, key_pair: &KeyPair) {
 	let csr = params
-		.serialize_request(key_pair)
+		.serialize_request(key_pair, Vec::new())
 		.and_then(|csr| csr.pem())
 		.unwrap();
 	println!("{csr}");

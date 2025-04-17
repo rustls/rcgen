@@ -513,21 +513,6 @@ impl CertificateParams {
 		});
 	}
 
-	/// Generate and serialize a certificate signing request (CSR).
-	///
-	/// The constructed CSR will contain attributes based on the certificate parameters,
-	/// and include the subject public key information from `subject_key`. Additionally,
-	/// the CSR will be signed using the subject key.
-	///
-	/// Note that subsequent invocations of `serialize_request()` will not produce the exact
-	/// same output.
-	pub fn serialize_request(
-		&self,
-		subject_key: &impl SigningKey,
-	) -> Result<CertificateSigningRequest, Error> {
-		self.serialize_request_with_attributes(subject_key, Vec::new())
-	}
-
 	/// Generate and serialize a certificate signing request (CSR) with custom PKCS #10 attributes.
 	/// as defined in [RFC 2986].
 	///
@@ -539,7 +524,7 @@ impl CertificateParams {
 	/// same output.
 	///
 	/// [RFC 2986]: <https://datatracker.ietf.org/doc/html/rfc2986#section-4>
-	pub fn serialize_request_with_attributes(
+	pub fn serialize_request(
 		&self,
 		subject_key: &impl SigningKey,
 		attrs: Vec<Attribute>,

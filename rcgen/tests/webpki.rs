@@ -511,7 +511,7 @@ fn test_certificate_from_csr() {
 	}
 
 	let cert_key = KeyPair::generate().unwrap();
-	let csr = params.serialize_request(&cert_key).unwrap();
+	let csr = params.serialize_request(&cert_key, Vec::new()).unwrap();
 	let csr = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
 
 	let ekus_contained = &csr.params.extended_key_usages;

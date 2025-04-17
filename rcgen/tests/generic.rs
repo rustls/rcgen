@@ -107,7 +107,7 @@ mod test_x509_custom_ext {
 		assert_eq!(favorite_drink_ext.value, test_ext);
 
 		// Generate a CSR with the custom extension, parse it with x509-parser.
-		let test_cert_csr = params.serialize_request(&test_key).unwrap();
+		let test_cert_csr = params.serialize_request(&test_key, Vec::new()).unwrap();
 		let (_, x509_csr) = X509CertificationRequest::from_der(test_cert_csr.der()).unwrap();
 
 		// We should find that the CSR contains requested extensions.
@@ -176,7 +176,7 @@ mod test_csr_custom_attributes {
 		let params = CertificateParams::default();
 		let key_pair = KeyPair::generate().unwrap();
 		let csr = params
-			.serialize_request_with_attributes(&key_pair, vec![challenge_password_attribute])
+			.serialize_request(&key_pair, vec![challenge_password_attribute])
 			.unwrap();
 
 		// Parse the CSR
@@ -425,7 +425,7 @@ mod test_csr_extension_request {
 		let mut params = CertificateParams::default();
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
 		let key_pair = KeyPair::generate().unwrap();
-		let csr = params.serialize_request(&key_pair).unwrap();
+		let csr = params.serialize_request(&key_pair, Vec::new()).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		assert!(!parsed_csr
 			.requested_extensions()
@@ -440,7 +440,7 @@ mod test_csr_extension_request {
 			.extended_key_usages
 			.push(ExtendedKeyUsagePurpose::ClientAuth);
 		let key_pair = KeyPair::generate().unwrap();
-		let csr = params.serialize_request(&key_pair).unwrap();
+		let csr = params.serialize_request(&key_pair, Vec::new()).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		let requested_extensions = parsed_csr
 			.requested_extensions()
@@ -508,7 +508,7 @@ mod test_csr {
 		// Generate a key pair for the CSR
 		let key_pair = KeyPair::generate().unwrap();
 		// Serialize the CSR into DER from the given parameters
-		let csr = params.serialize_request(&key_pair).unwrap();
+		let csr = params.serialize_request(&key_pair, Vec::new()).unwrap();
 		// Parse the CSR we just serialized
 		let csrp = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
 
