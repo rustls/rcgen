@@ -6,7 +6,6 @@ use yasna::DERWriter;
 use yasna::DERWriterSeq;
 use yasna::Tag;
 
-use crate::key_pair::sign_der;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
@@ -205,13 +204,13 @@ impl CertificateRevocationListParams {
 			return Err(Error::IssuerNotCrlSigner);
 		}
 
-		let signable = SignableCrl {
-			params: self,
-			issuer: &issuer,
-		};
-
 		Ok(CertificateRevocationList {
-			der: sign_der(issuer.key_pair, |writer| signable.write_der(writer))?.into(),
+			der: SignableCrl {
+				params: self,
+				issuer: &issuer,
+			}
+			.signed(issuer_key)?
+			.into(),
 		})
 	}
 }

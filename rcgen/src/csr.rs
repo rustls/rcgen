@@ -8,9 +8,8 @@ use yasna::{models::ObjectIdentifier, DERWriter, Tag};
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	certificate::SignableCertificateParams,
-	key_pair::{serialize_public_key_der, sign_der},
-	oid, write_distinguished_name, write_x509_extension, Attribute, Certificate, CertificateParams,
+	certificate::SignableCertificateParams, key_pair::serialize_public_key_der, oid,
+	write_distinguished_name, write_x509_extension, Attribute, Certificate, CertificateParams,
 	Error, IsCa, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey, ToDer,
 };
 #[cfg(feature = "x509-parser")]
@@ -63,14 +62,14 @@ impl CertificateSigningRequest {
 		subject_key: &impl SigningKey,
 		attrs: Vec<Attribute>,
 	) -> Result<Self, Error> {
-		let signable = SignableRequest {
-			params,
-			subject_key,
-			attrs,
-		};
-
 		Ok(Self {
-			der: sign_der(subject_key, |writer| signable.write_der(writer))?.into(),
+			der: SignableRequest {
+				params,
+				subject_key,
+				attrs,
+			}
+			.signed(subject_key)?
+			.into(),
 		})
 	}
 
@@ -351,14 +350,14 @@ impl CertificateSigningRequestParams {
 			key_pair: issuer_key,
 		};
 
-		let signable = SignableCertificateParams {
-			params: &self.params,
-			pub_key: &self.public_key,
-			issuer: &issuer,
-		};
-
 		Ok(Certificate {
-			der: sign_der(issuer.key_pair, |writer| signable.write_der(writer))?.into(),
+			der: SignableCertificateParams {
+				params: &self.params,
+				pub_key: &self.public_key,
+				issuer: &issuer,
+			}
+			.signed(issuer.key_pair)?
+			.into(),
 		})
 	}
 }

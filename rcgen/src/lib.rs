@@ -140,6 +140,27 @@ struct Issuer<'a, S> {
 }
 
 trait ToDer {
+	fn signed(&self, key: &impl SigningKey) -> Result<Vec<u8>, Error> {
+		yasna::try_construct_der(|writer| {
+			writer.write_sequence(|writer| {
+				let data = yasna::try_construct_der(|writer| {
+					writer.write_sequence(|writer| self.write_der(writer))
+				})?;
+				writer.next().write_der(&data);
+
+				// Write signatureAlgorithm
+				key.algorithm().write_alg_ident(writer.next());
+
+				// Write signature
+				let sig = key.sign(&data)?;
+				let writer = writer.next();
+				writer.write_bitvec_bytes(&sig, sig.len() * 8);
+
+				Ok(())
+			})
+		})
+	}
+
 	fn write_der(&self, writer: &mut DERWriterSeq) -> Result<(), Error>;
 }
 

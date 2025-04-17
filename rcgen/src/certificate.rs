@@ -9,7 +9,7 @@ use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::crl::CrlDistributionPoint;
-use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
+use crate::key_pair::{serialize_public_key_der, PublicKeyData};
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
 #[cfg(feature = "pem")]
@@ -149,14 +149,14 @@ impl CertificateParams {
 			key_pair: issuer_key,
 		};
 
-		let signable = SignableCertificateParams {
-			params: self,
-			pub_key: public_key,
-			issuer: &issuer,
-		};
-
 		Ok(Certificate {
-			der: sign_der(issuer.key_pair, |writer| signable.write_der(writer))?.into(),
+			der: SignableCertificateParams {
+				params: self,
+				pub_key: public_key,
+				issuer: &issuer,
+			}
+			.signed(issuer.key_pair)?
+			.into(),
 		})
 	}
 
@@ -172,14 +172,14 @@ impl CertificateParams {
 			key_pair,
 		};
 
-		let signable = SignableCertificateParams {
-			params: self,
-			pub_key: &*key_pair,
-			issuer: &issuer,
-		};
-
 		Ok(Certificate {
-			der: sign_der(issuer.key_pair, |writer| signable.write_der(writer))?.into(),
+			der: SignableCertificateParams {
+				params: self,
+				pub_key: &*key_pair,
+				issuer: &issuer,
+			}
+			.signed(issuer.key_pair)?
+			.into(),
 		})
 	}
 
