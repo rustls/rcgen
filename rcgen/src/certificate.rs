@@ -3,13 +3,12 @@ use std::str::FromStr;
 
 #[cfg(feature = "pem")]
 use pem::Pem;
-use pki_types::{CertificateDer, CertificateSigningRequestDer};
+use pki_types::CertificateDer;
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
 use crate::crl::CrlDistributionPoint;
-use crate::csr::CertificateSigningRequest;
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
@@ -415,35 +414,8 @@ impl CertificateParams {
 		Ok(result)
 	}
 
-	/// Write a CSR extension request attribute as defined in [RFC 2985].
-	///
-	/// [RFC 2985]: <https://datatracker.ietf.org/doc/html/rfc2985>
-	fn write_extension_request_attribute(&self, writer: DERWriter) {
-		writer.write_sequence(|writer| {
-			writer.next().write_oid(&ObjectIdentifier::from_slice(
-				oid::PKCS_9_AT_EXTENSION_REQUEST,
-			));
-			writer.next().write_set(|writer| {
-				writer.next().write_sequence(|writer| {
-					// Write key_usage
-					self.write_key_usage(writer.next());
-					// Write subject_alt_names
-					self.write_subject_alt_names(writer.next());
-					self.write_extended_key_usage(writer.next());
-
-					// Write custom extensions
-					for ext in &self.custom_extensions {
-						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
-							writer.write_der(ext.content())
-						});
-					}
-				});
-			});
-		});
-	}
-
 	/// Write a certificate's KeyUsage as defined in RFC 5280.
-	fn write_key_usage(&self, writer: DERWriter) {
+	pub(crate) fn write_key_usage(&self, writer: DERWriter) {
 		// RFC 5280 defines 9 key usages, which we detail in our key usage enum
 		// We could use std::mem::variant_count here, but it's experimental
 		const KEY_USAGE_BITS: usize = 9;
@@ -461,7 +433,7 @@ impl CertificateParams {
 		});
 	}
 
-	fn write_extended_key_usage(&self, writer: DERWriter) {
+	pub(crate) fn write_extended_key_usage(&self, writer: DERWriter) {
 		if !self.extended_key_usages.is_empty() {
 			write_x509_extension(writer, oid::EXT_KEY_USAGE, false, |writer| {
 				writer.write_sequence(|writer| {
@@ -475,7 +447,7 @@ impl CertificateParams {
 		}
 	}
 
-	fn write_subject_alt_names(&self, writer: DERWriter) {
+	pub(crate) fn write_subject_alt_names(&self, writer: DERWriter) {
 		if self.subject_alt_names.is_empty() {
 			return;
 		}
@@ -511,100 +483,6 @@ impl CertificateParams {
 				}
 			});
 		});
-	}
-
-	/// Generate and serialize a certificate signing request (CSR) with custom PKCS #10 attributes.
-	/// as defined in [RFC 2986].
-	///
-	/// The constructed CSR will contain attributes based on the certificate parameters,
-	/// and include the subject public key information from `subject_key`. Additionally,
-	/// the CSR will be self-signed using the subject key.
-	///
-	/// Note that subsequent invocations of `serialize_request_with_attributes()` will not produce the exact
-	/// same output.
-	///
-	/// [RFC 2986]: <https://datatracker.ietf.org/doc/html/rfc2986#section-4>
-	pub fn serialize_request(
-		&self,
-		subject_key: &impl SigningKey,
-		attrs: Vec<Attribute>,
-	) -> Result<CertificateSigningRequest, Error> {
-		// No .. pattern, we use this to ensure every field is used
-		#[deny(unused)]
-		let Self {
-			not_before,
-			not_after,
-			serial_number,
-			subject_alt_names,
-			distinguished_name,
-			is_ca,
-			key_usages,
-			extended_key_usages,
-			name_constraints,
-			crl_distribution_points,
-			custom_extensions,
-			use_authority_key_identifier_extension,
-			key_identifier_method,
-		} = self;
-		// - alg and key_pair will be used by the caller
-		// - not_before and not_after cannot be put in a CSR
-		// - key_identifier_method is here because self.write_extended_key_usage uses it
-		// - There might be a use case for specifying the key identifier
-		// in the CSR, but in the current API it can't be distinguished
-		// from the defaults so this is left for a later version if
-		// needed.
-		let _ = (
-			not_before,
-			not_after,
-			key_identifier_method,
-			extended_key_usages,
-		);
-		if serial_number.is_some()
-			|| *is_ca != IsCa::NoCa
-			|| name_constraints.is_some()
-			|| !crl_distribution_points.is_empty()
-			|| *use_authority_key_identifier_extension
-		{
-			return Err(Error::UnsupportedInCsr);
-		}
-
-		// Whether or not to write an extension request attribute
-		let write_extension_request = !key_usages.is_empty()
-			|| !subject_alt_names.is_empty()
-			|| !extended_key_usages.is_empty()
-			|| !custom_extensions.is_empty();
-
-		let der = sign_der(subject_key, |writer| {
-			// Write version
-			writer.next().write_u8(0);
-			write_distinguished_name(writer.next(), distinguished_name);
-			serialize_public_key_der(subject_key, writer.next());
-
-			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
-			writer
-				.next()
-				.write_tagged_implicit(Tag::context(0), |writer| {
-					// RFC 2986 specifies that attributes are a SET OF Attribute
-					writer.write_set_of(|writer| {
-						if write_extension_request {
-							self.write_extension_request_attribute(writer.next());
-						}
-
-						for Attribute { oid, values } in attrs {
-							writer.next().write_sequence(|writer| {
-								writer.next().write_oid(&ObjectIdentifier::from_slice(&oid));
-								writer.next().write_der(&values);
-							});
-						}
-					});
-				});
-
-			Ok(())
-		})?;
-
-		Ok(CertificateSigningRequest {
-			der: CertificateSigningRequestDer::from(der),
-		})
 	}
 
 	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
@@ -874,11 +752,11 @@ pub struct Attribute {
 /// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct CustomExtension {
-	oid: Vec<u64>,
-	critical: bool,
+	pub(crate) oid: Vec<u64>,
+	pub(crate) critical: bool,
 
 	/// The content must be DER-encoded
-	content: Vec<u8>,
+	pub(crate) content: Vec<u8>,
 }
 
 impl CustomExtension {

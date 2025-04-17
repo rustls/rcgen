@@ -19,7 +19,7 @@ use rcgen::{
 };
 use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams};
 #[cfg(feature = "x509-parser")]
-use rcgen::{CertificateSigningRequestParams, DnValue};
+use rcgen::{CertificateSigningRequest, CertificateSigningRequestParams, DnValue};
 use rcgen::{ExtendedKeyUsagePurpose, KeyUsagePurpose, SerialNumber};
 
 mod util;
@@ -511,7 +511,7 @@ fn test_certificate_from_csr() {
 	}
 
 	let cert_key = KeyPair::generate().unwrap();
-	let csr = params.serialize_request(&cert_key, Vec::new()).unwrap();
+	let csr = CertificateSigningRequest::new(&params, &cert_key, Vec::new()).unwrap();
 	let csr = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
 
 	let ekus_contained = &csr.params.extended_key_usages;

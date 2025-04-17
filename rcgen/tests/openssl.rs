@@ -13,8 +13,8 @@ use openssl::x509::store::{X509Store, X509StoreBuilder};
 use openssl::x509::{CrlStatus, X509Crl, X509Req, X509StoreContext, X509};
 
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DnType, DnValue, GeneralSubtree, IsCa,
-	KeyPair, NameConstraints,
+	BasicConstraints, Certificate, CertificateParams, CertificateSigningRequest, DnType, DnValue,
+	GeneralSubtree, IsCa, KeyPair, NameConstraints,
 };
 
 mod util;
@@ -164,8 +164,7 @@ fn verify_cert_ca(cert_pem: &str, key: &[u8], ca_cert_pem: &str) {
 }
 
 fn verify_csr(params: &CertificateParams, key_pair: &KeyPair) {
-	let csr = params
-		.serialize_request(key_pair, Vec::new())
+	let csr = CertificateSigningRequest::new(params, key_pair, Vec::new())
 		.and_then(|csr| csr.pem())
 		.unwrap();
 	println!("{csr}");

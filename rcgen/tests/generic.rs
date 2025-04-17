@@ -70,7 +70,7 @@ mod test_convert_x509_subject_alternative_name {
 mod test_x509_custom_ext {
 	use crate::util;
 
-	use rcgen::CustomExtension;
+	use rcgen::{CertificateSigningRequest, CustomExtension};
 	use x509_parser::oid_registry::asn1_rs;
 	use x509_parser::prelude::{
 		FromDer, ParsedCriAttribute, X509Certificate, X509CertificationRequest,
@@ -107,7 +107,7 @@ mod test_x509_custom_ext {
 		assert_eq!(favorite_drink_ext.value, test_ext);
 
 		// Generate a CSR with the custom extension, parse it with x509-parser.
-		let test_cert_csr = params.serialize_request(&test_key, Vec::new()).unwrap();
+		let test_cert_csr = CertificateSigningRequest::new(&params, &test_key, Vec::new()).unwrap();
 		let (_, x509_csr) = X509CertificationRequest::from_der(test_cert_csr.der()).unwrap();
 
 		// We should find that the CSR contains requested extensions.
@@ -137,7 +137,7 @@ mod test_x509_custom_ext {
 
 #[cfg(feature = "x509-parser")]
 mod test_csr_custom_attributes {
-	use rcgen::{Attribute, CertificateParams, KeyPair};
+	use rcgen::{Attribute, CertificateParams, CertificateSigningRequest, KeyPair};
 	use x509_parser::{
 		der_parser::Oid,
 		prelude::{FromDer, X509CertificationRequest},
@@ -175,9 +175,9 @@ mod test_csr_custom_attributes {
 		// Serialize a DER-encoded CSR
 		let params = CertificateParams::default();
 		let key_pair = KeyPair::generate().unwrap();
-		let csr = params
-			.serialize_request(&key_pair, vec![challenge_password_attribute])
-			.unwrap();
+		let csr =
+			CertificateSigningRequest::new(&params, &key_pair, vec![challenge_password_attribute])
+				.unwrap();
 
 		// Parse the CSR
 		let (_, x509_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
@@ -417,7 +417,10 @@ mod test_parse_other_name_alt_name {
 
 #[cfg(feature = "x509-parser")]
 mod test_csr_extension_request {
-	use rcgen::{CertificateParams, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose};
+	use rcgen::{
+		CertificateParams, CertificateSigningRequest, ExtendedKeyUsagePurpose, KeyPair,
+		KeyUsagePurpose,
+	};
 	use x509_parser::prelude::{FromDer, ParsedExtension, X509CertificationRequest};
 
 	#[test]
@@ -425,7 +428,7 @@ mod test_csr_extension_request {
 		let mut params = CertificateParams::default();
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
 		let key_pair = KeyPair::generate().unwrap();
-		let csr = params.serialize_request(&key_pair, Vec::new()).unwrap();
+		let csr = CertificateSigningRequest::new(&params, &key_pair, Vec::new()).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		assert!(!parsed_csr
 			.requested_extensions()
@@ -440,7 +443,7 @@ mod test_csr_extension_request {
 			.extended_key_usages
 			.push(ExtendedKeyUsagePurpose::ClientAuth);
 		let key_pair = KeyPair::generate().unwrap();
-		let csr = params.serialize_request(&key_pair, Vec::new()).unwrap();
+		let csr = CertificateSigningRequest::new(&params, &key_pair, Vec::new()).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		let requested_extensions = parsed_csr
 			.requested_extensions()
@@ -456,8 +459,8 @@ mod test_csr_extension_request {
 #[cfg(feature = "x509-parser")]
 mod test_csr {
 	use rcgen::{
-		CertificateParams, CertificateSigningRequestParams, ExtendedKeyUsagePurpose, KeyPair,
-		KeyUsagePurpose,
+		CertificateParams, CertificateSigningRequest, CertificateSigningRequestParams,
+		ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose,
 	};
 
 	#[test]
@@ -508,7 +511,7 @@ mod test_csr {
 		// Generate a key pair for the CSR
 		let key_pair = KeyPair::generate().unwrap();
 		// Serialize the CSR into DER from the given parameters
-		let csr = params.serialize_request(&key_pair, Vec::new()).unwrap();
+		let csr = CertificateSigningRequest::new(params, &key_pair, Vec::new()).unwrap();
 		// Parse the CSR we just serialized
 		let csrp = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
 
