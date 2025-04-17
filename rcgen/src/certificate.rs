@@ -144,13 +144,10 @@ impl CertificateParams {
 	) -> Result<Certificate, Error> {
 		let issuer = Issuer::new(&issuer, issuer_key);
 		Ok(Certificate {
-			der: SignableCertificateParams {
-				params: self,
-				pub_key: public_key,
-				issuer: &issuer,
-			}
-			.signed(issuer.key_pair)?
-			.into(),
+			der: self
+				.signable(public_key, &issuer)
+				.signed(issuer.key_pair)?
+				.into(),
 		})
 	}
 
@@ -161,13 +158,10 @@ impl CertificateParams {
 	pub fn self_signed(&self, key_pair: &impl SigningKey) -> Result<Certificate, Error> {
 		let issuer = Issuer::new(self, key_pair);
 		Ok(Certificate {
-			der: SignableCertificateParams {
-				params: self,
-				pub_key: &*key_pair,
-				issuer: &issuer,
-			}
-			.signed(issuer.key_pair)?
-			.into(),
+			der: self
+				.signable(&*key_pair, &issuer)
+				.signed(issuer.key_pair)?
+				.into(),
 		})
 	}
 
@@ -176,6 +170,18 @@ impl CertificateParams {
 	pub fn key_identifier(&self, key: &impl PublicKeyData) -> Vec<u8> {
 		self.key_identifier_method
 			.derive(&key.subject_public_key_info())
+	}
+
+	pub(crate) fn signable<'a, P, S>(
+		&'a self,
+		pub_key: &'a P,
+		issuer: &'a Issuer<'a, S>,
+	) -> SignableCertificateParams<'a, P, S> {
+		SignableCertificateParams {
+			params: self,
+			pub_key,
+			issuer,
+		}
 	}
 
 	/// Parses an existing ca certificate from the ASCII PEM format.

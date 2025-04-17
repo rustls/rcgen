@@ -8,9 +8,9 @@ use yasna::{models::ObjectIdentifier, DERWriter, Tag};
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	certificate::SignableCertificateParams, key_pair::serialize_public_key_der, oid,
-	write_distinguished_name, write_x509_extension, Attribute, Certificate, CertificateParams,
-	Error, IsCa, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey, ToDer,
+	key_pair::serialize_public_key_der, oid, write_distinguished_name, write_x509_extension,
+	Attribute, Certificate, CertificateParams, Error, IsCa, Issuer, PublicKeyData,
+	SignatureAlgorithm, SigningKey, ToDer,
 };
 #[cfg(feature = "x509-parser")]
 use crate::{DistinguishedName, SanType};
@@ -345,13 +345,11 @@ impl CertificateSigningRequestParams {
 	) -> Result<Certificate, Error> {
 		let issuer = Issuer::new(issuer, issuer_key);
 		Ok(Certificate {
-			der: SignableCertificateParams {
-				params: &self.params,
-				pub_key: &self.public_key,
-				issuer: &issuer,
-			}
-			.signed(issuer.key_pair)?
-			.into(),
+			der: self
+				.params
+				.signable(&self.public_key, &issuer)
+				.signed(issuer.key_pair)?
+				.into(),
 		})
 	}
 }
