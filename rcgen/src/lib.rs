@@ -139,6 +139,17 @@ struct Issuer<'a, S> {
 	key_pair: &'a S,
 }
 
+impl<'a, S: SigningKey> Issuer<'a, S> {
+	fn new(params: &'a CertificateParams, key_pair: &'a S) -> Self {
+		Self {
+			distinguished_name: &params.distinguished_name,
+			key_identifier_method: &params.key_identifier_method,
+			key_usages: &params.key_usages,
+			key_pair,
+		}
+	}
+}
+
 trait ToDer {
 	fn signed(&self, key: &impl SigningKey) -> Result<Vec<u8>, Error> {
 		yasna::try_construct_der(|writer| {

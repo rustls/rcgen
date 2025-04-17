@@ -343,13 +343,7 @@ impl CertificateSigningRequestParams {
 		issuer: &CertificateParams,
 		issuer_key: &impl SigningKey,
 	) -> Result<Certificate, Error> {
-		let issuer = Issuer {
-			distinguished_name: &issuer.distinguished_name,
-			key_identifier_method: &issuer.key_identifier_method,
-			key_usages: &issuer.key_usages,
-			key_pair: issuer_key,
-		};
-
+		let issuer = Issuer::new(issuer, issuer_key);
 		Ok(Certificate {
 			der: SignableCertificateParams {
 				params: &self.params,
