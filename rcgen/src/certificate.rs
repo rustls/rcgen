@@ -170,10 +170,10 @@ impl CertificateParams {
 		};
 
 		Ok(Certificate {
-der: sign_der(issuer.key_pair, |writer| {
-	self.serialize_der_with_signer(writer, key_pair, issuer)
-})?
-.into(),
+			der: sign_der(issuer.key_pair, |writer| {
+				self.serialize_der_with_signer(writer, key_pair, issuer)
+			})?
+			.into(),
 		})
 	}
 
