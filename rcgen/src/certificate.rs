@@ -6,7 +6,7 @@ use pem::Pem;
 use pki_types::CertificateDer;
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
 use yasna::models::ObjectIdentifier;
-use yasna::{DERWriter, Tag};
+use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::crl::CrlDistributionPoint;
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
@@ -150,7 +150,10 @@ impl CertificateParams {
 		};
 
 		Ok(Certificate {
-			der: self.serialize_der_with_signer(public_key, issuer)?,
+			der: sign_der(issuer.key_pair, |writer| {
+				self.serialize_der_with_signer(writer, public_key, issuer)
+			})?
+			.into(),
 		})
 	}
 
@@ -167,7 +170,10 @@ impl CertificateParams {
 		};
 
 		Ok(Certificate {
-			der: self.serialize_der_with_signer(key_pair, issuer)?,
+der: sign_der(issuer.key_pair, |writer| {
+	self.serialize_der_with_signer(writer, key_pair, issuer)
+})?
+.into(),
 		})
 	}
 
@@ -487,205 +493,200 @@ impl CertificateParams {
 
 	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
+		writer: &mut DERWriterSeq,
 		pub_key: &K,
 		issuer: Issuer<'_, impl SigningKey>,
-	) -> Result<CertificateDer<'static>, Error> {
-		let der = sign_der(issuer.key_pair, |writer| {
-			let pub_key_spki = pub_key.subject_public_key_info();
-			// Write version
-			writer.next().write_tagged(Tag::context(0), |writer| {
-				writer.write_u8(2);
-			});
-			// Write serialNumber
-			if let Some(ref serial) = self.serial_number {
-				writer.next().write_bigint_bytes(serial.as_ref(), true);
-			} else {
-				#[cfg(feature = "crypto")]
-				{
-					let hash = digest::digest(&digest::SHA256, pub_key.der_bytes());
-					// RFC 5280 specifies at most 20 bytes for a serial number
-					let mut sl = hash.as_ref()[0..20].to_vec();
-					sl[0] &= 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
-					writer.next().write_bigint_bytes(&sl, true);
-				}
-				#[cfg(not(feature = "crypto"))]
-				if self.serial_number.is_none() {
-					return Err(Error::MissingSerialNumber);
-				}
-			};
-			// Write signature algorithm
-			issuer.key_pair.algorithm().write_alg_ident(writer.next());
-			// Write issuer name
-			write_distinguished_name(writer.next(), &issuer.distinguished_name);
-			// Write validity
-			writer.next().write_sequence(|writer| {
-				// Not before
-				write_dt_utc_or_generalized(writer.next(), self.not_before);
-				// Not after
-				write_dt_utc_or_generalized(writer.next(), self.not_after);
-				Ok::<(), Error>(())
-			})?;
-			// Write subject
-			write_distinguished_name(writer.next(), &self.distinguished_name);
-			// Write subjectPublicKeyInfo
-			serialize_public_key_der(pub_key, writer.next());
-			// write extensions
-			let should_write_exts = self.use_authority_key_identifier_extension
-				|| !self.subject_alt_names.is_empty()
-				|| !self.extended_key_usages.is_empty()
-				|| self.name_constraints.iter().any(|c| !c.is_empty())
-				|| matches!(self.is_ca, IsCa::ExplicitNoCa)
-				|| matches!(self.is_ca, IsCa::Ca(_))
-				|| !self.custom_extensions.is_empty();
-			if !should_write_exts {
-				return Ok(());
+	) -> Result<(), Error> {
+		let pub_key_spki = pub_key.subject_public_key_info();
+		// Write version
+		writer.next().write_tagged(Tag::context(0), |writer| {
+			writer.write_u8(2);
+		});
+		// Write serialNumber
+		if let Some(ref serial) = self.serial_number {
+			writer.next().write_bigint_bytes(serial.as_ref(), true);
+		} else {
+			#[cfg(feature = "crypto")]
+			{
+				let hash = digest::digest(&digest::SHA256, pub_key.der_bytes());
+				// RFC 5280 specifies at most 20 bytes for a serial number
+				let mut sl = hash.as_ref()[0..20].to_vec();
+				sl[0] &= 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
+				writer.next().write_bigint_bytes(&sl, true);
 			}
+			#[cfg(not(feature = "crypto"))]
+			if self.serial_number.is_none() {
+				return Err(Error::MissingSerialNumber);
+			}
+		};
+		// Write signature algorithm
+		issuer.key_pair.algorithm().write_alg_ident(writer.next());
+		// Write issuer name
+		write_distinguished_name(writer.next(), &issuer.distinguished_name);
+		// Write validity
+		writer.next().write_sequence(|writer| {
+			// Not before
+			write_dt_utc_or_generalized(writer.next(), self.not_before);
+			// Not after
+			write_dt_utc_or_generalized(writer.next(), self.not_after);
+			Ok::<(), Error>(())
+		})?;
+		// Write subject
+		write_distinguished_name(writer.next(), &self.distinguished_name);
+		// Write subjectPublicKeyInfo
+		serialize_public_key_der(pub_key, writer.next());
+		// write extensions
+		let should_write_exts = self.use_authority_key_identifier_extension
+			|| !self.subject_alt_names.is_empty()
+			|| !self.extended_key_usages.is_empty()
+			|| self.name_constraints.iter().any(|c| !c.is_empty())
+			|| matches!(self.is_ca, IsCa::ExplicitNoCa)
+			|| matches!(self.is_ca, IsCa::Ca(_))
+			|| !self.custom_extensions.is_empty();
+		if !should_write_exts {
+			return Ok(());
+		}
 
-			writer.next().write_tagged(Tag::context(3), |writer| {
-				writer.write_sequence(|writer| {
-					if self.use_authority_key_identifier_extension {
-						write_x509_authority_key_identifier(
-							writer.next(),
-							match issuer.key_identifier_method {
-								KeyIdMethod::PreSpecified(aki) => aki.clone(),
-								#[cfg(feature = "crypto")]
-								_ => issuer
-									.key_identifier_method
-									.derive(issuer.key_pair.subject_public_key_info()),
-							},
-						);
-					}
-					// Write subject_alt_names
-					if !self.subject_alt_names.is_empty() {
-						self.write_subject_alt_names(writer.next());
-					}
+		writer.next().write_tagged(Tag::context(3), |writer| {
+			writer.write_sequence(|writer| {
+				if self.use_authority_key_identifier_extension {
+					write_x509_authority_key_identifier(
+						writer.next(),
+						match issuer.key_identifier_method {
+							KeyIdMethod::PreSpecified(aki) => aki.clone(),
+							#[cfg(feature = "crypto")]
+							_ => issuer
+								.key_identifier_method
+								.derive(issuer.key_pair.subject_public_key_info()),
+						},
+					);
+				}
+				// Write subject_alt_names
+				if !self.subject_alt_names.is_empty() {
+					self.write_subject_alt_names(writer.next());
+				}
 
-					// Write standard key usage
-					self.write_key_usage(writer.next());
+				// Write standard key usage
+				self.write_key_usage(writer.next());
 
-					// Write extended key usage
-					if !self.extended_key_usages.is_empty() {
-						write_x509_extension(writer.next(), oid::EXT_KEY_USAGE, false, |writer| {
-							writer.write_sequence(|writer| {
-								for usage in self.extended_key_usages.iter() {
-									let oid = ObjectIdentifier::from_slice(usage.oid());
-									writer.next().write_oid(&oid);
-								}
-							});
+				// Write extended key usage
+				if !self.extended_key_usages.is_empty() {
+					write_x509_extension(writer.next(), oid::EXT_KEY_USAGE, false, |writer| {
+						writer.write_sequence(|writer| {
+							for usage in self.extended_key_usages.iter() {
+								let oid = ObjectIdentifier::from_slice(usage.oid());
+								writer.next().write_oid(&oid);
+							}
 						});
-					}
-					if let Some(name_constraints) = &self.name_constraints {
-						// If both trees are empty, the extension must be omitted.
-						if !name_constraints.is_empty() {
-							write_x509_extension(
-								writer.next(),
-								oid::NAME_CONSTRAINTS,
-								true,
-								|writer| {
-									writer.write_sequence(|writer| {
-										if !name_constraints.permitted_subtrees.is_empty() {
-											write_general_subtrees(
-												writer.next(),
-												0,
-												&name_constraints.permitted_subtrees,
-											);
-										}
-										if !name_constraints.excluded_subtrees.is_empty() {
-											write_general_subtrees(
-												writer.next(),
-												1,
-												&name_constraints.excluded_subtrees,
-											);
-										}
-									});
-								},
-							);
-						}
-					}
-					if !self.crl_distribution_points.is_empty() {
+					});
+				}
+				if let Some(name_constraints) = &self.name_constraints {
+					// If both trees are empty, the extension must be omitted.
+					if !name_constraints.is_empty() {
 						write_x509_extension(
 							writer.next(),
-							oid::CRL_DISTRIBUTION_POINTS,
-							false,
+							oid::NAME_CONSTRAINTS,
+							true,
 							|writer| {
 								writer.write_sequence(|writer| {
-									for distribution_point in &self.crl_distribution_points {
-										distribution_point.write_der(writer.next());
+									if !name_constraints.permitted_subtrees.is_empty() {
+										write_general_subtrees(
+											writer.next(),
+											0,
+											&name_constraints.permitted_subtrees,
+										);
 									}
-								})
+									if !name_constraints.excluded_subtrees.is_empty() {
+										write_general_subtrees(
+											writer.next(),
+											1,
+											&name_constraints.excluded_subtrees,
+										);
+									}
+								});
 							},
 						);
 					}
-					match self.is_ca {
-						IsCa::Ca(ref constraint) => {
-							// Write subject_key_identifier
-							write_x509_extension(
-								writer.next(),
-								oid::SUBJECT_KEY_IDENTIFIER,
-								false,
-								|writer| {
-									writer.write_bytes(
-										&self.key_identifier_method.derive(pub_key_spki),
-									);
-								},
-							);
-							// Write basic_constraints
-							write_x509_extension(
-								writer.next(),
-								oid::BASIC_CONSTRAINTS,
-								true,
-								|writer| {
-									writer.write_sequence(|writer| {
-										writer.next().write_bool(true); // cA flag
-										if let BasicConstraints::Constrained(path_len_constraint) =
-											constraint
-										{
-											writer.next().write_u8(*path_len_constraint);
-										}
-									});
-								},
-							);
+				}
+				if !self.crl_distribution_points.is_empty() {
+					write_x509_extension(
+						writer.next(),
+						oid::CRL_DISTRIBUTION_POINTS,
+						false,
+						|writer| {
+							writer.write_sequence(|writer| {
+								for distribution_point in &self.crl_distribution_points {
+									distribution_point.write_der(writer.next());
+								}
+							})
 						},
-						IsCa::ExplicitNoCa => {
-							// Write subject_key_identifier
-							write_x509_extension(
-								writer.next(),
-								oid::SUBJECT_KEY_IDENTIFIER,
-								false,
-								|writer| {
-									writer.write_bytes(
-										&self.key_identifier_method.derive(pub_key_spki),
-									);
-								},
-							);
-							// Write basic_constraints
-							write_x509_extension(
-								writer.next(),
-								oid::BASIC_CONSTRAINTS,
-								true,
-								|writer| {
-									writer.write_sequence(|writer| {
-										writer.next().write_bool(false); // cA flag
-									});
-								},
-							);
-						},
-						IsCa::NoCa => {},
-					}
+					);
+				}
+				match self.is_ca {
+					IsCa::Ca(ref constraint) => {
+						// Write subject_key_identifier
+						write_x509_extension(
+							writer.next(),
+							oid::SUBJECT_KEY_IDENTIFIER,
+							false,
+							|writer| {
+								writer
+									.write_bytes(&self.key_identifier_method.derive(pub_key_spki));
+							},
+						);
+						// Write basic_constraints
+						write_x509_extension(
+							writer.next(),
+							oid::BASIC_CONSTRAINTS,
+							true,
+							|writer| {
+								writer.write_sequence(|writer| {
+									writer.next().write_bool(true); // cA flag
+									if let BasicConstraints::Constrained(path_len_constraint) =
+										constraint
+									{
+										writer.next().write_u8(*path_len_constraint);
+									}
+								});
+							},
+						);
+					},
+					IsCa::ExplicitNoCa => {
+						// Write subject_key_identifier
+						write_x509_extension(
+							writer.next(),
+							oid::SUBJECT_KEY_IDENTIFIER,
+							false,
+							|writer| {
+								writer
+									.write_bytes(&self.key_identifier_method.derive(pub_key_spki));
+							},
+						);
+						// Write basic_constraints
+						write_x509_extension(
+							writer.next(),
+							oid::BASIC_CONSTRAINTS,
+							true,
+							|writer| {
+								writer.write_sequence(|writer| {
+									writer.next().write_bool(false); // cA flag
+								});
+							},
+						);
+					},
+					IsCa::NoCa => {},
+				}
 
-					// Write the custom extensions
-					for ext in &self.custom_extensions {
-						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
-							writer.write_der(ext.content())
-						});
-					}
-				});
+				// Write the custom extensions
+				for ext in &self.custom_extensions {
+					write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
+						writer.write_der(ext.content())
+					});
+				}
 			});
+		});
 
-			Ok(())
-		})?;
-
-		Ok(der.into())
+		Ok(())
 	}
 
 	/// Insert an extended key usage (EKU) into the parameters if it does not already exist

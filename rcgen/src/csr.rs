@@ -337,9 +337,11 @@ impl CertificateSigningRequestParams {
 		};
 
 		Ok(Certificate {
-			der: self
-				.params
-				.serialize_der_with_signer(&self.public_key, issuer)?,
+			der: sign_der(issuer.key_pair, |writer| {
+				self.params
+					.serialize_der_with_signer(writer, &self.public_key, issuer)
+			})?
+			.into(),
 		})
 	}
 }
