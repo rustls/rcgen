@@ -12,7 +12,7 @@ use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
 	write_x509_authority_key_identifier, write_x509_extension, CertificateParams, Error, Issuer,
-	KeyIdMethod, KeyUsagePurpose, SerialNumber, SigningKey,
+	KeyIdMethod, KeyUsagePurpose, SerialNumber, SigningKey, ToDer,
 };
 
 /// A certificate revocation list (CRL)
@@ -205,16 +205,24 @@ impl CertificateRevocationListParams {
 			return Err(Error::IssuerNotCrlSigner);
 		}
 
+		let signable = SignableCrl {
+			params: self,
+			issuer: &issuer,
+		};
+
 		Ok(CertificateRevocationList {
-			der: sign_der(issuer.key_pair, |writer| self.serialize_der(writer, issuer))?.into(),
+			der: sign_der(issuer.key_pair, |writer| signable.write_der(writer))?.into(),
 		})
 	}
+}
 
-	fn serialize_der(
-		&self,
-		writer: &mut DERWriterSeq,
-		issuer: Issuer<'_, impl SigningKey>,
-	) -> Result<(), Error> {
+struct SignableCrl<'a, S> {
+	params: &'a CertificateRevocationListParams,
+	issuer: &'a Issuer<'a, S>,
+}
+
+impl<'a, S: SigningKey> ToDer for SignableCrl<'_, S> {
+	fn write_der(&self, writer: &mut DERWriterSeq) -> Result<(), Error> {
 		// Write CRL version.
 		// RFC 5280 §5.1.2.1:
 		//   This optional field describes the version of the encoded CRL.  When
@@ -230,31 +238,34 @@ impl CertificateRevocationListParams {
 		// RFC 5280 §5.1.2.2:
 		//   This field MUST contain the same algorithm identifier as the
 		//   signatureAlgorithm field in the sequence CertificateList
-		issuer.key_pair.algorithm().write_alg_ident(writer.next());
+		self.issuer
+			.key_pair
+			.algorithm()
+			.write_alg_ident(writer.next());
 
 		// Write issuer.
 		// RFC 5280 §5.1.2.3:
 		//   The issuer field MUST contain a non-empty X.500 distinguished name (DN).
-		write_distinguished_name(writer.next(), &issuer.distinguished_name);
+		write_distinguished_name(writer.next(), &self.issuer.distinguished_name);
 
 		// Write thisUpdate date.
 		// RFC 5280 §5.1.2.4:
 		//    This field indicates the issue date of this CRL.  thisUpdate may be
 		//    encoded as UTCTime or GeneralizedTime.
-		write_dt_utc_or_generalized(writer.next(), self.this_update);
+		write_dt_utc_or_generalized(writer.next(), self.params.this_update);
 
 		// Write nextUpdate date.
 		// While OPTIONAL in the ASN.1 module, RFC 5280 §5.1.2.5 says:
 		//   Conforming CRL issuers MUST include the nextUpdate field in all CRLs.
-		write_dt_utc_or_generalized(writer.next(), self.next_update);
+		write_dt_utc_or_generalized(writer.next(), self.params.next_update);
 
 		// Write revokedCertificates.
 		// RFC 5280 §5.1.2.6:
 		//   When there are no revoked certificates, the revoked certificates list
 		//   MUST be absent
-		if !self.revoked_certs.is_empty() {
+		if !self.params.revoked_certs.is_empty() {
 			writer.next().write_sequence(|writer| {
-				for revoked_cert in &self.revoked_certs {
+				for revoked_cert in &self.params.revoked_certs {
 					revoked_cert.write_der(writer.next());
 				}
 			});
@@ -273,17 +284,18 @@ impl CertificateRevocationListParams {
 				// Write authority key identifier.
 				write_x509_authority_key_identifier(
 					writer.next(),
-					self.key_identifier_method
-						.derive(issuer.key_pair.der_bytes()),
+					self.params
+						.key_identifier_method
+						.derive(self.issuer.key_pair.der_bytes()),
 				);
 
 				// Write CRL number.
 				write_x509_extension(writer.next(), oid::CRL_NUMBER, false, |writer| {
-					writer.write_bigint_bytes(self.crl_number.as_ref(), true);
+					writer.write_bigint_bytes(self.params.crl_number.as_ref(), true);
 				});
 
 				// Write issuing distribution point (if present).
-				if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
+				if let Some(issuing_distribution_point) = &self.params.issuing_distribution_point {
 					write_x509_extension(
 						writer.next(),
 						oid::CRL_ISSUING_DISTRIBUTION_POINT,

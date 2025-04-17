@@ -8,9 +8,10 @@ use yasna::{models::ObjectIdentifier, DERWriter, Tag};
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
+	certificate::SignableCertificateParams,
 	key_pair::{serialize_public_key_der, sign_der},
 	oid, write_distinguished_name, write_x509_extension, Attribute, Certificate, CertificateParams,
-	Error, IsCa, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey,
+	Error, IsCa, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey, ToDer,
 };
 #[cfg(feature = "x509-parser")]
 use crate::{DistinguishedName, SanType};
@@ -62,6 +63,47 @@ impl CertificateSigningRequest {
 		subject_key: &impl SigningKey,
 		attrs: Vec<Attribute>,
 	) -> Result<Self, Error> {
+		let signable = SignableRequest {
+			params,
+			subject_key,
+			attrs,
+		};
+
+		Ok(Self {
+			der: sign_der(subject_key, |writer| signable.write_der(writer))?.into(),
+		})
+	}
+
+	/// Get the PEM-encoded bytes of the certificate signing request.
+	#[cfg(feature = "pem")]
+	pub fn pem(&self) -> Result<String, Error> {
+		let p = Pem::new("CERTIFICATE REQUEST", &*self.der);
+		Ok(pem::encode_config(&p, ENCODE_CONFIG))
+	}
+
+	/// Get the DER-encoded bytes of the certificate signing request.
+	///
+	/// [`CertificateSigningRequestDer`] implements `Deref<Target = [u8]>` and `AsRef<[u8]>`,
+	/// so you can easily extract the DER bytes from the return value.
+	pub fn der(&self) -> &CertificateSigningRequestDer<'static> {
+		&self.der
+	}
+}
+
+impl From<CertificateSigningRequest> for CertificateSigningRequestDer<'static> {
+	fn from(csr: CertificateSigningRequest) -> Self {
+		csr.der
+	}
+}
+
+struct SignableRequest<'a, S> {
+	params: &'a CertificateParams,
+	subject_key: &'a S,
+	attrs: Vec<Attribute>,
+}
+
+impl<'a, S: SigningKey> ToDer for SignableRequest<'a, S> {
+	fn write_der(&self, writer: &mut yasna::DERWriterSeq) -> Result<(), Error> {
 		// No .. pattern, we use this to ensure every field is used
 		#[deny(unused)]
 		let CertificateParams {
@@ -78,7 +120,7 @@ impl CertificateSigningRequest {
 			custom_extensions,
 			use_authority_key_identifier_extension,
 			key_identifier_method,
-		} = params;
+		} = &self.params;
 		// - alg and key_pair will be used by the caller
 		// - not_before and not_after cannot be put in a CSR
 		// - key_identifier_method is here because self.write_extended_key_usage uses it
@@ -107,58 +149,31 @@ impl CertificateSigningRequest {
 			|| !extended_key_usages.is_empty()
 			|| !custom_extensions.is_empty();
 
-		let der = sign_der(subject_key, |writer| {
-			// Write version
-			writer.next().write_u8(0);
-			write_distinguished_name(writer.next(), distinguished_name);
-			serialize_public_key_der(subject_key, writer.next());
+		// Write version
+		writer.next().write_u8(0);
+		write_distinguished_name(writer.next(), distinguished_name);
+		serialize_public_key_der(self.subject_key, writer.next());
 
-			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
-			writer
-				.next()
-				.write_tagged_implicit(Tag::context(0), |writer| {
-					// RFC 2986 specifies that attributes are a SET OF Attribute
-					writer.write_set_of(|writer| {
-						if write_extension_request {
-							write_extension_request_attribute(params, writer.next());
-						}
+		// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
+		writer
+			.next()
+			.write_tagged_implicit(Tag::context(0), |writer| {
+				// RFC 2986 specifies that attributes are a SET OF Attribute
+				writer.write_set_of(|writer| {
+					if write_extension_request {
+						write_extension_request_attribute(&self.params, writer.next());
+					}
 
-						for Attribute { oid, values } in attrs {
-							writer.next().write_sequence(|writer| {
-								writer.next().write_oid(&ObjectIdentifier::from_slice(&oid));
-								writer.next().write_der(&values);
-							});
-						}
-					});
+					for Attribute { oid, values } in &self.attrs {
+						writer.next().write_sequence(|writer| {
+							writer.next().write_oid(&ObjectIdentifier::from_slice(&oid));
+							writer.next().write_der(&values);
+						});
+					}
 				});
+			});
 
-			Ok(())
-		})?;
-
-		Ok(Self {
-			der: CertificateSigningRequestDer::from(der),
-		})
-	}
-
-	/// Get the PEM-encoded bytes of the certificate signing request.
-	#[cfg(feature = "pem")]
-	pub fn pem(&self) -> Result<String, Error> {
-		let p = Pem::new("CERTIFICATE REQUEST", &*self.der);
-		Ok(pem::encode_config(&p, ENCODE_CONFIG))
-	}
-
-	/// Get the DER-encoded bytes of the certificate signing request.
-	///
-	/// [`CertificateSigningRequestDer`] implements `Deref<Target = [u8]>` and `AsRef<[u8]>`,
-	/// so you can easily extract the DER bytes from the return value.
-	pub fn der(&self) -> &CertificateSigningRequestDer<'static> {
-		&self.der
-	}
-}
-
-impl From<CertificateSigningRequest> for CertificateSigningRequestDer<'static> {
-	fn from(csr: CertificateSigningRequest) -> Self {
-		csr.der
+		Ok(())
 	}
 }
 
@@ -336,12 +351,14 @@ impl CertificateSigningRequestParams {
 			key_pair: issuer_key,
 		};
 
+		let signable = SignableCertificateParams {
+			params: &self.params,
+			pub_key: &self.public_key,
+			issuer: &issuer,
+		};
+
 		Ok(Certificate {
-			der: sign_der(issuer.key_pair, |writer| {
-				self.params
-					.serialize_der_with_signer(writer, &self.public_key, issuer)
-			})?
-			.into(),
+			der: sign_der(issuer.key_pair, |writer| signable.write_der(writer))?.into(),
 		})
 	}
 }

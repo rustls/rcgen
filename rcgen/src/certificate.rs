@@ -17,7 +17,7 @@ use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
 	write_x509_authority_key_identifier, write_x509_extension, DistinguishedName, Error, Issuer,
-	KeyIdMethod, KeyUsagePurpose, SanType, SerialNumber, SigningKey,
+	KeyIdMethod, KeyUsagePurpose, SanType, SerialNumber, SigningKey, ToDer,
 };
 
 /// An issued certificate
@@ -149,11 +149,14 @@ impl CertificateParams {
 			key_pair: issuer_key,
 		};
 
+		let signable = SignableCertificateParams {
+			params: self,
+			pub_key: public_key,
+			issuer: &issuer,
+		};
+
 		Ok(Certificate {
-			der: sign_der(issuer.key_pair, |writer| {
-				self.serialize_der_with_signer(writer, public_key, issuer)
-			})?
-			.into(),
+			der: sign_der(issuer.key_pair, |writer| signable.write_der(writer))?.into(),
 		})
 	}
 
@@ -169,11 +172,14 @@ impl CertificateParams {
 			key_pair,
 		};
 
+		let signable = SignableCertificateParams {
+			params: self,
+			pub_key: &*key_pair,
+			issuer: &issuer,
+		};
+
 		Ok(Certificate {
-			der: sign_der(issuer.key_pair, |writer| {
-				self.serialize_der_with_signer(writer, key_pair, issuer)
-			})?
-			.into(),
+			der: sign_der(issuer.key_pair, |writer| signable.write_der(writer))?.into(),
 		})
 	}
 
@@ -491,69 +497,6 @@ impl CertificateParams {
 		});
 	}
 
-	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
-		&self,
-		writer: &mut DERWriterSeq,
-		pub_key: &K,
-		issuer: Issuer<'_, impl SigningKey>,
-	) -> Result<(), Error> {
-		// Write version
-		writer.next().write_tagged(Tag::context(0), |writer| {
-			writer.write_u8(2);
-		});
-		// Write serialNumber
-		if let Some(ref serial) = self.serial_number {
-			writer.next().write_bigint_bytes(serial.as_ref(), true);
-		} else {
-			#[cfg(feature = "crypto")]
-			{
-				let hash = digest::digest(&digest::SHA256, pub_key.der_bytes());
-				// RFC 5280 specifies at most 20 bytes for a serial number
-				let mut sl = hash.as_ref()[0..20].to_vec();
-				sl[0] &= 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
-				writer.next().write_bigint_bytes(&sl, true);
-			}
-			#[cfg(not(feature = "crypto"))]
-			if self.serial_number.is_none() {
-				return Err(Error::MissingSerialNumber);
-			}
-		};
-		// Write signature algorithm
-		issuer.key_pair.algorithm().write_alg_ident(writer.next());
-		// Write issuer name
-		write_distinguished_name(writer.next(), &issuer.distinguished_name);
-		// Write validity
-		writer.next().write_sequence(|writer| {
-			// Not before
-			write_dt_utc_or_generalized(writer.next(), self.not_before);
-			// Not after
-			write_dt_utc_or_generalized(writer.next(), self.not_after);
-			Ok::<(), Error>(())
-		})?;
-		// Write subject
-		write_distinguished_name(writer.next(), &self.distinguished_name);
-		// Write subjectPublicKeyInfo
-		serialize_public_key_der(pub_key, writer.next());
-		// write extensions
-		let should_write_exts = self.use_authority_key_identifier_extension
-			|| !self.subject_alt_names.is_empty()
-			|| !self.extended_key_usages.is_empty()
-			|| self.name_constraints.iter().any(|c| !c.is_empty())
-			|| matches!(self.is_ca, IsCa::ExplicitNoCa)
-			|| matches!(self.is_ca, IsCa::Ca(_))
-			|| !self.custom_extensions.is_empty();
-		if !should_write_exts {
-			return Ok(());
-		}
-
-		let pub_key_spki = yasna::construct_der(|writer| serialize_public_key_der(pub_key, writer));
-		writer.next().write_tagged(Tag::context(3), |writer| {
-			writer.write_sequence(|writer| self.write_extensions(writer, &pub_key_spki, &issuer))
-		})?;
-
-		Ok(())
-	}
-
 	fn write_extensions(
 		&self,
 		writer: &mut DERWriterSeq,
@@ -693,6 +636,79 @@ impl CertificateParams {
 impl AsRef<CertificateParams> for CertificateParams {
 	fn as_ref(&self) -> &CertificateParams {
 		self
+	}
+}
+
+pub(crate) struct SignableCertificateParams<'a, P, S> {
+	pub(crate) params: &'a CertificateParams,
+	pub(crate) pub_key: &'a P,
+	pub(crate) issuer: &'a Issuer<'a, S>,
+}
+
+impl<'a, P: PublicKeyData, S: SigningKey> ToDer for SignableCertificateParams<'_, P, S> {
+	fn write_der(&self, writer: &mut DERWriterSeq) -> Result<(), Error> {
+		// Write version
+		writer.next().write_tagged(Tag::context(0), |writer| {
+			writer.write_u8(2);
+		});
+		// Write serialNumber
+		if let Some(ref serial) = self.params.serial_number {
+			writer.next().write_bigint_bytes(serial.as_ref(), true);
+		} else {
+			#[cfg(feature = "crypto")]
+			{
+				let hash = digest::digest(&digest::SHA256, self.pub_key.der_bytes());
+				// RFC 5280 specifies at most 20 bytes for a serial number
+				let mut sl = hash.as_ref()[0..20].to_vec();
+				sl[0] &= 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
+				writer.next().write_bigint_bytes(&sl, true);
+			}
+			#[cfg(not(feature = "crypto"))]
+			if self.serial_number.is_none() {
+				return Err(Error::MissingSerialNumber);
+			}
+		};
+		// Write signature algorithm
+		self.issuer
+			.key_pair
+			.algorithm()
+			.write_alg_ident(writer.next());
+		// Write issuer name
+		write_distinguished_name(writer.next(), &self.issuer.distinguished_name);
+		// Write validity
+		writer.next().write_sequence(|writer| {
+			// Not before
+			write_dt_utc_or_generalized(writer.next(), self.params.not_before);
+			// Not after
+			write_dt_utc_or_generalized(writer.next(), self.params.not_after);
+			Ok::<(), Error>(())
+		})?;
+		// Write subject
+		write_distinguished_name(writer.next(), &self.params.distinguished_name);
+		// Write subjectPublicKeyInfo
+		serialize_public_key_der(self.pub_key, writer.next());
+		// write extensions
+		let should_write_exts = self.params.use_authority_key_identifier_extension
+			|| !self.params.subject_alt_names.is_empty()
+			|| !self.params.extended_key_usages.is_empty()
+			|| self.params.name_constraints.iter().any(|c| !c.is_empty())
+			|| matches!(self.params.is_ca, IsCa::ExplicitNoCa)
+			|| matches!(self.params.is_ca, IsCa::Ca(_))
+			|| !self.params.custom_extensions.is_empty();
+		if !should_write_exts {
+			return Ok(());
+		}
+
+		let pub_key_spki =
+			yasna::construct_der(|writer| serialize_public_key_der(self.pub_key, writer));
+		writer.next().write_tagged(Tag::context(3), |writer| {
+			writer.write_sequence(|writer| {
+				self.params
+					.write_extensions(writer, &pub_key_spki, &self.issuer)
+			})
+		})?;
+
+		Ok(())
 	}
 }
 

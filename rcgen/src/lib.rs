@@ -44,8 +44,8 @@ use time::{OffsetDateTime, Time};
 use yasna::models::ObjectIdentifier;
 use yasna::models::{GeneralizedTime, UTCTime};
 use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
-use yasna::DERWriter;
 use yasna::Tag;
+use yasna::{DERWriter, DERWriterSeq};
 
 use crate::string::{BmpString, Ia5String, PrintableString, TeletexString, UniversalString};
 
@@ -137,6 +137,10 @@ struct Issuer<'a, S> {
 	key_identifier_method: &'a KeyIdMethod,
 	key_usages: &'a [KeyUsagePurpose],
 	key_pair: &'a S,
+}
+
+trait ToDer {
+	fn write_der(&self, writer: &mut DERWriterSeq) -> Result<(), Error>;
 }
 
 // https://tools.ietf.org/html/rfc5280#section-4.1.1
