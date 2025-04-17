@@ -497,7 +497,6 @@ impl CertificateParams {
 		pub_key: &K,
 		issuer: Issuer<'_, impl SigningKey>,
 	) -> Result<(), Error> {
-		let pub_key_spki = pub_key.subject_public_key_info();
 		// Write version
 		writer.next().write_tagged(Tag::context(0), |writer| {
 			writer.write_u8(2);
@@ -547,144 +546,138 @@ impl CertificateParams {
 			return Ok(());
 		}
 
+		let pub_key_spki = yasna::construct_der(|writer| serialize_public_key_der(pub_key, writer));
 		writer.next().write_tagged(Tag::context(3), |writer| {
-			writer.write_sequence(|writer| {
-				if self.use_authority_key_identifier_extension {
-					write_x509_authority_key_identifier(
-						writer.next(),
-						match issuer.key_identifier_method {
-							KeyIdMethod::PreSpecified(aki) => aki.clone(),
-							#[cfg(feature = "crypto")]
-							_ => issuer
-								.key_identifier_method
-								.derive(issuer.key_pair.subject_public_key_info()),
-						},
-					);
-				}
-				// Write subject_alt_names
-				if !self.subject_alt_names.is_empty() {
-					self.write_subject_alt_names(writer.next());
-				}
+			writer.write_sequence(|writer| self.write_extensions(writer, &pub_key_spki, &issuer))
+		})?;
 
-				// Write standard key usage
-				self.write_key_usage(writer.next());
+		Ok(())
+	}
 
-				// Write extended key usage
-				if !self.extended_key_usages.is_empty() {
-					write_x509_extension(writer.next(), oid::EXT_KEY_USAGE, false, |writer| {
-						writer.write_sequence(|writer| {
-							for usage in self.extended_key_usages.iter() {
-								let oid = ObjectIdentifier::from_slice(usage.oid());
-								writer.next().write_oid(&oid);
-							}
-						});
-					});
-				}
-				if let Some(name_constraints) = &self.name_constraints {
-					// If both trees are empty, the extension must be omitted.
-					if !name_constraints.is_empty() {
-						write_x509_extension(
-							writer.next(),
-							oid::NAME_CONSTRAINTS,
-							true,
-							|writer| {
-								writer.write_sequence(|writer| {
-									if !name_constraints.permitted_subtrees.is_empty() {
-										write_general_subtrees(
-											writer.next(),
-											0,
-											&name_constraints.permitted_subtrees,
-										);
-									}
-									if !name_constraints.excluded_subtrees.is_empty() {
-										write_general_subtrees(
-											writer.next(),
-											1,
-											&name_constraints.excluded_subtrees,
-										);
-									}
-								});
-							},
-						);
+	fn write_extensions(
+		&self,
+		writer: &mut DERWriterSeq,
+		pub_key_spki: &[u8],
+		issuer: &Issuer<'_, impl SigningKey>,
+	) -> Result<(), Error> {
+		if self.use_authority_key_identifier_extension {
+			write_x509_authority_key_identifier(
+				writer.next(),
+				match issuer.key_identifier_method {
+					KeyIdMethod::PreSpecified(aki) => aki.clone(),
+					#[cfg(feature = "crypto")]
+					_ => issuer
+						.key_identifier_method
+						.derive(issuer.key_pair.subject_public_key_info()),
+				},
+			);
+		}
+		// Write subject_alt_names
+		if !self.subject_alt_names.is_empty() {
+			self.write_subject_alt_names(writer.next());
+		}
+
+		// Write standard key usage
+		self.write_key_usage(writer.next());
+
+		// Write extended key usage
+		if !self.extended_key_usages.is_empty() {
+			write_x509_extension(writer.next(), oid::EXT_KEY_USAGE, false, |writer| {
+				writer.write_sequence(|writer| {
+					for usage in self.extended_key_usages.iter() {
+						let oid = ObjectIdentifier::from_slice(usage.oid());
+						writer.next().write_oid(&oid);
 					}
-				}
-				if !self.crl_distribution_points.is_empty() {
-					write_x509_extension(
-						writer.next(),
-						oid::CRL_DISTRIBUTION_POINTS,
-						false,
-						|writer| {
-							writer.write_sequence(|writer| {
-								for distribution_point in &self.crl_distribution_points {
-									distribution_point.write_der(writer.next());
-								}
-							})
-						},
-					);
-				}
-				match self.is_ca {
-					IsCa::Ca(ref constraint) => {
-						// Write subject_key_identifier
-						write_x509_extension(
-							writer.next(),
-							oid::SUBJECT_KEY_IDENTIFIER,
-							false,
-							|writer| {
-								writer
-									.write_bytes(&self.key_identifier_method.derive(pub_key_spki));
-							},
-						);
-						// Write basic_constraints
-						write_x509_extension(
-							writer.next(),
-							oid::BASIC_CONSTRAINTS,
-							true,
-							|writer| {
-								writer.write_sequence(|writer| {
-									writer.next().write_bool(true); // cA flag
-									if let BasicConstraints::Constrained(path_len_constraint) =
-										constraint
-									{
-										writer.next().write_u8(*path_len_constraint);
-									}
-								});
-							},
-						);
-					},
-					IsCa::ExplicitNoCa => {
-						// Write subject_key_identifier
-						write_x509_extension(
-							writer.next(),
-							oid::SUBJECT_KEY_IDENTIFIER,
-							false,
-							|writer| {
-								writer
-									.write_bytes(&self.key_identifier_method.derive(pub_key_spki));
-							},
-						);
-						// Write basic_constraints
-						write_x509_extension(
-							writer.next(),
-							oid::BASIC_CONSTRAINTS,
-							true,
-							|writer| {
-								writer.write_sequence(|writer| {
-									writer.next().write_bool(false); // cA flag
-								});
-							},
-						);
-					},
-					IsCa::NoCa => {},
-				}
-
-				// Write the custom extensions
-				for ext in &self.custom_extensions {
-					write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
-						writer.write_der(ext.content())
-					});
-				}
+				});
 			});
-		});
+		}
+
+		if let Some(name_constraints) = &self.name_constraints {
+			// If both trees are empty, the extension must be omitted.
+			if !name_constraints.is_empty() {
+				write_x509_extension(writer.next(), oid::NAME_CONSTRAINTS, true, |writer| {
+					writer.write_sequence(|writer| {
+						if !name_constraints.permitted_subtrees.is_empty() {
+							write_general_subtrees(
+								writer.next(),
+								0,
+								&name_constraints.permitted_subtrees,
+							);
+						}
+						if !name_constraints.excluded_subtrees.is_empty() {
+							write_general_subtrees(
+								writer.next(),
+								1,
+								&name_constraints.excluded_subtrees,
+							);
+						}
+					});
+				});
+			}
+		}
+
+		if !self.crl_distribution_points.is_empty() {
+			write_x509_extension(
+				writer.next(),
+				oid::CRL_DISTRIBUTION_POINTS,
+				false,
+				|writer| {
+					writer.write_sequence(|writer| {
+						for distribution_point in &self.crl_distribution_points {
+							distribution_point.write_der(writer.next());
+						}
+					})
+				},
+			);
+		}
+
+		match self.is_ca {
+			IsCa::Ca(ref constraint) => {
+				// Write subject_key_identifier
+				write_x509_extension(
+					writer.next(),
+					oid::SUBJECT_KEY_IDENTIFIER,
+					false,
+					|writer| {
+						writer.write_bytes(&self.key_identifier_method.derive(pub_key_spki));
+					},
+				);
+				// Write basic_constraints
+				write_x509_extension(writer.next(), oid::BASIC_CONSTRAINTS, true, |writer| {
+					writer.write_sequence(|writer| {
+						writer.next().write_bool(true); // cA flag
+						if let BasicConstraints::Constrained(path_len_constraint) = constraint {
+							writer.next().write_u8(*path_len_constraint);
+						}
+					});
+				});
+			},
+			IsCa::ExplicitNoCa => {
+				// Write subject_key_identifier
+				write_x509_extension(
+					writer.next(),
+					oid::SUBJECT_KEY_IDENTIFIER,
+					false,
+					|writer| {
+						writer.write_bytes(&self.key_identifier_method.derive(pub_key_spki));
+					},
+				);
+				// Write basic_constraints
+				write_x509_extension(writer.next(), oid::BASIC_CONSTRAINTS, true, |writer| {
+					writer.write_sequence(|writer| {
+						writer.next().write_bool(false); // cA flag
+					});
+				});
+			},
+			IsCa::NoCa => {},
+		}
+
+		// Write the custom extensions
+		for ext in &self.custom_extensions {
+			write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
+				writer.write_der(ext.content())
+			});
+		}
 
 		Ok(())
 	}
