@@ -7,8 +7,7 @@ use pki_types::CertificateSigningRequestDer;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	key_pair::serialize_public_key_der, Certificate, CertificateParams, Error, Issuer, KeyPair,
-	PublicKeyData, SignatureAlgorithm,
+	Certificate, CertificateParams, Error, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey,
 };
 #[cfg(feature = "x509-parser")]
 use crate::{DistinguishedName, SanType};
@@ -32,7 +31,7 @@ impl PublicKeyData for PublicKey {
 		&self.raw
 	}
 
-	fn algorithm(&self) -> &SignatureAlgorithm {
+	fn algorithm(&self) -> &'static SignatureAlgorithm {
 		self.alg
 	}
 }
@@ -202,27 +201,20 @@ impl CertificateSigningRequestParams {
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
 	pub fn signed_by(
-		self,
-		issuer: &Certificate,
-		issuer_key: &KeyPair,
+		&self,
+		issuer: &CertificateParams,
+		issuer_key: &impl SigningKey,
 	) -> Result<Certificate, Error> {
 		let issuer = Issuer {
-			distinguished_name: &issuer.params.distinguished_name,
-			key_identifier_method: &issuer.params.key_identifier_method,
-			key_usages: &issuer.params.key_usages,
+			distinguished_name: &issuer.distinguished_name,
+			key_identifier_method: &issuer.key_identifier_method,
+			key_usages: &issuer.key_usages,
 			key_pair: issuer_key,
 		};
 
 		let der = self
 			.params
 			.serialize_der_with_signer(&self.public_key, issuer)?;
-		let subject_public_key_info = yasna::construct_der(|writer| {
-			serialize_public_key_der(&self.public_key, writer);
-		});
-		Ok(Certificate {
-			params: self.params,
-			subject_public_key_info,
-			der,
-		})
+		Ok(Certificate { der })
 	}
 }

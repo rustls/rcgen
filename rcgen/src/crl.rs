@@ -5,12 +5,15 @@ use time::OffsetDateTime;
 use yasna::DERWriter;
 use yasna::Tag;
 
+use crate::key_pair::sign_der;
+use crate::CertificateParams;
+use crate::SigningKey;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_authority_key_identifier, write_x509_extension, Certificate, Error, Issuer,
-	KeyIdMethod, KeyPair, KeyUsagePurpose, SerialNumber,
+	write_x509_authority_key_identifier, write_x509_extension, Error, Issuer, KeyIdMethod,
+	KeyUsagePurpose, SerialNumber,
 };
 
 /// A certificate revocation list (CRL)
@@ -24,7 +27,7 @@ use crate::{
 /// #[cfg(not(feature = "crypto"))]
 /// struct MyKeyPair { public_key: Vec<u8> }
 /// #[cfg(not(feature = "crypto"))]
-/// impl RemoteKeyPair for MyKeyPair {
+/// impl SigningKey for MyKeyPair {
 ///   fn public_key(&self) -> &[u8] { &self.public_key }
 ///   fn sign(&self, _: &[u8]) -> Result<Vec<u8>, rcgen::Error> { Ok(vec![]) }
 ///   fn algorithm(&self) -> &'static SignatureAlgorithm { &PKCS_ED25519 }
@@ -60,7 +63,7 @@ use crate::{
 ///   key_identifier_method: KeyIdMethod::Sha256,
 ///   #[cfg(not(feature = "crypto"))]
 ///   key_identifier_method: KeyIdMethod::PreSpecified(vec![]),
-/// }.signed_by(&issuer, &key_pair).unwrap();
+/// }.signed_by(&issuer_params, &key_pair).unwrap();
 ///# }
 #[derive(Debug)]
 pub struct CertificateRevocationList {
@@ -190,17 +193,17 @@ impl CertificateRevocationListParams {
 	/// Including a signature from the issuing certificate authority's key.
 	pub fn signed_by(
 		self,
-		issuer: &Certificate,
-		issuer_key: &KeyPair,
+		issuer: &CertificateParams,
+		issuer_key: &impl SigningKey,
 	) -> Result<CertificateRevocationList, Error> {
 		if self.next_update.le(&self.this_update) {
 			return Err(Error::InvalidCrlNextUpdate);
 		}
 
 		let issuer = Issuer {
-			distinguished_name: &issuer.params.distinguished_name,
-			key_identifier_method: &issuer.params.key_identifier_method,
-			key_usages: &issuer.params.key_usages,
+			distinguished_name: &issuer.distinguished_name,
+			key_identifier_method: &issuer.key_identifier_method,
+			key_usages: &issuer.key_usages,
 			key_pair: issuer_key,
 		};
 
@@ -214,8 +217,8 @@ impl CertificateRevocationListParams {
 		})
 	}
 
-	fn serialize_der(&self, issuer: Issuer) -> Result<Vec<u8>, Error> {
-		issuer.key_pair.sign_der(|writer| {
+	fn serialize_der(&self, issuer: Issuer<'_, impl SigningKey>) -> Result<Vec<u8>, Error> {
+		sign_der(issuer.key_pair, |writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
 			//   This optional field describes the version of the encoded CRL.  When
@@ -231,7 +234,7 @@ impl CertificateRevocationListParams {
 			// RFC 5280 §5.1.2.2:
 			//   This field MUST contain the same algorithm identifier as the
 			//   signatureAlgorithm field in the sequence CertificateList
-			issuer.key_pair.alg.write_alg_ident(writer.next());
+			issuer.key_pair.algorithm().write_alg_ident(writer.next());
 
 			// Write issuer.
 			// RFC 5280 §5.1.2.3:
@@ -275,7 +278,7 @@ impl CertificateRevocationListParams {
 					write_x509_authority_key_identifier(
 						writer.next(),
 						self.key_identifier_method
-							.derive(issuer.key_pair.public_key_der()),
+							.derive(issuer.key_pair.der_bytes()),
 					);
 
 					// Write CRL number.
