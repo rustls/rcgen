@@ -245,6 +245,8 @@ fn test_webpki_rsa_combinations_given() {
 			&signature::RSA_PKCS1_SHA512,
 		),
 		//(&rcgen::PKCS_RSA_PSS_SHA256, &webpki::RSA_PSS_2048_8192_SHA256_LEGACY_KEY, &signature::RSA_PSS_SHA256),
+		//(&rcgen::PKCS_RSA_PSS_SHA384, &webpki::RSA_PSS_2048_8192_SHA384_LEGACY_KEY, &signature::RSA_PSS_SHA384),
+		//(&rcgen::PKCS_RSA_PSS_SHA384, &webpki::RSA_PSS_2048_8192_SHA512_LEGACY_KEY, &signature::RSA_PSS_SHA512),
 	];
 	for c in configs {
 		let (params, _) = util::default_params();
