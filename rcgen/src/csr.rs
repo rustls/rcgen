@@ -7,8 +7,7 @@ use pki_types::CertificateSigningRequestDer;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	key_pair::serialize_public_key_der, Certificate, CertificateParams, Error, Issuer, KeyPair,
-	PublicKeyData, SignatureAlgorithm,
+	Certificate, CertificateParams, Error, Issuer, KeyPair, PublicKeyData, SignatureAlgorithm,
 };
 #[cfg(feature = "x509-parser")]
 use crate::{DistinguishedName, SanType};
@@ -216,12 +215,10 @@ impl CertificateSigningRequestParams {
 		let der = self
 			.params
 			.serialize_der_with_signer(&self.public_key, issuer)?;
-		let subject_public_key_info = yasna::construct_der(|writer| {
-			serialize_public_key_der(&self.public_key, writer);
-		});
+
 		Ok(Certificate {
 			params: self.params,
-			subject_public_key_info,
+			subject_public_key_info: self.public_key.subject_public_key_info(),
 			der,
 		})
 	}
