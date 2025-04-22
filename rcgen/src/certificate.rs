@@ -168,12 +168,10 @@ impl CertificateParams {
 			key_pair: issuer_key,
 		};
 
-		let subject_public_key_info =
-			yasna::construct_der(|writer| serialize_public_key_der(public_key, writer));
 		let der = self.serialize_der_with_signer(public_key, issuer)?;
 		Ok(Certificate {
 			params: self,
-			subject_public_key_info,
+			subject_public_key_info: public_key.subject_public_key_info(),
 			der,
 		})
 	}
@@ -190,7 +188,7 @@ impl CertificateParams {
 			key_pair,
 		};
 
-		let subject_public_key_info = key_pair.public_key_der();
+		let subject_public_key_info = key_pair.subject_public_key_info();
 		let der = self.serialize_der_with_signer(key_pair, issuer)?;
 		Ok(Certificate {
 			params: self,
@@ -648,8 +646,7 @@ impl CertificateParams {
 		issuer: Issuer<'_>,
 	) -> Result<CertificateDer<'static>, Error> {
 		let der = issuer.key_pair.sign_der(|writer| {
-			let pub_key_spki =
-				yasna::construct_der(|writer| serialize_public_key_der(pub_key, writer));
+			let pub_key_spki = pub_key.subject_public_key_info();
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
 				writer.write_u8(2);
@@ -709,7 +706,7 @@ impl CertificateParams {
 								#[cfg(feature = "crypto")]
 								_ => issuer
 									.key_identifier_method
-									.derive(issuer.key_pair.public_key_der()),
+									.derive(issuer.key_pair.subject_public_key_info()),
 							},
 						);
 					}

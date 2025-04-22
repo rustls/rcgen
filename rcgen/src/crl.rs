@@ -10,7 +10,7 @@ use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
 	write_x509_authority_key_identifier, write_x509_extension, Certificate, Error, Issuer,
-	KeyIdMethod, KeyPair, KeyUsagePurpose, SerialNumber,
+	KeyIdMethod, KeyPair, KeyUsagePurpose, PublicKeyData, SerialNumber,
 };
 
 /// A certificate revocation list (CRL)
@@ -275,7 +275,7 @@ impl CertificateRevocationListParams {
 					write_x509_authority_key_identifier(
 						writer.next(),
 						self.key_identifier_method
-							.derive(issuer.key_pair.public_key_der()),
+							.derive(issuer.key_pair.subject_public_key_info()),
 					);
 
 					// Write CRL number.

@@ -460,21 +460,12 @@ impl KeyPair {
 		Ok(())
 	}
 
-	/// Return the key pair's public key in DER format
-	///
-	/// The key is formatted according to the SubjectPublicKeyInfo struct of
-	/// X.509.
-	/// See [RFC 5280 section 4.1](https://tools.ietf.org/html/rfc5280#section-4.1).
-	pub fn public_key_der(&self) -> Vec<u8> {
-		yasna::construct_der(|writer| serialize_public_key_der(self, writer))
-	}
-
 	/// Return the key pair's public key in PEM format
 	///
 	/// The returned string can be interpreted with `openssl pkey --inform PEM -pubout -pubin -text`
 	#[cfg(feature = "pem")]
 	pub fn public_key_pem(&self) -> String {
-		let contents = self.public_key_der();
+		let contents = self.subject_public_key_info();
 		let p = Pem::new("PUBLIC KEY", contents);
 		pem::encode_config(&p, ENCODE_CONFIG)
 	}
@@ -763,6 +754,14 @@ impl PublicKeyData for SubjectPublicKeyInfo {
 
 /// The public key data of a key pair
 pub trait PublicKeyData {
+	/// The subject public key info, in DER format
+	///
+	/// The key is formatted according to the SubjectPublicKeyInfo struct of X.509.
+	/// See [RFC 5280 section 4.1](https://tools.ietf.org/html/rfc5280#section-4.1).
+	fn subject_public_key_info(&self) -> Vec<u8> {
+		yasna::construct_der(|writer| serialize_public_key_der(self, writer))
+	}
+
 	/// The public key in DER format
 	fn der_bytes(&self) -> &[u8];
 
@@ -770,7 +769,7 @@ pub trait PublicKeyData {
 	fn algorithm(&self) -> &SignatureAlgorithm;
 }
 
-pub(crate) fn serialize_public_key_der(key: &impl PublicKeyData, writer: DERWriter) {
+pub(crate) fn serialize_public_key_der(key: &(impl PublicKeyData + ?Sized), writer: DERWriter) {
 	writer.write_sequence(|writer| {
 		key.algorithm().write_oids_sign_alg(writer.next());
 		let pk = key.der_bytes();
@@ -801,7 +800,7 @@ mod test {
 		] {
 			let kp = KeyPair::generate_for(alg).expect("keygen");
 			let pem = kp.public_key_pem();
-			let der = kp.public_key_der();
+			let der = kp.subject_public_key_info();
 
 			let pkd_pem = SubjectPublicKeyInfo::from_pem(&pem).expect("from pem");
 			assert_eq!(kp.der_bytes(), pkd_pem.der_bytes());
