@@ -218,7 +218,6 @@ impl CertificateSigningRequestParams {
 
 		Ok(Certificate {
 			params: self.params,
-			subject_public_key_info: self.public_key.subject_public_key_info(),
 			der,
 		})
 	}

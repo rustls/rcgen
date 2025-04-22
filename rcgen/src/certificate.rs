@@ -25,7 +25,6 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Certificate {
 	pub(crate) params: CertificateParams,
-	pub(crate) subject_public_key_info: Vec<u8>,
 	pub(crate) der: CertificateDer<'static>,
 }
 
@@ -33,13 +32,6 @@ impl Certificate {
 	/// Returns the certificate parameters
 	pub fn params(&self) -> &CertificateParams {
 		&self.params
-	}
-	/// Calculates a subject key identifier for the certificate subject's public key.
-	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
-	pub fn key_identifier(&self) -> Vec<u8> {
-		self.params
-			.key_identifier_method
-			.derive(&self.subject_public_key_info)
 	}
 	/// Get the certificate in DER encoded format.
 	///
@@ -169,11 +161,7 @@ impl CertificateParams {
 		};
 
 		let der = self.serialize_der_with_signer(public_key, issuer)?;
-		Ok(Certificate {
-			params: self,
-			subject_public_key_info: public_key.subject_public_key_info(),
-			der,
-		})
+		Ok(Certificate { params: self, der })
 	}
 
 	/// Generates a new self-signed certificate from the given parameters.
@@ -188,13 +176,15 @@ impl CertificateParams {
 			key_pair,
 		};
 
-		let subject_public_key_info = key_pair.subject_public_key_info();
 		let der = self.serialize_der_with_signer(key_pair, issuer)?;
-		Ok(Certificate {
-			params: self,
-			subject_public_key_info,
-			der,
-		})
+		Ok(Certificate { params: self, der })
+	}
+
+	/// Calculates a subject key identifier for the certificate subject's public key.
+	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
+	pub fn key_identifier(&self, key: &impl PublicKeyData) -> Vec<u8> {
+		self.key_identifier_method
+			.derive(&key.subject_public_key_info())
 	}
 
 	/// Parses an existing ca certificate from the ASCII PEM format.
@@ -1489,8 +1479,9 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 			);
 
 			let ca_kp = KeyPair::from_pem(ca_key).unwrap();
+			let key_id = params.key_identifier(&ca_kp);
 			let ca_cert = params.self_signed(&ca_kp).unwrap();
-			assert_eq!(&ca_ski, &ca_cert.key_identifier());
+			assert_eq!(&ca_ski, &key_id);
 
 			let (_, x509_ca) = x509_parser::parse_x509_certificate(ca_cert.der()).unwrap();
 			assert_eq!(
