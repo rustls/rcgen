@@ -5,7 +5,7 @@ use std::fmt;
 use pem::Pem;
 #[cfg(feature = "crypto")]
 use pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
-use yasna::{DERWriter, DERWriterSeq};
+use yasna::DERWriter;
 
 #[cfg(any(feature = "crypto", feature = "pem"))]
 use crate::error::ExternalError;
@@ -582,28 +582,6 @@ pub enum RsaKeySize {
 	_3072,
 	/// 4096 bits
 	_4096,
-}
-
-pub(crate) fn sign_der(
-	key: &impl SigningKey,
-	f: impl FnOnce(&mut DERWriterSeq<'_>) -> Result<(), Error>,
-) -> Result<Vec<u8>, Error> {
-	yasna::try_construct_der(|writer| {
-		writer.write_sequence(|writer| {
-			let data = yasna::try_construct_der(|writer| writer.write_sequence(f))?;
-			writer.next().write_der(&data);
-
-			// Write signatureAlgorithm
-			key.algorithm().write_alg_ident(writer.next());
-
-			// Write signature
-			let sig = key.sign(&data)?;
-			let writer = writer.next();
-			writer.write_bitvec_bytes(&sig, sig.len() * 8);
-
-			Ok(())
-		})
-	})
 }
 
 /// A key that can be used to sign messages

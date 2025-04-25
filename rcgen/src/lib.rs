@@ -44,8 +44,8 @@ use time::{OffsetDateTime, Time};
 use yasna::models::ObjectIdentifier;
 use yasna::models::{GeneralizedTime, UTCTime};
 use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
-use yasna::DERWriter;
 use yasna::Tag;
+use yasna::{DERWriter, DERWriterSeq};
 
 use crate::string::{BmpString, Ia5String, PrintableString, TeletexString, UniversalString};
 
@@ -137,6 +137,42 @@ struct Issuer<'a, S> {
 	key_identifier_method: &'a KeyIdMethod,
 	key_usages: &'a [KeyUsagePurpose],
 	key_pair: &'a S,
+}
+
+impl<'a, S: SigningKey> Issuer<'a, S> {
+	fn new(params: &'a CertificateParams, key_pair: &'a S) -> Self {
+		Self {
+			distinguished_name: &params.distinguished_name,
+			key_identifier_method: &params.key_identifier_method,
+			key_usages: &params.key_usages,
+			key_pair,
+		}
+	}
+}
+
+trait ToDer {
+	fn signed(&self, key: &impl SigningKey) -> Result<Vec<u8>, Error> {
+		yasna::try_construct_der(|writer| {
+			writer.write_sequence(|writer| {
+				let data = yasna::try_construct_der(|writer| {
+					writer.write_sequence(|writer| self.write_der(writer))
+				})?;
+				writer.next().write_der(&data);
+
+				// Write signatureAlgorithm
+				key.algorithm().write_alg_ident(writer.next());
+
+				// Write signature
+				let sig = key.sign(&data)?;
+				let writer = writer.next();
+				writer.write_bitvec_bytes(&sig, sig.len() * 8);
+
+				Ok(())
+			})
+		})
+	}
+
+	fn write_der(&self, writer: &mut DERWriterSeq) -> Result<(), Error>;
 }
 
 // https://tools.ietf.org/html/rfc5280#section-4.1.1
