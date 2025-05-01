@@ -185,15 +185,15 @@ impl SanType {
 			.or(Err(Error::CouldNotParseCertificate))?
 			.map(|ext| &ext.value.general_names);
 
-		if let Some(sans) = sans {
-			let mut subject_alt_names = Vec::with_capacity(sans.len());
-			for san in sans {
-				subject_alt_names.push(Self::try_from_general(san)?);
-			}
-			Ok(subject_alt_names)
-		} else {
-			Ok(Vec::new())
+		let Some(sans) = sans else {
+			return Ok(Vec::new());
+		};
+
+		let mut subject_alt_names = Vec::with_capacity(sans.len());
+		for san in sans {
+			subject_alt_names.push(Self::try_from_general(san)?);
 		}
+		Ok(subject_alt_names)
 	}
 }
 
