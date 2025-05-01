@@ -208,7 +208,7 @@ impl CertificateParams {
 		let subject_alt_names = Self::convert_x509_subject_alternative_name(&x509)?;
 		let key_usages = Self::convert_x509_key_usages(&x509)?;
 		let extended_key_usages = Self::convert_x509_extended_key_usages(&x509)?;
-		let name_constraints = Self::convert_x509_name_constraints(&x509)?;
+		let name_constraints = NameConstraints::from_x509(&x509)?;
 		let serial_number = Some(x509.serial.to_bytes_be().into());
 
 		let key_identifier_method =
@@ -339,38 +339,6 @@ impl CertificateParams {
 			}
 		}
 		Ok(extended_key_usages)
-	}
-	#[cfg(feature = "x509-parser")]
-	fn convert_x509_name_constraints(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Option<NameConstraints>, Error> {
-		let constraints = x509
-			.name_constraints()
-			.or(Err(Error::CouldNotParseCertificate))?
-			.map(|ext| ext.value);
-
-		if let Some(constraints) = constraints {
-			let permitted_subtrees = if let Some(permitted) = &constraints.permitted_subtrees {
-				GeneralSubtree::from_x509(permitted)?
-			} else {
-				Vec::new()
-			};
-
-			let excluded_subtrees = if let Some(excluded) = &constraints.excluded_subtrees {
-				GeneralSubtree::from_x509(excluded)?
-			} else {
-				Vec::new()
-			};
-
-			let name_constraints = NameConstraints {
-				permitted_subtrees,
-				excluded_subtrees,
-			};
-
-			Ok(Some(name_constraints))
-		} else {
-			Ok(None)
-		}
 	}
 
 	/// Write a CSR extension request attribute as defined in [RFC 2985].
@@ -987,6 +955,39 @@ pub struct NameConstraints {
 }
 
 impl NameConstraints {
+	#[cfg(feature = "x509-parser")]
+	fn from_x509(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Option<Self>, Error> {
+		let constraints = x509
+			.name_constraints()
+			.or(Err(Error::CouldNotParseCertificate))?
+			.map(|ext| ext.value);
+
+		if let Some(constraints) = constraints {
+			let permitted_subtrees = if let Some(permitted) = &constraints.permitted_subtrees {
+				GeneralSubtree::from_x509(permitted)?
+			} else {
+				Vec::new()
+			};
+
+			let excluded_subtrees = if let Some(excluded) = &constraints.excluded_subtrees {
+				GeneralSubtree::from_x509(excluded)?
+			} else {
+				Vec::new()
+			};
+
+			let name_constraints = Self {
+				permitted_subtrees,
+				excluded_subtrees,
+			};
+
+			Ok(Some(name_constraints))
+		} else {
+			Ok(None)
+		}
+	}
+
 	fn is_empty(&self) -> bool {
 		self.permitted_subtrees.is_empty() && self.excluded_subtrees.is_empty()
 	}
