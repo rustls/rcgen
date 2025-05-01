@@ -207,7 +207,7 @@ impl CertificateParams {
 		let validity = x509.validity();
 		let subject_alt_names = SanType::from_x509(&x509)?;
 		let key_usages = KeyUsagePurpose::from_x509(&x509)?;
-		let extended_key_usages = Self::convert_x509_extended_key_usages(&x509)?;
+		let extended_key_usages = ExtendedKeyUsagePurpose::from_x509(&x509)?;
 		let name_constraints = NameConstraints::from_x509(&x509)?;
 		let serial_number = Some(x509.serial.to_bytes_be().into());
 
@@ -243,42 +243,6 @@ impl CertificateParams {
 			not_after: validity.not_after.to_datetime(),
 			..Default::default()
 		})
-	}
-
-	#[cfg(feature = "x509-parser")]
-	fn convert_x509_extended_key_usages(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Vec<ExtendedKeyUsagePurpose>, Error> {
-		let extended_key_usage = x509
-			.extended_key_usage()
-			.or(Err(Error::CouldNotParseCertificate))?
-			.map(|ext| ext.value);
-
-		let mut extended_key_usages = Vec::new();
-		if let Some(extended_key_usage) = extended_key_usage {
-			if extended_key_usage.any {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::Any);
-			}
-			if extended_key_usage.server_auth {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::ServerAuth);
-			}
-			if extended_key_usage.client_auth {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::ClientAuth);
-			}
-			if extended_key_usage.code_signing {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::CodeSigning);
-			}
-			if extended_key_usage.email_protection {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::EmailProtection);
-			}
-			if extended_key_usage.time_stamping {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::TimeStamping);
-			}
-			if extended_key_usage.ocsp_signing {
-				extended_key_usages.push(ExtendedKeyUsagePurpose::OcspSigning);
-			}
-		}
-		Ok(extended_key_usages)
 	}
 
 	/// Write a CSR extension request attribute as defined in [RFC 2985].
@@ -865,6 +829,41 @@ pub enum ExtendedKeyUsagePurpose {
 }
 
 impl ExtendedKeyUsagePurpose {
+	#[cfg(feature = "x509-parser")]
+	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
+		let extended_key_usage = x509
+			.extended_key_usage()
+			.or(Err(Error::CouldNotParseCertificate))?
+			.map(|ext| ext.value);
+
+		let mut extended_key_usages = Vec::new();
+		if let Some(extended_key_usage) = extended_key_usage {
+			if extended_key_usage.any {
+				extended_key_usages.push(Self::Any);
+			}
+			if extended_key_usage.server_auth {
+				extended_key_usages.push(Self::ServerAuth);
+			}
+			if extended_key_usage.client_auth {
+				extended_key_usages.push(Self::ClientAuth);
+			}
+			if extended_key_usage.code_signing {
+				extended_key_usages.push(Self::CodeSigning);
+			}
+			if extended_key_usage.email_protection {
+				extended_key_usages.push(Self::EmailProtection);
+			}
+			if extended_key_usage.time_stamping {
+				extended_key_usages.push(Self::TimeStamping);
+			}
+			if extended_key_usage.ocsp_signing {
+				extended_key_usages.push(Self::OcspSigning);
+			}
+		}
+
+		Ok(extended_key_usages)
+	}
+
 	fn oid(&self) -> &[u64] {
 		use ExtendedKeyUsagePurpose::*;
 		match self {
