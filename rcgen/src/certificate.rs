@@ -202,25 +202,6 @@ impl CertificateParams {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
 			.or(Err(Error::CouldNotParseCertificate))?;
 
-		let key_identifier_method =
-			x509.iter_extensions()
-				.find_map(|ext| match ext.parsed_extension() {
-					x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(key_id) => {
-						Some(KeyIdMethod::PreSpecified(key_id.0.into()))
-					},
-					_ => None,
-				});
-
-		let key_identifier_method = match key_identifier_method {
-			Some(method) => method,
-			None => {
-				#[cfg(not(feature = "crypto"))]
-				return Err(Error::UnsupportedSignatureAlgorithm);
-				#[cfg(feature = "crypto")]
-				KeyIdMethod::Sha256
-			},
-		};
-
 		Ok(CertificateParams {
 			is_ca: IsCa::from_x509(&x509)?,
 			subject_alt_names: SanType::from_x509(&x509)?,
@@ -228,7 +209,7 @@ impl CertificateParams {
 			extended_key_usages: ExtendedKeyUsagePurpose::from_x509(&x509)?,
 			name_constraints: NameConstraints::from_x509(&x509)?,
 			serial_number: Some(x509.serial.to_bytes_be().into()),
-			key_identifier_method,
+			key_identifier_method: KeyIdMethod::from_x509(&x509)?,
 			distinguished_name: DistinguishedName::from_name(&x509.tbs_certificate.subject)?,
 			not_before: x509.validity().not_before.to_datetime(),
 			not_after: x509.validity().not_after.to_datetime(),
