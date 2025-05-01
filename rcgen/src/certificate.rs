@@ -206,7 +206,7 @@ impl CertificateParams {
 		let is_ca = IsCa::from_x509(&x509)?;
 		let validity = x509.validity();
 		let subject_alt_names = SanType::from_x509(&x509)?;
-		let key_usages = Self::convert_x509_key_usages(&x509)?;
+		let key_usages = KeyUsagePurpose::from_x509(&x509)?;
 		let extended_key_usages = Self::convert_x509_extended_key_usages(&x509)?;
 		let name_constraints = NameConstraints::from_x509(&x509)?;
 		let serial_number = Some(x509.serial.to_bytes_be().into());
@@ -245,18 +245,6 @@ impl CertificateParams {
 		})
 	}
 
-	#[cfg(feature = "x509-parser")]
-	fn convert_x509_key_usages(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Vec<KeyUsagePurpose>, Error> {
-		let key_usage = x509
-			.key_usage()
-			.or(Err(Error::CouldNotParseCertificate))?
-			.map(|ext| ext.value);
-		// This x509 parser stores flags in reversed bit BIT STRING order
-		let flags = key_usage.map_or(0u16, |k| k.flags).reverse_bits();
-		Ok(KeyUsagePurpose::from_u16(flags))
-	}
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_extended_key_usages(
 		x509: &x509_parser::certificate::X509Certificate<'_>,

@@ -469,6 +469,17 @@ pub enum KeyUsagePurpose {
 }
 
 impl KeyUsagePurpose {
+	#[cfg(feature = "x509-parser")]
+	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
+		let key_usage = x509
+			.key_usage()
+			.or(Err(Error::CouldNotParseCertificate))?
+			.map(|ext| ext.value);
+		// This x509 parser stores flags in reversed bit BIT STRING order
+		let flags = key_usage.map_or(0u16, |k| k.flags).reverse_bits();
+		Ok(Self::from_u16(flags))
+	}
+
 	/// Encode a key usage as the value of a BIT STRING as defined by RFC 5280.
 	/// [`u16`] is sufficient to encode the largest possible key usage value (two bytes).
 	fn to_u16(&self) -> u16 {
