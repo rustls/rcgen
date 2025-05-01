@@ -203,7 +203,7 @@ impl CertificateParams {
 			.or(Err(Error::CouldNotParseCertificate))?;
 
 		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
-		let is_ca = Self::convert_x509_is_ca(&x509)?;
+		let is_ca = IsCa::from_x509(&x509)?;
 		let validity = x509.validity();
 		let subject_alt_names = Self::convert_x509_subject_alternative_name(&x509)?;
 		let key_usages = Self::convert_x509_key_usages(&x509)?;
@@ -244,36 +244,7 @@ impl CertificateParams {
 			..Default::default()
 		})
 	}
-	#[cfg(feature = "x509-parser")]
-	fn convert_x509_is_ca(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<IsCa, Error> {
-		use x509_parser::extensions::BasicConstraints as B;
 
-		let basic_constraints = x509
-			.basic_constraints()
-			.or(Err(Error::CouldNotParseCertificate))?
-			.map(|ext| ext.value);
-
-		let is_ca = match basic_constraints {
-			Some(B {
-				ca: true,
-				path_len_constraint: Some(n),
-			}) if *n <= u8::MAX as u32 => IsCa::Ca(BasicConstraints::Constrained(*n as u8)),
-			Some(B {
-				ca: true,
-				path_len_constraint: Some(_),
-			}) => return Err(Error::CouldNotParseCertificate),
-			Some(B {
-				ca: true,
-				path_len_constraint: None,
-			}) => IsCa::Ca(BasicConstraints::Unconstrained),
-			Some(B { ca: false, .. }) => IsCa::ExplicitNoCa,
-			None => IsCa::NoCa,
-		};
-
-		Ok(is_ca)
-	}
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_subject_alternative_name(
 		x509: &x509_parser::certificate::X509Certificate<'_>,
@@ -1179,6 +1150,35 @@ pub enum IsCa {
 	ExplicitNoCa,
 	/// The certificate may be used to sign other certificates
 	Ca(BasicConstraints),
+}
+
+impl IsCa {
+	#[cfg(feature = "x509-parser")]
+	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Self, Error> {
+		use x509_parser::extensions::BasicConstraints as B;
+
+		let basic_constraints = x509
+			.basic_constraints()
+			.or(Err(Error::CouldNotParseCertificate))?
+			.map(|ext| ext.value);
+
+		Ok(match basic_constraints {
+			Some(B {
+				ca: true,
+				path_len_constraint: Some(n),
+			}) if *n <= u8::MAX as u32 => Self::Ca(BasicConstraints::Constrained(*n as u8)),
+			Some(B {
+				ca: true,
+				path_len_constraint: Some(_),
+			}) => return Err(Error::CouldNotParseCertificate),
+			Some(B {
+				ca: true,
+				path_len_constraint: None,
+			}) => Self::Ca(BasicConstraints::Unconstrained),
+			Some(B { ca: false, .. }) => Self::ExplicitNoCa,
+			None => Self::NoCa,
+		})
+	}
 }
 
 /// The path length constraint (only relevant for CA certificates)
