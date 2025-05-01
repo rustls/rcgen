@@ -205,7 +205,7 @@ impl CertificateParams {
 		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
 		let is_ca = IsCa::from_x509(&x509)?;
 		let validity = x509.validity();
-		let subject_alt_names = Self::convert_x509_subject_alternative_name(&x509)?;
+		let subject_alt_names = SanType::from_x509(&x509)?;
 		let key_usages = Self::convert_x509_key_usages(&x509)?;
 		let extended_key_usages = Self::convert_x509_extended_key_usages(&x509)?;
 		let name_constraints = NameConstraints::from_x509(&x509)?;
@@ -245,25 +245,6 @@ impl CertificateParams {
 		})
 	}
 
-	#[cfg(feature = "x509-parser")]
-	fn convert_x509_subject_alternative_name(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Vec<SanType>, Error> {
-		let sans = x509
-			.subject_alternative_name()
-			.or(Err(Error::CouldNotParseCertificate))?
-			.map(|ext| &ext.value.general_names);
-
-		if let Some(sans) = sans {
-			let mut subject_alt_names = Vec::with_capacity(sans.len());
-			for san in sans {
-				subject_alt_names.push(SanType::try_from_general(san)?);
-			}
-			Ok(subject_alt_names)
-		} else {
-			Ok(Vec::new())
-		}
-	}
 	#[cfg(feature = "x509-parser")]
 	fn convert_x509_key_usages(
 		x509: &x509_parser::certificate::X509Certificate<'_>,
