@@ -550,6 +550,28 @@ pub enum KeyIdMethod {
 }
 
 impl KeyIdMethod {
+	#[cfg(feature = "x509-parser")]
+	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Self, Error> {
+		let key_identifier_method =
+			x509.iter_extensions()
+				.find_map(|ext| match ext.parsed_extension() {
+					x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(key_id) => {
+						Some(KeyIdMethod::PreSpecified(key_id.0.into()))
+					},
+					_ => None,
+				});
+
+		Ok(match key_identifier_method {
+			Some(method) => method,
+			None => {
+				#[cfg(not(feature = "crypto"))]
+				return Err(Error::UnsupportedSignatureAlgorithm);
+				#[cfg(feature = "crypto")]
+				KeyIdMethod::Sha256
+			},
+		})
+	}
+
 	/// Derive a key identifier for the provided subject public key info using the key ID method.
 	///
 	/// Typically this is a truncated hash over the raw subject public key info, but may
