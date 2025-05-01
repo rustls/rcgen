@@ -202,15 +202,6 @@ impl CertificateParams {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
 			.or(Err(Error::CouldNotParseCertificate))?;
 
-		let dn = DistinguishedName::from_name(&x509.tbs_certificate.subject)?;
-		let is_ca = IsCa::from_x509(&x509)?;
-		let validity = x509.validity();
-		let subject_alt_names = SanType::from_x509(&x509)?;
-		let key_usages = KeyUsagePurpose::from_x509(&x509)?;
-		let extended_key_usages = ExtendedKeyUsagePurpose::from_x509(&x509)?;
-		let name_constraints = NameConstraints::from_x509(&x509)?;
-		let serial_number = Some(x509.serial.to_bytes_be().into());
-
 		let key_identifier_method =
 			x509.iter_extensions()
 				.find_map(|ext| match ext.parsed_extension() {
@@ -231,16 +222,16 @@ impl CertificateParams {
 		};
 
 		Ok(CertificateParams {
-			is_ca,
-			subject_alt_names,
-			key_usages,
-			extended_key_usages,
-			name_constraints,
-			serial_number,
+			is_ca: IsCa::from_x509(&x509)?,
+			subject_alt_names: SanType::from_x509(&x509)?,
+			key_usages: KeyUsagePurpose::from_x509(&x509)?,
+			extended_key_usages: ExtendedKeyUsagePurpose::from_x509(&x509)?,
+			name_constraints: NameConstraints::from_x509(&x509)?,
+			serial_number: Some(x509.serial.to_bytes_be().into()),
 			key_identifier_method,
-			distinguished_name: dn,
-			not_before: validity.not_before.to_datetime(),
-			not_after: validity.not_after.to_datetime(),
+			distinguished_name: DistinguishedName::from_name(&x509.tbs_certificate.subject)?,
+			not_before: x509.validity().not_before.to_datetime(),
+			not_after: x509.validity().not_after.to_datetime(),
 			..Default::default()
 		})
 	}
