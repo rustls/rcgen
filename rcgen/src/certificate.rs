@@ -351,13 +351,13 @@ impl CertificateParams {
 
 		if let Some(constraints) = constraints {
 			let permitted_subtrees = if let Some(permitted) = &constraints.permitted_subtrees {
-				Self::convert_x509_general_subtrees(permitted)?
+				GeneralSubtree::from_x509(permitted)?
 			} else {
 				Vec::new()
 			};
 
 			let excluded_subtrees = if let Some(excluded) = &constraints.excluded_subtrees {
-				Self::convert_x509_general_subtrees(excluded)?
+				GeneralSubtree::from_x509(excluded)?
 			} else {
 				Vec::new()
 			};
@@ -371,36 +371,6 @@ impl CertificateParams {
 		} else {
 			Ok(None)
 		}
-	}
-	#[cfg(feature = "x509-parser")]
-	fn convert_x509_general_subtrees(
-		subtrees: &[x509_parser::extensions::GeneralSubtree<'_>],
-	) -> Result<Vec<GeneralSubtree>, Error> {
-		use x509_parser::extensions::GeneralName;
-
-		let mut result = Vec::new();
-		for subtree in subtrees {
-			let subtree = match &subtree.base {
-				GeneralName::RFC822Name(s) => GeneralSubtree::Rfc822Name(s.to_string()),
-				GeneralName::DNSName(s) => GeneralSubtree::DnsName(s.to_string()),
-				GeneralName::DirectoryName(n) => {
-					GeneralSubtree::DirectoryName(DistinguishedName::from_name(n)?)
-				},
-				GeneralName::IPAddress(bytes) if bytes.len() == 8 => {
-					let addr: [u8; 4] = bytes[..4].try_into().unwrap();
-					let mask: [u8; 4] = bytes[4..].try_into().unwrap();
-					GeneralSubtree::IpAddress(CidrSubnet::V4(addr, mask))
-				},
-				GeneralName::IPAddress(bytes) if bytes.len() == 32 => {
-					let addr: [u8; 16] = bytes[..16].try_into().unwrap();
-					let mask: [u8; 16] = bytes[16..].try_into().unwrap();
-					GeneralSubtree::IpAddress(CidrSubnet::V6(addr, mask))
-				},
-				_ => continue,
-			};
-			result.push(subtree);
-		}
-		Ok(result)
 	}
 
 	/// Write a CSR extension request attribute as defined in [RFC 2985].
@@ -1039,6 +1009,38 @@ pub enum GeneralSubtree {
 }
 
 impl GeneralSubtree {
+	#[cfg(feature = "x509-parser")]
+	fn from_x509(
+		subtrees: &[x509_parser::extensions::GeneralSubtree<'_>],
+	) -> Result<Vec<Self>, Error> {
+		use x509_parser::extensions::GeneralName;
+
+		let mut result = Vec::new();
+		for subtree in subtrees {
+			let subtree = match &subtree.base {
+				GeneralName::RFC822Name(s) => Self::Rfc822Name(s.to_string()),
+				GeneralName::DNSName(s) => Self::DnsName(s.to_string()),
+				GeneralName::DirectoryName(n) => {
+					Self::DirectoryName(DistinguishedName::from_name(n)?)
+				},
+				GeneralName::IPAddress(bytes) if bytes.len() == 8 => {
+					let addr: [u8; 4] = bytes[..4].try_into().unwrap();
+					let mask: [u8; 4] = bytes[4..].try_into().unwrap();
+					Self::IpAddress(CidrSubnet::V4(addr, mask))
+				},
+				GeneralName::IPAddress(bytes) if bytes.len() == 32 => {
+					let addr: [u8; 16] = bytes[..16].try_into().unwrap();
+					let mask: [u8; 16] = bytes[16..].try_into().unwrap();
+					Self::IpAddress(CidrSubnet::V6(addr, mask))
+				},
+				_ => continue,
+			};
+			result.push(subtree);
+		}
+
+		Ok(result)
+	}
+
 	fn tag(&self) -> u64 {
 		// Defined in the GeneralName list in
 		// https://tools.ietf.org/html/rfc5280#page-38
