@@ -2,6 +2,7 @@ name: ci
 
 on:
   push:
+    branches: ['main', 'rel-*', 'ci/*']
   pull_request:
   merge_group:
   schedule:
