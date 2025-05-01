@@ -80,7 +80,7 @@ impl CertificateSigningRequestParams {
 	/// See [`from_der`](Self::from_der) for more details.
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
 	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
-		let csr = pem::parse(pem_str).or(Err(Error::CouldNotParseCertificationRequest))?;
+		let csr = pem::parse(pem_str).map_err(|_| Error::CouldNotParseCertificationRequest)?;
 		Self::from_der(&csr.contents().into())
 	}
 

@@ -182,7 +182,7 @@ impl SanType {
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
 		let sans = x509
 			.subject_alternative_name()
-			.or(Err(Error::CouldNotParseCertificate))?
+			.map_err(|_| Error::CouldNotParseCertificate)?
 			.map(|ext| &ext.value.general_names);
 
 		let Some(sans) = sans else {
@@ -473,7 +473,7 @@ impl KeyUsagePurpose {
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
 		let key_usage = x509
 			.key_usage()
-			.or(Err(Error::CouldNotParseCertificate))?
+			.map_err(|_| Error::CouldNotParseCertificate)?
 			.map(|ext| ext.value);
 		// This x509 parser stores flags in reversed bit BIT STRING order
 		let flags = key_usage.map_or(0u16, |k| k.flags).reverse_bits();
