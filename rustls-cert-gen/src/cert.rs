@@ -250,8 +250,8 @@ impl KeyPairAlgorithm {
 
 				let rng = ring_like::rand::SystemRandom::new();
 				let alg = &rcgen::PKCS_ED25519;
-				let pkcs8_bytes =
-					Ed25519KeyPair::generate_pkcs8(&rng).or(Err(rcgen::Error::RingUnspecified))?;
+				let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rng)
+					.map_err(|_| rcgen::Error::RingUnspecified)?;
 
 				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
 			},
@@ -263,7 +263,7 @@ impl KeyPairAlgorithm {
 				let alg = &rcgen::PKCS_ECDSA_P256_SHA256;
 				let pkcs8_bytes =
 					EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, &rng)
-						.or(Err(rcgen::Error::RingUnspecified))?;
+						.map_err(|_| rcgen::Error::RingUnspecified)?;
 				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
 			},
 			KeyPairAlgorithm::EcdsaP384 => {
@@ -274,7 +274,7 @@ impl KeyPairAlgorithm {
 				let alg = &rcgen::PKCS_ECDSA_P384_SHA384;
 				let pkcs8_bytes =
 					EcdsaKeyPair::generate_pkcs8(&ECDSA_P384_SHA384_ASN1_SIGNING, &rng)
-						.or(Err(rcgen::Error::RingUnspecified))?;
+						.map_err(|_| rcgen::Error::RingUnspecified)?;
 
 				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
 			},
@@ -287,7 +287,7 @@ impl KeyPairAlgorithm {
 				let alg = &rcgen::PKCS_ECDSA_P521_SHA512;
 				let pkcs8_bytes =
 					EcdsaKeyPair::generate_pkcs8(&ECDSA_P521_SHA512_ASN1_SIGNING, &rng)
-						.or(Err(rcgen::Error::RingUnspecified))?;
+						.map_err(|_| rcgen::Error::RingUnspecified)?;
 
 				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
 			},

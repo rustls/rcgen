@@ -172,7 +172,7 @@ impl CertificateParams {
 	/// See [`from_ca_cert_der`](Self::from_ca_cert_der) for more details.
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
 	pub fn from_ca_cert_pem(pem_str: &str) -> Result<Self, Error> {
-		let certificate = pem::parse(pem_str).or(Err(Error::CouldNotParseCertificate))?;
+		let certificate = pem::parse(pem_str).map_err(|_| Error::CouldNotParseCertificate)?;
 		Self::from_ca_cert_der(&certificate.contents().into())
 	}
 
@@ -200,7 +200,7 @@ impl CertificateParams {
 	#[cfg(feature = "x509-parser")]
 	pub fn from_ca_cert_der(ca_cert: &CertificateDer<'_>) -> Result<Self, Error> {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
-			.or(Err(Error::CouldNotParseCertificate))?;
+			.map_err(|_| Error::CouldNotParseCertificate)?;
 
 		Ok(CertificateParams {
 			is_ca: IsCa::from_x509(&x509)?,
@@ -805,7 +805,7 @@ impl ExtendedKeyUsagePurpose {
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
 		let extended_key_usage = x509
 			.extended_key_usage()
-			.or(Err(Error::CouldNotParseCertificate))?
+			.map_err(|_| Error::CouldNotParseCertificate)?
 			.map(|ext| ext.value);
 
 		let mut extended_key_usages = Vec::new();
@@ -872,7 +872,7 @@ impl NameConstraints {
 	) -> Result<Option<Self>, Error> {
 		let constraints = x509
 			.name_constraints()
-			.or(Err(Error::CouldNotParseCertificate))?
+			.map_err(|_| Error::CouldNotParseCertificate)?
 			.map(|ext| ext.value);
 
 		let Some(constraints) = constraints else {
@@ -1097,7 +1097,7 @@ impl IsCa {
 
 		let basic_constraints = x509
 			.basic_constraints()
-			.or(Err(Error::CouldNotParseCertificate))?
+			.map_err(|_| Error::CouldNotParseCertificate)?
 			.map(|ext| ext.value);
 
 		Ok(match basic_constraints {
