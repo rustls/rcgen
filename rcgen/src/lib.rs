@@ -177,6 +177,26 @@ pub enum SanType {
 	OtherName((Vec<u64>, OtherNameValue)),
 }
 
+impl SanType {
+	#[cfg(feature = "x509-parser")]
+	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
+		let sans = x509
+			.subject_alternative_name()
+			.or(Err(Error::CouldNotParseCertificate))?
+			.map(|ext| &ext.value.general_names);
+
+		if let Some(sans) = sans {
+			let mut subject_alt_names = Vec::with_capacity(sans.len());
+			for san in sans {
+				subject_alt_names.push(Self::try_from_general(san)?);
+			}
+			Ok(subject_alt_names)
+		} else {
+			Ok(Vec::new())
+		}
+	}
+}
+
 /// An `OtherName` value, defined in [RFC 5280§4.1.2.4].
 ///
 /// While the standard specifies this could be any ASN.1 type rcgen limits
