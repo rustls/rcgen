@@ -916,28 +916,26 @@ impl NameConstraints {
 			.or(Err(Error::CouldNotParseCertificate))?
 			.map(|ext| ext.value);
 
-		if let Some(constraints) = constraints {
-			let permitted_subtrees = if let Some(permitted) = &constraints.permitted_subtrees {
-				GeneralSubtree::from_x509(permitted)?
-			} else {
-				Vec::new()
-			};
+		let Some(constraints) = constraints else {
+			return Ok(None);
+		};
 
-			let excluded_subtrees = if let Some(excluded) = &constraints.excluded_subtrees {
-				GeneralSubtree::from_x509(excluded)?
-			} else {
-				Vec::new()
-			};
-
-			let name_constraints = Self {
-				permitted_subtrees,
-				excluded_subtrees,
-			};
-
-			Ok(Some(name_constraints))
+		let permitted_subtrees = if let Some(permitted) = &constraints.permitted_subtrees {
+			GeneralSubtree::from_x509(permitted)?
 		} else {
-			Ok(None)
-		}
+			Vec::new()
+		};
+
+		let excluded_subtrees = if let Some(excluded) = &constraints.excluded_subtrees {
+			GeneralSubtree::from_x509(excluded)?
+		} else {
+			Vec::new()
+		};
+
+		Ok(Some(Self {
+			permitted_subtrees,
+			excluded_subtrees,
+		}))
 	}
 
 	fn is_empty(&self) -> bool {
