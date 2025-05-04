@@ -80,13 +80,11 @@ mod test_x509_custom_ext {
 	fn custom_ext() {
 		// Create an imaginary critical custom extension for testing.
 		let test_oid = asn1_rs::Oid::from(&[2, 5, 29, 999999]).unwrap();
+		let oid_vec = test_oid.iter().unwrap().collect::<Vec<u64>>();
 		let test_ext = yasna::construct_der(|writer| {
 			writer.write_utf8_string("🦀 greetz to ferris 🦀");
 		});
-		let mut custom_ext = CustomExtension::from_oid_content(
-			test_oid.iter().unwrap().collect::<Vec<u64>>().as_slice(),
-			test_ext.clone(),
-		);
+		let mut custom_ext = CustomExtension::from_oid_content(&oid_vec, test_ext.clone());
 		custom_ext.set_criticality(true);
 
 		// Generate a certificate with the custom extension, parse it with x509-parser.
@@ -132,6 +130,20 @@ mod test_x509_custom_ext {
 			.expect("missing requested custom extension");
 		assert!(custom_ext.critical);
 		assert_eq!(custom_ext.value, test_ext);
+
+		let csr_params = rcgen::CertificateSigningRequestParams::from_der_custom_validator(
+			test_cert_csr.der(),
+			|ext| {
+				if ext.oid != oid_vec || ext.value != test_ext || !ext.critical {
+					Err(rcgen::Error::UnsupportedExtension)
+				} else {
+					Ok(())
+				}
+			},
+		)
+		.unwrap();
+
+		assert_eq!(csr_params.params, params);
 	}
 }
 
