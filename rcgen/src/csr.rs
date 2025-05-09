@@ -10,7 +10,7 @@ use crate::{
 	Certificate, CertificateParams, Error, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey,
 };
 #[cfg(feature = "x509-parser")]
-use crate::{DistinguishedName, SanType};
+use crate::{CustomExtension, DistinguishedName, SanType};
 
 /// A public key, extracted from a CSR
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -65,6 +65,18 @@ impl From<CertificateSigningRequest> for CertificateSigningRequestDer<'static> {
 	}
 }
 
+/// A unsupported extension.
+#[derive(Debug, Clone, Eq, PartialEq)]
+#[cfg(feature = "x509-parser")]
+pub struct UnsupportedExtension<'a> {
+	/// The Object ID of the extension.
+	pub oid: Vec<u64>,
+	/// The unparsed value.
+	pub value: &'a [u8],
+	/// Whether the extension is critical.
+	pub critical: bool,
+}
+
 /// Parameters for a certificate signing request
 #[derive(Debug)]
 pub struct CertificateSigningRequestParams {
@@ -84,6 +96,23 @@ impl CertificateSigningRequestParams {
 		Self::from_der(&csr.contents().into())
 	}
 
+	/// Parse a certificate signing request from the ASCII PEM format
+	/// using the provided validator function to handle unknown extension
+	/// types.
+	///
+	/// The validator function must return an error if the attribute OID or value
+	/// is incorrect.
+	///
+	/// See [`from_der`](Self::from_der) for more details.
+	#[cfg(all(feature = "pem", feature = "x509-parser"))]
+	pub fn from_pem_custom_validator<F>(pem_str: &str, valid_fn: F) -> Result<Self, Error>
+	where
+		F: FnMut(&UnsupportedExtension<'_>) -> Result<(), Error>,
+	{
+		let csr = pem::parse(pem_str).or(Err(Error::CouldNotParseCertificationRequest))?;
+		Self::from_der_custom_validator(&csr.contents().into(), valid_fn)
+	}
+
 	/// Parse a certificate signing request from DER-encoded bytes
 	///
 	/// Currently, this only supports the `Subject Alternative Name` extension.
@@ -96,6 +125,24 @@ impl CertificateSigningRequestParams {
 	/// [`rustls_pemfile::csr()`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.csr.html
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(csr: &CertificateSigningRequestDer<'_>) -> Result<Self, Error> {
+		Self::from_der_custom_validator(csr, |_| Ok(()))
+	}
+
+	/// Parse a certificate signing request from DER-encoded bytes using the provided
+	/// validator function to handle unknown extension types.
+	///
+	/// The validator function must return an error if the attribute OID or value
+	/// is incorrect.
+	///
+	/// See [`from_der`](Self::from_der) for more details.
+	#[cfg(feature = "x509-parser")]
+	pub fn from_der_custom_validator<F>(
+		csr: &CertificateSigningRequestDer<'_>,
+		mut valid_fn: F,
+	) -> Result<Self, Error>
+	where
+		F: FnMut(&UnsupportedExtension<'_>) -> Result<(), Error>,
+	{
 		use crate::KeyUsagePurpose;
 		use x509_parser::prelude::FromDer;
 
@@ -171,7 +218,25 @@ impl CertificateSigningRequestParams {
 							return Err(Error::UnsupportedExtension);
 						}
 					},
-					_ => return Err(Error::UnsupportedExtension),
+					x509_parser::extensions::ParsedExtension::UnsupportedExtension(val) => {
+						let oid: Vec<u64> = match val.oid.iter() {
+							Some(iter) => iter.collect(),
+							None => return Err(Error::UnsupportedExtension),
+						};
+						let ext = UnsupportedExtension {
+							oid,
+							value: val.value,
+							critical: val.critical,
+						};
+						valid_fn(&ext)?;
+						let mut ext =
+							CustomExtension::from_oid_content(&ext.oid, val.value.to_vec());
+						ext.set_criticality(val.critical);
+						params.custom_extensions.push(ext);
+					},
+					_ => {
+						return Err(Error::UnsupportedExtension);
+					},
 				}
 			}
 		}
