@@ -968,7 +968,7 @@ impl GeneralSubtree {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[allow(missing_docs)]
 /// CIDR subnet, as per [RFC 4632](https://tools.ietf.org/html/rfc4632)
 ///
@@ -1080,7 +1080,7 @@ pub fn date_time_ymd(year: i32, month: u8, day: u8) -> OffsetDateTime {
 }
 
 /// Whether the certificate is allowed to sign other certificates
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum IsCa {
 	/// The certificate can only sign itself
 	NoCa,
@@ -1123,7 +1123,7 @@ impl IsCa {
 ///
 /// Sets an optional upper limit on the length of the intermediate certificate chain
 /// length allowed for this CA certificate (not including the end entity certificate).
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BasicConstraints {
 	/// No constraint
 	Unconstrained,
