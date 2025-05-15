@@ -13,7 +13,7 @@ use crate::{
 use crate::{DistinguishedName, SanType};
 
 /// A public key, extracted from a CSR
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PublicKey {
 	raw: Vec<u8>,
 	alg: &'static SignatureAlgorithm,
@@ -37,7 +37,7 @@ impl PublicKeyData for PublicKey {
 }
 
 /// A certificate signing request (CSR) that can be encoded to PEM or DER.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CertificateSigningRequest {
 	pub(crate) der: CertificateSigningRequestDer<'static>,
 }
@@ -66,7 +66,7 @@ impl From<CertificateSigningRequest> for CertificateSigningRequestDer<'static> {
 }
 
 /// Parameters for a certificate signing request
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CertificateSigningRequestParams {
 	/// Parameters for the certificate to be signed.
 	pub params: CertificateParams,

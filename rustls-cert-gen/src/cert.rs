@@ -37,7 +37,7 @@ impl PemCertifiedKey {
 
 /// Builder to configure TLS [CertificateParams] to be finalized
 /// into either a [Ca] or an [EndEntity].
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct CertificateBuilder {
 	params: CertificateParams,
 	alg: KeyPairAlgorithm,
@@ -80,6 +80,7 @@ impl CertificateBuilder {
 }
 
 /// [CertificateParams] from which an [Ca] [Certificate] can be built
+#[derive(Clone)]
 pub struct CaBuilder {
 	params: CertificateParams,
 	alg: KeyPairAlgorithm,
@@ -161,6 +162,7 @@ impl EndEntity {
 }
 
 /// [CertificateParams] from which an [EndEntity] [Certificate] can be built
+#[derive(Clone)]
 pub struct EndEntityBuilder {
 	params: CertificateParams,
 	alg: KeyPairAlgorithm,

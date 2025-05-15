@@ -40,10 +40,10 @@ fn verify_cert_basic(cert: &Certificate) {
 
 // TODO implement Debug manually instead of
 // deriving it
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct PipeInner([Vec<u8>; 2]);
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct PipeEnd {
 	read_pos: usize,
 	/// Which end of the pipe
