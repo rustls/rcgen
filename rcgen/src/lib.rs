@@ -430,6 +430,7 @@ impl DistinguishedName {
 /**
 Iterator over [`DistinguishedName`] entries
 */
+#[derive(Clone)]
 pub struct DistinguishedNameIterator<'a> {
 	distinguished_name: &'a DistinguishedName,
 	iter: std::slice::Iter<'a, DnType>,
