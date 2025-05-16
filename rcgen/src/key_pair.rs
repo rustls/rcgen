@@ -264,7 +264,13 @@ impl KeyPair {
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
 			#[cfg(feature = "aws_lc_rs")]
-			if alg == &PKCS_ECDSA_P521_SHA512 {
+			if alg == &PKCS_ECDSA_P256K1_SHA256 {
+				KeyPairKind::Ec(ecdsa_from_pkcs8(
+					&signature::ECDSA_P256K1_SHA256_ASN1_SIGNING,
+					&serialized_der,
+					rng,
+				)?)
+			} else if alg == &PKCS_ECDSA_P521_SHA512 {
 				KeyPairKind::Ec(ecdsa_from_pkcs8(
 					&signature::ECDSA_P521_SHA512_ASN1_SIGNING,
 					&serialized_der,
@@ -784,6 +790,8 @@ mod test {
 		for alg in [
 			&PKCS_ED25519,
 			&PKCS_ECDSA_P256_SHA256,
+			#[cfg(feature = "aws_lc_rs")]
+			&PKCS_ECDSA_P256K1_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
 			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_ECDSA_P521_SHA512,
