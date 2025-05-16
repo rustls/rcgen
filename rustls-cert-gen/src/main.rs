@@ -40,7 +40,7 @@ fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-#[derive(Clone, Debug, Bpaf)]
+#[derive(Clone, Debug, Bpaf, PartialEq, Eq)]
 #[bpaf(options)]
 /// rustls-cert-gen TLS Certificate Generator
 struct Options {

@@ -11,7 +11,7 @@ use aws_lc_rs as ring_like;
 #[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
 use ring as ring_like;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// PEM serialized Certificate and PEM serialized corresponding private key
 pub struct PemCertifiedKey {
 	pub cert_pem: String,
@@ -37,7 +37,7 @@ impl PemCertifiedKey {
 
 /// Builder to configure TLS [CertificateParams] to be finalized
 /// into either a [Ca] or an [EndEntity].
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct CertificateBuilder {
 	params: CertificateParams,
 	alg: KeyPairAlgorithm,
@@ -80,7 +80,7 @@ impl CertificateBuilder {
 }
 
 /// [CertificateParams] from which an [Ca] [Certificate] can be built
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct CaBuilder {
 	params: CertificateParams,
 	alg: KeyPairAlgorithm,
@@ -162,7 +162,7 @@ impl EndEntity {
 }
 
 /// [CertificateParams] from which an [EndEntity] [Certificate] can be built
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct EndEntityBuilder {
 	params: CertificateParams,
 	alg: KeyPairAlgorithm,
@@ -218,7 +218,7 @@ impl EndEntityBuilder {
 }
 
 /// Supported Keypair Algorithms
-#[derive(Clone, Copy, Debug, Default, Bpaf, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Bpaf, PartialEq, Eq)]
 pub enum KeyPairAlgorithm {
 	Rsa,
 	Ed25519,

@@ -87,6 +87,7 @@ pub mod string;
 pub type RcgenError = Error;
 
 /// An issued certificate, together with the subject keypair.
+#[derive(PartialEq, Eq)]
 pub struct CertifiedKey<S: SigningKey> {
 	/// An issued certificate.
 	pub cert: Certificate,
@@ -132,6 +133,7 @@ pub fn generate_simple_self_signed(
 	Ok(CertifiedKey { cert, key_pair })
 }
 
+#[derive(PartialEq, Eq)]
 struct Issuer<'a, S> {
 	distinguished_name: &'a DistinguishedName,
 	key_identifier_method: &'a KeyIdMethod,
