@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// An issued certificate
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Certificate {
 	pub(crate) der: CertificateDer<'static>,
 }
