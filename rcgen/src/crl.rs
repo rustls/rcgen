@@ -95,7 +95,7 @@ impl From<CertificateRevocationList> for CertificateRevocationListDer<'static> {
 /// A certificate revocation list (CRL) distribution point, to be included in a certificate's
 /// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13) or
 /// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5)
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct CrlDistributionPoint {
 	/// One or more URI distribution point names, indicating a place the current CRL can
 	/// be retrieved. When present, SHOULD include at least one LDAP or HTTP URI.
@@ -142,7 +142,7 @@ fn write_distribution_point_name_uris<'a>(
 /// See [RFC 5280 §5.3.1][1]
 ///
 /// [1]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 #[allow(missing_docs)] // Not much to add above the code name.
 pub enum RevocationReason {
 	Unspecified = 0,
@@ -159,7 +159,7 @@ pub enum RevocationReason {
 }
 
 /// Parameters used for certificate revocation list (CRL) generation
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct CertificateRevocationListParams {
 	/// Issue date of the CRL.
 	pub this_update: OffsetDateTime,
@@ -293,7 +293,7 @@ impl CertificateRevocationListParams {
 
 /// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
 /// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct CrlIssuingDistributionPoint {
 	/// The CRL's distribution point, containing a sequence of URIs the CRL can be retrieved from.
 	pub distribution_point: CrlDistributionPoint,
@@ -327,7 +327,7 @@ impl CrlIssuingDistributionPoint {
 }
 
 /// Describes the scope of a CRL for an issuing distribution point extension.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum CrlScope {
 	/// The CRL contains only end-entity user certificates.
 	UserCertsOnly,
@@ -336,7 +336,7 @@ pub enum CrlScope {
 }
 
 /// Parameters used for describing a revoked certificate included in a [`CertificateRevocationList`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct RevokedCertParams {
 	/// Serial number identifying the revoked certificate.
 	pub serial_number: SerialNumber,
