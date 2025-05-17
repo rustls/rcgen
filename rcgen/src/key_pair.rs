@@ -634,7 +634,7 @@ impl<T> ExternalError<T> for Result<T, pem::PemError> {
 }
 
 /// A public key
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct SubjectPublicKeyInfo {
 	pub(crate) alg: &'static SignatureAlgorithm,
 	pub(crate) subject_public_key: Vec<u8>,

@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 /// The error type of the rcgen crate
 pub enum Error {
@@ -104,7 +104,7 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 /// Invalid ASN.1 string type
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum InvalidAsn1String {
 	/// Invalid PrintableString type
