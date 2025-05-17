@@ -34,7 +34,7 @@ println!("{}", key_pair.serialize_pem());
 #![warn(unreachable_pub)]
 
 use std::collections::HashMap;
-use std::fmt;
+use std::fmt::{self, Debug};
 use std::hash::Hash;
 use std::net::IpAddr;
 #[cfg(feature = "x509-parser")]
@@ -147,6 +147,24 @@ impl<'a, S: SigningKey> Issuer<'a, S> {
 			key_usages: &params.key_usages,
 			key_pair,
 		}
+	}
+}
+
+impl std::fmt::Debug for Issuer<'_, KeyPair> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		// The key pair is omitted from the debug output as it contains secret information.
+		let Issuer {
+			distinguished_name,
+			key_identifier_method,
+			key_usages,
+			key_pair: _,
+		} = self;
+
+		f.debug_struct("Issuer")
+			.field("distinguished_name", distinguished_name)
+			.field("key_identifier_method", key_identifier_method)
+			.field("key_usages", key_usages)
+			.finish()
 	}
 }
 
@@ -430,7 +448,7 @@ impl DistinguishedName {
 /**
 Iterator over [`DistinguishedName`] entries
 */
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DistinguishedNameIterator<'a> {
 	distinguished_name: &'a DistinguishedName,
 	iter: std::slice::Iter<'a, DnType>,
