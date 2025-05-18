@@ -45,7 +45,7 @@ use crate::{Error, InvalidAsn1String};
 ///
 /// [ASCII printable characters]: https://en.wikipedia.org/wiki/ASCII#Printable_characters
 /// [ASN.1's `PrintableString`]: https://en.wikipedia.org/wiki/PrintableString
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct PrintableString(String);
 
 impl PrintableString {
@@ -172,7 +172,7 @@ impl PartialEq<&String> for PrintableString {
 /// For UTF-8, use [`String`][`std::string::String`].
 ///
 /// [International Alphabet No. 5 (IA5)]: https://en.wikipedia.org/wiki/T.50_(standard)
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct Ia5String(String);
 
 impl Ia5String {
@@ -279,7 +279,7 @@ impl PartialEq<&String> for Ia5String {
 ///
 /// [mailing list]: https://www.mail-archive.com/asn1@asn1.org/msg00460.html
 /// [RFC 5280]: https://datatracker.ietf.org/doc/html/rfc5280#page-25
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct TeletexString(String);
 
 impl TeletexString {
@@ -394,7 +394,7 @@ impl PartialEq<&String> for TeletexString {
 /// SHOULD NOT be used for certificates for new subjects.
 ///
 /// [RFC 5280]: https://datatracker.ietf.org/doc/html/rfc5280#page-25
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct BmpString(Vec<u8>);
 
 impl BmpString {
@@ -513,7 +513,7 @@ impl FromStr for BmpString {
 /// SHOULD NOT be used for certificates for new subjects.
 ///
 /// [RFC 5280]: https://datatracker.ietf.org/doc/html/rfc5280#page-25
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct UniversalString(Vec<u8>);
 
 impl UniversalString {

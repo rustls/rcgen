@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::net::IpAddr;
 use std::str::FromStr;
 
@@ -731,7 +732,7 @@ impl CustomExtension {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 #[non_exhaustive]
 /// The attribute type of a distinguished name entry
 pub enum DnType {
@@ -779,7 +780,7 @@ impl DnType {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 /// One of the purposes contained in the [extended key usage extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.12)
 pub enum ExtendedKeyUsagePurpose {
 	/// anyExtendedKeyUsage
@@ -968,7 +969,7 @@ impl GeneralSubtree {
 	}
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[allow(missing_docs)]
 /// CIDR subnet, as per [RFC 4632](https://tools.ietf.org/html/rfc4632)
 ///
@@ -1080,7 +1081,7 @@ pub fn date_time_ymd(year: i32, month: u8, day: u8) -> OffsetDateTime {
 }
 
 /// Whether the certificate is allowed to sign other certificates
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IsCa {
 	/// The certificate can only sign itself
 	NoCa,
@@ -1129,6 +1130,33 @@ pub enum BasicConstraints {
 	Unconstrained,
 	/// Constrain to the contained number of intermediate certificates
 	Constrained(u8),
+}
+
+impl PartialOrd for BasicConstraints {
+	/// Compares two `BasicConstraints` values
+	///
+	/// The ordering has been defined as follows:
+	/// * `Constrained(n)` < `Unconstrained`
+	/// * `Constrained(n)` < `Constrained(m)` if `n < m`
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl Ord for BasicConstraints {
+	/// Compares two `BasicConstraints` values
+	///
+	/// The ordering has been defined as follows:
+	/// * `Constrained(n)` < `Unconstrained`
+	/// * `Constrained(n)` < `Constrained(m)` if `n < m`
+	fn cmp(&self, other: &Self) -> Ordering {
+		match (self, other) {
+			(Self::Constrained(a), Self::Constrained(b)) => a.cmp(b),
+			(Self::Constrained(_), Self::Unconstrained) => Ordering::Less,
+			(Self::Unconstrained, Self::Constrained(_)) => Ordering::Greater,
+			(Self::Unconstrained, Self::Unconstrained) => Ordering::Equal,
+		}
+	}
 }
 
 #[cfg(test)]

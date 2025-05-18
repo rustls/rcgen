@@ -142,7 +142,7 @@ fn write_distribution_point_name_uris<'a>(
 /// See [RFC 5280 §5.3.1][1]
 ///
 /// [1]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 #[allow(missing_docs)] // Not much to add above the code name.
 pub enum RevocationReason {
 	Unspecified = 0,
@@ -327,7 +327,7 @@ impl CrlIssuingDistributionPoint {
 }
 
 /// Describes the scope of a CRL for an issuing distribution point extension.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 pub enum CrlScope {
 	/// The CRL contains only end-entity user certificates.
 	UserCertsOnly,

@@ -17,7 +17,7 @@ pub(crate) enum SignAlgo {
 	Rsa(&'static dyn RsaEncoding),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum SignatureAlgorithmParams {
 	/// Omit the parameters
 	None,

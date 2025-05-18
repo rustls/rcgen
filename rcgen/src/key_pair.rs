@@ -573,7 +573,7 @@ impl TryFrom<&PrivateKeyDer<'_>> for KeyPair {
 
 /// The key size used for RSA key generation
 #[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum RsaKeySize {
 	/// 2048 bits

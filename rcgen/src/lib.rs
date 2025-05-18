@@ -164,7 +164,7 @@ const ENCODE_CONFIG: pem::EncodeConfig = {
 	pem::EncodeConfig::new().set_line_ending(line_ending)
 };
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 #[allow(missing_docs)]
 #[non_exhaustive]
 /// The type of subject alt name
@@ -204,7 +204,7 @@ impl SanType {
 /// use cases, for instance smart card user principal names (UPN).
 ///
 /// [RFC 5280§4.1.2.4]: https://datatracker.ietf.org/doc/html/rfc5280#section-4.1.2.4
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 #[non_exhaustive]
 pub enum OtherNameValue {
 	/// A string encoded using UTF-8
@@ -295,7 +295,7 @@ impl SanType {
 }
 
 /// A distinguished name entry
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 #[non_exhaustive]
 pub enum DnValue {
 	/// A string encoded using UCS-2
@@ -447,7 +447,7 @@ impl<'a> Iterator for DistinguishedNameIterator<'a> {
 }
 
 /// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum KeyUsagePurpose {
 	/// digitalSignature
 	DigitalSignature,
@@ -534,7 +534,7 @@ impl KeyUsagePurpose {
 /// This can be helpful when working with an existing `Certificate`.
 ///
 /// [RFC 7093]: https://www.rfc-editor.org/rfc/rfc7093
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 #[non_exhaustive]
 pub enum KeyIdMethod {
 	/// RFC 7093 method 1 - a truncated SHA256 digest.
@@ -729,7 +729,7 @@ impl zeroize::Zeroize for KeyPair {
 }
 
 /// A certificate serial number.
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct SerialNumber {
 	inner: Vec<u8>,
 }
