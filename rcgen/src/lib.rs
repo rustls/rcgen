@@ -20,9 +20,9 @@ use rcgen::{generate_simple_self_signed, CertifiedKey};
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let CertifiedKey { cert, key_pair } = generate_simple_self_signed(subject_alt_names).unwrap();
+let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names).unwrap();
 println!("{}", cert.pem());
-println!("{}", key_pair.serialize_pem());
+println!("{}", signing_key.serialize_pem());
 # }
 ```"##
 )]
@@ -90,8 +90,8 @@ pub type RcgenError = Error;
 pub struct CertifiedKey<S: SigningKey> {
 	/// An issued certificate.
 	pub cert: Certificate,
-	/// The certificate's subject key pair.
-	pub key_pair: S,
+	/// The certificate's subject signing key.
+	pub signing_key: S,
 }
 
 /**
@@ -115,11 +115,11 @@ use rcgen::{generate_simple_self_signed, CertifiedKey};
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let CertifiedKey { cert, key_pair } = generate_simple_self_signed(subject_alt_names).unwrap();
+let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names).unwrap();
 
 // The certificate is now valid for localhost and the domain "hello.world.example"
 println!("{}", cert.pem());
-println!("{}", key_pair.serialize_pem());
+println!("{}", signing_key.serialize_pem());
 # }
 ```
 "##
@@ -127,25 +127,25 @@ println!("{}", key_pair.serialize_pem());
 pub fn generate_simple_self_signed(
 	subject_alt_names: impl Into<Vec<String>>,
 ) -> Result<CertifiedKey<KeyPair>, Error> {
-	let key_pair = KeyPair::generate()?;
-	let cert = CertificateParams::new(subject_alt_names)?.self_signed(&key_pair)?;
-	Ok(CertifiedKey { cert, key_pair })
+	let signing_key = KeyPair::generate()?;
+	let cert = CertificateParams::new(subject_alt_names)?.self_signed(&signing_key)?;
+	Ok(CertifiedKey { cert, signing_key })
 }
 
 struct Issuer<'a, S> {
 	distinguished_name: &'a DistinguishedName,
 	key_identifier_method: &'a KeyIdMethod,
 	key_usages: &'a [KeyUsagePurpose],
-	key_pair: &'a S,
+	signing_key: &'a S,
 }
 
 impl<'a, S: SigningKey> Issuer<'a, S> {
-	fn new(params: &'a CertificateParams, key_pair: &'a S) -> Self {
+	fn new(params: &'a CertificateParams, signing_key: &'a S) -> Self {
 		Self {
 			distinguished_name: &params.distinguished_name,
 			key_identifier_method: &params.key_identifier_method,
 			key_usages: &params.key_usages,
-			key_pair,
+			signing_key,
 		}
 	}
 }
@@ -158,14 +158,14 @@ impl<'a, S: SigningKey> fmt::Debug for Issuer<'a, S> {
 			distinguished_name,
 			key_identifier_method,
 			key_usages,
-			key_pair: _,
+			signing_key: _,
 		} = self;
 
 		f.debug_struct("Issuer")
 			.field("distinguished_name", distinguished_name)
 			.field("key_identifier_method", key_identifier_method)
 			.field("key_usages", key_usages)
-			.field("key_pair", &"[elided]")
+			.field("signing_key", &"[elided]")
 			.finish()
 	}
 }

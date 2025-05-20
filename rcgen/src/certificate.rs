@@ -153,10 +153,10 @@ impl CertificateParams {
 	///
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
-	pub fn self_signed(&self, key_pair: &impl SigningKey) -> Result<Certificate, Error> {
-		let issuer = Issuer::new(self, key_pair);
+	pub fn self_signed(&self, signing_key: &impl SigningKey) -> Result<Certificate, Error> {
+		let issuer = Issuer::new(self, signing_key);
 		Ok(Certificate {
-			der: self.serialize_der_with_signer(key_pair, issuer)?,
+			der: self.serialize_der_with_signer(signing_key, issuer)?,
 		})
 	}
 
@@ -363,7 +363,7 @@ impl CertificateParams {
 			use_authority_key_identifier_extension,
 			key_identifier_method,
 		} = self;
-		// - alg and key_pair will be used by the caller
+		// - subject_key will be used by the caller
 		// - not_before and not_after cannot be put in a CSR
 		// - key_identifier_method is here because self.write_extended_key_usage uses it
 		// - There might be a use case for specifying the key identifier
@@ -429,7 +429,7 @@ impl CertificateParams {
 		pub_key: &K,
 		issuer: Issuer<'_, impl SigningKey>,
 	) -> Result<CertificateDer<'static>, Error> {
-		let der = sign_der(issuer.key_pair, |writer| {
+		let der = sign_der(issuer.signing_key, |writer| {
 			let pub_key_spki = pub_key.subject_public_key_info();
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
@@ -453,7 +453,10 @@ impl CertificateParams {
 				}
 			};
 			// Write signature algorithm
-			issuer.key_pair.algorithm().write_alg_ident(writer.next());
+			issuer
+				.signing_key
+				.algorithm()
+				.write_alg_ident(writer.next());
 			// Write issuer name
 			write_distinguished_name(writer.next(), &issuer.distinguished_name);
 			// Write validity
@@ -505,7 +508,7 @@ impl CertificateParams {
 					#[cfg(feature = "crypto")]
 					_ => issuer
 						.key_identifier_method
-						.derive(issuer.key_pair.subject_public_key_info()),
+						.derive(issuer.signing_key.subject_public_key_info()),
 				},
 			);
 		}
