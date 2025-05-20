@@ -119,12 +119,12 @@ jobs:
     - name: Run the tests
       run: cargo test
     - name: Run the tests with x509-parser enabled
-      run: cargo test --verbose --features x509-parser
+      run: cargo test --features x509-parser
     - name: Run the tests with aws_lc_rs backend enabled
-      run: cargo test --verbose --no-default-features --features aws_lc_rs,pem
+      run: cargo test --no-default-features --features aws_lc_rs,pem
       # rustls-cert-gen require either aws_lc_rs or ring feature
     - name: Run the tests with no features enabled
-      run: cargo test -p rcgen --verbose --no-default-features
+      run: cargo test -p rcgen --no-default-features
 
   build:
     strategy:
@@ -161,9 +161,9 @@ jobs:
     - name: Run the tests
       run: cargo test
     - name: Run the tests with x509-parser enabled
-      run: cargo test --verbose --features x509-parser
+      run: cargo test --features x509-parser
     - name: Run the tests with aws_lc_rs backend enabled
-      run: cargo test --verbose --no-default-features --features aws_lc_rs,pem
+      run: cargo test --no-default-features --features aws_lc_rs,pem
 
   # Build rustls-cert-gen as a standalone package, see this PR for why it's needed:
   # https://github.com/rustls/rcgen/pull/206#pullrequestreview-1816197358
