@@ -443,7 +443,8 @@ mod tests {
 		check_signature(&cert, &issuer);
 		Ok(())
 	}
-	pub fn check_signature(cert: &X509Certificate<'_>, issuer: &X509Certificate<'_>) {
+
+	fn check_signature(cert: &X509Certificate<'_>, issuer: &X509Certificate<'_>) {
 		let verified = cert.verify_signature(Some(issuer.public_key())).is_ok();
 		assert!(verified);
 	}
