@@ -165,6 +165,7 @@ impl<'a, S: SigningKey> Debug for Issuer<'a, S> {
 			.field("distinguished_name", distinguished_name)
 			.field("key_identifier_method", key_identifier_method)
 			.field("key_usages", key_usages)
+			.field("key_pair", &"[elided]")
 			.finish()
 	}
 }
