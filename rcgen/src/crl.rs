@@ -30,7 +30,7 @@ use crate::{
 /// }
 /// #[cfg(not(feature = "crypto"))]
 /// impl PublicKeyData for MyKeyPair {
-///	  fn der_bytes(&self) -> &[u8] { &self.public_key }
+///   fn der_bytes(&self) -> &[u8] { &self.public_key }
 ///   fn algorithm(&self) -> &'static SignatureAlgorithm { &PKCS_ED25519 }
 /// }
 /// # fn main () {
@@ -228,7 +228,7 @@ impl CertificateRevocationListParams {
 			// Write issuer.
 			// RFC 5280 §5.1.2.3:
 			//   The issuer field MUST contain a non-empty X.500 distinguished name (DN).
-			write_distinguished_name(writer.next(), &issuer.distinguished_name);
+			write_distinguished_name(writer.next(), issuer.distinguished_name);
 
 			// Write thisUpdate date.
 			// RFC 5280 §5.1.2.4:

@@ -29,7 +29,6 @@ println!("{}", signing_key.serialize_pem());
 #![forbid(unsafe_code)]
 #![forbid(non_ascii_idents)]
 #![deny(missing_docs)]
-#![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![warn(unreachable_pub)]
 
@@ -503,7 +502,7 @@ impl KeyUsagePurpose {
 
 	/// Encode a key usage as the value of a BIT STRING as defined by RFC 5280.
 	/// [`u16`] is sufficient to encode the largest possible key usage value (two bytes).
-	fn to_u16(&self) -> u16 {
+	fn to_u16(self) -> u16 {
 		const FLAG: u16 = 0b1000_0000_0000_0000;
 		FLAG >> match self {
 			KeyUsagePurpose::DigitalSignature => 0,
@@ -602,6 +601,7 @@ impl KeyIdMethod {
 	/// X.509v3 extensions.
 	#[allow(unused_variables)]
 	pub(crate) fn derive(&self, subject_public_key_info: impl AsRef<[u8]>) -> Vec<u8> {
+		#[cfg_attr(not(feature = "crypto"), expect(clippy::let_unit_value))]
 		let digest_method = match &self {
 			#[cfg(feature = "crypto")]
 			Self::Sha256 => &digest::SHA256,
@@ -754,6 +754,7 @@ pub struct SerialNumber {
 	inner: Vec<u8>,
 }
 
+#[expect(clippy::len_without_is_empty)]
 impl SerialNumber {
 	/// Create a serial number from the given byte slice.
 	pub fn from_slice(bytes: &[u8]) -> SerialNumber {
