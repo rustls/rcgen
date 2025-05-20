@@ -34,7 +34,7 @@ println!("{}", key_pair.serialize_pem());
 #![warn(unreachable_pub)]
 
 use std::collections::HashMap;
-use std::fmt::{self, Debug};
+use std::fmt;
 use std::hash::Hash;
 use std::net::IpAddr;
 #[cfg(feature = "x509-parser")]
@@ -150,7 +150,7 @@ impl<'a, S: SigningKey> Issuer<'a, S> {
 	}
 }
 
-impl<'a, S: SigningKey> Debug for Issuer<'a, S> {
+impl<'a, S: SigningKey> fmt::Debug for Issuer<'a, S> {
 	/// Formats the issuer information without revealing the key pair.
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		// The key pair is omitted from the debug output as it contains secret information.

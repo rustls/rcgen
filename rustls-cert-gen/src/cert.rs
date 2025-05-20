@@ -145,7 +145,7 @@ impl Ca {
 	}
 }
 
-impl std::fmt::Debug for Ca {
+impl fmt::Debug for Ca {
 	/// Formats the `Ca` information without revealing the key pair.
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		// The key pair is omitted from the debug output as it contains secret information.
@@ -179,7 +179,7 @@ impl EndEntity {
 	}
 }
 
-impl std::fmt::Debug for EndEntity {
+impl fmt::Debug for EndEntity {
 	/// Formats the `EndEntity` information without revealing the key pair.
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		// The key pair is omitted from the debug output as it contains secret information.
