@@ -260,19 +260,6 @@ pub enum KeyPairAlgorithm {
 	EcdsaP521,
 }
 
-impl fmt::Display for KeyPairAlgorithm {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			KeyPairAlgorithm::Rsa => write!(f, "rsa"),
-			KeyPairAlgorithm::Ed25519 => write!(f, "ed25519"),
-			KeyPairAlgorithm::EcdsaP256 => write!(f, "ecdsa-p256"),
-			KeyPairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
-			#[cfg(feature = "aws_lc_rs")]
-			KeyPairAlgorithm::EcdsaP521 => write!(f, "ecdsa-p521"),
-		}
-	}
-}
-
 impl KeyPairAlgorithm {
 	/// Return an `rcgen::KeyPair` for the given varient
 	fn to_key_pair(self) -> Result<rcgen::KeyPair, rcgen::Error> {
@@ -324,6 +311,19 @@ impl KeyPairAlgorithm {
 
 				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
 			},
+		}
+	}
+}
+
+impl fmt::Display for KeyPairAlgorithm {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			KeyPairAlgorithm::Rsa => write!(f, "rsa"),
+			KeyPairAlgorithm::Ed25519 => write!(f, "ed25519"),
+			KeyPairAlgorithm::EcdsaP256 => write!(f, "ecdsa-p256"),
+			KeyPairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
+			#[cfg(feature = "aws_lc_rs")]
+			KeyPairAlgorithm::EcdsaP521 => write!(f, "ecdsa-p521"),
 		}
 	}
 }
