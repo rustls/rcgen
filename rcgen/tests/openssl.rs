@@ -1,4 +1,4 @@
-#![cfg(feature = "pem")]
+#![cfg(all(unix, feature = "pem"))]
 
 use std::cell::RefCell;
 use std::io::{Error, ErrorKind, Read, Result as ioResult, Write};

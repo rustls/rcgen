@@ -114,8 +114,6 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
     - name: Install NASM for aws-lc-rs on Windows
       uses: ilammy/setup-nasm@v1
-    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-    - run: vcpkg install openssl:x64-windows-static-md
     - name: Run cargo check
       run: cargo check --all-targets
     - name: Run the tests

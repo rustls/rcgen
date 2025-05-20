@@ -1,3 +1,4 @@
+#[cfg(unix)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	use rcgen::{date_time_ymd, CertificateParams, DistinguishedName};
 	use std::fmt::Write;
@@ -30,4 +31,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	fs::write("certs/key.pem", key_pair.serialize_pem().as_bytes())?;
 	fs::write("certs/key.der", key_pair.serialize_der())?;
 	Ok(())
+}
+
+#[cfg(not(unix))]
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+	// Due to the support burden of running OpenSSL on Windows,
+	// we only support the OpenSSL backend on Unix-like systems.
+	// It should still work on Windows if you have OpenSSL installed.
+	unimplemented!("OpenSSL backend is not supported on Windows");
 }
