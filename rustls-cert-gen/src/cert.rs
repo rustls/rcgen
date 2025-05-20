@@ -37,7 +37,7 @@ impl PemCertifiedKey {
 
 /// Builder to configure TLS [CertificateParams] to be finalized
 /// into either a [Ca] or an [EndEntity].
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct CertificateBuilder {
 	params: CertificateParams,
 	alg: KeyPairAlgorithm,
@@ -80,7 +80,7 @@ impl CertificateBuilder {
 }
 
 /// [CertificateParams] from which an [Ca] [Certificate] can be built
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CaBuilder {
 	params: CertificateParams,
 	alg: KeyPairAlgorithm,
@@ -145,6 +145,23 @@ impl Ca {
 	}
 }
 
+impl std::fmt::Debug for Ca {
+	/// Formats the `Ca` information without revealing the key pair.
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		// The key pair is omitted from the debug output as it contains secret information.
+		let Ca {
+			cert,
+			params,
+			key_pair: _,
+		} = self;
+
+		f.debug_struct("Ca")
+			.field("cert", cert)
+			.field("params", params)
+			.finish()
+	}
+}
+
 /// End-entity [Certificate]
 pub struct EndEntity {
 	cert: Certificate,
@@ -161,8 +178,18 @@ impl EndEntity {
 	}
 }
 
+impl std::fmt::Debug for EndEntity {
+	/// Formats the `EndEntity` information without revealing the key pair.
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		// The key pair is omitted from the debug output as it contains secret information.
+		let EndEntity { cert, key_pair: _ } = self;
+
+		f.debug_struct("EndEntity").field("cert", cert).finish()
+	}
+}
+
 /// [CertificateParams] from which an [EndEntity] [Certificate] can be built
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EndEntityBuilder {
 	params: CertificateParams,
 	alg: KeyPairAlgorithm,

@@ -10,14 +10,14 @@ use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters, 
 use crate::Error;
 
 #[cfg(feature = "crypto")]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum SignAlgo {
 	EcDsa(&'static EcdsaSigningAlgorithm),
 	EdDsa(&'static EdDSAParameters),
 	Rsa(&'static dyn RsaEncoding),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum SignatureAlgorithmParams {
 	/// Omit the parameters
 	None,
