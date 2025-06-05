@@ -30,7 +30,7 @@ use crate::{
 /// }
 /// #[cfg(not(feature = "crypto"))]
 /// impl PublicKeyData for MyKeyPair {
-///	  fn der_bytes(&self) -> &[u8] { &self.public_key }
+///   fn der_bytes(&self) -> &[u8] { &self.public_key }
 ///   fn algorithm(&self) -> &'static SignatureAlgorithm { &PKCS_ED25519 }
 /// }
 /// # fn main () {
@@ -204,7 +204,7 @@ impl CertificateRevocationListParams {
 	}
 
 	fn serialize_der(&self, issuer: Issuer<'_, impl SigningKey>) -> Result<Vec<u8>, Error> {
-		sign_der(issuer.key_pair, |writer| {
+		sign_der(issuer.signing_key, |writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
 			//   This optional field describes the version of the encoded CRL.  When
@@ -220,12 +220,15 @@ impl CertificateRevocationListParams {
 			// RFC 5280 §5.1.2.2:
 			//   This field MUST contain the same algorithm identifier as the
 			//   signatureAlgorithm field in the sequence CertificateList
-			issuer.key_pair.algorithm().write_alg_ident(writer.next());
+			issuer
+				.signing_key
+				.algorithm()
+				.write_alg_ident(writer.next());
 
 			// Write issuer.
 			// RFC 5280 §5.1.2.3:
 			//   The issuer field MUST contain a non-empty X.500 distinguished name (DN).
-			write_distinguished_name(writer.next(), &issuer.distinguished_name);
+			write_distinguished_name(writer.next(), issuer.distinguished_name);
 
 			// Write thisUpdate date.
 			// RFC 5280 §5.1.2.4:
@@ -264,7 +267,7 @@ impl CertificateRevocationListParams {
 					write_x509_authority_key_identifier(
 						writer.next(),
 						self.key_identifier_method
-							.derive(issuer.key_pair.subject_public_key_info()),
+							.derive(issuer.signing_key.subject_public_key_info()),
 					);
 
 					// Write CRL number.

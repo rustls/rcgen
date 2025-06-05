@@ -37,7 +37,7 @@ impl PemCertifiedKey {
 
 /// Builder to configure TLS [CertificateParams] to be finalized
 /// into either a [Ca] or an [EndEntity].
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct CertificateBuilder {
 	params: CertificateParams,
 	alg: KeyPairAlgorithm,
@@ -80,7 +80,7 @@ impl CertificateBuilder {
 }
 
 /// [CertificateParams] from which an [Ca] [Certificate] can be built
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CaBuilder {
 	params: CertificateParams,
 	alg: KeyPairAlgorithm,
@@ -145,6 +145,24 @@ impl Ca {
 	}
 }
 
+impl fmt::Debug for Ca {
+	/// Formats the `Ca` information without revealing the key pair.
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		// The key pair is omitted from the debug output as it contains secret information.
+		let Ca {
+			cert,
+			params,
+			key_pair,
+		} = self;
+
+		f.debug_struct("Ca")
+			.field("cert", cert)
+			.field("params", params)
+			.field("key_pair", key_pair)
+			.finish()
+	}
+}
+
 /// End-entity [Certificate]
 pub struct EndEntity {
 	cert: Certificate,
@@ -161,8 +179,21 @@ impl EndEntity {
 	}
 }
 
+impl fmt::Debug for EndEntity {
+	/// Formats the `EndEntity` information without revealing the key pair.
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		// The key pair is omitted from the debug output as it contains secret information.
+		let EndEntity { cert, key_pair } = self;
+
+		f.debug_struct("EndEntity")
+			.field("cert", cert)
+			.field("key_pair", key_pair)
+			.finish()
+	}
+}
+
 /// [CertificateParams] from which an [EndEntity] [Certificate] can be built
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EndEntityBuilder {
 	params: CertificateParams,
 	alg: KeyPairAlgorithm,
@@ -229,19 +260,6 @@ pub enum KeyPairAlgorithm {
 	EcdsaP521,
 }
 
-impl fmt::Display for KeyPairAlgorithm {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			KeyPairAlgorithm::Rsa => write!(f, "rsa"),
-			KeyPairAlgorithm::Ed25519 => write!(f, "ed25519"),
-			KeyPairAlgorithm::EcdsaP256 => write!(f, "ecdsa-p256"),
-			KeyPairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
-			#[cfg(feature = "aws_lc_rs")]
-			KeyPairAlgorithm::EcdsaP521 => write!(f, "ecdsa-p521"),
-		}
-	}
-}
-
 impl KeyPairAlgorithm {
 	/// Return an `rcgen::KeyPair` for the given varient
 	fn to_key_pair(self) -> Result<rcgen::KeyPair, rcgen::Error> {
@@ -293,6 +311,19 @@ impl KeyPairAlgorithm {
 
 				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
 			},
+		}
+	}
+}
+
+impl fmt::Display for KeyPairAlgorithm {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			KeyPairAlgorithm::Rsa => write!(f, "rsa"),
+			KeyPairAlgorithm::Ed25519 => write!(f, "ed25519"),
+			KeyPairAlgorithm::EcdsaP256 => write!(f, "ecdsa-p256"),
+			KeyPairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
+			#[cfg(feature = "aws_lc_rs")]
+			KeyPairAlgorithm::EcdsaP521 => write!(f, "ecdsa-p521"),
 		}
 	}
 }
@@ -412,7 +443,8 @@ mod tests {
 		check_signature(&cert, &issuer);
 		Ok(())
 	}
-	pub fn check_signature(cert: &X509Certificate<'_>, issuer: &X509Certificate<'_>) {
+
+	fn check_signature(cert: &X509Certificate<'_>, issuer: &X509Certificate<'_>) {
 		let verified = cert.verify_signature(Some(issuer.public_key())).is_ok();
 		assert!(verified);
 	}

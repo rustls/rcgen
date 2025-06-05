@@ -114,19 +114,17 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
     - name: Install NASM for aws-lc-rs on Windows
       uses: ilammy/setup-nasm@v1
-    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-    - run: vcpkg install openssl:x64-windows-static-md
     - name: Run cargo check
       run: cargo check --all-targets
     - name: Run the tests
       run: cargo test
     - name: Run the tests with x509-parser enabled
-      run: cargo test --verbose --features x509-parser
+      run: cargo test --features x509-parser
     - name: Run the tests with aws_lc_rs backend enabled
-      run: cargo test --verbose --no-default-features --features aws_lc_rs,pem
+      run: cargo test --no-default-features --features aws_lc_rs,pem
       # rustls-cert-gen require either aws_lc_rs or ring feature
     - name: Run the tests with no features enabled
-      run: cargo test -p rcgen --verbose --no-default-features
+      run: cargo test -p rcgen --no-default-features
 
   build:
     strategy:
@@ -163,9 +161,9 @@ jobs:
     - name: Run the tests
       run: cargo test
     - name: Run the tests with x509-parser enabled
-      run: cargo test --verbose --features x509-parser
+      run: cargo test --features x509-parser
     - name: Run the tests with aws_lc_rs backend enabled
-      run: cargo test --verbose --no-default-features --features aws_lc_rs,pem
+      run: cargo test --no-default-features --features aws_lc_rs,pem
 
   # Build rustls-cert-gen as a standalone package, see this PR for why it's needed:
   # https://github.com/rustls/rcgen/pull/206#pullrequestreview-1816197358

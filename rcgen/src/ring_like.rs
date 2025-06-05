@@ -21,7 +21,7 @@ pub(crate) fn ecdsa_from_pkcs8(
 
 	#[cfg(feature = "aws_lc_rs")]
 	{
-		Ok(signature::EcdsaKeyPair::from_pkcs8(alg, pkcs8)._err()?)
+		signature::EcdsaKeyPair::from_pkcs8(alg, pkcs8)._err()
 	}
 }
 
@@ -30,7 +30,7 @@ pub(crate) fn ecdsa_from_private_key_der(
 	alg: &'static signature::EcdsaSigningAlgorithm,
 	key: &[u8],
 ) -> Result<signature::EcdsaKeyPair, Error> {
-	Ok(signature::EcdsaKeyPair::from_private_key_der(alg, key)._err()?)
+	signature::EcdsaKeyPair::from_private_key_der(alg, key)._err()
 }
 
 #[cfg(feature = "crypto")]

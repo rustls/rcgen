@@ -81,8 +81,8 @@ pub struct CertificateParams {
 impl Default for CertificateParams {
 	fn default() -> Self {
 		// not_before and not_after set to reasonably long dates
-		let not_before = date_time_ymd(1975, 01, 01);
-		let not_after = date_time_ymd(4096, 01, 01);
+		let not_before = date_time_ymd(1975, 1, 1);
+		let not_after = date_time_ymd(4096, 1, 1);
 		let mut distinguished_name = DistinguishedName::new();
 		distinguished_name.push(DnType::CommonName, "rcgen self signed cert");
 		CertificateParams {
@@ -143,7 +143,7 @@ impl CertificateParams {
 		issuer: &CertificateParams,
 		issuer_key: &impl SigningKey,
 	) -> Result<Certificate, Error> {
-		let issuer = Issuer::new(&issuer, issuer_key);
+		let issuer = Issuer::new(issuer, issuer_key);
 		Ok(Certificate {
 			der: self.serialize_der_with_signer(public_key, issuer)?,
 		})
@@ -153,10 +153,10 @@ impl CertificateParams {
 	///
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
-	pub fn self_signed(&self, key_pair: &impl SigningKey) -> Result<Certificate, Error> {
-		let issuer = Issuer::new(self, key_pair);
+	pub fn self_signed(&self, signing_key: &impl SigningKey) -> Result<Certificate, Error> {
+		let issuer = Issuer::new(self, signing_key);
 		Ok(Certificate {
-			der: self.serialize_der_with_signer(key_pair, issuer)?,
+			der: self.serialize_der_with_signer(signing_key, issuer)?,
 		})
 	}
 
@@ -164,7 +164,7 @@ impl CertificateParams {
 	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
 	pub fn key_identifier(&self, key: &impl PublicKeyData) -> Vec<u8> {
 		self.key_identifier_method
-			.derive(&key.subject_public_key_info())
+			.derive(key.subject_public_key_info())
 	}
 
 	/// Parses an existing ca certificate from the ASCII PEM format.
@@ -363,7 +363,7 @@ impl CertificateParams {
 			use_authority_key_identifier_extension,
 			key_identifier_method,
 		} = self;
-		// - alg and key_pair will be used by the caller
+		// - subject_key will be used by the caller
 		// - not_before and not_after cannot be put in a CSR
 		// - key_identifier_method is here because self.write_extended_key_usage uses it
 		// - There might be a use case for specifying the key identifier
@@ -409,7 +409,7 @@ impl CertificateParams {
 
 						for Attribute { oid, values } in attrs {
 							writer.next().write_sequence(|writer| {
-								writer.next().write_oid(&ObjectIdentifier::from_slice(&oid));
+								writer.next().write_oid(&ObjectIdentifier::from_slice(oid));
 								writer.next().write_der(&values);
 							});
 						}
@@ -429,7 +429,7 @@ impl CertificateParams {
 		pub_key: &K,
 		issuer: Issuer<'_, impl SigningKey>,
 	) -> Result<CertificateDer<'static>, Error> {
-		let der = sign_der(issuer.key_pair, |writer| {
+		let der = sign_der(issuer.signing_key, |writer| {
 			let pub_key_spki = pub_key.subject_public_key_info();
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
@@ -453,9 +453,12 @@ impl CertificateParams {
 				}
 			};
 			// Write signature algorithm
-			issuer.key_pair.algorithm().write_alg_ident(writer.next());
+			issuer
+				.signing_key
+				.algorithm()
+				.write_alg_ident(writer.next());
 			// Write issuer name
-			write_distinguished_name(writer.next(), &issuer.distinguished_name);
+			write_distinguished_name(writer.next(), issuer.distinguished_name);
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
@@ -505,7 +508,7 @@ impl CertificateParams {
 					#[cfg(feature = "crypto")]
 					_ => issuer
 						.key_identifier_method
-						.derive(issuer.key_pair.subject_public_key_info()),
+						.derive(issuer.signing_key.subject_public_key_info()),
 				},
 			);
 		}
@@ -985,7 +988,7 @@ pub enum CidrSubnet {
 
 macro_rules! mask {
 	($t:ty, $d:expr) => {{
-		let v = <$t>::max_value();
+		let v = <$t>::MAX;
 		let v = v.checked_shr($d as u32).unwrap_or(0);
 		(!v).to_be_bytes()
 	}};
@@ -1021,16 +1024,16 @@ impl CidrSubnet {
 	pub fn from_v6_prefix(addr: [u8; 16], prefix: u8) -> Self {
 		CidrSubnet::V6(addr, mask!(u128, prefix))
 	}
-	fn to_bytes(&self) -> Vec<u8> {
+	fn to_bytes(self) -> Vec<u8> {
 		let mut res = Vec::new();
 		match self {
 			CidrSubnet::V4(addr, mask) => {
-				res.extend_from_slice(addr);
-				res.extend_from_slice(mask);
+				res.extend_from_slice(&addr);
+				res.extend_from_slice(&mask);
 			},
 			CidrSubnet::V6(addr, mask) => {
-				res.extend_from_slice(addr);
-				res.extend_from_slice(mask);
+				res.extend_from_slice(&addr);
+				res.extend_from_slice(&mask);
 			},
 		}
 		res
@@ -1141,17 +1144,17 @@ mod tests {
 	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_key_usages() {
-		let mut params: CertificateParams = Default::default();
-
-		// Set key_usages
-		params.key_usages = vec![
-			KeyUsagePurpose::DigitalSignature,
-			KeyUsagePurpose::KeyEncipherment,
-			KeyUsagePurpose::ContentCommitment,
-		];
-
-		// This can sign things!
-		params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
+		let params = CertificateParams {
+			// Set key usages
+			key_usages: vec![
+				KeyUsagePurpose::DigitalSignature,
+				KeyUsagePurpose::KeyEncipherment,
+				KeyUsagePurpose::ContentCommitment,
+			],
+			// This can sign things!
+			is_ca: IsCa::Ca(BasicConstraints::Constrained(0)),
+			..CertificateParams::default()
+		};
 
 		// Make the cert
 		let key_pair = KeyPair::generate().unwrap();
@@ -1168,12 +1171,11 @@ mod tests {
 
 		for ext in cert.extensions() {
 			if key_usage_oid_str == ext.oid.to_id_string() {
-				match ext.parsed_extension() {
-					x509_parser::extensions::ParsedExtension::KeyUsage(usage) => {
-						assert!(usage.flags == 7);
-						found = true;
-					},
-					_ => {},
+				if let x509_parser::extensions::ParsedExtension::KeyUsage(usage) =
+					ext.parsed_extension()
+				{
+					assert!(usage.flags == 7);
+					found = true;
 				}
 			}
 		}
@@ -1184,13 +1186,13 @@ mod tests {
 	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_key_usages_decipheronly_only() {
-		let mut params: CertificateParams = Default::default();
-
-		// Set key_usages
-		params.key_usages = vec![KeyUsagePurpose::DecipherOnly];
-
-		// This can sign things!
-		params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
+		let params = CertificateParams {
+			// Set key usages
+			key_usages: vec![KeyUsagePurpose::DecipherOnly],
+			// This can sign things!
+			is_ca: IsCa::Ca(BasicConstraints::Constrained(0)),
+			..CertificateParams::default()
+		};
 
 		// Make the cert
 		let key_pair = KeyPair::generate().unwrap();
@@ -1207,12 +1209,11 @@ mod tests {
 
 		for ext in cert.extensions() {
 			if key_usage_oid_str == ext.oid.to_id_string() {
-				match ext.parsed_extension() {
-					x509_parser::extensions::ParsedExtension::KeyUsage(usage) => {
-						assert!(usage.flags == 256);
-						found = true;
-					},
-					_ => {},
+				if let x509_parser::extensions::ParsedExtension::KeyUsage(usage) =
+					ext.parsed_extension()
+				{
+					assert!(usage.flags == 256);
+					found = true;
 				}
 			}
 		}
@@ -1223,10 +1224,10 @@ mod tests {
 	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_extended_key_usages_any() {
-		let mut params: CertificateParams = Default::default();
-
-		// Set extended_key_usages
-		params.extended_key_usages = vec![ExtendedKeyUsagePurpose::Any];
+		let params = CertificateParams {
+			extended_key_usages: vec![ExtendedKeyUsagePurpose::Any],
+			..CertificateParams::default()
+		};
 
 		// Make the cert
 		let key_pair = KeyPair::generate().unwrap();
@@ -1245,15 +1246,16 @@ mod tests {
 	#[test]
 	fn test_with_extended_key_usages_other() {
 		use x509_parser::der_parser::asn1_rs::Oid;
-		let mut params: CertificateParams = Default::default();
 		const OID_1: &[u64] = &[1, 2, 3, 4];
 		const OID_2: &[u64] = &[1, 2, 3, 4, 5, 6];
 
-		// Set extended_key_usages
-		params.extended_key_usages = vec![
-			ExtendedKeyUsagePurpose::Other(Vec::from(OID_1)),
-			ExtendedKeyUsagePurpose::Other(Vec::from(OID_2)),
-		];
+		let params = CertificateParams {
+			extended_key_usages: vec![
+				ExtendedKeyUsagePurpose::Other(Vec::from(OID_1)),
+				ExtendedKeyUsagePurpose::Other(Vec::from(OID_2)),
+			],
+			..CertificateParams::default()
+		};
 
 		// Make the cert
 		let key_pair = KeyPair::generate().unwrap();
@@ -1411,8 +1413,10 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 			);
 
 			let ee_key = KeyPair::generate().unwrap();
-			let mut ee_params = CertificateParams::default();
-			ee_params.use_authority_key_identifier_extension = true;
+			let ee_params = CertificateParams {
+				use_authority_key_identifier_extension: true,
+				..CertificateParams::default()
+			};
 			let ee_cert = ee_params.signed_by(&ee_key, &params, &ee_key).unwrap();
 
 			let (_, x509_ee) = x509_parser::parse_x509_certificate(ee_cert.der()).unwrap();

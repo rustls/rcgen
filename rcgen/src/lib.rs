@@ -20,16 +20,15 @@ use rcgen::{generate_simple_self_signed, CertifiedKey};
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let CertifiedKey { cert, key_pair } = generate_simple_self_signed(subject_alt_names).unwrap();
+let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names).unwrap();
 println!("{}", cert.pem());
-println!("{}", key_pair.serialize_pem());
+println!("{}", signing_key.serialize_pem());
 # }
 ```"##
 )]
 #![forbid(unsafe_code)]
 #![forbid(non_ascii_idents)]
 #![deny(missing_docs)]
-#![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![warn(unreachable_pub)]
 
@@ -91,8 +90,8 @@ pub type RcgenError = Error;
 pub struct CertifiedKey<S: SigningKey> {
 	/// An issued certificate.
 	pub cert: Certificate,
-	/// The certificate's subject key pair.
-	pub key_pair: S,
+	/// The certificate's subject signing key.
+	pub signing_key: S,
 }
 
 /**
@@ -116,11 +115,11 @@ use rcgen::{generate_simple_self_signed, CertifiedKey};
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let CertifiedKey { cert, key_pair } = generate_simple_self_signed(subject_alt_names).unwrap();
+let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names).unwrap();
 
 // The certificate is now valid for localhost and the domain "hello.world.example"
 println!("{}", cert.pem());
-println!("{}", key_pair.serialize_pem());
+println!("{}", signing_key.serialize_pem());
 # }
 ```
 "##
@@ -128,9 +127,9 @@ println!("{}", key_pair.serialize_pem());
 pub fn generate_simple_self_signed(
 	subject_alt_names: impl Into<Vec<String>>,
 ) -> Result<CertifiedKey<KeyPair>, Error> {
-	let key_pair = KeyPair::generate()?;
-	let cert = CertificateParams::new(subject_alt_names)?.self_signed(&key_pair)?;
-	Ok(CertifiedKey { cert, key_pair })
+	let signing_key = KeyPair::generate()?;
+	let cert = CertificateParams::new(subject_alt_names)?.self_signed(&signing_key)?;
+	Ok(CertifiedKey { cert, signing_key })
 }
 
 #[derive(PartialEq, Eq)]
@@ -138,17 +137,37 @@ struct Issuer<'a, S> {
 	distinguished_name: &'a DistinguishedName,
 	key_identifier_method: &'a KeyIdMethod,
 	key_usages: &'a [KeyUsagePurpose],
-	key_pair: &'a S,
+	signing_key: &'a S,
 }
 
 impl<'a, S: SigningKey> Issuer<'a, S> {
-	fn new(params: &'a CertificateParams, key_pair: &'a S) -> Self {
+	fn new(params: &'a CertificateParams, signing_key: &'a S) -> Self {
 		Self {
 			distinguished_name: &params.distinguished_name,
 			key_identifier_method: &params.key_identifier_method,
 			key_usages: &params.key_usages,
-			key_pair,
+			signing_key,
 		}
+	}
+}
+
+impl<'a, S: SigningKey> fmt::Debug for Issuer<'a, S> {
+	/// Formats the issuer information without revealing the key pair.
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		// The key pair is omitted from the debug output as it contains secret information.
+		let Issuer {
+			distinguished_name,
+			key_identifier_method,
+			key_usages,
+			signing_key: _,
+		} = self;
+
+		f.debug_struct("Issuer")
+			.field("distinguished_name", distinguished_name)
+			.field("key_identifier_method", key_identifier_method)
+			.field("key_usages", key_usages)
+			.field("signing_key", &"[elided]")
+			.finish()
 	}
 }
 
@@ -432,7 +451,7 @@ impl DistinguishedName {
 /**
 Iterator over [`DistinguishedName`] entries
 */
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DistinguishedNameIterator<'a> {
 	distinguished_name: &'a DistinguishedName,
 	iter: std::slice::Iter<'a, DnType>,
@@ -485,7 +504,7 @@ impl KeyUsagePurpose {
 
 	/// Encode a key usage as the value of a BIT STRING as defined by RFC 5280.
 	/// [`u16`] is sufficient to encode the largest possible key usage value (two bytes).
-	fn to_u16(&self) -> u16 {
+	fn to_u16(self) -> u16 {
 		const FLAG: u16 = 0b1000_0000_0000_0000;
 		FLAG >> match self {
 			KeyUsagePurpose::DigitalSignature => 0,
@@ -584,6 +603,7 @@ impl KeyIdMethod {
 	/// X.509v3 extensions.
 	#[allow(unused_variables)]
 	pub(crate) fn derive(&self, subject_public_key_info: impl AsRef<[u8]>) -> Vec<u8> {
+		#[cfg_attr(not(feature = "crypto"), expect(clippy::let_unit_value))]
 		let digest_method = match &self {
 			#[cfg(feature = "crypto")]
 			Self::Sha256 => &digest::SHA256,
@@ -736,6 +756,7 @@ pub struct SerialNumber {
 	inner: Vec<u8>,
 }
 
+#[expect(clippy::len_without_is_empty)]
 impl SerialNumber {
 	/// Create a serial number from the given byte slice.
 	pub fn from_slice(bytes: &[u8]) -> SerialNumber {
