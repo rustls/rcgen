@@ -10,8 +10,8 @@ use crate::key_pair::sign_der;
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_authority_key_identifier, write_x509_extension, CertificateParams, Error, Issuer,
-	KeyIdMethod, KeyUsagePurpose, SerialNumber, SigningKey,
+	write_x509_authority_key_identifier, write_x509_extension, Error, Issuer, KeyIdMethod,
+	KeyUsagePurpose, SerialNumber, SigningKey,
 };
 
 /// A certificate revocation list (CRL)
@@ -43,7 +43,8 @@ use crate::{
 /// let key_pair = KeyPair::generate().unwrap();
 /// #[cfg(not(feature = "crypto"))]
 /// let key_pair = MyKeyPair { public_key: vec![] };
-/// let issuer = issuer_params.self_signed(&key_pair).unwrap();
+/// let issuer = Issuer::new(issuer_params, key_pair);
+///
 /// // Describe a revoked certificate.
 /// let revoked_cert = RevokedCertParams{
 ///   serial_number: SerialNumber::from(9999),
@@ -62,7 +63,7 @@ use crate::{
 ///   key_identifier_method: KeyIdMethod::Sha256,
 ///   #[cfg(not(feature = "crypto"))]
 ///   key_identifier_method: KeyIdMethod::PreSpecified(vec![]),
-/// }.signed_by(&issuer_params, &key_pair).unwrap();
+/// }.signed_by(&issuer).unwrap();
 ///# }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CertificateRevocationList {
@@ -186,14 +187,12 @@ impl CertificateRevocationListParams {
 	/// Including a signature from the issuing certificate authority's key.
 	pub fn signed_by(
 		&self,
-		issuer: &CertificateParams,
-		issuer_key: &impl SigningKey,
+		issuer: &Issuer<'_, impl SigningKey>,
 	) -> Result<CertificateRevocationList, Error> {
 		if self.next_update.le(&self.this_update) {
 			return Err(Error::InvalidCrlNextUpdate);
 		}
 
-		let issuer = Issuer::from_params(issuer, issuer_key);
 		if !issuer.key_usages.is_empty() && !issuer.key_usages.contains(&KeyUsagePurpose::CrlSign) {
 			return Err(Error::IssuerNotCrlSigner);
 		}
@@ -203,8 +202,8 @@ impl CertificateRevocationListParams {
 		})
 	}
 
-	fn serialize_der(&self, issuer: Issuer<'_, impl SigningKey>) -> Result<Vec<u8>, Error> {
-		sign_der(issuer.signing_key, |writer| {
+	fn serialize_der(&self, issuer: &Issuer<'_, impl SigningKey>) -> Result<Vec<u8>, Error> {
+		sign_der(&*issuer.signing_key, |writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
 			//   This optional field describes the version of the encoded CRL.  When

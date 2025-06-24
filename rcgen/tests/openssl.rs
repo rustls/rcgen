@@ -14,7 +14,7 @@ use openssl::x509::{CrlStatus, X509Crl, X509Req, X509StoreContext, X509};
 
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DnType, DnValue, GeneralSubtree, IsCa,
-	KeyPair, NameConstraints,
+	Issuer, KeyPair, NameConstraints,
 };
 
 mod util;
@@ -312,6 +312,7 @@ fn test_openssl_separate_ca() {
 	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 	let ca_cert_pem = ca_cert.pem();
+	let ca = Issuer::new(ca_params, ca_key);
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
@@ -321,7 +322,7 @@ fn test_openssl_separate_ca() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert_key = KeyPair::generate().unwrap();
-	let cert = params.signed_by(&cert_key, &ca_params, &ca_key).unwrap();
+	let cert = params.signed_by(&cert_key, &ca).unwrap();
 	let key = cert_key.serialize_der();
 
 	verify_cert_ca(&cert.pem(), &key, &ca_cert_pem);
@@ -345,7 +346,8 @@ fn test_openssl_separate_ca_with_printable_string() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert_key = KeyPair::generate().unwrap();
-	let cert = params.signed_by(&cert_key, &ca_params, &ca_key).unwrap();
+	let ca = Issuer::new(ca_params, ca_key);
+	let cert = params.signed_by(&cert_key, &ca).unwrap();
 	let key = cert_key.serialize_der();
 
 	verify_cert_ca(&cert.pem(), &key, &ca_cert.pem());
@@ -357,6 +359,7 @@ fn test_openssl_separate_ca_with_other_signing_alg() {
 	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_key = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
+	let ca = Issuer::new(ca_params, ca_key);
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
@@ -366,7 +369,7 @@ fn test_openssl_separate_ca_with_other_signing_alg() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert_key = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P384_SHA384).unwrap();
-	let cert = params.signed_by(&cert_key, &ca_params, &ca_key).unwrap();
+	let cert = params.signed_by(&cert_key, &ca).unwrap();
 	let key = cert_key.serialize_der();
 
 	verify_cert_ca(&cert.pem(), &key, &ca_cert.pem());
@@ -387,6 +390,7 @@ fn test_openssl_separate_ca_name_constraints() {
 		excluded_subtrees: Vec::new(),
 	});
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
+	let ca = Issuer::new(ca_params, ca_key);
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
@@ -396,7 +400,7 @@ fn test_openssl_separate_ca_name_constraints() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert_key = KeyPair::generate().unwrap();
-	let cert = params.signed_by(&cert_key, &ca_params, &ca_key).unwrap();
+	let cert = params.signed_by(&cert_key, &ca).unwrap();
 	let key = cert_key.serialize_der();
 
 	verify_cert_ca(&cert.pem(), &key, &ca_cert.pem());

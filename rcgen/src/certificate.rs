@@ -140,10 +140,8 @@ impl CertificateParams {
 	pub fn signed_by(
 		&self,
 		public_key: &impl PublicKeyData,
-		issuer: &CertificateParams,
-		issuer_key: &impl SigningKey,
+		issuer: &Issuer<'_, impl SigningKey>,
 	) -> Result<Certificate, Error> {
-		let issuer = Issuer::from_params(issuer, issuer_key);
 		Ok(Certificate {
 			der: self.serialize_der_with_signer(public_key, issuer)?,
 		})
@@ -156,7 +154,7 @@ impl CertificateParams {
 	pub fn self_signed(&self, signing_key: &impl SigningKey) -> Result<Certificate, Error> {
 		let issuer = Issuer::from_params(self, signing_key);
 		Ok(Certificate {
-			der: self.serialize_der_with_signer(signing_key, issuer)?,
+			der: self.serialize_der_with_signer(signing_key, &issuer)?,
 		})
 	}
 
@@ -427,9 +425,9 @@ impl CertificateParams {
 	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
-		issuer: Issuer<'_, impl SigningKey>,
+		issuer: &Issuer<'_, impl SigningKey>,
 	) -> Result<CertificateDer<'static>, Error> {
-		let der = sign_der(issuer.signing_key, |writer| {
+		let der = sign_der(&*issuer.signing_key, |writer| {
 			let pub_key_spki = pub_key.subject_public_key_info();
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
@@ -484,8 +482,7 @@ impl CertificateParams {
 			}
 
 			writer.next().write_tagged(Tag::context(3), |writer| {
-				writer
-					.write_sequence(|writer| self.write_extensions(writer, &pub_key_spki, &issuer))
+				writer.write_sequence(|writer| self.write_extensions(writer, &pub_key_spki, issuer))
 			})?;
 
 			Ok(())
@@ -1412,12 +1409,13 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 					.unwrap()
 			);
 
+			let issuer = Issuer::new(params, ca_kp);
 			let ee_key = KeyPair::generate().unwrap();
 			let ee_params = CertificateParams {
 				use_authority_key_identifier_extension: true,
 				..CertificateParams::default()
 			};
-			let ee_cert = ee_params.signed_by(&ee_key, &params, &ee_key).unwrap();
+			let ee_cert = ee_params.signed_by(&ee_key, &issuer).unwrap();
 
 			let (_, x509_ee) = x509_parser::parse_x509_certificate(ee_cert.der()).unwrap();
 			assert_eq!(
