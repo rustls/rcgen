@@ -458,7 +458,7 @@ impl CertificateParams {
 				.algorithm()
 				.write_alg_ident(writer.next());
 			// Write issuer name
-			write_distinguished_name(writer.next(), issuer.distinguished_name);
+			write_distinguished_name(writer.next(), issuer.distinguished_name.as_ref());
 			// Write validity
 			writer.next().write_sequence(|writer| {
 				// Not before
@@ -503,7 +503,7 @@ impl CertificateParams {
 		if self.use_authority_key_identifier_extension {
 			write_x509_authority_key_identifier(
 				writer.next(),
-				match issuer.key_identifier_method {
+				match issuer.key_identifier_method.as_ref() {
 					KeyIdMethod::PreSpecified(aki) => aki.clone(),
 					#[cfg(feature = "crypto")]
 					_ => issuer

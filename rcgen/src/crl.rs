@@ -228,7 +228,7 @@ impl CertificateRevocationListParams {
 			// Write issuer.
 			// RFC 5280 §5.1.2.3:
 			//   The issuer field MUST contain a non-empty X.500 distinguished name (DN).
-			write_distinguished_name(writer.next(), issuer.distinguished_name);
+			write_distinguished_name(writer.next(), issuer.distinguished_name.as_ref());
 
 			// Write thisUpdate date.
 			// RFC 5280 §5.1.2.4:

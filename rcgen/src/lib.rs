@@ -32,6 +32,7 @@ println!("{}", signing_key.serialize_pem());
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![warn(unreachable_pub)]
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::Hash;
@@ -134,18 +135,18 @@ pub fn generate_simple_self_signed(
 
 #[derive(PartialEq, Eq)]
 struct Issuer<'a, S> {
-	distinguished_name: &'a DistinguishedName,
-	key_identifier_method: &'a KeyIdMethod,
-	key_usages: &'a [KeyUsagePurpose],
+	distinguished_name: Cow<'a, DistinguishedName>,
+	key_identifier_method: Cow<'a, KeyIdMethod>,
+	key_usages: Cow<'a, [KeyUsagePurpose]>,
 	signing_key: &'a S,
 }
 
 impl<'a, S: SigningKey> Issuer<'a, S> {
 	fn new(params: &'a CertificateParams, signing_key: &'a S) -> Self {
 		Self {
-			distinguished_name: &params.distinguished_name,
-			key_identifier_method: &params.key_identifier_method,
-			key_usages: &params.key_usages,
+			distinguished_name: Cow::Borrowed(&params.distinguished_name),
+			key_identifier_method: Cow::Borrowed(&params.key_identifier_method),
+			key_usages: Cow::Borrowed(&params.key_usages),
 			signing_key,
 		}
 	}
