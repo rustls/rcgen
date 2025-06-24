@@ -41,6 +41,8 @@ use std::net::IpAddr;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::ops::Deref;
 
+#[cfg(feature = "x509-parser")]
+use pki_types::CertificateDer;
 use time::{OffsetDateTime, Time};
 use yasna::models::ObjectIdentifier;
 use yasna::models::{GeneralizedTime, UTCTime};
@@ -163,6 +165,43 @@ impl<'a, S: SigningKey> Issuer<'a, S> {
 			key_usages: Cow::Borrowed(&params.key_usages),
 			signing_key: MaybeOwned::Borrowed(signing_key),
 		}
+	}
+
+	/// Parses an existing CA certificate from the ASCII PEM format.
+	///
+	/// See [`from_ca_cert_der`](Self::from_ca_cert_der) for more details.
+	#[cfg(all(feature = "pem", feature = "x509-parser"))]
+	pub fn from_ca_cert_pem(pem_str: &str, signing_key: S) -> Result<Self, Error> {
+		let certificate = pem::parse(pem_str).map_err(|_| Error::CouldNotParseCertificate)?;
+		Self::from_ca_cert_der(&certificate.contents().into(), signing_key)
+	}
+
+	/// Parses an existing CA certificate from the DER format.
+	///
+	/// This function assumes the provided certificate is a CA. It will not check
+	/// for the presence of the `BasicConstraints` extension, or perform any other
+	/// validation.
+	///
+	/// If you already have a byte slice containing DER, it can trivially be converted into
+	/// [`CertificateDer`] using the [`Into`] trait.
+	#[cfg(feature = "x509-parser")]
+	pub fn from_ca_cert_der(ca_cert: &CertificateDer<'_>, signing_key: S) -> Result<Self, Error> {
+		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
+			.map_err(|_| Error::CouldNotParseCertificate)?;
+
+		Ok(Self {
+			key_usages: Cow::Owned(KeyUsagePurpose::from_x509(&x509)?),
+			key_identifier_method: Cow::Owned(KeyIdMethod::from_x509(&x509)?),
+			distinguished_name: Cow::Owned(DistinguishedName::from_name(
+				&x509.tbs_certificate.subject,
+			)?),
+			signing_key: MaybeOwned::Owned(signing_key),
+		})
+	}
+
+	/// Allowed key usages for this issuer.
+	pub fn key_usages(&self) -> &[KeyUsagePurpose] {
+		&self.key_usages
 	}
 
 	/// Yield a reference to the signing key.

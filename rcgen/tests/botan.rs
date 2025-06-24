@@ -154,10 +154,8 @@ fn test_botan_imported_ca() {
 	let (mut params, ca_key) = default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = params.self_signed(&ca_key).unwrap();
-
 	let ca_cert_der = ca_cert.der();
-
-	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der).unwrap();
+	let ca = Issuer::from_ca_cert_der(ca_cert.der(), ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
@@ -170,7 +168,6 @@ fn test_botan_imported_ca() {
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
 
 	let key_pair = KeyPair::generate().unwrap();
-	let ca = Issuer::new(imported_ca_cert_params, ca_key);
 	let cert = params.signed_by(&key_pair, &ca).unwrap();
 	check_cert_ca(cert.der(), &cert, ca_cert_der);
 }
@@ -185,10 +182,7 @@ fn test_botan_imported_ca_with_printable_string() {
 	);
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = params.self_signed(&imported_ca_key).unwrap();
-
-	let ca_cert_der = ca_cert.der();
-
-	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der).unwrap();
+	let ca = Issuer::from_ca_cert_der(ca_cert.der(), imported_ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
@@ -200,10 +194,9 @@ fn test_botan_imported_ca_with_printable_string() {
 	// Botan has a sanity check that enforces a maximum expiration date
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
 	let key_pair = KeyPair::generate().unwrap();
-	let ca = Issuer::new(imported_ca_cert_params, imported_ca_key);
 	let cert = params.signed_by(&key_pair, &ca).unwrap();
 
-	check_cert_ca(cert.der(), &cert, ca_cert_der);
+	check_cert_ca(cert.der(), &cert, ca_cert.der());
 }
 
 #[test]
