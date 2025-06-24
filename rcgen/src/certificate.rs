@@ -143,7 +143,7 @@ impl CertificateParams {
 		issuer: &CertificateParams,
 		issuer_key: &impl SigningKey,
 	) -> Result<Certificate, Error> {
-		let issuer = Issuer::new(issuer, issuer_key);
+		let issuer = Issuer::from_params(issuer, issuer_key);
 		Ok(Certificate {
 			der: self.serialize_der_with_signer(public_key, issuer)?,
 		})
@@ -154,7 +154,7 @@ impl CertificateParams {
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
 	pub fn self_signed(&self, signing_key: &impl SigningKey) -> Result<Certificate, Error> {
-		let issuer = Issuer::new(self, signing_key);
+		let issuer = Issuer::from_params(self, signing_key);
 		Ok(Certificate {
 			der: self.serialize_der_with_signer(signing_key, issuer)?,
 		})

@@ -142,7 +142,7 @@ struct Issuer<'a, S> {
 }
 
 impl<'a, S: SigningKey> Issuer<'a, S> {
-	fn new(params: &'a CertificateParams, signing_key: &'a S) -> Self {
+	fn from_params(params: &'a CertificateParams, signing_key: &'a S) -> Self {
 		Self {
 			distinguished_name: Cow::Borrowed(&params.distinguished_name),
 			key_identifier_method: Cow::Borrowed(&params.key_identifier_method),

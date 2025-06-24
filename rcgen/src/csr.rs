@@ -205,7 +205,7 @@ impl CertificateSigningRequestParams {
 		issuer: &CertificateParams,
 		issuer_key: &impl SigningKey,
 	) -> Result<Certificate, Error> {
-		let issuer = Issuer::new(issuer, issuer_key);
+		let issuer = Issuer::from_params(issuer, issuer_key);
 		Ok(Certificate {
 			der: self
 				.params
