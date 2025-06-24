@@ -133,7 +133,6 @@ pub fn generate_simple_self_signed(
 	Ok(CertifiedKey { cert, signing_key })
 }
 
-#[derive(PartialEq, Eq)]
 struct Issuer<'a, S> {
 	distinguished_name: Cow<'a, DistinguishedName>,
 	key_identifier_method: Cow<'a, KeyIdMethod>,
