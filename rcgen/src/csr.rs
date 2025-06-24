@@ -208,3 +208,42 @@ impl CertificateSigningRequestParams {
 		})
 	}
 }
+
+#[cfg(all(test, feature = "x509-parser"))]
+mod tests {
+	use crate::{CertificateParams, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose};
+	use x509_parser::certification_request::X509CertificationRequest;
+	use x509_parser::prelude::{FromDer, ParsedExtension};
+
+	#[test]
+	fn dont_write_sans_extension_if_no_sans_are_present() {
+		let mut params = CertificateParams::default();
+		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
+		let key_pair = KeyPair::generate().unwrap();
+		let csr = params.serialize_request(&key_pair).unwrap();
+		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
+		assert!(!parsed_csr
+			.requested_extensions()
+			.unwrap()
+			.any(|ext| matches!(ext, ParsedExtension::SubjectAlternativeName(_))));
+	}
+
+	#[test]
+	fn write_extension_request_if_ekus_are_present() {
+		let mut params = CertificateParams::default();
+		params
+			.extended_key_usages
+			.push(ExtendedKeyUsagePurpose::ClientAuth);
+		let key_pair = KeyPair::generate().unwrap();
+		let csr = params.serialize_request(&key_pair).unwrap();
+		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
+		let requested_extensions = parsed_csr
+			.requested_extensions()
+			.unwrap()
+			.collect::<Vec<_>>();
+		assert!(matches!(
+			requested_extensions.first().unwrap(),
+			ParsedExtension::ExtendedKeyUsage(_)
+		));
+	}
+}
