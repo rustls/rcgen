@@ -1133,6 +1133,9 @@ pub enum BasicConstraints {
 
 #[cfg(test)]
 mod tests {
+	#[cfg(feature = "x509-parser")]
+	use pki_types::pem::PemObject;
+
 	#[cfg(feature = "pem")]
 	use super::*;
 	#[cfg(feature = "crypto")]
@@ -1290,7 +1293,7 @@ mod tests {
 		}
 	}
 
-	#[cfg(all(feature = "pem", feature = "x509-parser"))]
+	#[cfg(all(feature = "x509-parser"))]
 	mod test_key_identifier_from_ca {
 		use super::*;
 
@@ -1380,22 +1383,20 @@ JiY98T5oN1X0C/qAXxJfSvklbru9fipwGt3dho5Tm6Ee3cYf+plnk4WZhSnqyef4
 PITGdT9dgN88nHPCle0B1+OY+OZ5
 -----END PRIVATE KEY-----"#;
 
-			let params = CertificateParams::from_ca_cert_pem(ca_cert).unwrap();
+			let ca_kp = KeyPair::from_pem(ca_key).unwrap();
+			let ca = Issuer::from_ca_cert_pem(ca_cert, ca_kp).unwrap();
 			let ca_ski = vec![
 				0x97, 0xD4, 0x76, 0xA1, 0x9B, 0x1A, 0x71, 0x35, 0x2A, 0xC7, 0xF4, 0xA1, 0x84, 0x12,
 				0x56, 0x06, 0xBA, 0x5D, 0x61, 0x84,
 			];
 
 			assert_eq!(
-				KeyIdMethod::PreSpecified(ca_ski.clone()),
-				params.key_identifier_method
+				&KeyIdMethod::PreSpecified(ca_ski.clone()),
+				ca.key_identifier_method.as_ref()
 			);
 
-			let ca_kp = KeyPair::from_pem(ca_key).unwrap();
-			let ca_cert = params.self_signed(&ca_kp).unwrap();
-			assert_eq!(ca_ski, params.key_identifier(&ca_kp));
-
-			let (_, x509_ca) = x509_parser::parse_x509_certificate(ca_cert.der()).unwrap();
+			let ca_cert_der = CertificateDer::from_pem_slice(ca_cert.as_bytes()).unwrap();
+			let (_, x509_ca) = x509_parser::parse_x509_certificate(ca_cert_der.as_ref()).unwrap();
 			assert_eq!(
 				&ca_ski,
 				&x509_ca
@@ -1409,13 +1410,12 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 					.unwrap()
 			);
 
-			let issuer = Issuer::new(params, ca_kp);
 			let ee_key = KeyPair::generate().unwrap();
 			let ee_params = CertificateParams {
 				use_authority_key_identifier_extension: true,
 				..CertificateParams::default()
 			};
-			let ee_cert = ee_params.signed_by(&ee_key, &issuer).unwrap();
+			let ee_cert = ee_params.signed_by(&ee_key, &ca).unwrap();
 
 			let (_, x509_ee) = x509_parser::parse_x509_certificate(ee_cert.der()).unwrap();
 			assert_eq!(

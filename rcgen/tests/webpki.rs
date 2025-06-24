@@ -420,13 +420,8 @@ fn test_webpki_imported_ca() {
 	params.key_usages.push(KeyUsagePurpose::KeyCertSign);
 	let ca_cert = params.self_signed(&ca_key).unwrap();
 
-	let ca_cert_der = ca_cert.der();
-
-	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der).unwrap();
-	assert_eq!(
-		imported_ca_cert_params.key_usages,
-		vec![KeyUsagePurpose::KeyCertSign]
-	);
+	let ca = Issuer::from_ca_cert_der(ca_cert.der(), ca_key).unwrap();
+	assert_eq!(ca.key_usages(), &[KeyUsagePurpose::KeyCertSign]);
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
@@ -436,14 +431,13 @@ fn test_webpki_imported_ca() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert_key = KeyPair::generate().unwrap();
-	let ca = Issuer::new(imported_ca_cert_params, ca_key);
 	let cert = params.signed_by(&cert_key, &ca).unwrap();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
 		cert.der(),
 		&cert_key,
-		ca_cert_der,
+		ca_cert.der(),
 		webpki::ring::ECDSA_P256_SHA256,
 		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
@@ -460,9 +454,7 @@ fn test_webpki_imported_ca_with_printable_string() {
 	);
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = params.self_signed(&ca_key).unwrap();
-
-	let ca_cert_der = ca_cert.der();
-	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der).unwrap();
+	let ca = Issuer::from_ca_cert_der(ca_cert.der(), ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
 	params
@@ -472,14 +464,13 @@ fn test_webpki_imported_ca_with_printable_string() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert_key = KeyPair::generate().unwrap();
-	let ca = Issuer::new(imported_ca_cert_params, ca_key);
 	let cert = params.signed_by(&cert_key, &ca).unwrap();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
 		cert.der(),
 		&cert_key,
-		ca_cert_der,
+		ca_cert.der(),
 		webpki::ring::ECDSA_P256_SHA256,
 		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
