@@ -2,7 +2,7 @@
 
 use time::{Duration, OffsetDateTime};
 
-use rcgen::{BasicConstraints, Certificate, CertificateParams, KeyPair};
+use rcgen::{BasicConstraints, Certificate, CertificateParams, Issuer, KeyPair};
 use rcgen::{
 	CertificateRevocationList, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope,
 };
@@ -97,6 +97,7 @@ pub fn test_crl() -> (
 		KeyUsagePurpose::CrlSign,
 	];
 	let issuer_cert = issuer.self_signed(&key_pair).unwrap();
+	let ca = Issuer::new(issuer, key_pair);
 
 	let now = OffsetDateTime::now_utc();
 	let next_week = now + Duration::weeks(1);
@@ -121,7 +122,7 @@ pub fn test_crl() -> (
 		key_identifier_method: KeyIdMethod::Sha256,
 	};
 
-	let crl = params.signed_by(&issuer, &key_pair).unwrap();
+	let crl = params.signed_by(&ca).unwrap();
 	(params, crl, issuer_cert)
 }
 

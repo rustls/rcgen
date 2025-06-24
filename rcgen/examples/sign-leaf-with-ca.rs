@@ -1,13 +1,13 @@
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DnType, DnValue::PrintableString,
-	ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose,
+	ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair, KeyUsagePurpose,
 };
 use time::{Duration, OffsetDateTime};
 
 /// Example demonstrating signing end-entity certificate with ca
 fn main() {
-	let (ca_params, ca, ca_key) = new_ca();
-	let end_entity = new_end_entity(&ca_params, &ca_key);
+	let (ca, issuer) = new_ca();
+	let end_entity = new_end_entity(&issuer);
 
 	let end_entity_pem = end_entity.pem();
 	println!("directly signed end-entity certificate: {end_entity_pem}");
@@ -16,7 +16,7 @@ fn main() {
 	println!("ca certificate: {ca_cert_pem}");
 }
 
-fn new_ca() -> (CertificateParams, Certificate, KeyPair) {
+fn new_ca() -> (Certificate, Issuer<'static, KeyPair>) {
 	let mut params =
 		CertificateParams::new(Vec::default()).expect("empty subject alt name can't produce error");
 	let (yesterday, tomorrow) = validity_period();
@@ -37,10 +37,10 @@ fn new_ca() -> (CertificateParams, Certificate, KeyPair) {
 
 	let key_pair = KeyPair::generate().unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
-	(params, cert, key_pair)
+	(cert, Issuer::new(params, key_pair))
 }
 
-fn new_end_entity(ca: &CertificateParams, ca_key: &KeyPair) -> Certificate {
+fn new_end_entity(issuer: &Issuer<'static, KeyPair>) -> Certificate {
 	let name = "entity.other.host";
 	let mut params = CertificateParams::new(vec![name.into()]).expect("we know the name is valid");
 	let (yesterday, tomorrow) = validity_period();
@@ -54,7 +54,7 @@ fn new_end_entity(ca: &CertificateParams, ca_key: &KeyPair) -> Certificate {
 	params.not_after = tomorrow;
 
 	let key_pair = KeyPair::generate().unwrap();
-	params.signed_by(&key_pair, ca, ca_key).unwrap()
+	params.signed_by(&key_pair, issuer).unwrap()
 }
 
 fn validity_period() -> (OffsetDateTime, OffsetDateTime) {

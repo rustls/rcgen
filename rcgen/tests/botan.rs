@@ -2,7 +2,7 @@
 
 use time::{Duration, OffsetDateTime};
 
-use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa};
+use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, Issuer};
 use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams};
 use rcgen::{DnValue, KeyPair};
 use rcgen::{KeyUsagePurpose, SerialNumber};
@@ -143,7 +143,8 @@ fn test_botan_separate_ca() {
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
 
 	let key_pair = KeyPair::generate().unwrap();
-	let cert = params.signed_by(&key_pair, &ca_params, &ca_key).unwrap();
+	let ca = Issuer::new(ca_params, ca_key);
+	let cert = params.signed_by(&key_pair, &ca).unwrap();
 	check_cert_ca(cert.der(), &cert, ca_cert.der());
 }
 
@@ -169,9 +170,8 @@ fn test_botan_imported_ca() {
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
 
 	let key_pair = KeyPair::generate().unwrap();
-	let cert = params
-		.signed_by(&key_pair, &imported_ca_cert_params, &ca_key)
-		.unwrap();
+	let ca = Issuer::new(imported_ca_cert_params, ca_key);
+	let cert = params.signed_by(&key_pair, &ca).unwrap();
 	check_cert_ca(cert.der(), &cert, ca_cert_der);
 }
 
@@ -200,9 +200,8 @@ fn test_botan_imported_ca_with_printable_string() {
 	// Botan has a sanity check that enforces a maximum expiration date
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
 	let key_pair = KeyPair::generate().unwrap();
-	let cert = params
-		.signed_by(&key_pair, &imported_ca_cert_params, &imported_ca_key)
-		.unwrap();
+	let ca = Issuer::new(imported_ca_cert_params, imported_ca_key);
+	let cert = params.signed_by(&key_pair, &ca).unwrap();
 
 	check_cert_ca(cert.der(), &cert, ca_cert_der);
 }
@@ -219,6 +218,7 @@ fn test_botan_crl_parse() {
 		KeyUsagePurpose::CrlSign,
 	];
 	let issuer_key = KeyPair::generate_for(alg).unwrap();
+	let ca = Issuer::new(issuer, issuer_key);
 
 	// Create an end entity cert issued by the issuer.
 	let (mut ee, _) = util::default_params();
@@ -227,7 +227,7 @@ fn test_botan_crl_parse() {
 	// Botan has a sanity check that enforces a maximum expiration date
 	ee.not_after = rcgen::date_time_ymd(3016, 1, 1);
 	let ee_key = KeyPair::generate_for(alg).unwrap();
-	let ee_cert = ee.signed_by(&ee_key, &issuer, &issuer_key).unwrap();
+	let ee_cert = ee.signed_by(&ee_key, &ca).unwrap();
 	let botan_ee = botan::Certificate::load(ee_cert.der()).unwrap();
 
 	// Generate a CRL with the issuer that revokes the EE cert.
@@ -246,7 +246,7 @@ fn test_botan_crl_parse() {
 		key_identifier_method: rcgen::KeyIdMethod::Sha256,
 	};
 
-	let crl = crl.signed_by(&issuer, &issuer_key).unwrap();
+	let crl = crl.signed_by(&ca).unwrap();
 
 	// We should be able to load the CRL in both serializations.
 	botan::CRL::load(crl.pem().unwrap().as_ref()).unwrap();

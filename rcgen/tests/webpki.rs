@@ -14,8 +14,8 @@ use webpki::{
 };
 
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DnType, Error, IsCa, KeyPair, PublicKeyData,
-	SigningKey,
+	BasicConstraints, Certificate, CertificateParams, DnType, Error, IsCa, Issuer, KeyPair,
+	PublicKeyData, SigningKey,
 };
 use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams};
 #[cfg(feature = "x509-parser")]
@@ -275,7 +275,8 @@ fn test_webpki_separate_ca() {
 		.push(DnType::CommonName, "Dev domain");
 
 	let key_pair = KeyPair::generate().unwrap();
-	let cert = params.signed_by(&key_pair, &ca_params, &ca_key).unwrap();
+	let ca = Issuer::new(ca_params, ca_key);
+	let cert = params.signed_by(&key_pair, &ca).unwrap();
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
 		cert.der(),
@@ -303,7 +304,8 @@ fn test_webpki_separate_ca_with_other_signing_alg() {
 		.push(DnType::CommonName, "Dev domain");
 
 	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ED25519).unwrap();
-	let cert = params.signed_by(&key_pair, &ca_params, &ca_key).unwrap();
+	let ca = Issuer::new(ca_params, ca_key);
+	let cert = params.signed_by(&key_pair, &ca).unwrap();
 	check_cert_ca(
 		cert.der(),
 		&key_pair,
@@ -434,9 +436,8 @@ fn test_webpki_imported_ca() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert_key = KeyPair::generate().unwrap();
-	let cert = params
-		.signed_by(&cert_key, &imported_ca_cert_params, &ca_key)
-		.unwrap();
+	let ca = Issuer::new(imported_ca_cert_params, ca_key);
+	let cert = params.signed_by(&cert_key, &ca).unwrap();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
@@ -471,9 +472,8 @@ fn test_webpki_imported_ca_with_printable_string() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert_key = KeyPair::generate().unwrap();
-	let cert = params
-		.signed_by(&cert_key, &imported_ca_cert_params, &ca_key)
-		.unwrap();
+	let ca = Issuer::new(imported_ca_cert_params, ca_key);
+	let cert = params.signed_by(&cert_key, &ca).unwrap();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
@@ -536,16 +536,17 @@ fn test_certificate_from_csr() {
 		assert!(ekus_contained.contains(eku));
 	}
 
-	let cert = csr.signed_by(&ca_params, &ca_key).unwrap();
+	let ekus = ca_params.extended_key_usages.clone();
+	let ca = Issuer::new(ca_params, ca_key);
+	let cert = csr.signed_by(&ca).unwrap();
 
 	let ekus_contained = &csr.params.extended_key_usages;
 	for eku in &eku_test {
 		assert!(ekus_contained.contains(eku));
 	}
 
-	let eku_cert = &ca_params.extended_key_usages;
 	for eku in &eku_test {
-		assert!(eku_cert.contains(eku));
+		assert!(ekus.contains(eku));
 	}
 
 	let sign_fn =
@@ -629,7 +630,8 @@ fn test_webpki_crl_revoke() {
 	ee.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
 	ee.serial_number = Some(SerialNumber::from(99999));
 	let ee_key = KeyPair::generate_for(alg).unwrap();
-	let ee_cert = ee.signed_by(&ee_key, &issuer, &issuer_key).unwrap();
+	let issuer = Issuer::new(issuer, issuer_key);
+	let ee_cert = ee.signed_by(&ee_key, &issuer).unwrap();
 
 	// Set up webpki's verification requirements.
 	let trust_anchor = anchor_from_trusted_cert(issuer_cert.der()).unwrap();
@@ -666,7 +668,7 @@ fn test_webpki_crl_revoke() {
 		}],
 		key_identifier_method: rcgen::KeyIdMethod::Sha256,
 	}
-	.signed_by(&issuer, &issuer_key)
+	.signed_by(&issuer)
 	.unwrap();
 
 	let crl = CertRevocationList::from(BorrowedCertRevocationList::from_der(crl.der()).unwrap());

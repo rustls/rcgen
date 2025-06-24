@@ -3,7 +3,8 @@ use std::{fmt, fs::File, io, path::Path};
 use bpaf::Bpaf;
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType,
-	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
+	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair, KeyUsagePurpose,
+	SanType,
 };
 
 #[cfg(feature = "aws_lc_rs")]
@@ -116,9 +117,8 @@ impl CaBuilder {
 		let key_pair = self.alg.to_key_pair()?;
 		let cert = self.params.self_signed(&key_pair)?;
 		Ok(Ca {
-			params: self.params,
 			cert,
-			key_pair,
+			issuer: Issuer::new(self.params, key_pair),
 		})
 	}
 }
@@ -126,8 +126,7 @@ impl CaBuilder {
 /// End-entity [Certificate]
 pub struct Ca {
 	cert: Certificate,
-	params: CertificateParams,
-	key_pair: KeyPair,
+	issuer: Issuer<'static, KeyPair>,
 }
 
 impl Ca {
@@ -135,7 +134,7 @@ impl Ca {
 	pub fn serialize_pem(&self) -> PemCertifiedKey {
 		PemCertifiedKey {
 			cert_pem: self.cert.pem(),
-			private_key_pem: self.key_pair.serialize_pem(),
+			private_key_pem: self.issuer.key().serialize_pem(),
 		}
 	}
 	/// Return `&Certificate`
@@ -149,16 +148,11 @@ impl fmt::Debug for Ca {
 	/// Formats the `Ca` information without revealing the key pair.
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		// The key pair is omitted from the debug output as it contains secret information.
-		let Ca {
-			cert,
-			params,
-			key_pair,
-		} = self;
+		let Ca { cert, issuer } = self;
 
 		f.debug_struct("Ca")
 			.field("cert", cert)
-			.field("params", params)
-			.field("key_pair", key_pair)
+			.field("issuer", issuer)
 			.finish()
 	}
 }
@@ -241,9 +235,7 @@ impl EndEntityBuilder {
 	/// build `EndEntity` Certificate.
 	pub fn build(self, issuer: &Ca) -> Result<EndEntity, rcgen::Error> {
 		let key_pair = self.alg.to_key_pair()?;
-		let cert = self
-			.params
-			.signed_by(&key_pair, &issuer.params, &issuer.key_pair)?;
+		let cert = self.params.signed_by(&key_pair, &issuer.issuer)?;
 		Ok(EndEntity { cert, key_pair })
 	}
 }
