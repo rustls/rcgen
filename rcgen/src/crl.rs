@@ -193,7 +193,7 @@ impl CertificateRevocationListParams {
 			return Err(Error::InvalidCrlNextUpdate);
 		}
 
-		let issuer = Issuer::new(issuer, issuer_key);
+		let issuer = Issuer::from_params(issuer, issuer_key);
 		if !issuer.key_usages.is_empty() && !issuer.key_usages.contains(&KeyUsagePurpose::CrlSign) {
 			return Err(Error::IssuerNotCrlSigner);
 		}
