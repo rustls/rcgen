@@ -63,7 +63,7 @@ impl fmt::Display for Error {
 			CouldNotParseKeyPair => write!(f, "Could not parse key pair")?,
 			#[cfg(feature = "x509-parser")]
 			InvalidNameType => write!(f, "Invalid subject alternative name type")?,
-			InvalidAsn1String(e) => write!(f, "{}", e)?,
+			InvalidAsn1String(e) => write!(f, "{e}")?,
 			InvalidIpAddressOctetLength(actual) => {
 				write!(f, "Invalid IP address octet length of {actual} bytes")?
 			},
@@ -80,12 +80,12 @@ impl fmt::Display for Error {
 			#[cfg(feature = "x509-parser")]
 			UnsupportedExtension => write!(f, "Unsupported extension requested in CSR")?,
 			RingUnspecified => write!(f, "Unspecified ring error")?,
-			RingKeyRejected(e) => write!(f, "Key rejected by ring: {}", e)?,
+			RingKeyRejected(e) => write!(f, "Key rejected by ring: {e}")?,
 
 			Time => write!(f, "Time error")?,
 			RemoteKeyError => write!(f, "Remote key error")?,
 			#[cfg(feature = "pem")]
-			PemError(e) => write!(f, "PEM error: {}", e)?,
+			PemError(e) => write!(f, "PEM error: {e}")?,
 			UnsupportedInCsr => write!(f, "Certificate parameter unsupported in CSR")?,
 			InvalidCrlNextUpdate => write!(f, "Invalid CRL next update parameter")?,
 			IssuerNotCrlSigner => write!(
@@ -123,11 +123,11 @@ impl fmt::Display for InvalidAsn1String {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		use InvalidAsn1String::*;
 		match self {
-			PrintableString(s) => write!(f, "Invalid PrintableString: '{}'", s)?,
-			Ia5String(s) => write!(f, "Invalid IA5String: '{}'", s)?,
-			BmpString(s) => write!(f, "Invalid BMPString: '{}'", s)?,
-			UniversalString(s) => write!(f, "Invalid UniversalString: '{}'", s)?,
-			TeletexString(s) => write!(f, "Invalid TeletexString: '{}'", s)?,
+			PrintableString(s) => write!(f, "Invalid PrintableString: '{s}'")?,
+			Ia5String(s) => write!(f, "Invalid IA5String: '{s}'")?,
+			BmpString(s) => write!(f, "Invalid BMPString: '{s}'")?,
+			UniversalString(s) => write!(f, "Invalid UniversalString: '{s}'")?,
+			TeletexString(s) => write!(f, "Invalid TeletexString: '{s}'")?,
 		};
 		Ok(())
 	}
