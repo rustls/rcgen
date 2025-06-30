@@ -697,9 +697,9 @@ impl PublicKeyData for SubjectPublicKeyInfo {
 
 /// The public key data of a key pair
 pub trait PublicKeyData {
-	/// The subject public key info, in DER format
+	/// The public key data in DER format
 	///
-	/// The key is formatted according to the SubjectPublicKeyInfo struct of X.509.
+	/// The key is formatted according to the X.509 SubjectPublicKeyInfo struct.
 	/// See [RFC 5280 section 4.1](https://tools.ietf.org/html/rfc5280#section-4.1).
 	fn subject_public_key_info(&self) -> Vec<u8> {
 		yasna::construct_der(|writer| serialize_public_key_der(self, writer))
