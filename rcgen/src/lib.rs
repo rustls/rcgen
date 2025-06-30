@@ -934,7 +934,7 @@ mod tests {
 				assert_eq!(
 					alg_i == alg_j,
 					i == j,
-					"Algorighm relationship mismatch for algorithm index pair {i} and {j}"
+					"Algorithm relationship mismatch for algorithm index pair {i} and {j}"
 				);
 			}
 		}
