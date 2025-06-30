@@ -852,7 +852,7 @@ impl SerialNumber {
 
 impl fmt::Display for SerialNumber {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-		let hex: Vec<_> = self.inner.iter().map(|b| format!("{:02x}", b)).collect();
+		let hex: Vec<_> = self.inner.iter().map(|b| format!("{b:02x}")).collect();
 		write!(f, "{}", hex.join(":"))
 	}
 }
@@ -934,9 +934,7 @@ mod tests {
 				assert_eq!(
 					alg_i == alg_j,
 					i == j,
-					"Algorighm relationship mismatch for algorithm index pair {} and {}",
-					i,
-					j
+					"Algorighm relationship mismatch for algorithm index pair {i} and {j}"
 				);
 			}
 		}

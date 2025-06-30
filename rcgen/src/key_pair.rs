@@ -44,9 +44,9 @@ pub(crate) enum KeyPairKind {
 impl fmt::Debug for KeyPairKind {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Self::Ec(key_pair) => write!(f, "{:?}", key_pair),
-			Self::Ed(key_pair) => write!(f, "{:?}", key_pair),
-			Self::Rsa(key_pair, _) => write!(f, "{:?}", key_pair),
+			Self::Ec(key_pair) => write!(f, "{key_pair:?}"),
+			Self::Ed(key_pair) => write!(f, "{key_pair:?}"),
+			Self::Rsa(key_pair, _) => write!(f, "{key_pair:?}"),
 		}
 	}
 }

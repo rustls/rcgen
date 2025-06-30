@@ -137,12 +137,12 @@ fn verify_cert_ca(cert_pem: &str, key: &[u8], ca_cert_pem: &str) {
 			match cln_res {
 				Ok(_) => ready |= 2,
 				Err(HandshakeError::WouldBlock(mh)) => cln_res = mh.handshake(),
-				Err(e) => panic!("Error: {:?}", e),
+				Err(e) => panic!("Error: {e:?}"),
 			}
 			match srv_res {
 				Ok(_) => ready |= 1,
 				Err(HandshakeError::WouldBlock(mh)) => srv_res = mh.handshake(),
-				Err(e) => panic!("Error: {:?}", e),
+				Err(e) => panic!("Error: {e:?}"),
 			}
 			if ready == 3 {
 				break (cln_res.unwrap(), srv_res.unwrap());
