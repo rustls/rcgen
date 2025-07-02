@@ -1,224 +1,224 @@
 name: ci
 
 on:
-  push:
-    branches: ['main', 'rel-*', 'ci/*']
-  pull_request:
-  merge_group:
-  schedule:
-    - cron: '0 18 * * *'
-  workflow_dispatch:
+    push:
+        branches: ["main", "rel-*", "ci/*"]
+    pull_request:
+    merge_group:
+    schedule:
+        - cron: "0 18 * * *"
+    workflow_dispatch:
 
 env:
-  RUSTFLAGS: -D warnings
+    RUSTFLAGS: -D warnings
 
 jobs:
-  lint:
-    name: Format & clippy
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-      - run: cargo fmt -- --check
-      - run: cargo clippy --all-features --all-targets
-      # rustls-cert-gen require either aws_lc_rs or ring feature
-      - run: cargo clippy -p rcgen --no-default-features --all-targets
-      - run: cargo clippy --no-default-features --features ring --all-targets
-      - run: cargo clippy --no-default-features --features aws_lc_rs --all-targets
-      - run: cargo clippy --no-default-features --features aws_lc_rs,pem --all-targets
+    lint:
+        name: Format & clippy
+        runs-on: ubuntu-latest
+        continue-on-error: true
+        steps:
+            - name: Checkout sources
+              uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - name: Install rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: clippy, rustfmt
+            - run: cargo fmt -- --check
+            - run: cargo clippy --all-features --all-targets
+            # rustls-cert-gen require either aws_lc_rs or ring feature
+            - run: cargo clippy -p rcgen --no-default-features --all-targets
+            - run: cargo clippy --no-default-features --features ring --all-targets
+            - run: cargo clippy --no-default-features --features aws_lc_rs --all-targets
+            - run: cargo clippy --no-default-features --features aws_lc_rs,pem --all-targets
 
-  rustdoc:
-    name: Documentation
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain: [stable, nightly]
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.toolchain }}
-      - name: cargo doc (all features)
-        run: cargo doc --all-features --document-private-items
+    rustdoc:
+        name: Documentation
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                toolchain: [stable, nightly]
+        steps:
+            - name: Checkout sources
+              uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - name: Install rust toolchain
+              uses: dtolnay/rust-toolchain@master
+              with:
+                  toolchain: ${{ matrix.toolchain }}
+            - name: cargo doc (all features)
+              run: cargo doc --all-features --document-private-items
+              env:
+                  RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
+
+    check-external-types:
+        name: Validate external types appearing in public API
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout sources
+              uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - name: Install rust toolchain
+              uses: dtolnay/rust-toolchain@master
+              with:
+                  toolchain: nightly-2025-05-04
+                  # ^ sync with https://github.com/awslabs/cargo-check-external-types/blob/main/rust-toolchain.toml
+            - run: cargo install --locked cargo-check-external-types
+            - name: run cargo-check-external-types for rcgen/
+              working-directory: rcgen/
+              run: cargo check-external-types --all-features
+
+    semver:
+        name: Check semver compatibility
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout sources
+              uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+
+            - name: Check semver
+              uses: obi1kenobi/cargo-semver-checks-action@v2
+              with:
+                  exclude: rustls-cert-gen
+
+    msrv:
+        name: Check MSRV
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@master
+              with:
+                  toolchain: 1.71.0
+            - run: cargo check --locked --lib --all-features
+
+    build-windows:
+        runs-on: windows-latest
         env:
-          RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
+            # botan doesn't build on windows if the source is
+            # on a different drive than the artifacts
+            # https://github.com/randombit/botan-rs/issues/82
+            BOTAN_CONFIGURE_LINK_METHOD: copy
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cargo/bin/
+                      ~/.cargo/registry/index/
+                      ~/.cargo/registry/cache/
+                      ~/.cargo/git/db/
+                      target/
+                      $VCPKG_DEFAULT_BINARY_CACHE
+                  key: ${{ runner.os }}-cargo-stable-${{ hashFiles('Cargo.lock') }}
+            - uses: egor-tensin/vs-shell@v2
+              with:
+                  arch: amd64
+            - name: Install Rust
+              uses: dtolnay/rust-toolchain@stable
+            - name: Install NASM for aws-lc-rs on Windows
+              uses: ilammy/setup-nasm@v1
+            - name: Run cargo check
+              run: cargo check --all-targets
+            - name: Run the tests
+              run: cargo test
+            - name: Run the tests with x509-parser enabled
+              run: cargo test --features x509-parser
+            - name: Run the tests with aws_lc_rs backend enabled
+              run: cargo test --no-default-features --features aws_lc_rs,pem
+              # rustls-cert-gen require either aws_lc_rs or ring feature
+            - name: Run the tests with no features enabled
+              run: cargo test -p rcgen --no-default-features
 
-  check-external-types:
-    name: Validate external types appearing in public API
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: nightly-2025-05-04
-          # ^ sync with https://github.com/awslabs/cargo-check-external-types/blob/main/rust-toolchain.toml
-      - run: cargo install --locked cargo-check-external-types
-      - name: run cargo-check-external-types for rcgen/
-        working-directory: rcgen/
-        run: cargo check-external-types --all-features
+    build:
+        strategy:
+            matrix:
+                os: [macOS-latest, ubuntu-latest]
+                toolchain: [stable, beta, nightly, stable 7 months ago]
+                exclude:
+                    - os: macOS-latest
+                      toolchain: beta
+                    - os: macOS-latest
+                      toolchain: nightly
+                    - os: macOS-latest
+                      toolchain: stable 7 months ago
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cargo/bin/
+                      ~/.cargo/registry/index/
+                      ~/.cargo/registry/cache/
+                      ~/.cargo/git/db/
+                      target/
+                  key: ${{ runner.os }}-cargo-${{matrix.toolchain}}-${{ hashFiles('Cargo.lock') }}
+            - name: Install Rust
+              uses: dtolnay/rust-toolchain@master
+              with:
+                  toolchain: ${{ matrix.toolchain }}
+            - name: Run cargo check
+              run: cargo check --all-targets
+            - name: Run the tests
+              run: cargo test
+            - name: Run the tests with x509-parser enabled
+              run: cargo test --features x509-parser
+            - name: Run the tests with aws_lc_rs backend enabled
+              run: cargo test --no-default-features --features aws_lc_rs,pem
 
-  semver:
-    name: Check semver compatibility
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+    # Build rustls-cert-gen as a standalone package, see this PR for why it's needed:
+    # https://github.com/rustls/rcgen/pull/206#pullrequestreview-1816197358
+    build-rustls-cert-gen-standalone:
+        name: Build rustls-cert-gen as a standalone package
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout sources
+              uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - name: Install rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+            - name: Run the tests
+              run: cargo test --package rustls-cert-gen
 
-      - name: Check semver
-        uses: obi1kenobi/cargo-semver-checks-action@v2
-        with:
-          exclude: rustls-cert-gen
-
-  msrv:
-    name: Check MSRV
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.71.0
-      - run: cargo check --locked --lib --all-features
-
-  build-windows:
-    runs-on: windows-latest
-    env:
-      # botan doesn't build on windows if the source is
-      # on a different drive than the artifacts
-      # https://github.com/randombit/botan-rs/issues/82
-      BOTAN_CONFIGURE_LINK_METHOD: copy
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        persist-credentials: false
-    - uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/
-          $VCPKG_DEFAULT_BINARY_CACHE
-        key: ${{ runner.os }}-cargo-stable-${{ hashFiles('Cargo.lock') }}
-    - uses: egor-tensin/vs-shell@v2
-      with:
-        arch: amd64
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-    - name: Install NASM for aws-lc-rs on Windows
-      uses: ilammy/setup-nasm@v1
-    - name: Run cargo check
-      run: cargo check --all-targets
-    - name: Run the tests
-      run: cargo test
-    - name: Run the tests with x509-parser enabled
-      run: cargo test --features x509-parser
-    - name: Run the tests with aws_lc_rs backend enabled
-      run: cargo test --no-default-features --features aws_lc_rs,pem
-      # rustls-cert-gen require either aws_lc_rs or ring feature
-    - name: Run the tests with no features enabled
-      run: cargo test -p rcgen --no-default-features
-
-  build:
-    strategy:
-      matrix:
-        os: [macOS-latest, ubuntu-latest]
-        toolchain: [stable, beta, nightly, stable 7 months ago]
-        exclude:
-          - os: macOS-latest
-            toolchain: beta
-          - os: macOS-latest
-            toolchain: nightly
-          - os: macOS-latest
-            toolchain: stable 7 months ago
-    runs-on: ${{ matrix.os }}
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        persist-credentials: false
-    - uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/
-        key: ${{ runner.os }}-cargo-${{matrix.toolchain}}-${{ hashFiles('Cargo.lock') }}
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ matrix.toolchain }}
-    - name: Run cargo check
-      run: cargo check --all-targets
-    - name: Run the tests
-      run: cargo test
-    - name: Run the tests with x509-parser enabled
-      run: cargo test --features x509-parser
-    - name: Run the tests with aws_lc_rs backend enabled
-      run: cargo test --no-default-features --features aws_lc_rs,pem
-
-  # Build rustls-cert-gen as a standalone package, see this PR for why it's needed:
-  # https://github.com/rustls/rcgen/pull/206#pullrequestreview-1816197358
-  build-rustls-cert-gen-standalone:
-    name: Build rustls-cert-gen as a standalone package
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - name: Run the tests
-        run: cargo test --package rustls-cert-gen
-
-  coverage:
-    name: Measure coverage
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-stable-${{ hashFiles('Cargo.lock') }}
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools
-      - name: Measure coverage
-        run: cargo llvm-cov --all-features --lcov --output-path ./lcov.info
-      - name: Report to codecov.io
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./lcov.info
-          fail_ci_if_error: false
-          verbose: true
+    coverage:
+        name: Measure coverage
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout sources
+              uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cargo/bin/
+                      ~/.cargo/registry/index/
+                      ~/.cargo/registry/cache/
+                      ~/.cargo/git/db/
+                      target/
+                  key: ${{ runner.os }}-cargo-stable-${{ hashFiles('Cargo.lock') }}
+            - name: Install cargo-llvm-cov
+              uses: taiki-e/install-action@cargo-llvm-cov
+            - name: Install rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: llvm-tools
+            - name: Measure coverage
+              run: cargo llvm-cov --all-features --lcov --output-path ./lcov.info
+            - name: Report to codecov.io
+              uses: codecov/codecov-action@v5
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  files: ./lcov.info
+                  fail_ci_if_error: false
+                  verbose: true
