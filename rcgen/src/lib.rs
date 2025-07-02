@@ -831,7 +831,7 @@ pub struct SerialNumber {
 	inner: Vec<u8>,
 }
 
-#[expect(clippy::len_without_is_empty)]
+#[allow(clippy::len_without_is_empty)]
 impl SerialNumber {
 	/// Create a serial number from the given byte slice.
 	pub fn from_slice(bytes: &[u8]) -> SerialNumber {
