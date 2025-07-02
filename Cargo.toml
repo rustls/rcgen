@@ -12,6 +12,7 @@ x509-parser = "0.17"
 [workspace.package]
 license = "MIT OR Apache-2.0"
 edition = "2021"
+rust-version = "1.71"
 readme = "README.md"
 description = "Rust X.509 certificate generator"
 repository = "https://github.com/rustls/rcgen"

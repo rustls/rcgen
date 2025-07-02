@@ -86,6 +86,16 @@ jobs:
         with:
           exclude: rustls-cert-gen
 
+  msrv:
+    name: Check MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.71.0
+      - run: cargo check --locked --lib --all-features
+
   build-windows:
     runs-on: windows-latest
     env:
