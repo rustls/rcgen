@@ -2,9 +2,8 @@ use std::{fmt, fs::File, io, path::Path};
 
 use bpaf::Bpaf;
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType,
-	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair, KeyUsagePurpose,
-	SanType,
+	BasicConstraints, Certificate, CertificateParams, CertifiedIssuer, DistinguishedName, DnType,
+	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
 };
 
 #[cfg(feature = "aws_lc_rs")]
@@ -115,45 +114,30 @@ impl CaBuilder {
 	/// build `Ca` Certificate.
 	pub fn build(self) -> Result<Ca, rcgen::Error> {
 		let key_pair = self.alg.to_key_pair()?;
-		let cert = self.params.self_signed(&key_pair)?;
 		Ok(Ca {
-			cert,
-			issuer: Issuer::new(self.params, key_pair),
+			issuer: CertifiedIssuer::self_signed(self.params, key_pair)?,
 		})
 	}
 }
 
 /// End-entity [Certificate]
+#[derive(Debug)]
 pub struct Ca {
-	cert: Certificate,
-	issuer: Issuer<'static, KeyPair>,
+	issuer: CertifiedIssuer<'static, KeyPair>,
 }
 
 impl Ca {
 	/// Self-sign and serialize
 	pub fn serialize_pem(&self) -> PemCertifiedKey {
 		PemCertifiedKey {
-			cert_pem: self.cert.pem(),
+			cert_pem: self.issuer.pem(),
 			private_key_pem: self.issuer.key().serialize_pem(),
 		}
 	}
 	/// Return `&Certificate`
 	#[allow(dead_code)]
 	pub fn cert(&self) -> &Certificate {
-		&self.cert
-	}
-}
-
-impl fmt::Debug for Ca {
-	/// Formats the `Ca` information without revealing the key pair.
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		// The key pair is omitted from the debug output as it contains secret information.
-		let Ca { cert, issuer } = self;
-
-		f.debug_struct("Ca")
-			.field("cert", cert)
-			.field("issuer", issuer)
-			.finish()
+		self.issuer.as_ref()
 	}
 }
 

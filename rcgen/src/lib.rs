@@ -187,6 +187,12 @@ impl<'a, S> Deref for CertifiedIssuer<'a, S> {
 	}
 }
 
+impl<'a, S> AsRef<Certificate> for CertifiedIssuer<'a, S> {
+	fn as_ref(&self) -> &Certificate {
+		&self.certificate
+	}
+}
+
 /// An issuer that can sign certificates.
 ///
 /// Encapsulates the distinguished name, key identifier method, key usages and signing key
