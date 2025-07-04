@@ -142,6 +142,7 @@ impl Ca {
 }
 
 /// End-entity [Certificate]
+#[derive(Debug)]
 pub struct EndEntity {
 	cert: Certificate,
 	key_pair: KeyPair,
@@ -154,19 +155,6 @@ impl EndEntity {
 			cert_pem: self.cert.pem(),
 			private_key_pem: self.key_pair.serialize_pem(),
 		}
-	}
-}
-
-impl fmt::Debug for EndEntity {
-	/// Formats the `EndEntity` information without revealing the key pair.
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		// The key pair is omitted from the debug output as it contains secret information.
-		let EndEntity { cert, key_pair } = self;
-
-		f.debug_struct("EndEntity")
-			.field("cert", cert)
-			.field("key_pair", key_pair)
-			.finish()
 	}
 }
 
