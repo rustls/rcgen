@@ -41,7 +41,8 @@ use std::net::IpAddr;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::ops::Deref;
 
-#[cfg(feature = "x509-parser")]
+#[cfg(feature = "pem")]
+use pem::Pem;
 use pki_types::CertificateDer;
 use time::{OffsetDateTime, Time};
 use yasna::models::ObjectIdentifier;
@@ -136,6 +137,56 @@ pub fn generate_simple_self_signed(
 	Ok(CertifiedKey { cert, signing_key })
 }
 
+/// An [`Issuer`] wrapper that also contains the issuer's [`Certificate`].
+#[derive(Debug)]
+pub struct CertifiedIssuer<'a, S> {
+	certificate: Certificate,
+	issuer: Issuer<'a, S>,
+}
+
+impl<'a, S: SigningKey> CertifiedIssuer<'a, S> {
+	/// Create a new issuer from the given parameters and key, with a self-signed certificate.
+	pub fn self_signed(params: CertificateParams, signing_key: S) -> Result<Self, Error> {
+		Ok(Self {
+			certificate: params.self_signed(&signing_key)?,
+			issuer: Issuer::new(params, signing_key),
+		})
+	}
+
+	/// Create a new issuer from the given parameters and key, signed by the given `issuer`.
+	pub fn signed_by(
+		params: CertificateParams,
+		signing_key: S,
+		issuer: &Issuer<'_, impl SigningKey>,
+	) -> Result<Self, Error> {
+		Ok(Self {
+			certificate: params.signed_by(&signing_key, issuer)?,
+			issuer: Issuer::new(params, signing_key),
+		})
+	}
+
+	/// Get the certificate in PEM encoded format.
+	#[cfg(feature = "pem")]
+	pub fn pem(&self) -> String {
+		pem::encode_config(&Pem::new("CERTIFICATE", self.der().to_vec()), ENCODE_CONFIG)
+	}
+
+	/// Get the certificate in DER encoded format.
+	///
+	/// See also [`Certificate::der()`]
+	pub fn der(&self) -> &CertificateDer<'static> {
+		self.certificate.der()
+	}
+}
+
+impl<'a, S> Deref for CertifiedIssuer<'a, S> {
+	type Target = Issuer<'a, S>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.issuer
+	}
+}
+
 /// An issuer that can sign certificates.
 ///
 /// Encapsulates the distinguished name, key identifier method, key usages and signing key
@@ -210,7 +261,7 @@ impl<'a, S: SigningKey> Issuer<'a, S> {
 	}
 }
 
-impl<'a, S: SigningKey> fmt::Debug for Issuer<'a, S> {
+impl<'a, S> fmt::Debug for Issuer<'a, S> {
 	/// Formats the issuer information without revealing the key pair.
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		// The key pair is omitted from the debug output as it contains secret information.
