@@ -158,7 +158,11 @@ impl<'a, S: SigningKey> Issuer<'a, S> {
 		}
 	}
 
-	fn from_params(params: &'a CertificateParams, signing_key: &'a S) -> Self {
+	/// Create a new issuer from the given parameters and signing key references.
+	///
+	/// Use [`Issuer::new`] instead if you want to obtain an [`Issuer`] that owns
+	/// its parameters.
+	pub fn from_params(params: &'a CertificateParams, signing_key: &'a S) -> Self {
 		Self {
 			distinguished_name: Cow::Borrowed(&params.distinguished_name),
 			key_identifier_method: Cow::Borrowed(&params.key_identifier_method),
