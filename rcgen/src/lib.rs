@@ -177,6 +177,11 @@ impl<'a, S: SigningKey> CertifiedIssuer<'a, S> {
 	pub fn der(&self) -> &CertificateDer<'static> {
 		self.certificate.der()
 	}
+
+	/// Converts the `CertifiedIssuer` into its inner `Issuer` and `Certificate`
+	pub fn into_issuer_and_certificate(self) -> (Issuer<'a, S>, Certificate) {
+		(self.issuer, self.certificate)
+	}
 }
 
 impl<'a, S> Deref for CertifiedIssuer<'a, S> {
