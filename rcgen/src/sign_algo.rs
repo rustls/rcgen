@@ -127,7 +127,7 @@ pub(crate) mod algo {
 		params: SignatureAlgorithmParams::Null,
 	};
 
-	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+	/// RSA signing with PKCS#1 1.5 padding and SHA-384 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[RSA_ENCRYPTION],
 		#[cfg(feature = "crypto")]
