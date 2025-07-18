@@ -214,9 +214,6 @@ impl CertificateParams {
 
 	/// Write a certificate's KeyUsage as defined in RFC 5280.
 	fn write_key_usage(&self, writer: DERWriter) {
-		// RFC 5280 defines 9 key usages, which we detail in our key usage enum
-		// We could use std::mem::variant_count here, but it's experimental
-		const KEY_USAGE_BITS: usize = 9;
 		if self.key_usages.is_empty() {
 			return;
 		}
@@ -227,7 +224,16 @@ impl CertificateParams {
 			let bit_string = self.key_usages.iter().fold(0u16, |bit_string, key_usage| {
 				bit_string | key_usage.to_u16()
 			});
-			writer.write_bitvec_bytes(&bit_string.to_be_bytes(), KEY_USAGE_BITS);
+
+			match u16::BITS - bit_string.trailing_zeros() {
+				bits @ 0..=8 => {
+					writer.write_bitvec_bytes(&bit_string.to_be_bytes()[..1], bits as usize)
+				},
+				bits @ 9..=16 => {
+					writer.write_bitvec_bytes(&bit_string.to_be_bytes(), bits as usize)
+				},
+				_ => unreachable!(),
+			}
 		});
 	}
 
@@ -1146,6 +1152,9 @@ mod tests {
 
 		for ext in cert.extensions() {
 			if key_usage_oid_str == ext.oid.to_id_string() {
+				// should have the minimal number of octets, and no extra trailing zero bytes
+				// ref. https://github.com/rustls/rcgen/issues/368
+				assert_eq!(ext.value, vec![0x03, 0x02, 0x05, 0xe0]);
 				if let x509_parser::extensions::ParsedExtension::KeyUsage(usage) =
 					ext.parsed_extension()
 				{
