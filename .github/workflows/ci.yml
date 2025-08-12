@@ -19,7 +19,7 @@ jobs:
         continue-on-error: true
         steps:
             - name: Checkout sources
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   persist-credentials: false
             - name: Install rust toolchain
@@ -42,7 +42,7 @@ jobs:
                 toolchain: [stable, nightly]
         steps:
             - name: Checkout sources
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   persist-credentials: false
             - name: Install rust toolchain
@@ -59,7 +59,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout sources
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   persist-credentials: false
             - name: Install rust toolchain
@@ -77,7 +77,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout sources
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   persist-credentials: false
 
@@ -90,7 +90,7 @@ jobs:
         name: Check MSRV
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
             - uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: 1.71.0
@@ -104,7 +104,7 @@ jobs:
             # https://github.com/randombit/botan-rs/issues/82
             BOTAN_CONFIGURE_LINK_METHOD: copy
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
               with:
                   persist-credentials: false
             - uses: actions/cache@v4
@@ -150,7 +150,7 @@ jobs:
                       toolchain: stable 7 months ago
         runs-on: ${{ matrix.os }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
               with:
                   persist-credentials: false
             - uses: actions/cache@v4
@@ -182,7 +182,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout sources
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   persist-credentials: false
             - name: Install rust toolchain
@@ -195,7 +195,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout sources
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   persist-credentials: false
             - uses: actions/cache@v4
