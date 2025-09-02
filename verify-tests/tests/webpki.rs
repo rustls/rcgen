@@ -1,5 +1,9 @@
 use std::time::Duration as StdDuration;
 
+#[cfg(feature = "aws_lc_rs_unstable")]
+use aws_lc_rs::unstable::signature::{
+	PqdsaKeyPair, PqdsaSigningAlgorithm, ML_DSA_44_SIGNING, ML_DSA_65_SIGNING, ML_DSA_87_SIGNING,
+};
 use pki_types::{CertificateDer, ServerName, SignatureVerificationAlgorithm, UnixTime};
 use ring::rand::SystemRandom;
 use ring::signature::{self, EcdsaKeyPair, EcdsaSigningAlgorithm, Ed25519KeyPair, KeyPair as _};
@@ -36,6 +40,15 @@ fn sign_msg_ed25519(key_pair: &KeyPair, msg: &[u8]) -> Vec<u8> {
 	let key_pair = Ed25519KeyPair::from_pkcs8_maybe_unchecked(&pk_der).unwrap();
 	let signature = key_pair.sign(msg);
 	signature.as_ref().to_vec()
+}
+
+#[cfg(feature = "aws_lc_rs_unstable")]
+fn sign_msg_pq(key_pair: &KeyPair, msg: &[u8], alg: &'static PqdsaSigningAlgorithm) -> Vec<u8> {
+	let pk_der = key_pair.serialize_der();
+	let key_pair = PqdsaKeyPair::from_pkcs8(alg, &pk_der).unwrap();
+	let mut sig = vec![0; alg.signature_len()];
+	key_pair.sign(msg, &mut sig).unwrap();
+	sig.to_owned()
 }
 
 #[cfg(feature = "pem")]
@@ -224,6 +237,43 @@ fn test_webpki_rsa_given() {
 		|msg, cert| sign_msg_rsa(msg, cert, &signature::RSA_PKCS1_SHA256),
 	);
 }
+
+#[cfg(all(feature = "pem", feature = "aws_lc_rs_unstable"))]
+#[test]
+fn test_webpki_ml_dsa() {
+	let (params, _) = util::default_params();
+	for (rcgen_alg, webpki_alg, signing_alg) in ML_DSA_ALGS {
+		let key_pair = KeyPair::generate_for(rcgen_alg).unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
+
+		// Now verify the certificate.
+		let sign_fn = |cert, msg| sign_msg_pq(cert, msg, signing_alg);
+		check_cert(cert.der(), &cert, &key_pair, *webpki_alg, sign_fn);
+	}
+}
+
+#[cfg(feature = "aws_lc_rs_unstable")]
+const ML_DSA_ALGS: &[(
+	&rcgen::SignatureAlgorithm,
+	&dyn SignatureVerificationAlgorithm,
+	&PqdsaSigningAlgorithm,
+)] = &[
+	(
+		&rcgen::PKCS_ML_DSA_44,
+		webpki::aws_lc_rs::ML_DSA_44,
+		&ML_DSA_44_SIGNING,
+	),
+	(
+		&rcgen::PKCS_ML_DSA_65,
+		webpki::aws_lc_rs::ML_DSA_65,
+		&ML_DSA_65_SIGNING,
+	),
+	(
+		&rcgen::PKCS_ML_DSA_87,
+		webpki::aws_lc_rs::ML_DSA_87,
+		&ML_DSA_87_SIGNING,
+	),
+];
 
 #[cfg(feature = "pem")]
 #[test]

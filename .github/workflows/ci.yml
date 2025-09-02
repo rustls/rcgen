@@ -27,12 +27,15 @@ jobs:
               with:
                   components: clippy, rustfmt
             - run: cargo fmt -- --check
-            - run: cargo clippy --all-features --all-targets
+            # `fips` and `aws_lc_rs_unstable` cannot be used together, so avoid `--all-features`
+            - run: cargo clippy --features ring,pem,x509-parser --all-targets
             # rustls-cert-gen require either aws_lc_rs or ring feature
             - run: cargo clippy -p rcgen --no-default-features --all-targets
             - run: cargo clippy --no-default-features --features ring --all-targets
+            - run: cargo clippy --no-default-features --features aws_lc_rs,pem,x509-parser --all-targets
+            - run: cargo clippy --no-default-features --features aws_lc_rs_unstable,pem,x509-parser --all-targets
             - run: cargo clippy --no-default-features --features aws_lc_rs --all-targets
-            - run: cargo clippy --no-default-features --features aws_lc_rs,pem --all-targets
+            - run: cargo clippy --no-default-features --features fips,pem,x509-parser --all-targets
 
     rustdoc:
         name: Documentation
@@ -49,8 +52,16 @@ jobs:
               uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: ${{ matrix.toolchain }}
-            - name: cargo doc (all features)
-              run: cargo doc --all-features --document-private-items
+            - name: cargo doc (ring)
+              run: cargo doc --features ring,pem,x509-parser --document-private-items
+              env:
+                  RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
+            - name: cargo doc (aws_lc_rs_unstable)
+              run: cargo doc --features aws_lc_rs_unstable,pem,x509-parser --document-private-items
+              env:
+                  RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
+            - name: cargo doc (fips)
+              run: cargo doc --no-default-features --features fips --document-private-items
               env:
                   RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
 
@@ -70,7 +81,10 @@ jobs:
             - run: cargo install --locked cargo-check-external-types
             - name: run cargo-check-external-types for rcgen/
               working-directory: rcgen/
-              run: cargo check-external-types --all-features
+              run: cargo check-external-types --features ring,pem,x509-parser
+            - name: run cargo-check-external-types for rcgen/
+              working-directory: rcgen/
+              run: cargo check-external-types --features aws_lc_rs_unstable,pem,x509-parser
 
     semver:
         name: Check semver compatibility
@@ -94,7 +108,9 @@ jobs:
             - uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: 1.71.0
-            - run: cargo check --locked --lib --all-features
+            - run: cargo check --locked --lib --features ring,pem,x509-parser
+            - run: cargo check --locked --lib --features aws_lc_rs_unstable
+            - run: cargo check --locked --lib --features fips
 
     build-windows:
         runs-on: windows-latest
@@ -214,7 +230,7 @@ jobs:
               with:
                   components: llvm-tools
             - name: Measure coverage
-              run: cargo llvm-cov --all-features --lcov --output-path ./lcov.info
+              run: cargo llvm-cov --features ring,pem,x509-parser --lcov --output-path ./lcov.info
             - name: Report to codecov.io
               uses: codecov/codecov-action@v5
               with:

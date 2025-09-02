@@ -7,6 +7,7 @@ publish = false
 [features]
 default = []
 aws_lc_rs = ["rcgen/aws_lc_rs"]
+aws_lc_rs_unstable = ["dep:aws-lc-rs", "rcgen/aws_lc_rs_unstable", "rustls-webpki/aws-lc-rs-unstable"]
 fips = ["rcgen/fips"]
 pem = ["dep:pem", "rcgen/pem"]
 ring = ["rcgen/ring"]
@@ -17,13 +18,13 @@ aws-lc-rs = { workspace = true, optional = true }
 pem = { workspace = true, optional = true }
 rcgen = { path = "../rcgen", features = ["pem", "x509-parser"] }
 ring = { workspace = true }
+rustls-webpki = { workspace = true }
 time = { workspace = true }
 x509-parser = { workspace = true, features = ["verify"], optional = true }
 yasna = { workspace = true }
 
 [dev-dependencies]
 pki-types = { workspace = true }
-rustls-webpki = { workspace = true }
 botan = { workspace = true }
 ring = { workspace = true }
 
