@@ -14,7 +14,7 @@ keywords = ["mkcert", "ca", "certificate"]
 [workspace.dependencies]
 anyhow = "1.0.75"
 assert_fs = "1.0.13"
-aws-lc-rs = { version = "1.6.0", default-features = false }
+aws-lc-rs = { version = "1.13.3", default-features = false }
 botan = { version = "0.12", features = ["vendored"] }
 bpaf = { version = "0.9.5", features = ["derive"] }
 openssl = "0.10"

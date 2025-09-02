@@ -25,6 +25,13 @@ pub(crate) const EC_SECP_384_R1: &[u64] = &[1, 3, 132, 0, 34];
 #[cfg(feature = "aws_lc_rs")]
 pub(crate) const EC_SECP_521_R1: &[u64] = &[1, 3, 132, 0, 35];
 
+#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+pub(crate) const ML_DSA_44: &[u64] = &[2, 16, 840, 1, 101, 3, 4, 3, 17];
+#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+pub(crate) const ML_DSA_65: &[u64] = &[2, 16, 840, 1, 101, 3, 4, 3, 18];
+#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+pub(crate) const ML_DSA_87: &[u64] = &[2, 16, 840, 1, 101, 3, 4, 3, 19];
+
 /// rsaEncryption in [RFC 4055](https://www.rfc-editor.org/rfc/rfc4055#section-6)
 pub(crate) const RSA_ENCRYPTION: &[u64] = &[1, 2, 840, 113549, 1, 1, 1];
 

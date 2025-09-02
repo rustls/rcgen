@@ -27,6 +27,8 @@ use crate::sign_algo::{algo::*, SignAlgo};
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{sign_algo::SignatureAlgorithm, Error};
+#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+use aws_lc_rs::unstable::signature::PqdsaKeyPair;
 
 /// A key pair variant
 #[allow(clippy::large_enum_variant)]
@@ -36,6 +38,9 @@ pub(crate) enum KeyPairKind {
 	Ec(EcdsaKeyPair),
 	/// A Ed25519 key pair
 	Ed(Ed25519KeyPair),
+	/// A Pqdsa key pair
+	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	Pq(PqdsaKeyPair),
 	/// A RSA key pair
 	Rsa(RsaKeyPair, &'static dyn RsaEncoding),
 }
@@ -46,6 +51,8 @@ impl fmt::Debug for KeyPairKind {
 		match self {
 			Self::Ec(key_pair) => write!(f, "{key_pair:?}"),
 			Self::Ed(key_pair) => write!(f, "{key_pair:?}"),
+			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			Self::Pq(key_pair) => write!(f, "{key_pair:?}"),
 			Self::Rsa(key_pair, _) => write!(f, "{key_pair:?}"),
 		}
 	}
@@ -107,6 +114,17 @@ impl KeyPair {
 				let key_pair = Ed25519KeyPair::from_pkcs8(key_pair_doc.as_ref()).unwrap();
 				Ok(KeyPair {
 					kind: KeyPairKind::Ed(key_pair),
+					alg,
+					serialized_der: key_pair_serialized,
+				})
+			},
+			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			SignAlgo::PqDsa(sign_alg) => {
+				let key_pair = PqdsaKeyPair::generate(sign_alg)._err()?;
+				let key_pair_serialized = key_pair.to_pkcs8()._err()?.as_ref().to_vec();
+
+				Ok(KeyPair {
+					kind: KeyPairKind::Pq(key_pair),
 					alg,
 					serialized_der: key_pair_serialized,
 				})
@@ -433,6 +451,12 @@ impl SigningKey for KeyPair {
 				signature.as_ref().to_owned()
 			},
 			KeyPairKind::Ed(kp) => kp.sign(msg).as_ref().to_owned(),
+			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			KeyPairKind::Pq(kp) => {
+				let mut signature = vec![0; kp.algorithm().signature_len()];
+				kp.sign(msg, &mut signature)._err()?;
+				signature
+			},
 			KeyPairKind::Rsa(kp, padding_alg) => {
 				let system_random = SystemRandom::new();
 				let mut signature = vec![0; rsa_key_pair_public_modulus_len(kp)];
@@ -450,6 +474,8 @@ impl PublicKeyData for KeyPair {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
 			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
+			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			KeyPairKind::Pq(kp) => kp.public_key().as_ref(),
 			KeyPairKind::Rsa(kp, _) => kp.public_key().as_ref(),
 		}
 	}
