@@ -52,12 +52,6 @@ impl fmt::Debug for KeyPairKind {
 }
 
 /// A key pair used to sign certificates and CSRs
-///
-/// Note that ring, the underlying library to handle RSA keys
-/// requires them to be in a special format, meaning that
-/// `openssl genrsa` doesn't work. See ring's [documentation](ring::signature::RsaKeyPair::from_pkcs8)
-/// for how to generate RSA keys in the wanted format
-/// and conversion between the formats.
 #[cfg(feature = "crypto")]
 pub struct KeyPair {
 	pub(crate) kind: KeyPairKind,
@@ -378,9 +372,12 @@ impl KeyPair {
 
 	/// Get the raw public key of this key pair
 	///
-	/// The key is in raw format, as how [`ring::signature::KeyPair::public_key`]
-	/// would output, and how [`ring::signature::UnparsedPublicKey::verify`]
+	/// The key is in raw format, as how [`KeyPair::public_key()`][public_key]
+	/// would output, and how [`UnparsedPublicKey::verify()`][verify]
 	/// would accept.
+	///
+	/// [public_key]: crate::ring_like::signature::KeyPair::public_key()
+	/// [verify]: crate::ring_like::signature::UnparsedPublicKey::verify()
 	pub fn public_key_raw(&self) -> &[u8] {
 		self.der_bytes()
 	}
