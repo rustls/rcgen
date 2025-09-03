@@ -4,6 +4,7 @@ use bpaf::Bpaf;
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, CertifiedIssuer, DistinguishedName, DnType,
 	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
+	SignatureAlgorithm,
 };
 
 #[derive(Debug, Clone)]
@@ -108,7 +109,7 @@ impl CaBuilder {
 	}
 	/// build `Ca` Certificate.
 	pub fn build(self) -> Result<Ca, rcgen::Error> {
-		let key_pair = self.alg.to_key_pair()?;
+		let key_pair = KeyPair::generate_for(self.alg.into())?;
 		Ok(Ca {
 			issuer: CertifiedIssuer::self_signed(self.params, key_pair)?,
 		})
@@ -201,7 +202,7 @@ impl EndEntityBuilder {
 	}
 	/// build `EndEntity` Certificate.
 	pub fn build(self, issuer: &Ca) -> Result<EndEntity, rcgen::Error> {
-		let key_pair = self.alg.to_key_pair()?;
+		let key_pair = KeyPair::generate_for(self.alg.into())?;
 		let cert = self.params.signed_by(&key_pair, &issuer.issuer)?;
 		Ok(EndEntity { cert, key_pair })
 	}
@@ -219,16 +220,15 @@ pub enum KeyPairAlgorithm {
 	EcdsaP521,
 }
 
-impl KeyPairAlgorithm {
-	/// Return an `rcgen::KeyPair` for the given varient
-	fn to_key_pair(self) -> Result<KeyPair, rcgen::Error> {
-		match self {
-			KeyPairAlgorithm::Rsa => KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256),
-			KeyPairAlgorithm::Ed25519 => KeyPair::generate_for(&rcgen::PKCS_ED25519),
-			KeyPairAlgorithm::EcdsaP256 => KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256),
-			KeyPairAlgorithm::EcdsaP384 => KeyPair::generate_for(&rcgen::PKCS_ECDSA_P384_SHA384),
+impl From<KeyPairAlgorithm> for &'static SignatureAlgorithm {
+	fn from(alg: KeyPairAlgorithm) -> Self {
+		match alg {
+			KeyPairAlgorithm::Rsa => &rcgen::PKCS_RSA_SHA256,
+			KeyPairAlgorithm::Ed25519 => &rcgen::PKCS_ED25519,
+			KeyPairAlgorithm::EcdsaP256 => &rcgen::PKCS_ECDSA_P256_SHA256,
+			KeyPairAlgorithm::EcdsaP384 => &rcgen::PKCS_ECDSA_P384_SHA384,
 			#[cfg(feature = "aws_lc_rs")]
-			KeyPairAlgorithm::EcdsaP521 => KeyPair::generate_for(&rcgen::PKCS_ECDSA_P521_SHA512),
+			KeyPairAlgorithm::EcdsaP521 => &rcgen::PKCS_ECDSA_P521_SHA512,
 		}
 	}
 }
@@ -432,14 +432,14 @@ mod tests {
 
 	#[test]
 	fn key_pair_algorithm_to_keypair() -> anyhow::Result<()> {
-		let keypair = KeyPairAlgorithm::Ed25519.to_key_pair()?;
+		let keypair = KeyPair::generate_for(KeyPairAlgorithm::Ed25519.into())?;
 		assert_eq!(format!("{:?}", keypair.algorithm()), "PKCS_ED25519");
-		let keypair = KeyPairAlgorithm::EcdsaP256.to_key_pair()?;
+		let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP256.into())?;
 		assert_eq!(
 			format!("{:?}", keypair.algorithm()),
 			"PKCS_ECDSA_P256_SHA256"
 		);
-		let keypair = KeyPairAlgorithm::EcdsaP384.to_key_pair()?;
+		let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP384.into())?;
 		assert_eq!(
 			format!("{:?}", keypair.algorithm()),
 			"PKCS_ECDSA_P384_SHA384"
@@ -447,7 +447,7 @@ mod tests {
 
 		#[cfg(feature = "aws_lc_rs")]
 		{
-			let keypair = KeyPairAlgorithm::EcdsaP521.to_key_pair()?;
+			let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP521.into())?;
 			assert_eq!(
 				format!("{:?}", keypair.algorithm()),
 				"PKCS_ECDSA_P521_SHA512"
