@@ -6,11 +6,6 @@ use rcgen::{
 	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
 };
 
-#[cfg(feature = "aws_lc_rs")]
-use aws_lc_rs as ring_like;
-#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
-use ring as ring_like;
-
 #[derive(Debug, Clone)]
 /// PEM serialized Certificate and PEM serialized corresponding private key
 pub struct PemCertifiedKey {
@@ -226,55 +221,14 @@ pub enum KeyPairAlgorithm {
 
 impl KeyPairAlgorithm {
 	/// Return an `rcgen::KeyPair` for the given varient
-	fn to_key_pair(self) -> Result<rcgen::KeyPair, rcgen::Error> {
+	fn to_key_pair(self) -> Result<KeyPair, rcgen::Error> {
 		match self {
-			KeyPairAlgorithm::Rsa => rcgen::KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256),
-			KeyPairAlgorithm::Ed25519 => {
-				use ring_like::signature::Ed25519KeyPair;
-
-				let rng = ring_like::rand::SystemRandom::new();
-				let alg = &rcgen::PKCS_ED25519;
-				let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rng)
-					.map_err(|_| rcgen::Error::RingUnspecified)?;
-
-				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
-			},
-			KeyPairAlgorithm::EcdsaP256 => {
-				use ring_like::signature::EcdsaKeyPair;
-				use ring_like::signature::ECDSA_P256_SHA256_ASN1_SIGNING;
-
-				let rng = ring_like::rand::SystemRandom::new();
-				let alg = &rcgen::PKCS_ECDSA_P256_SHA256;
-				let pkcs8_bytes =
-					EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, &rng)
-						.map_err(|_| rcgen::Error::RingUnspecified)?;
-				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
-			},
-			KeyPairAlgorithm::EcdsaP384 => {
-				use ring_like::signature::EcdsaKeyPair;
-				use ring_like::signature::ECDSA_P384_SHA384_ASN1_SIGNING;
-
-				let rng = ring_like::rand::SystemRandom::new();
-				let alg = &rcgen::PKCS_ECDSA_P384_SHA384;
-				let pkcs8_bytes =
-					EcdsaKeyPair::generate_pkcs8(&ECDSA_P384_SHA384_ASN1_SIGNING, &rng)
-						.map_err(|_| rcgen::Error::RingUnspecified)?;
-
-				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
-			},
+			KeyPairAlgorithm::Rsa => KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256),
+			KeyPairAlgorithm::Ed25519 => KeyPair::generate_for(&rcgen::PKCS_ED25519),
+			KeyPairAlgorithm::EcdsaP256 => KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256),
+			KeyPairAlgorithm::EcdsaP384 => KeyPair::generate_for(&rcgen::PKCS_ECDSA_P384_SHA384),
 			#[cfg(feature = "aws_lc_rs")]
-			KeyPairAlgorithm::EcdsaP521 => {
-				use ring_like::signature::EcdsaKeyPair;
-				use ring_like::signature::ECDSA_P521_SHA512_ASN1_SIGNING;
-
-				let rng = ring_like::rand::SystemRandom::new();
-				let alg = &rcgen::PKCS_ECDSA_P521_SHA512;
-				let pkcs8_bytes =
-					EcdsaKeyPair::generate_pkcs8(&ECDSA_P521_SHA512_ASN1_SIGNING, &rng)
-						.map_err(|_| rcgen::Error::RingUnspecified)?;
-
-				rcgen::KeyPair::from_pkcs8_der_and_sign_algo(&pkcs8_bytes.as_ref().into(), alg)
-			},
+			KeyPairAlgorithm::EcdsaP521 => KeyPair::generate_for(&rcgen::PKCS_ECDSA_P521_SHA512),
 		}
 	}
 }
