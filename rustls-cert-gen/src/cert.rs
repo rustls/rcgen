@@ -1,4 +1,4 @@
-use std::{fmt, fs::File, io, path::Path};
+use std::{fmt, fs::File, io, path::Path, str::FromStr};
 
 use bpaf::Bpaf;
 use rcgen::{
@@ -218,6 +218,22 @@ impl fmt::Display for KeyPairAlgorithm {
 			KeyPairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
 			#[cfg(feature = "aws_lc_rs")]
 			KeyPairAlgorithm::EcdsaP521 => write!(f, "ecdsa-p521"),
+		}
+	}
+}
+
+impl FromStr for KeyPairAlgorithm {
+	type Err = anyhow::Error;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s {
+			"rsa" => Ok(Self::Rsa),
+			"ed25519" => Ok(Self::Ed25519),
+			"ecdsa-p256" => Ok(Self::EcdsaP256),
+			"ecdsa-p384" => Ok(Self::EcdsaP384),
+			#[cfg(feature = "aws_lc_rs")]
+			"ecdsa-p521" => Ok(Self::EcdsaP521),
+			_ => Err(anyhow::anyhow!("unknown key algorithm: {s}")),
 		}
 	}
 }
