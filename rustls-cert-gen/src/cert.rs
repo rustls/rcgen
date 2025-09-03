@@ -7,30 +7,6 @@ use rcgen::{
 	SignatureAlgorithm,
 };
 
-#[derive(Debug, Clone)]
-/// PEM serialized Certificate and PEM serialized corresponding private key
-pub struct PemCertifiedKey {
-	pub cert_pem: String,
-	pub private_key_pem: String,
-}
-
-impl PemCertifiedKey {
-	pub fn write(&self, dir: &Path, name: &str) -> Result<(), io::Error> {
-		use std::io::Write;
-		std::fs::create_dir_all(dir)?;
-
-		let key_path = dir.join(format!("{name}.key.pem"));
-		let mut key_out = File::create(key_path)?;
-		write!(key_out, "{}", &self.private_key_pem)?;
-
-		let cert_path = dir.join(format!("{name}.pem"));
-		let mut cert_out = File::create(cert_path)?;
-		write!(cert_out, "{}", &self.cert_pem)?;
-
-		Ok(())
-	}
-}
-
 /// Builder to configure TLS [CertificateParams] to be finalized
 /// into either a [Ca] or an [EndEntity].
 #[derive(Clone, Debug, Default)]
@@ -243,6 +219,30 @@ impl fmt::Display for KeyPairAlgorithm {
 			#[cfg(feature = "aws_lc_rs")]
 			KeyPairAlgorithm::EcdsaP521 => write!(f, "ecdsa-p521"),
 		}
+	}
+}
+
+#[derive(Debug, Clone)]
+/// PEM serialized Certificate and PEM serialized corresponding private key
+pub struct PemCertifiedKey {
+	pub cert_pem: String,
+	pub private_key_pem: String,
+}
+
+impl PemCertifiedKey {
+	pub fn write(&self, dir: &Path, name: &str) -> Result<(), io::Error> {
+		use std::io::Write;
+		std::fs::create_dir_all(dir)?;
+
+		let key_path = dir.join(format!("{name}.key.pem"));
+		let mut key_out = File::create(key_path)?;
+		write!(key_out, "{}", &self.private_key_pem)?;
+
+		let cert_path = dir.join(format!("{name}.pem"));
+		let mut cert_out = File::create(cert_path)?;
+		write!(cert_out, "{}", &self.cert_pem)?;
+
+		Ok(())
 	}
 }
 
