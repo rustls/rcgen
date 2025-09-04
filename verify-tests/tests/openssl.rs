@@ -1,4 +1,4 @@
-#![cfg(all(unix, feature = "pem"))]
+#![cfg(unix)]
 
 use std::cell::RefCell;
 use std::io::{Error, ErrorKind, Read, Result as ioResult, Write};
@@ -16,8 +16,7 @@ use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DnType, DnValue, GeneralSubtree, IsCa,
 	Issuer, KeyPair, NameConstraints,
 };
-
-mod util;
+use verify_tests as util;
 
 fn verify_cert_basic(cert: &Certificate) {
 	let cert_pem = cert.pem();
@@ -502,7 +501,7 @@ fn test_openssl_crl_dps_parse() {
 }
 
 #[test]
-#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+#[cfg(feature = "aws_lc_rs")]
 fn test_openssl_pkcs1_and_sec1_keys() {
 	use openssl::ec::{EcGroup, EcKey};
 	use openssl::nid::Nid;

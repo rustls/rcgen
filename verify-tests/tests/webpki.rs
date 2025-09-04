@@ -1,5 +1,3 @@
-#![cfg(feature = "crypto")]
-
 use std::time::Duration as StdDuration;
 
 use pki_types::{CertificateDer, ServerName, SignatureVerificationAlgorithm, UnixTime};
@@ -22,7 +20,7 @@ use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams
 use rcgen::{CertificateSigningRequestParams, DnValue};
 use rcgen::{ExtendedKeyUsagePurpose, KeyUsagePurpose, SerialNumber};
 
-mod util;
+use verify_tests as util;
 
 fn sign_msg_ecdsa(key_pair: &KeyPair, msg: &[u8], alg: &'static EcdsaSigningAlgorithm) -> Vec<u8> {
 	let pk_der = key_pair.serialize_der();
@@ -52,6 +50,7 @@ fn sign_msg_rsa(key_pair: &KeyPair, msg: &[u8], encoding: &'static dyn RsaEncodi
 	signature
 }
 
+#[cfg_attr(not(feature = "pem"), allow(unused))]
 fn check_cert<'a, 'b, S: SigningKey + 'a>(
 	cert_der: &CertificateDer<'_>,
 	cert: &'a Certificate,

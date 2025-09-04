@@ -1,0 +1,31 @@
+[package]
+name = "verify-tests"
+version = "0.0.1"
+edition = { workspace = true }
+publish = false
+
+[features]
+default = []
+aws_lc_rs = ["rcgen/aws_lc_rs"]
+fips = ["rcgen/fips"]
+pem = ["dep:pem", "rcgen/pem"]
+ring = ["rcgen/ring"]
+x509-parser = ["dep:x509-parser", "rcgen/x509-parser"]
+
+[dependencies]
+aws-lc-rs = { workspace = true, optional = true }
+pem = { workspace = true, optional = true }
+rcgen = { path = "../rcgen", features = ["pem", "x509-parser"] }
+ring = { workspace = true }
+time = { workspace = true }
+x509-parser = { workspace = true, features = ["verify"], optional = true }
+yasna = { workspace = true }
+
+[dev-dependencies]
+pki-types = { workspace = true }
+rustls-webpki = { workspace = true }
+botan = { workspace = true }
+ring = { workspace = true }
+
+[target."cfg(unix)".dev-dependencies]
+openssl = { workspace = true }

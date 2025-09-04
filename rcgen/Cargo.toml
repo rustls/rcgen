@@ -27,13 +27,6 @@ x509-parser = { workspace = true, features = ["verify"], optional = true }
 yasna = { workspace = true }
 zeroize = { workspace = true, optional = true }
 
-[dev-dependencies]
-botan = { workspace = true }
-pki-types = { workspace = true }
-ring = { workspace = true }
-rustls-webpki = { workspace = true }
-x509-parser = { workspace = true, features = ["verify"] }
-
 [target."cfg(unix)".dev-dependencies]
 openssl = { workspace = true }
 

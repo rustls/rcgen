@@ -1,7 +1,3 @@
-#![cfg(feature = "crypto")]
-
-mod util;
-
 #[cfg(feature = "pem")]
 mod test_key_params_mismatch {
 	use std::collections::hash_map::DefaultHasher;
@@ -40,9 +36,8 @@ mod test_key_params_mismatch {
 
 #[cfg(feature = "x509-parser")]
 mod test_x509_custom_ext {
-	use crate::util;
-
 	use rcgen::CustomExtension;
+	use verify_tests as util;
 	use x509_parser::oid_registry::asn1_rs;
 	use x509_parser::prelude::{
 		FromDer, ParsedCriAttribute, X509Certificate, X509CertificationRequest,
@@ -166,7 +161,7 @@ mod test_csr_custom_attributes {
 
 #[cfg(feature = "x509-parser")]
 mod test_x509_parser_crl {
-	use crate::util;
+	use verify_tests as util;
 	use x509_parser::extensions::{DistributionPointName, ParsedExtension};
 	use x509_parser::num_bigint::BigUint;
 	use x509_parser::prelude::{FromDer, GeneralName, IssuingDistributionPoint, X509Certificate};
@@ -248,7 +243,7 @@ mod test_x509_parser_crl {
 
 #[cfg(feature = "x509-parser")]
 mod test_parse_crl_dps {
-	use crate::util;
+	use verify_tests as util;
 	use x509_parser::extensions::{DistributionPointName, ParsedExtension};
 
 	#[test]
@@ -425,11 +420,10 @@ mod test_csr {
 
 #[cfg(feature = "x509-parser")]
 mod test_subject_alternative_name_criticality {
+	use verify_tests::default_params;
 	use x509_parser::certificate::X509Certificate;
 	use x509_parser::extensions::X509Extension;
 	use x509_parser::{oid_registry, parse_x509_certificate};
-
-	use crate::util::default_params;
 
 	#[test]
 	fn with_subject_sans_not_critical() {

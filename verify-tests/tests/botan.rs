@@ -1,4 +1,4 @@
-#![cfg(all(feature = "crypto", feature = "x509-parser"))]
+#![cfg(feature = "x509-parser")]
 
 use time::{Duration, OffsetDateTime};
 
@@ -7,7 +7,7 @@ use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams
 use rcgen::{DnValue, KeyPair};
 use rcgen::{KeyUsagePurpose, SerialNumber};
 
-mod util;
+use verify_tests as util;
 
 fn default_params() -> (CertificateParams, KeyPair) {
 	let (mut params, key_pair) = util::default_params();
