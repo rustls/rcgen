@@ -18,13 +18,13 @@ fips = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/fips"]
 
 [dependencies]
 rcgen = { version = "0.14.2", path = "../rcgen", default-features = false, features = ["pem"] }
-bpaf = { version = "0.9.5", features = ["derive"] }
+bpaf = { workspace = true }
 pem = { workspace = true }
 pki-types = { workspace = true }
 ring = { workspace = true, optional = true }
-anyhow = "1.0.75"
+anyhow = { workspace = true }
 aws-lc-rs = { workspace = true, optional = true }
 
 [dev-dependencies]
-assert_fs = "1.0.13"
+assert_fs = { workspace = true }
 x509-parser = { workspace = true, features = ["verify"] }
