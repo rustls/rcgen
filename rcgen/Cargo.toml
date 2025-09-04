@@ -12,27 +12,27 @@ keywords.workspace = true
 
 [features]
 default = ["crypto", "pem", "ring"]
-crypto = []
 aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys"]
-ring = ["crypto", "dep:ring"]
 fips = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/fips"]
+crypto = []
+ring = ["crypto", "dep:ring"]
 
 [dependencies]
 aws-lc-rs = { workspace = true, optional = true }
-yasna = { workspace = true }
-ring = { workspace = true, optional = true }
 pem = { workspace = true, optional = true }
 pki-types = { workspace = true }
+ring = { workspace = true, optional = true }
 time = { workspace = true }
 x509-parser = { workspace = true, features = ["verify"], optional = true }
+yasna = { workspace = true }
 zeroize = { workspace = true, optional = true }
 
 [dev-dependencies]
-pki-types = { workspace = true }
-x509-parser = { workspace = true, features = ["verify"] }
-rustls-webpki = { workspace = true }
 botan = { workspace = true }
+pki-types = { workspace = true }
 ring = { workspace = true }
+rustls-webpki = { workspace = true }
+x509-parser = { workspace = true, features = ["verify"] }
 
 [target."cfg(unix)".dev-dependencies]
 openssl = { workspace = true }
