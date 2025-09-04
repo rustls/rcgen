@@ -10,6 +10,33 @@ edition.workspace = true
 rust-version.workspace = true
 keywords.workspace = true
 
+[features]
+default = ["crypto", "pem", "ring"]
+crypto = []
+aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys"]
+ring = ["crypto", "dep:ring"]
+fips = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/fips"]
+
+[dependencies]
+aws-lc-rs = { workspace = true, optional = true }
+yasna = { workspace = true }
+ring = { workspace = true, optional = true }
+pem = { workspace = true, optional = true }
+pki-types = { workspace = true }
+time = { workspace = true }
+x509-parser = { workspace = true, features = ["verify"], optional = true }
+zeroize = { workspace = true, optional = true }
+
+[dev-dependencies]
+pki-types = { workspace = true }
+x509-parser = { workspace = true, features = ["verify"] }
+rustls-webpki = { workspace = true }
+botan = { workspace = true }
+ring = { workspace = true }
+
+[target."cfg(unix)".dev-dependencies]
+openssl = { workspace = true }
+
 [[example]]
 name = "rsa-irc-openssl"
 required-features = ["pem"]
@@ -22,23 +49,6 @@ required-features = ["pem", "x509-parser"]
 name = "simple"
 required-features = ["crypto", "pem"]
 
-[dependencies]
-aws-lc-rs = { workspace = true, optional = true }
-yasna = { workspace = true }
-ring = { workspace = true, optional = true }
-pem = { workspace = true, optional = true }
-pki-types = { workspace = true }
-time = { workspace = true }
-x509-parser = { workspace = true, features = ["verify"], optional = true }
-zeroize = { workspace = true, optional = true }
-
-[features]
-default = ["crypto", "pem", "ring"]
-crypto = []
-aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys"]
-ring = ["crypto", "dep:ring"]
-fips = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/fips"]
-
 [package.metadata.docs.rs]
 features = ["x509-parser"]
 
@@ -48,13 +58,3 @@ allowed_external_types = [
     "zeroize::Zeroize",
     "rustls_pki_types::*",
 ]
-
-[dev-dependencies]
-pki-types = { workspace = true }
-x509-parser = { workspace = true, features = ["verify"] }
-rustls-webpki = { workspace = true }
-botan = { workspace = true }
-ring = { workspace = true }
-
-[target."cfg(unix)".dev-dependencies]
-openssl = { workspace = true }
