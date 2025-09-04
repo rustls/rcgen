@@ -13,17 +13,17 @@ keywords.workspace = true
 [features]
 default = ["ring"]
 aws_lc_rs = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/aws-lc-sys"]
-ring = ["dep:ring", "rcgen/ring"]
 fips = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/fips"]
+ring = ["dep:ring", "rcgen/ring"]
 
 [dependencies]
-rcgen = { version = "0.14.2", path = "../rcgen", default-features = false, features = ["pem"] }
+anyhow = { workspace = true }
+aws-lc-rs = { workspace = true, optional = true }
 bpaf = { workspace = true }
 pem = { workspace = true }
 pki-types = { workspace = true }
+rcgen = { version = "0.14.2", path = "../rcgen", default-features = false, features = ["pem"] }
 ring = { workspace = true, optional = true }
-anyhow = { workspace = true }
-aws-lc-rs = { workspace = true, optional = true }
 
 [dev-dependencies]
 assert_fs = { workspace = true }
