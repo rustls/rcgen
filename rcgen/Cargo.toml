@@ -53,7 +53,7 @@ allowed_external_types = [
 pki-types = { package = "rustls-pki-types", version = "1" }
 x509-parser = { workspace = true, features = ["verify"] }
 rustls-webpki = { version = "0.103", features = ["ring", "std"] }
-botan = { version = "0.11", features = ["vendored"] }
+botan = { version = "0.12", features = ["vendored"] }
 ring = { workspace = true }
 
 [target."cfg(unix)".dev-dependencies]
