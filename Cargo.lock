@@ -729,12 +729,10 @@ name = "rcgen"
 version = "0.14.3"
 dependencies = [
  "aws-lc-rs",
- "botan",
  "openssl",
  "pem",
  "ring",
  "rustls-pki-types",
- "rustls-webpki",
  "time",
  "x509-parser",
  "yasna",
@@ -1004,6 +1002,23 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "verify-tests"
+version = "0.0.1"
+dependencies = [
+ "aws-lc-rs",
+ "botan",
+ "openssl",
+ "pem",
+ "rcgen",
+ "ring",
+ "rustls-pki-types",
+ "rustls-webpki",
+ "time",
+ "x509-parser",
+ "yasna",
+]
 
 [[package]]
 name = "walkdir"
