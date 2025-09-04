@@ -24,13 +24,13 @@ required-features = ["crypto", "pem"]
 
 [dependencies]
 aws-lc-rs = { workspace = true, optional = true }
-yasna = { version = "0.5.2", features = ["time", "std"] }
+yasna = { workspace = true }
 ring = { workspace = true, optional = true }
 pem = { workspace = true, optional = true }
 pki-types = { workspace = true }
-time = { version = "0.3.6", default-features = false }
+time = { workspace = true }
 x509-parser = { workspace = true, features = ["verify"], optional = true }
-zeroize = { version = "1.2", optional = true }
+zeroize = { workspace = true, optional = true }
 
 [features]
 default = ["crypto", "pem", "ring"]
@@ -50,11 +50,11 @@ allowed_external_types = [
 ]
 
 [dev-dependencies]
-pki-types = { package = "rustls-pki-types", version = "1" }
+pki-types = { workspace = true }
 x509-parser = { workspace = true, features = ["verify"] }
-rustls-webpki = { version = "0.103", features = ["ring", "std"] }
-botan = { version = "0.12", features = ["vendored"] }
+rustls-webpki = { workspace = true }
+botan = { workspace = true }
 ring = { workspace = true }
 
 [target."cfg(unix)".dev-dependencies]
-openssl = "0.10"
+openssl = { workspace = true }
