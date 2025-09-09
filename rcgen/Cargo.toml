@@ -29,7 +29,8 @@ ring = { workspace = true, optional = true }
 pem = { workspace = true, optional = true }
 pki-types = { workspace = true }
 time = { version = "0.3.6", default-features = false }
-x509-parser = { workspace = true, features = ["verify"], optional = true }
+#x509-parser = { workspace = true, features = ["verify"], optional = true }
+x509-parser = { features = ["verify"], optional = true, git = "https://github.com/jean-airoldie/x509-parser", branch = "custom-extension" }
 zeroize = { version = "1.2", optional = true }
 
 [features]
@@ -51,7 +52,7 @@ allowed_external_types = [
 
 [dev-dependencies]
 pki-types = { package = "rustls-pki-types", version = "1" }
-x509-parser = { workspace = true, features = ["verify"] }
+x509-parser = { features = ["verify"], git = "https://github.com/jean-airoldie/x509-parser", branch = "custom-extension" }
 rustls-webpki = { version = "0.103", features = ["ring", "std"] }
 botan = { version = "0.12", features = ["vendored"] }
 ring = { workspace = true }
