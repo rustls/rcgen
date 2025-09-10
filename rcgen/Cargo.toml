@@ -32,6 +32,10 @@ zeroize = { workspace = true, optional = true }
 openssl = { workspace = true }
 
 [[example]]
+name = "files"
+required-features = ["pem", "x509-parser"]
+
+[[example]]
 name = "rsa-irc-openssl"
 required-features = ["pem"]
 
