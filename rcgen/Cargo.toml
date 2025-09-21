@@ -40,6 +40,10 @@ name = "sign-leaf-with-ca"
 required-features = ["pem", "x509-parser"]
 
 [[example]]
+name = "sign-leaf-with-pem-files"
+required-features = ["pem", "x509-parser"]
+
+[[example]]
 name = "simple"
 required-features = ["crypto", "pem"]
 
