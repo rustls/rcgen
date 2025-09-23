@@ -201,7 +201,7 @@ pub struct Issuer<'a, S> {
 	distinguished_name: Cow<'a, DistinguishedName>,
 	key_identifier_method: Cow<'a, KeyIdMethod>,
 	key_usages: Cow<'a, [KeyUsagePurpose]>,
-	signing_key: MaybeOwned<'a, S>,
+	signing_key: S,
 }
 
 impl<'a, S: SigningKey> Issuer<'a, S> {
@@ -211,7 +211,7 @@ impl<'a, S: SigningKey> Issuer<'a, S> {
 			distinguished_name: Cow::Owned(params.distinguished_name),
 			key_identifier_method: Cow::Owned(params.key_identifier_method),
 			key_usages: Cow::Owned(params.key_usages),
-			signing_key: MaybeOwned::Owned(signing_key),
+			signing_key,
 		}
 	}
 
@@ -219,12 +219,12 @@ impl<'a, S: SigningKey> Issuer<'a, S> {
 	///
 	/// Use [`Issuer::new`] instead if you want to obtain an [`Issuer`] that owns
 	/// its parameters.
-	pub fn from_params(params: &'a CertificateParams, signing_key: &'a S) -> Self {
+	pub fn from_params(params: &'a CertificateParams, signing_key: S) -> Self {
 		Self {
 			distinguished_name: Cow::Borrowed(&params.distinguished_name),
 			key_identifier_method: Cow::Borrowed(&params.key_identifier_method),
 			key_usages: Cow::Borrowed(&params.key_usages),
-			signing_key: MaybeOwned::Borrowed(signing_key),
+			signing_key,
 		}
 	}
 
@@ -256,7 +256,7 @@ impl<'a, S: SigningKey> Issuer<'a, S> {
 			distinguished_name: Cow::Owned(DistinguishedName::from_name(
 				&x509.tbs_certificate.subject,
 			)?),
-			signing_key: MaybeOwned::Owned(signing_key),
+			signing_key,
 		})
 	}
 
@@ -288,22 +288,6 @@ impl<'a, S> fmt::Debug for Issuer<'a, S> {
 			.field("key_usages", key_usages)
 			.field("signing_key", &"[elided]")
 			.finish()
-	}
-}
-
-enum MaybeOwned<'a, T> {
-	Owned(T),
-	Borrowed(&'a T),
-}
-
-impl<T> Deref for MaybeOwned<'_, T> {
-	type Target = T;
-
-	fn deref(&self) -> &Self::Target {
-		match self {
-			MaybeOwned::Owned(t) => t,
-			MaybeOwned::Borrowed(t) => t,
-		}
 	}
 }
 

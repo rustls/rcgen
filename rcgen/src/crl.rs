@@ -203,7 +203,7 @@ impl CertificateRevocationListParams {
 	}
 
 	fn serialize_der(&self, issuer: &Issuer<'_, impl SigningKey>) -> Result<Vec<u8>, Error> {
-		sign_der(&*issuer.signing_key, |writer| {
+		sign_der(&issuer.signing_key, |writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
 			//   This optional field describes the version of the encoded CRL.  When

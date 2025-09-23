@@ -629,6 +629,12 @@ pub(crate) fn sign_der(
 	})
 }
 
+impl<S: SigningKey + ?Sized> SigningKey for &S {
+	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
+		(*self).sign(msg)
+	}
+}
+
 /// A key that can be used to sign messages
 pub trait SigningKey: PublicKeyData {
 	/// Signs `msg` using the selected algorithm
@@ -715,6 +721,16 @@ impl PublicKeyData for SubjectPublicKeyInfo {
 
 	fn algorithm(&self) -> &'static SignatureAlgorithm {
 		self.alg
+	}
+}
+
+impl<K: PublicKeyData + ?Sized> PublicKeyData for &K {
+	fn der_bytes(&self) -> &[u8] {
+		(*self).der_bytes()
+	}
+
+	fn algorithm(&self) -> &'static SignatureAlgorithm {
+		(*self).algorithm()
 	}
 }
 
