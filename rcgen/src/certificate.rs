@@ -403,7 +403,7 @@ impl CertificateParams {
 		pub_key: &K,
 		issuer: &Issuer<'_, impl SigningKey>,
 	) -> Result<CertificateDer<'static>, Error> {
-		let der = sign_der(&*issuer.signing_key, |writer| {
+		let der = sign_der(&issuer.signing_key, |writer| {
 			let pub_key_spki = pub_key.subject_public_key_info();
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
