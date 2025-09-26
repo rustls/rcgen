@@ -1,12 +1,11 @@
 #![cfg(feature = "x509-parser")]
 
+use rcgen::{
+	BasicConstraints, Certificate, CertificateParams, CertificateRevocationListParams, DnType,
+	DnValue, IsCa, Issuer, KeyPair, KeyUsagePurpose, RevocationReason, RevokedCertParams,
+	SerialNumber,
+};
 use time::{Duration, OffsetDateTime};
-
-use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, Issuer};
-use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams};
-use rcgen::{DnValue, KeyPair};
-use rcgen::{KeyUsagePurpose, SerialNumber};
-
 use verify_tests as util;
 
 fn default_params() -> (CertificateParams, KeyPair) {
