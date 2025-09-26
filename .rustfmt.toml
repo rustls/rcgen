@@ -1,2 +1,5 @@
 hard_tabs = true
 match_block_trailing_comma = true
+
+unstable_features = true
+group_imports = "StdExternalCrate"

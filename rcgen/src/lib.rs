@@ -41,18 +41,6 @@ use std::net::IpAddr;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::ops::Deref;
 
-#[cfg(feature = "pem")]
-use pem::Pem;
-use pki_types::CertificateDer;
-use time::{OffsetDateTime, Time};
-use yasna::models::ObjectIdentifier;
-use yasna::models::{GeneralizedTime, UTCTime};
-use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
-use yasna::DERWriter;
-use yasna::Tag;
-
-use crate::string::{BmpString, Ia5String, PrintableString, TeletexString, UniversalString};
-
 pub use certificate::{
 	date_time_ymd, Attribute, BasicConstraints, Certificate, CertificateParams, CidrSubnet,
 	CustomExtension, DnType, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, NameConstraints,
@@ -69,10 +57,21 @@ pub use key_pair::PublicKeyData;
 #[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
 pub use key_pair::RsaKeySize;
 pub use key_pair::{SigningKey, SubjectPublicKeyInfo};
+#[cfg(feature = "pem")]
+use pem::Pem;
+use pki_types::CertificateDer;
 #[cfg(feature = "crypto")]
 use ring_like::digest;
 pub use sign_algo::algo::*;
 pub use sign_algo::SignatureAlgorithm;
+use time::{OffsetDateTime, Time};
+use yasna::models::ObjectIdentifier;
+use yasna::models::{GeneralizedTime, UTCTime};
+use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
+use yasna::DERWriter;
+use yasna::Tag;
+
+use crate::string::{BmpString, Ia5String, PrintableString, TeletexString, UniversalString};
 
 mod certificate;
 mod crl;
@@ -987,9 +986,10 @@ mod tests {
 
 	#[cfg(feature = "x509-parser")]
 	mod test_ip_address_from_octets {
+		use std::net::IpAddr;
+
 		use super::super::ip_addr_from_octets;
 		use super::super::Error;
-		use std::net::IpAddr;
 
 		#[test]
 		fn ipv4() {
@@ -1035,9 +1035,11 @@ mod tests {
 
 	#[cfg(feature = "x509-parser")]
 	mod test_san_type_from_general_name {
-		use crate::SanType;
 		use std::net::IpAddr;
+
 		use x509_parser::extensions::GeneralName;
+
+		use crate::SanType;
 
 		#[test]
 		fn with_ipv4() {

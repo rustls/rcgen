@@ -1,6 +1,8 @@
 #[cfg(feature = "crypto")]
 use std::fmt;
 
+#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+use aws_lc_rs::unstable::signature::PqdsaKeyPair;
 #[cfg(feature = "pem")]
 use pem::Pem;
 #[cfg(feature = "crypto")]
@@ -27,8 +29,6 @@ use crate::sign_algo::{algo::*, SignAlgo};
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{sign_algo::SignatureAlgorithm, Error};
-#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
-use aws_lc_rs::unstable::signature::PqdsaKeyPair;
 
 /// A key pair variant
 #[allow(clippy::large_enum_variant)]
@@ -762,7 +762,6 @@ pub(crate) fn serialize_public_key_der(key: &(impl PublicKeyData + ?Sized), writ
 #[cfg(all(test, feature = "crypto"))]
 mod test {
 	use super::*;
-
 	use crate::ring_like::{
 		rand::SystemRandom,
 		signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING},
