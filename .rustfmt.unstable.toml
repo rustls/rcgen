@@ -1,0 +1,7 @@
+# keep in sync with .rustfmt.toml
+hard_tabs = true
+match_block_trailing_comma = true
+
+# format imports
+group_imports = "StdExternalCrate"
+imports_granularity = "Module"

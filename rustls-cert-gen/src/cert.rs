@@ -1,10 +1,13 @@
-use std::{fmt, fs::File, io, path::Path, str::FromStr};
+use std::fs::File;
+use std::path::Path;
+use std::str::FromStr;
+use std::{fmt, io};
 
 use bpaf::Bpaf;
+use rcgen::DnValue::PrintableString;
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, CertifiedIssuer, DistinguishedName, DnType,
-	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
-	SignatureAlgorithm,
+	ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType, SignatureAlgorithm,
 };
 
 /// Builder to configure TLS [CertificateParams] to be finalized
