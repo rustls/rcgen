@@ -203,9 +203,10 @@ impl CertificateSigningRequestParams {
 
 #[cfg(all(test, feature = "x509-parser"))]
 mod tests {
-	use crate::{CertificateParams, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose};
 	use x509_parser::certification_request::X509CertificationRequest;
 	use x509_parser::prelude::{FromDer, ParsedExtension};
+
+	use crate::{CertificateParams, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose};
 
 	#[test]
 	fn dont_write_sans_extension_if_no_sans_are_present() {

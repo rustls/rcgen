@@ -1,8 +1,9 @@
 #[cfg(unix)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	use rcgen::{date_time_ymd, CertificateParams, DistinguishedName};
 	use std::fmt::Write;
 	use std::fs;
+
+	use rcgen::{date_time_ymd, CertificateParams, DistinguishedName};
 
 	let mut params: CertificateParams = Default::default();
 	params.not_before = date_time_ymd(2021, 5, 19);

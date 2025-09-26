@@ -1,17 +1,16 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use yasna::models::ObjectIdentifier;
-use yasna::DERWriter;
-use yasna::Tag;
-
-#[cfg(feature = "crypto")]
-use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters, RsaEncoding};
-use crate::Error;
 #[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
 use aws_lc_rs::unstable::signature::{
 	PqdsaSigningAlgorithm, ML_DSA_44_SIGNING, ML_DSA_65_SIGNING, ML_DSA_87_SIGNING,
 };
+use yasna::models::ObjectIdentifier;
+use yasna::{DERWriter, Tag};
+
+#[cfg(feature = "crypto")]
+use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters, RsaEncoding};
+use crate::Error;
 
 #[cfg(feature = "crypto")]
 #[derive(Clone, Copy, Debug)]
@@ -119,9 +118,8 @@ impl SignatureAlgorithm {
 
 /// The list of supported signature algorithms
 pub(crate) mod algo {
-	use crate::oid::*;
-
 	use super::*;
+	use crate::oid::*;
 
 	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_SHA256: SignatureAlgorithm = SignatureAlgorithm {

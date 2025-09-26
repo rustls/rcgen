@@ -5,26 +5,23 @@ use aws_lc_rs::unstable::signature::{
 	PqdsaKeyPair, PqdsaSigningAlgorithm, ML_DSA_44_SIGNING, ML_DSA_65_SIGNING, ML_DSA_87_SIGNING,
 };
 use pki_types::{CertificateDer, ServerName, SignatureVerificationAlgorithm, UnixTime};
+use rcgen::{
+	BasicConstraints, Certificate, CertificateParams, CertificateRevocationListParams, DnType,
+	Error, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair, KeyUsagePurpose, PublicKeyData,
+	RevocationReason, RevokedCertParams, SerialNumber, SigningKey,
+};
+#[cfg(feature = "x509-parser")]
+use rcgen::{CertificateSigningRequestParams, DnValue};
 use ring::rand::SystemRandom;
 use ring::signature::{self, EcdsaKeyPair, EcdsaSigningAlgorithm, Ed25519KeyPair, KeyPair as _};
 #[cfg(feature = "pem")]
 use ring::signature::{RsaEncoding, RsaKeyPair};
 use time::{Duration, OffsetDateTime};
+use verify_tests as util;
 use webpki::{
 	anchor_from_trusted_cert, BorrowedCertRevocationList, CertRevocationList, EndEntityCert,
 	KeyUsage, RevocationOptionsBuilder,
 };
-
-use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DnType, Error, IsCa, Issuer, KeyPair,
-	PublicKeyData, SigningKey,
-};
-use rcgen::{CertificateRevocationListParams, RevocationReason, RevokedCertParams};
-#[cfg(feature = "x509-parser")]
-use rcgen::{CertificateSigningRequestParams, DnValue};
-use rcgen::{ExtendedKeyUsagePurpose, KeyUsagePurpose, SerialNumber};
-
-use verify_tests as util;
 
 fn sign_msg_ecdsa(key_pair: &KeyPair, msg: &[u8], alg: &'static EcdsaSigningAlgorithm) -> Vec<u8> {
 	let pk_der = key_pair.serialize_der();

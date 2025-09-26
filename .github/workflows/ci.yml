@@ -13,8 +13,26 @@ env:
     RUSTFLAGS: -D warnings
 
 jobs:
+    format-unstable:
+        name: Format (unstable)
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout sources
+              uses: actions/checkout@v5
+              with:
+                  persist-credentials: false
+            - name: Install rust nightly toolchain
+              uses: dtolnay/rust-toolchain@master
+              with:
+                  toolchain: nightly
+                  components: rustfmt
+            - name: Check formatting (unstable)
+              run: cargo fmt --all -- --check --config-path .rustfmt.unstable.toml
+            - if: ${{ failure() }}
+              run: echo "Nightly formatting check failed. Please run \`cargo +nightly fmt --config-path .rustfmt.unstable.toml\`"
+
     lint:
-        name: Format & clippy
+        name: Clippy
         runs-on: ubuntu-latest
         continue-on-error: true
         steps:
@@ -25,8 +43,7 @@ jobs:
             - name: Install rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
-                  components: clippy, rustfmt
-            - run: cargo fmt -- --check
+                  components: clippy
             # `fips` and `aws_lc_rs_unstable` cannot be used together, so avoid `--all-features`
             - run: cargo clippy --features ring,pem,x509-parser --all-targets
             # rustls-cert-gen require either aws_lc_rs or ring feature

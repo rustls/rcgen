@@ -1,6 +1,7 @@
+use rcgen::DnValue::PrintableString;
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DnType, DnValue::PrintableString,
-	ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair, KeyUsagePurpose,
+	BasicConstraints, Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa,
+	Issuer, KeyPair, KeyUsagePurpose,
 };
 use time::{Duration, OffsetDateTime};
 

@@ -105,10 +105,8 @@ mod test_x509_custom_ext {
 #[cfg(feature = "x509-parser")]
 mod test_csr_custom_attributes {
 	use rcgen::{Attribute, CertificateParams, KeyPair};
-	use x509_parser::{
-		der_parser::Oid,
-		prelude::{FromDer, X509CertificationRequest},
-	};
+	use x509_parser::der_parser::Oid;
+	use x509_parser::prelude::{FromDer, X509CertificationRequest};
 
 	/// Test serializing a CSR with custom attributes.
 	/// This test case uses `challengePassword` from [RFC 2985], a simple
