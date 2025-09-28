@@ -22,7 +22,7 @@ pem = "3.0.2"
 pki-types = { package = "rustls-pki-types", version = "1.4.1" }
 ring = "0.17"
 rustls-webpki = { version = "0.103", features = ["ring", "std"] }
-time = { version = "0.3.6", default-features = false }
+time = { version = "0.3.44", default-features = false }
 x509-parser = "0.18"
 yasna = { version = "0.5.2", features = ["time", "std"] }
 zeroize = { version = "1.2" }
