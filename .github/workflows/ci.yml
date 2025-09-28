@@ -42,7 +42,10 @@ jobs:
         runs-on: ubuntu-latest
         strategy:
             matrix:
-                toolchain: [stable, nightly]
+                # Remove pin of nightly version after `rcgen` is updated to use a version of the
+                # `time` crate which resolves https://github.com/jhpratt/deranged/pull/24. This
+                # pin is independent of the nightly version pin for validating external types.
+                toolchain: [stable, nightly-2025-09-27]
         steps:
             - name: Checkout sources
               uses: actions/checkout@v5
@@ -55,15 +58,15 @@ jobs:
             - name: cargo doc (ring)
               run: cargo doc --features ring,pem,x509-parser --document-private-items
               env:
-                  RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
+                  RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly-2025-09-27' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
             - name: cargo doc (aws_lc_rs_unstable)
               run: cargo doc --features aws_lc_rs_unstable,pem,x509-parser --document-private-items
               env:
-                  RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
+                  RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly-2025-09-27' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
             - name: cargo doc (fips)
               run: cargo doc --no-default-features --features fips --document-private-items
               env:
-                  RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
+                  RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly-2025-09-27' && '-Dwarnings --cfg=docsrs' || '-Dwarnings' }}
 
     check-external-types:
         name: Validate external types appearing in public API
