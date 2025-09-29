@@ -29,7 +29,7 @@ println!("{}", signing_key.serialize_pem());
 #![forbid(unsafe_code)]
 #![forbid(non_ascii_idents)]
 #![deny(missing_docs)]
-#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![cfg_attr(rcgen_docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![warn(unreachable_pub)]
 
 use std::borrow::Cow;

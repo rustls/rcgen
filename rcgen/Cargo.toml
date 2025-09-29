@@ -45,6 +45,7 @@ required-features = ["crypto", "pem"]
 
 [package.metadata.docs.rs]
 features = ["aws_lc_rs",  "aws_lc_rs_unstable", "crypto", "ring", "x509-parser"]
+rustdoc-args = ["--cfg", "rcgen_docsrs"]
 
 [package.metadata.cargo_check_external_types]
 allowed_external_types = [
@@ -52,3 +53,6 @@ allowed_external_types = [
     "zeroize::Zeroize",
     "rustls_pki_types::*",
 ]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(rcgen_docsrs)"] }
