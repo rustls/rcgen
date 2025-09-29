@@ -44,7 +44,7 @@ name = "simple"
 required-features = ["crypto", "pem"]
 
 [package.metadata.docs.rs]
-features = ["x509-parser"]
+features = ["aws_lc_rs",  "aws_lc_rs_unstable", "crypto", "ring", "x509-parser"]
 
 [package.metadata.cargo_check_external_types]
 allowed_external_types = [
