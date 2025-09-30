@@ -12,10 +12,10 @@ keywords.workspace = true
 
 [features]
 default = ["ring"]
-aws_lc_rs = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/aws-lc-sys"]
+aws_lc_rs = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/aws-lc-sys", "x509-parser/verify-aws"]
 aws_lc_rs_unstable = ["rcgen/aws_lc_rs_unstable"]
-fips = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/fips"]
-ring = ["dep:ring", "rcgen/ring"]
+fips = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/fips", "x509-parser/verify-aws"]
+ring = ["dep:ring", "rcgen/ring", "x509-parser/verify"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -28,4 +28,4 @@ ring = { workspace = true, optional = true }
 
 [dev-dependencies]
 assert_fs = { workspace = true }
-x509-parser = { workspace = true, features = ["verify"] }
+x509-parser = { workspace = true }

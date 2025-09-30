@@ -94,7 +94,7 @@ impl CertificateSigningRequestParams {
 	/// into [`CertificateSigningRequestDer`] using the [`Into`] trait.
 	///
 	/// [`rustls_pemfile::csr()`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.csr.html
-	#[cfg(feature = "x509-parser")]
+	#[cfg(all(feature = "x509-parser", feature = "crypto"))]
 	pub fn from_der(csr: &CertificateSigningRequestDer<'_>) -> Result<Self, Error> {
 		use crate::KeyUsagePurpose;
 		use x509_parser::prelude::FromDer;
