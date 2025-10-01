@@ -1,6 +1,8 @@
 #[cfg(feature = "crypto")]
 use std::fmt;
 
+#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+use aws_lc_rs::unstable::signature::PqdsaKeyPair;
 #[cfg(feature = "pem")]
 use pem::Pem;
 #[cfg(feature = "crypto")]
@@ -22,13 +24,12 @@ use crate::ring_like::{
 	},
 	{ecdsa_from_pkcs8, rsa_key_pair_public_modulus_len},
 };
+use crate::sign_algo::SignatureAlgorithm;
 #[cfg(feature = "crypto")]
 use crate::sign_algo::{algo::*, SignAlgo};
+use crate::Error;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
-use crate::{sign_algo::SignatureAlgorithm, Error};
-#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
-use aws_lc_rs::unstable::signature::PqdsaKeyPair;
 
 /// A key pair variant
 #[allow(clippy::large_enum_variant)]
@@ -679,10 +680,8 @@ impl SubjectPublicKeyInfo {
 	/// Create a `SubjectPublicKey` value from DER-encoded SubjectPublicKeyInfo bytes
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(spki_der: &[u8]) -> Result<Self, Error> {
-		use x509_parser::{
-			prelude::FromDer,
-			x509::{AlgorithmIdentifier, SubjectPublicKeyInfo},
-		};
+		use x509_parser::prelude::FromDer;
+		use x509_parser::x509::{AlgorithmIdentifier, SubjectPublicKeyInfo};
 
 		let (rem, spki) =
 			SubjectPublicKeyInfo::from_der(spki_der).map_err(|e| Error::X509(e.to_string()))?;
@@ -762,11 +761,8 @@ pub(crate) fn serialize_public_key_der(key: &(impl PublicKeyData + ?Sized), writ
 #[cfg(all(test, feature = "crypto"))]
 mod test {
 	use super::*;
-
-	use crate::ring_like::{
-		rand::SystemRandom,
-		signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING},
-	};
+	use crate::ring_like::rand::SystemRandom;
+	use crate::ring_like::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
 
 	#[cfg(all(feature = "x509-parser", feature = "pem"))]
 	#[test]
