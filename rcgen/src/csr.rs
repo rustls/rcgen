@@ -10,7 +10,7 @@ use crate::{
 	Certificate, CertificateParams, Error, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey,
 };
 #[cfg(feature = "x509-parser")]
-use crate::{DistinguishedName, SanType};
+use crate::{DistinguishedName, ExtendedKeyUsagePurpose, KeyUsagePurpose, SanType};
 
 /// A public key, extracted from a CSR
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -75,7 +75,7 @@ pub struct CertificateSigningRequestParams {
 }
 
 impl CertificateSigningRequestParams {
-	/// Parse a certificate signing request from the ASCII PEM format
+	/// Parse and verify a certificate signing request from the ASCII PEM format
 	///
 	/// See [`from_der`](Self::from_der) for more details.
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
@@ -84,9 +84,13 @@ impl CertificateSigningRequestParams {
 		Self::from_der(&csr.contents().into())
 	}
 
-	/// Parse a certificate signing request from DER-encoded bytes
+	/// Parse and verify a certificate signing request from DER-encoded bytes
 	///
-	/// Currently, this only supports the `Subject Alternative Name` extension.
+	/// Currently, this supports the following extensions:
+	/// - `Subject Alternative Name` (see [`SanType`])
+	/// - `Key Usage` (see [`KeyUsagePurpose`])
+	/// - `Extended Key Usage` (see [`ExtendedKeyUsagePurpose`])
+	///
 	/// On encountering other extensions, this function will return an error.
 	///
 	/// [`rustls_pemfile::csr()`] is often used to obtain a [`CertificateSigningRequestDer`] from
@@ -96,7 +100,6 @@ impl CertificateSigningRequestParams {
 	/// [`rustls_pemfile::csr()`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.csr.html
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(csr: &CertificateSigningRequestDer<'_>) -> Result<Self, Error> {
-		use crate::KeyUsagePurpose;
 		use x509_parser::prelude::FromDer;
 
 		let csr = x509_parser::certification_request::X509CertificationRequest::from_der(csr)
@@ -135,37 +138,27 @@ impl CertificateSigningRequestParams {
 					},
 					x509_parser::extensions::ParsedExtension::ExtendedKeyUsage(eku) => {
 						if eku.any {
-							params.insert_extended_key_usage(crate::ExtendedKeyUsagePurpose::Any);
+							params.insert_extended_key_usage(ExtendedKeyUsagePurpose::Any);
 						}
 						if eku.server_auth {
-							params.insert_extended_key_usage(
-								crate::ExtendedKeyUsagePurpose::ServerAuth,
-							);
+							params.insert_extended_key_usage(ExtendedKeyUsagePurpose::ServerAuth);
 						}
 						if eku.client_auth {
-							params.insert_extended_key_usage(
-								crate::ExtendedKeyUsagePurpose::ClientAuth,
-							);
+							params.insert_extended_key_usage(ExtendedKeyUsagePurpose::ClientAuth);
 						}
 						if eku.code_signing {
-							params.insert_extended_key_usage(
-								crate::ExtendedKeyUsagePurpose::CodeSigning,
-							);
+							params.insert_extended_key_usage(ExtendedKeyUsagePurpose::CodeSigning);
 						}
 						if eku.email_protection {
 							params.insert_extended_key_usage(
-								crate::ExtendedKeyUsagePurpose::EmailProtection,
+								ExtendedKeyUsagePurpose::EmailProtection,
 							);
 						}
 						if eku.time_stamping {
-							params.insert_extended_key_usage(
-								crate::ExtendedKeyUsagePurpose::TimeStamping,
-							);
+							params.insert_extended_key_usage(ExtendedKeyUsagePurpose::TimeStamping);
 						}
 						if eku.ocsp_signing {
-							params.insert_extended_key_usage(
-								crate::ExtendedKeyUsagePurpose::OcspSigning,
-							);
+							params.insert_extended_key_usage(ExtendedKeyUsagePurpose::OcspSigning);
 						}
 						if !eku.other.is_empty() {
 							return Err(Error::UnsupportedExtension);
@@ -178,7 +171,6 @@ impl CertificateSigningRequestParams {
 
 		// Not yet handled:
 		// * is_ca
-		// * extended_key_usages
 		// * name_constraints
 		// and any other extensions.
 
