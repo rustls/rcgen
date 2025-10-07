@@ -2,8 +2,7 @@
 use pem::Pem;
 use pki_types::CertificateRevocationListDer;
 use time::OffsetDateTime;
-use yasna::DERWriter;
-use yasna::Tag;
+use yasna::{DERWriter, Tag};
 
 use crate::key_pair::sign_der;
 #[cfg(feature = "pem")]
