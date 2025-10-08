@@ -43,21 +43,21 @@ impl Certificate {
 		pem::encode_config(&Pem::new("CERTIFICATE", self.der().to_vec()), ENCODE_CONFIG)
 	}
 	/// Deserialize a cert from PEM format
-	#[cfg(feature = "pem")]
+	#[cfg(feature = "x509-parser")]
 	pub fn from_pem(pem_bytes: &[u8]) -> Result<Self, Error> {
-		let cert_der = match CertificateDer::from_pem_slice(&pem_bytes) {
+		let cert_der = match CertificateDer::from_pem_slice(pem_bytes) {
 			Ok(val) => val,
 			Err(_) => return Err(Error::CouldNotParseCertificate),
 		};
-		return Ok(Self { der: cert_der });
+		Ok(Self { der: cert_der })
 	}
 
 	/// Deserialize a cert from DER format
 	pub fn from_der(der_bytes: &[u8]) -> Self {
 		let owned_bytes = der_bytes.to_vec();
-		return Certificate {
+		Certificate {
 			der: owned_bytes.into(),
-		};
+		}
 	}
 }
 
