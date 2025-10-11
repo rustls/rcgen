@@ -31,9 +31,9 @@ impl CertificateBuilder {
 		}
 	}
 	/// Set signature algorithm (instead of default).
-	pub fn signature_algorithm(mut self, alg: KeyPairAlgorithm) -> anyhow::Result<Self> {
+	pub fn signature_algorithm(mut self, alg: KeyPairAlgorithm) -> Self {
 		self.alg = alg;
-		Ok(self)
+		self
 	}
 	/// Set options for Ca Certificates
 	/// # Example
@@ -241,7 +241,7 @@ impl fmt::Display for KeyPairAlgorithm {
 }
 
 impl FromStr for KeyPairAlgorithm {
-	type Err = anyhow::Error;
+	type Err = String;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s {
@@ -257,7 +257,7 @@ impl FromStr for KeyPairAlgorithm {
 			"ml-dsa-65" => Ok(Self::MlDsa65),
 			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
 			"ml-dsa-87" => Ok(Self::MlDsa87),
-			_ => Err(anyhow::anyhow!("unknown key algorithm: {s}")),
+			_ => Err(format!("unknown key algorithm: {s}")),
 		}
 	}
 }
@@ -348,7 +348,7 @@ mod tests {
 	fn serialize_end_entity_ecdsa_p384_sha384_sig() -> anyhow::Result<()> {
 		let ca = CertificateBuilder::new().certificate_authority().build()?;
 		let end_entity = CertificateBuilder::new()
-			.signature_algorithm(KeyPairAlgorithm::EcdsaP384)?
+			.signature_algorithm(KeyPairAlgorithm::EcdsaP384)
 			.end_entity()
 			.build(&ca)?
 			.serialize_pem();
@@ -387,7 +387,7 @@ mod tests {
 	fn serialize_end_entity_ed25519_sig() -> anyhow::Result<()> {
 		let ca = CertificateBuilder::new().certificate_authority().build()?;
 		let end_entity = CertificateBuilder::new()
-			.signature_algorithm(KeyPairAlgorithm::Ed25519)?
+			.signature_algorithm(KeyPairAlgorithm::Ed25519)
 			.end_entity()
 			.build(&ca)?
 			.serialize_pem();

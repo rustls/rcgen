@@ -7,14 +7,14 @@ fn main() -> anyhow::Result<()> {
 	let opts = options().run();
 
 	let ca = CertificateBuilder::new()
-		.signature_algorithm(opts.keypair_algorithm)?
+		.signature_algorithm(opts.keypair_algorithm)
 		.certificate_authority()
 		.country_name(&opts.country_name)?
 		.organization_name(&opts.organization_name)
 		.build()?;
 
 	let mut entity = CertificateBuilder::new()
-		.signature_algorithm(opts.keypair_algorithm)?
+		.signature_algorithm(opts.keypair_algorithm)
 		.end_entity()
 		.common_name(&opts.common_name)
 		.subject_alternative_names(opts.san);
@@ -92,13 +92,14 @@ fn parse_sans(hosts: Vec<String>) -> Result<Vec<SanType>, Error> {
 }
 
 fn key_pair_algorithm() -> impl bpaf::Parser<KeyPairAlgorithm> {
+	#[allow(unused_mut)]
 	let mut help = "Supported algorithms: rsa, ed25519, ecdsa-p256, ecdsa-p384".to_string();
-    
-    #[cfg(feature = "aws_lc_rs")] 
-    help.push_str(", ecdsa-p521");
-    
-    #[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))] 
-    help.push_str(", ml-dsa-44, ml-dsa-65, ml-dsa-87");
+
+	#[cfg(feature = "aws_lc_rs")]
+	help.push_str(", ecdsa-p521");
+
+	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	help.push_str(", ml-dsa-44, ml-dsa-65, ml-dsa-87");
 
 	bpaf::long("keypair-algorithm")
 		.argument("ARG")
