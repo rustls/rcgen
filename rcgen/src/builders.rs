@@ -1,7 +1,6 @@
 use std::{fmt, fs::File, io, path::Path, str::FromStr};
 
-use bpaf::Bpaf;
-use rcgen::{
+use crate::{
 	BasicConstraints, Certificate, CertificateParams, CertifiedIssuer, DistinguishedName, DnType,
 	DnValue::PrintableString, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
 	SignatureAlgorithm,
@@ -19,7 +18,7 @@ impl CertificateBuilder {
 	/// Initialize `CertificateParams` with defaults
 	/// # Example
 	/// ```
-	/// # use rustls_cert_gen::CertificateBuilder;
+	/// # use rcgen::CertificateBuilder;
 	/// let cert = CertificateBuilder::new();
 	/// ```
 	pub fn new() -> Self {
@@ -39,7 +38,7 @@ impl CertificateBuilder {
 	/// Set options for Ca Certificates
 	/// # Example
 	/// ```
-	/// # use rustls_cert_gen::CertificateBuilder;
+	/// # use rcgen::CertificateBuilder;
 	/// let cert = CertificateBuilder::new().certificate_authority();
 	/// ```
 	pub fn certificate_authority(self) -> CaBuilder {
@@ -69,7 +68,7 @@ impl CaBuilder {
 	}
 	/// Add CountryName to `distinguished_name`. Multiple calls will
 	/// replace previous value.
-	pub fn country_name(mut self, country: &str) -> Result<Self, rcgen::Error> {
+	pub fn country_name(mut self, country: &str) -> Result<Self, crate::Error> {
 		self.params
 			.distinguished_name
 			.push(DnType::CountryName, PrintableString(country.try_into()?));
@@ -84,7 +83,7 @@ impl CaBuilder {
 		self
 	}
 	/// build `Ca` Certificate.
-	pub fn build(self) -> Result<Ca, rcgen::Error> {
+	pub fn build(self) -> Result<Ca, crate::Error> {
 		let key_pair = KeyPair::generate_for(self.alg.into())?;
 		Ok(Ca {
 			issuer: CertifiedIssuer::self_signed(self.params, key_pair)?,
@@ -177,7 +176,7 @@ impl EndEntityBuilder {
 		self
 	}
 	/// build `EndEntity` Certificate.
-	pub fn build(self, issuer: &Ca) -> Result<EndEntity, rcgen::Error> {
+	pub fn build(self, issuer: &Ca) -> Result<EndEntity, crate::Error> {
 		let key_pair = KeyPair::generate_for(self.alg.into())?;
 		let cert = self.params.signed_by(&key_pair, &issuer.issuer)?;
 		Ok(EndEntity { cert, key_pair })
@@ -185,7 +184,8 @@ impl EndEntityBuilder {
 }
 
 /// Supported Keypair Algorithms
-#[derive(Clone, Copy, Debug, Default, Bpaf, PartialEq)]
+#[allow(missing_docs)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum KeyPairAlgorithm {
 	Rsa,
 	Ed25519,
@@ -205,18 +205,18 @@ pub enum KeyPairAlgorithm {
 impl From<KeyPairAlgorithm> for &'static SignatureAlgorithm {
 	fn from(alg: KeyPairAlgorithm) -> Self {
 		match alg {
-			KeyPairAlgorithm::Rsa => &rcgen::PKCS_RSA_SHA256,
-			KeyPairAlgorithm::Ed25519 => &rcgen::PKCS_ED25519,
-			KeyPairAlgorithm::EcdsaP256 => &rcgen::PKCS_ECDSA_P256_SHA256,
-			KeyPairAlgorithm::EcdsaP384 => &rcgen::PKCS_ECDSA_P384_SHA384,
+			KeyPairAlgorithm::Rsa => &crate::PKCS_RSA_SHA256,
+			KeyPairAlgorithm::Ed25519 => &crate::PKCS_ED25519,
+			KeyPairAlgorithm::EcdsaP256 => &crate::PKCS_ECDSA_P256_SHA256,
+			KeyPairAlgorithm::EcdsaP384 => &crate::PKCS_ECDSA_P384_SHA384,
 			#[cfg(feature = "aws_lc_rs")]
-			KeyPairAlgorithm::EcdsaP521 => &rcgen::PKCS_ECDSA_P521_SHA512,
+			KeyPairAlgorithm::EcdsaP521 => &crate::PKCS_ECDSA_P521_SHA512,
 			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
-			KeyPairAlgorithm::MlDsa44 => &rcgen::PKCS_ML_DSA_44,
+			KeyPairAlgorithm::MlDsa44 => &crate::PKCS_ML_DSA_44,
 			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
-			KeyPairAlgorithm::MlDsa65 => &rcgen::PKCS_ML_DSA_65,
+			KeyPairAlgorithm::MlDsa65 => &crate::PKCS_ML_DSA_65,
 			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
-			KeyPairAlgorithm::MlDsa87 => &rcgen::PKCS_ML_DSA_87,
+			KeyPairAlgorithm::MlDsa87 => &crate::PKCS_ML_DSA_87,
 		}
 	}
 }
@@ -454,7 +454,7 @@ mod tests {
 			.subject_alternative_names(names);
 		assert_eq!(
 			cert.params.subject_alt_names,
-			vec![rcgen::SanType::DnsName(name.try_into().unwrap())]
+			vec![crate::SanType::DnsName(name.try_into().unwrap())]
 		);
 	}
 	#[test]

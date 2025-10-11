@@ -74,6 +74,9 @@ use ring_like::digest;
 pub use sign_algo::algo::*;
 pub use sign_algo::SignatureAlgorithm;
 
+pub use builders::{Ca, CaBuilder, CertificateBuilder, KeyPairAlgorithm, EndEntity, EndEntityBuilder};
+
+mod builders;
 mod certificate;
 mod crl;
 mod csr;

@@ -1,10 +1,7 @@
 use std::{net::IpAddr, path::PathBuf, str::FromStr};
 
-use bpaf::Bpaf;
-use rcgen::{Error, SanType};
-
-mod cert;
-use cert::{key_pair_algorithm, CertificateBuilder, KeyPairAlgorithm};
+use bpaf::{Bpaf, Parser};
+use rcgen::{CertificateBuilder, Error, KeyPairAlgorithm, SanType};
 
 fn main() -> anyhow::Result<()> {
 	let opts = options().run();
@@ -51,8 +48,7 @@ struct Options {
 	#[bpaf(
 		external(key_pair_algorithm),
 		fallback(KeyPairAlgorithm::EcdsaP256),
-		display_fallback,
-		group_help("Keypair Algorithm:")
+		display_fallback
 	)]
 	pub keypair_algorithm: KeyPairAlgorithm,
 	/// Extended Key Usage Purpose: ClientAuth
@@ -95,9 +91,65 @@ fn parse_sans(hosts: Vec<String>) -> Result<Vec<SanType>, Error> {
 		.collect()
 }
 
+fn key_pair_algorithm() -> impl bpaf::Parser<KeyPairAlgorithm> {
+	let mut help = "Supported algorithms: rsa, ed25519, ecdsa-p256, ecdsa-p384".to_string();
+    
+    #[cfg(feature = "aws_lc_rs")] 
+    help.push_str(", ecdsa-p521");
+    
+    #[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))] 
+    help.push_str(", ml-dsa-44, ml-dsa-65, ml-dsa-87");
+
+	bpaf::long("keypair-algorithm")
+		.argument("ARG")
+		.help(help.as_str())
+		.parse(|s: String| KeyPairAlgorithm::from_str(&s))
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn test_key_pair_algorithm() {
+		use bpaf::Args;
+
+		// Test valid algorithms
+		let opts = options()
+			.run_inner(Args::from(&[
+				"--keypair-algorithm",
+				"rsa",
+				"--output",
+				"/tmp",
+			]))
+			.unwrap();
+		assert_eq!(opts.keypair_algorithm, KeyPairAlgorithm::Rsa);
+
+		let opts = options()
+			.run_inner(Args::from(&[
+				"--keypair-algorithm",
+				"ed25519",
+				"--output",
+				"/tmp",
+			]))
+			.unwrap();
+		assert_eq!(opts.keypair_algorithm, KeyPairAlgorithm::Ed25519);
+
+		// Test invalid algorithm
+		let result = options().run_inner(Args::from(&[
+			"--keypair-algorithm",
+			"invalid",
+			"--output",
+			"/tmp",
+		]));
+		assert!(result.is_err());
+
+		// Test fallback (no --keypair-algorithm specified)
+		let opts = options()
+			.run_inner(Args::from(&["--output", "/tmp"]))
+			.unwrap();
+		assert_eq!(opts.keypair_algorithm, KeyPairAlgorithm::EcdsaP256);
+	}
 
 	#[test]
 	fn test_parse_san() {

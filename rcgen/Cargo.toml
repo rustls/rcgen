@@ -19,6 +19,7 @@ crypto = []
 ring = ["crypto", "dep:ring"]
 
 [dependencies]
+anyhow = { workspace = true }
 aws-lc-rs = { workspace = true, optional = true }
 pem = { workspace = true, optional = true }
 pki-types = { workspace = true }
@@ -27,6 +28,9 @@ time = { workspace = true }
 x509-parser = { workspace = true, features = ["verify"], optional = true }
 yasna = { workspace = true }
 zeroize = { workspace = true, optional = true }
+
+[dev-dependencies]
+assert_fs = { workspace = true }
 
 [target."cfg(unix)".dev-dependencies]
 openssl = { workspace = true }
