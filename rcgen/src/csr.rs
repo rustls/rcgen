@@ -105,7 +105,8 @@ impl CertificateSigningRequestParams {
 		let csr = x509_parser::certification_request::X509CertificationRequest::from_der(csr)
 			.map_err(|_| Error::CouldNotParseCertificationRequest)?
 			.1;
-		csr.verify_signature().map_err(|_| Error::RingUnspecified)?;
+		csr.verify_signature()
+			.map_err(|_| Error::InvalidRequestSignature)?;
 		let alg_oid = csr
 			.signature_algorithm
 			.algorithm
