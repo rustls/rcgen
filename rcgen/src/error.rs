@@ -48,6 +48,9 @@ pub enum Error {
 	/// X509 parsing error
 	#[cfg(feature = "x509-parser")]
 	X509(String),
+	/// Invalid signature when decoding a CSR
+	#[cfg(feature = "x509-parser")]
+	InvalidSignatureInCsr,
 }
 
 impl fmt::Display for Error {
@@ -96,6 +99,8 @@ impl fmt::Display for Error {
 			MissingSerialNumber => write!(f, "A serial number must be specified")?,
 			#[cfg(feature = "x509-parser")]
 			X509(e) => write!(f, "X.509 parsing error: {e}")?,
+			#[cfg(feature = "x509-parser")]
+			InvalidSignatureInCsr => write!(f, "Signature of CSR does not verify")?,
 		};
 		Ok(())
 	}

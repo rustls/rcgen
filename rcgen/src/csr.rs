@@ -91,7 +91,10 @@ impl CertificateSigningRequestParams {
 	/// - `Key Usage` (see [`KeyUsagePurpose`])
 	/// - `Extended Key Usage` (see [`ExtendedKeyUsagePurpose`])
 	///
-	/// On encountering other extensions, this function will return an error.
+	/// On encountering other extensions, this function will return the error [`Error::UnsupportedExtension`].
+	///
+	/// If the signature of the certificate signing request does not verify, this function
+	/// will return the error [`Error::InvalidSignatureInCsr`].
 	///
 	/// [`rustls_pemfile::csr()`] is often used to obtain a [`CertificateSigningRequestDer`] from
 	/// PEM input. If you already have a byte slice containing DER, it can trivially be converted
@@ -105,7 +108,8 @@ impl CertificateSigningRequestParams {
 		let csr = x509_parser::certification_request::X509CertificationRequest::from_der(csr)
 			.map_err(|_| Error::CouldNotParseCertificationRequest)?
 			.1;
-		csr.verify_signature().map_err(|_| Error::RingUnspecified)?;
+		csr.verify_signature()
+			.map_err(|_| Error::InvalidSignatureInCsr)?;
 		let alg_oid = csr
 			.signature_algorithm
 			.algorithm
