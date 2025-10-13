@@ -94,11 +94,11 @@ impl CertificateSigningRequestParams {
 	/// On encountering other extensions, this function will return [`Error::UnsupportedExtension`].
 	/// If the request's signature is invalid, it will return [`Error::InvalidRequestSignature`].
 	///
-	/// [`rustls_pemfile::csr()`] is often used to obtain a [`CertificateSigningRequestDer`] from
+	/// The [`PemObject`] trait is often used to obtain a [`CertificateSigningRequestDer`] from
 	/// PEM input. If you already have a byte slice containing DER, it can trivially be converted
 	/// into [`CertificateSigningRequestDer`] using the [`Into`] trait.
 	///
-	/// [`rustls_pemfile::csr()`]: https://docs.rs/rustls-pemfile/latest/rustls_pemfile/fn.csr.html
+	/// [`PemObject`]: pki_types::pem::PemObject
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(csr: &CertificateSigningRequestDer<'_>) -> Result<Self, Error> {
 		use x509_parser::prelude::FromDer;
