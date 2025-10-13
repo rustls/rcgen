@@ -91,7 +91,8 @@ impl CertificateSigningRequestParams {
 	/// - `Key Usage` (see [`KeyUsagePurpose`])
 	/// - `Extended Key Usage` (see [`ExtendedKeyUsagePurpose`])
 	///
-	/// On encountering other extensions, this function will return an error.
+	/// On encountering other extensions, this function will return [`Error::UnsupportedExtension`].
+	/// If the request's signature is invalid, it will return [`Error::InvalidRequestSignature`].
 	///
 	/// [`rustls_pemfile::csr()`] is often used to obtain a [`CertificateSigningRequestDer`] from
 	/// PEM input. If you already have a byte slice containing DER, it can trivially be converted
