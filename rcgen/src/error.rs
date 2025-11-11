@@ -12,7 +12,7 @@ pub enum Error {
 	CouldNotParseKeyPair,
 	/// The CSR signature is invalid
 	#[cfg(feature = "x509-parser")]
-	InvalidRequestSignature,
+	InvalidCertificationRequestSignature,
 	#[cfg(feature = "x509-parser")]
 	/// Invalid subject alternative name type
 	InvalidNameType,
@@ -65,7 +65,7 @@ impl fmt::Display for Error {
 			)?,
 			CouldNotParseKeyPair => write!(f, "Could not parse key pair")?,
 			#[cfg(feature = "x509-parser")]
-			InvalidRequestSignature => write!(f, "Invalid CSR signature")?,
+			InvalidCertificationRequestSignature => write!(f, "Invalid CSR signature")?,
 			#[cfg(feature = "x509-parser")]
 			InvalidNameType => write!(f, "Invalid subject alternative name type")?,
 			InvalidAsn1String(e) => write!(f, "{e}")?,

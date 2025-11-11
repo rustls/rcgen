@@ -92,7 +92,8 @@ impl CertificateSigningRequestParams {
 	/// - `Extended Key Usage` (see [`ExtendedKeyUsagePurpose`])
 	///
 	/// On encountering other extensions, this function will return [`Error::UnsupportedExtension`].
-	/// If the request's signature is invalid, it will return [`Error::InvalidRequestSignature`].
+	/// If the request's signature is invalid, it will return
+	/// [`Error::InvalidCertificationRequestSignature`].
 	///
 	/// The [`PemObject`] trait is often used to obtain a [`CertificateSigningRequestDer`] from
 	/// PEM input. If you already have a byte slice containing DER, it can trivially be converted
@@ -107,7 +108,7 @@ impl CertificateSigningRequestParams {
 			.map_err(|_| Error::CouldNotParseCertificationRequest)?
 			.1;
 		csr.verify_signature()
-			.map_err(|_| Error::InvalidRequestSignature)?;
+			.map_err(|_| Error::InvalidCertificationRequestSignature)?;
 		let alg_oid = csr
 			.signature_algorithm
 			.algorithm
