@@ -579,7 +579,7 @@ impl TryFrom<&str> for UniversalString {
 		// A `char` is any ‘Unicode code point’ other than a surrogate code point.
 		// The code units for UTF-32 correspond exactly to Unicode code points.
 		// (https://www.unicode.org/reports/tr19/tr19-9.html#Introduction)
-		// So any `char` is a valid UTF-32, we just cast it to perform the convertion.
+		// So any `char` is a valid UTF-32, we just cast it to perform the conversion.
 		for char in value.chars().map(|char| char as u32) {
 			bytes.extend(char.to_be_bytes())
 		}
