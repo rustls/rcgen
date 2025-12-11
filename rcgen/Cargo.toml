@@ -12,11 +12,11 @@ keywords.workspace = true
 
 [features]
 default = ["crypto", "pem", "ring"]
-aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys"]
-aws_lc_rs_unstable = ["aws_lc_rs", "aws-lc-rs/unstable"]
+aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys", "x509-parser?/verify-aws"]
+aws_lc_rs_unstable = ["aws_lc_rs", "aws-lc-rs/unstable", "x509-parser?/verify-aws"]
 fips = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/fips"]
 crypto = []
-ring = ["crypto", "dep:ring"]
+ring = ["crypto", "dep:ring", "x509-parser?/verify"]
 
 [dependencies]
 aws-lc-rs = { workspace = true, optional = true }
@@ -24,7 +24,7 @@ pem = { workspace = true, optional = true }
 pki-types = { workspace = true }
 ring = { workspace = true, optional = true }
 time = { workspace = true }
-x509-parser = { workspace = true, features = ["verify"], optional = true }
+x509-parser = { workspace = true, optional = true }
 yasna = { workspace = true }
 zeroize = { workspace = true, optional = true }
 
