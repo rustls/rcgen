@@ -103,6 +103,21 @@ jobs:
               working-directory: rcgen/
               run: cargo check-external-types --features aws_lc_rs_unstable,pem,x509-parser
 
+    cargo-hack:
+        name: Validate all feature combinations work
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout sources
+              uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - name: Install rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+            - name: install cargo-hack
+              uses: taiki-e/install-action@cargo-hack
+            - name: cargo hack check
+              run: cargo hack check --each-feature --no-dev-deps -p rcgen
+
     semver:
         name: Check semver compatibility
         runs-on: ubuntu-latest
