@@ -12,7 +12,7 @@ keywords.workspace = true
 
 [features]
 default = ["crypto", "pem", "ring"]
-aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys", "x509-parser?/verify-aws"]
+aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys", "x509-parser?/verify-aws", "x509-parser?/verify"]
 aws_lc_rs_unstable = ["aws_lc_rs", "aws-lc-rs/unstable", "x509-parser?/verify-aws"]
 fips = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/fips"]
 crypto = []
