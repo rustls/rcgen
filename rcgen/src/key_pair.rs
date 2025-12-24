@@ -595,6 +595,21 @@ impl TryFrom<&PrivateKeyDer<'_>> for KeyPair {
 	}
 }
 
+#[cfg(feature = "crypto")]
+impl<'a> From<&'a KeyPair> for PrivatePkcs8KeyDer<'a> {
+	fn from(val: &'a KeyPair) -> Self {
+		val.serialized_der().into()
+	}
+}
+
+#[cfg(feature = "crypto")]
+impl<'a> From<&'a KeyPair> for PrivateKeyDer<'a> {
+	fn from(val: &'a KeyPair) -> Self {
+		let der: PrivatePkcs8KeyDer = val.into();
+		der.into()
+	}
+}
+
 /// The key size used for RSA key generation
 #[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -785,6 +800,33 @@ mod test {
 
 			let pkd_der = SubjectPublicKeyInfo::from_der(&der).expect("from der");
 			assert_eq!(kp.der_bytes(), pkd_der.der_bytes());
+		}
+	}
+
+	#[cfg(all(feature = "crypto", feature = "pem"))]
+	fn keypair_to_pkd_via_pem<'a>(
+		kp: &'a KeyPair,
+	) -> Result<PrivateKeyDer<'a>, pki_types::pem::Error> {
+		use pki_types::pem::PemObject;
+		pki_types::PrivateKeyDer::from_pem_slice(kp.serialize_pem().as_bytes())
+	}
+
+	#[cfg(all(feature = "crypto", feature = "pem"))]
+	#[test]
+	fn test_pkd_from_kp() {
+		for alg in [
+			&PKCS_ED25519,
+			&PKCS_ECDSA_P256_SHA256,
+			&PKCS_ECDSA_P384_SHA384,
+			#[cfg(feature = "aws_lc_rs")]
+			&PKCS_ECDSA_P521_SHA512,
+			#[cfg(feature = "aws_lc_rs")]
+			&PKCS_RSA_SHA256,
+		] {
+			let kp = KeyPair::generate_for(alg).expect("keygen");
+			let pkd_naive = keypair_to_pkd_via_pem(&kp).expect("convert");
+			let pkd: PrivateKeyDer = (&kp).into();
+			assert_eq!(pkd_naive, pkd);
 		}
 	}
 
