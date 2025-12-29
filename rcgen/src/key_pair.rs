@@ -595,6 +595,20 @@ impl TryFrom<&PrivateKeyDer<'_>> for KeyPair {
 	}
 }
 
+#[cfg(feature = "crypto")]
+impl From<KeyPair> for PrivatePkcs8KeyDer<'static> {
+	fn from(val: KeyPair) -> Self {
+		val.serialize_der().into()
+	}
+}
+
+#[cfg(feature = "crypto")]
+impl From<KeyPair> for PrivateKeyDer<'static> {
+	fn from(val: KeyPair) -> Self {
+		Self::from(PrivatePkcs8KeyDer::from(val))
+	}
+}
+
 /// The key size used for RSA key generation
 #[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
