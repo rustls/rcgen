@@ -41,6 +41,16 @@ pub(crate) const RSASSA_PSS: &[u64] = &[1, 2, 840, 113549, 1, 1, 10];
 /// id-ce-keyUsage in [RFC 5280](https://tools.ietf.org/html/rfc5280#appendix-A.2)
 pub(crate) const KEY_USAGE: &[u64] = &[2, 5, 29, 15];
 
+// Contributor Question:
+// Many docstrings refer to appendix A of the RFC instead of the section
+// of the respective OID. Why is that? Should I change the link accordingly?
+//
+// Note: Every other RFC5280 rfc-editor.org link is referring to a nonexisting
+// appendix-A section.
+
+/// id-ce-certificatePolicies in [RFC 5280](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.4)
+pub(crate) const CERTIFICATE_POLICIES: &[u64] = &[2, 5, 29, 32];
+
 /// id-ce-subjectAltName in [RFC 5280](https://tools.ietf.org/html/rfc5280#appendix-A.2)
 pub(crate) const SUBJECT_ALT_NAME: &[u64] = &[2, 5, 29, 17];
 
