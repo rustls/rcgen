@@ -1,20 +1,28 @@
-use ring::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters};
 use std::fmt;
 use std::hash::{Hash, Hasher};
+
+#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+use aws_lc_rs::unstable::signature::{
+	PqdsaSigningAlgorithm, ML_DSA_44_SIGNING, ML_DSA_65_SIGNING, ML_DSA_87_SIGNING,
+};
 use yasna::models::ObjectIdentifier;
-use yasna::DERWriter;
-use yasna::Tag;
+use yasna::{DERWriter, Tag};
 
-use crate::oid::*;
-use crate::RcgenError;
+#[cfg(feature = "crypto")]
+use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters, RsaEncoding};
+use crate::Error;
 
+#[cfg(feature = "crypto")]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum SignAlgo {
 	EcDsa(&'static EcdsaSigningAlgorithm),
 	EdDsa(&'static EdDSAParameters),
-	Rsa(),
+	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	PqDsa(&'static PqdsaSigningAlgorithm),
+	Rsa(&'static dyn RsaEncoding),
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum SignatureAlgorithmParams {
 	/// Omit the parameters
 	None,
@@ -28,8 +36,10 @@ pub(crate) enum SignatureAlgorithmParams {
 }
 
 /// Signature algorithm type
+#[derive(Clone)]
 pub struct SignatureAlgorithm {
 	oids_sign_alg: &'static [&'static [u64]],
+	#[cfg(feature = "crypto")]
 	pub(crate) sign_alg: SignAlgo,
 	oid_components: &'static [u64],
 	params: SignatureAlgorithmParams,
@@ -53,6 +63,11 @@ impl fmt::Debug for SignatureAlgorithm {
 		} else if self == &PKCS_ED25519 {
 			write!(f, "PKCS_ED25519")
 		} else {
+			#[cfg(feature = "aws_lc_rs")]
+			if self == &PKCS_ECDSA_P521_SHA512 {
+				return write!(f, "PKCS_ECDSA_P521_SHA512");
+			}
+
 			write!(f, "Unknown")
 		}
 	}
@@ -73,7 +88,6 @@ impl Hash for SignatureAlgorithm {
 		self.oids_sign_alg.hash(state);
 	}
 }
-
 impl SignatureAlgorithm {
 	pub(crate) fn iter() -> std::slice::Iter<'static, &'static SignatureAlgorithm> {
 		use algo::*;
@@ -84,39 +98,44 @@ impl SignatureAlgorithm {
 			//&PKCS_RSA_PSS_SHA256,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
+			#[cfg(feature = "aws_lc_rs")]
+			&PKCS_ECDSA_P521_SHA512,
 			&PKCS_ED25519,
 		];
 		ALGORITHMS.iter()
 	}
 
 	/// Retrieve the SignatureAlgorithm for the provided OID
-	pub fn from_oid(oid: &[u64]) -> Result<&'static SignatureAlgorithm, RcgenError> {
+	pub fn from_oid(oid: &[u64]) -> Result<&'static SignatureAlgorithm, Error> {
 		for algo in Self::iter() {
 			if algo.oid_components == oid {
 				return Ok(algo);
 			}
 		}
-		Err(RcgenError::UnsupportedSignatureAlgorithm)
+		Err(Error::UnsupportedSignatureAlgorithm)
 	}
 }
 
 /// The list of supported signature algorithms
-pub mod algo {
+pub(crate) mod algo {
 	use super::*;
+	use crate::oid::*;
 
 	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_SHA256: SignatureAlgorithm = SignatureAlgorithm {
-		oids_sign_alg: &[&OID_RSA_ENCRYPTION],
-		sign_alg: SignAlgo::Rsa(),
+		oids_sign_alg: &[RSA_ENCRYPTION],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA256),
 		// sha256WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 11],
 		params: SignatureAlgorithmParams::Null,
 	};
 
-	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+	/// RSA signing with PKCS#1 1.5 padding and SHA-384 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_SHA384: SignatureAlgorithm = SignatureAlgorithm {
-		oids_sign_alg: &[&OID_RSA_ENCRYPTION],
-		sign_alg: SignAlgo::Rsa(),
+		oids_sign_alg: &[RSA_ENCRYPTION],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA384),
 		// sha384WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 12],
 		params: SignatureAlgorithmParams::Null,
@@ -124,8 +143,9 @@ pub mod algo {
 
 	/// RSA signing with PKCS#1 1.5 padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_SHA512: SignatureAlgorithm = SignatureAlgorithm {
-		oids_sign_alg: &[&OID_RSA_ENCRYPTION],
-		sign_alg: SignAlgo::Rsa(),
+		oids_sign_alg: &[RSA_ENCRYPTION],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA512),
 		// sha512WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 13],
 		params: SignatureAlgorithmParams::Null,
@@ -138,11 +158,12 @@ pub mod algo {
 	//
 	/// RSA signing with PKCS#1 2.1 RSASSA-PSS padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub(crate) static PKCS_RSA_PSS_SHA256: SignatureAlgorithm = SignatureAlgorithm {
-		// We could also use OID_RSA_ENCRYPTION here, but it's recommended
+		// We could also use RSA_ENCRYPTION here, but it's recommended
 		// to use ID-RSASSA-PSS if possible.
-		oids_sign_alg: &[&OID_RSASSA_PSS],
-		sign_alg: SignAlgo::Rsa(),
-		oid_components: &OID_RSASSA_PSS, //&[1, 2, 840, 113549, 1, 1, 13],
+		oids_sign_alg: &[RSASSA_PSS],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PSS_SHA256),
+		oid_components: RSASSA_PSS, //&[1, 2, 840, 113549, 1, 1, 13],
 		// rSASSA-PSS-SHA256-Params in RFC 4055
 		params: SignatureAlgorithmParams::RsaPss {
 			// id-sha256 in https://datatracker.ietf.org/doc/html/rfc4055#section-2.1
@@ -153,7 +174,8 @@ pub mod algo {
 
 	/// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	pub static PKCS_ECDSA_P256_SHA256: SignatureAlgorithm = SignatureAlgorithm {
-		oids_sign_alg: &[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_256_R1],
+		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_256_R1],
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P256_SHA256_ASN1_SIGNING),
 		// ecdsa-with-SHA256 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 2],
@@ -162,22 +184,63 @@ pub mod algo {
 
 	/// ECDSA signing using the P-384 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	pub static PKCS_ECDSA_P384_SHA384: SignatureAlgorithm = SignatureAlgorithm {
-		oids_sign_alg: &[&OID_EC_PUBLIC_KEY, &OID_EC_SECP_384_R1],
+		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_384_R1],
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P384_SHA384_ASN1_SIGNING),
 		// ecdsa-with-SHA384 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 3],
 		params: SignatureAlgorithmParams::None,
 	};
-
-	// TODO PKCS_ECDSA_P521_SHA512 https://github.com/briansmith/ring/issues/824
+	/// ECDSA signing using the P-521 curves and SHA-512 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+	/// Currently this is only supported with the `aws_lc_rs` feature
+	#[cfg(feature = "aws_lc_rs")]
+	pub static PKCS_ECDSA_P521_SHA512: SignatureAlgorithm = SignatureAlgorithm {
+		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P521_SHA512_ASN1_SIGNING),
+		// ecdsa-with-SHA512 in RFC 5758
+		oid_components: &[1, 2, 840, 10045, 4, 3, 4],
+		params: SignatureAlgorithmParams::None,
+	};
 
 	/// ED25519 curve signing as per [RFC 8410](https://tools.ietf.org/html/rfc8410)
 	pub static PKCS_ED25519: SignatureAlgorithm = SignatureAlgorithm {
 		// id-Ed25519 in RFC 8410
 		oids_sign_alg: &[&[1, 3, 101, 112]],
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::EdDsa(&signature::ED25519),
 		// id-Ed25519 in RFC 8410
 		oid_components: &[1, 3, 101, 112],
+		params: SignatureAlgorithmParams::None,
+	};
+
+	/// ML-DSA-44 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
+	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	pub static PKCS_ML_DSA_44: SignatureAlgorithm = SignatureAlgorithm {
+		oids_sign_alg: &[ML_DSA_44],
+		#[cfg(all(feature = "crypto", feature = "aws_lc_rs_unstable"))]
+		sign_alg: SignAlgo::PqDsa(&ML_DSA_44_SIGNING),
+		oid_components: ML_DSA_44,
+		params: SignatureAlgorithmParams::None,
+	};
+
+	/// ML-DSA-44 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
+	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	pub static PKCS_ML_DSA_65: SignatureAlgorithm = SignatureAlgorithm {
+		oids_sign_alg: &[ML_DSA_65],
+		#[cfg(all(feature = "crypto", feature = "aws_lc_rs_unstable"))]
+		sign_alg: SignAlgo::PqDsa(&ML_DSA_65_SIGNING),
+		oid_components: ML_DSA_65,
+		params: SignatureAlgorithmParams::None,
+	};
+
+	/// ML-DSA-44 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
+	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	pub static PKCS_ML_DSA_87: SignatureAlgorithm = SignatureAlgorithm {
+		oids_sign_alg: &[ML_DSA_87],
+		#[cfg(all(feature = "crypto", feature = "aws_lc_rs_unstable"))]
+		sign_alg: SignAlgo::PqDsa(&ML_DSA_87_SIGNING),
+		oid_components: ML_DSA_87,
 		params: SignatureAlgorithmParams::None,
 	};
 }
