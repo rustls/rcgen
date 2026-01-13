@@ -64,7 +64,9 @@ impl fmt::Debug for SignatureAlgorithm {
 			write!(f, "PKCS_ED25519")
 		} else {
 			#[cfg(feature = "aws_lc_rs")]
-			if self == &PKCS_ECDSA_P521_SHA512 {
+			if self == &PKCS_ECDSA_P256K1_SHA256 {
+				return write!(f, "PKCS_ECDSA_P256K1_SHA256");
+			} else if self == &PKCS_ECDSA_P521_SHA512 {
 				return write!(f, "PKCS_ECDSA_P521_SHA512");
 			}
 
@@ -97,6 +99,8 @@ impl SignatureAlgorithm {
 			&PKCS_RSA_SHA512,
 			//&PKCS_RSA_PSS_SHA256,
 			&PKCS_ECDSA_P256_SHA256,
+			#[cfg(feature = "aws_lc_rs")]
+			&PKCS_ECDSA_P256K1_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
 			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_ECDSA_P521_SHA512,
@@ -172,7 +176,19 @@ pub(crate) mod algo {
 		},
 	};
 
-	/// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+	/// ECDSA signing using the K-256 curves and SHA-256 hashing as per [SEC 2, Section 2.4.1](https://www.secg.org/sec2-v2.pdf)
+	/// Currently this is only supported with the `aws_lc_rs` feature
+	#[cfg(feature = "aws_lc_rs")]
+	pub static PKCS_ECDSA_P256K1_SHA256: SignatureAlgorithm = SignatureAlgorithm {
+		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_256_K1],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P256K1_SHA256_ASN1_SIGNING),
+		// ecdsa-with-SHA256 in RFC 5758
+		oid_components: &[1, 2, 840, 10045, 4, 3, 2],
+		params: SignatureAlgorithmParams::None,
+	};
+
+	/// ECDSA signing using the P-256 curves with verifiably random parameters and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	pub static PKCS_ECDSA_P256_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_256_R1],
 		#[cfg(feature = "crypto")]
