@@ -795,6 +795,24 @@ impl CertificatePolicies {
 		})
 	}
 
+	/// Add multiple policies at once
+	/// Returns [`Error::Other`] if any of the
+	/// PolicyInformation OIDs are already present
+	pub fn add_policies(self, policies: &[PolicyInformation]) -> Result<Self, Error> {
+		let mut registered_policies = self.policy_information.clone();
+		registered_policies.extend_from_slice(policies);
+		let mut oids = std::collections::HashSet::<&[u64]>::new();
+		for policy in &registered_policies {
+			if !oids.insert(&policy.policy_identifier) {
+				return Err(Error::Other);
+			}
+		}
+		Ok(Self {
+			critical: self.critical,
+			policy_information: registered_policies,
+		})
+	}
+
 	/// Add once policy at a time
 	/// Does not validate if the PolicyInformation OID is unique.
 	pub fn add_policy_unchecked(self, policy: PolicyInformation) -> Self {
