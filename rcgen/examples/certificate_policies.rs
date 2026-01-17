@@ -2,9 +2,10 @@
 
 use std::fs;
 
+use rcgen::string::Ia5String;
 use rcgen::{
-	date_time_ymd, string::Ia5String, CertificateParams, CertificatePolicies, DistinguishedName,
-	DnType, InhibitAnyPolicy, KeyPair, PolicyInformation, SanType, UserNotice,
+	date_time_ymd, CertificateParams, CertificatePolicies, DistinguishedName, DnType,
+	InhibitAnyPolicy, KeyPair, PolicyInformation, SanType, UserNotice,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
