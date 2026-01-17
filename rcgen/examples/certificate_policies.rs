@@ -29,9 +29,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 				Ia5String::try_from("https://cps.example.com")?,
 				Ia5String::try_from("https://cps.example.org")?,
 			]))
-			.add_policy_unchecked(PolicyInformation::user_notice(
-				&UserNotice::new_explicit_text("Test".into()),
-			)),
+			.add_policy_unchecked(PolicyInformation::user_notice(&UserNotice::new_full(
+				"Example Org".into(),
+				vec![0, 1, 2, 3],
+				"Test message".into(),
+			))),
 	);
 
 	params.inhibit_any_policy = Some(InhibitAnyPolicy::new(2));

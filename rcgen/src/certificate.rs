@@ -605,24 +605,35 @@ impl CertificateParams {
 		}
 
 		if let Some(certificate_policies) = &self.certificate_policies {
-			write_x509_extension(
-				writer.next(),
-				oid::CERTIFICATE_POLICIES,
-				certificate_policies.critical,
-				|writer| {
-					writer.write_sequence_of(|writer| {
-						for policy in &certificate_policies.policy_information {
-							writer.next().write_der(&yasna::encode_der(policy))
-						}
-					})
-				},
-			);
+			// write_x509_extension(
+			// 	writer.next(),
+			// 	oid::CERTIFICATE_POLICIES,
+			// 	certificate_policies.critical,
+			// 	|writer| {
+			// 		writer.write_sequence_of(|writer| {
+			// 			for policy in &certificate_policies.policy_information {
+			// 				// writer.next().write_der(&yasna::encode_der(policy))
+
+			// 				// Unwrapped equivalent to the above trait use
+			// 				writer.next().write_der(&yasna::construct_der(|writer| {
+			// 					policy.encode_der(writer)
+			// 				}))
+			// 			}
+			// 		})
+			// 	},
+			// );
+			writer.next().write_der(&yasna::construct_der(|writer| {
+				certificate_policies.encode_der(writer);
+			}))
 		}
 
 		if let Some(inhibit_any_policy) = &self.inhibit_any_policy {
-			write_x509_extension(writer.next(), oid::INHIBIT_ANY_POLICY, true, |writer| {
-				writer.write_i64(inhibit_any_policy.skip_certs as i64)
-			});
+			// write_x509_extension(writer.next(), oid::INHIBIT_ANY_POLICY, true, |writer| {
+			// 	writer.write_i64(inhibit_any_policy.skip_certs as i64)
+			// });
+			writer.next().write_der(&yasna::construct_der(|writer| {
+				inhibit_any_policy.encode_der(writer)
+			}))
 		}
 
 		// Write the custom extensions
@@ -736,12 +747,18 @@ impl CertificatePolicies {
 	}
 }
 
-impl yasna::DEREncodable for CertificatePolicies {
+// impl yasna::DEREncodable for CertificatePolicies {
+impl CertificatePolicies {
 	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
 		write_x509_extension(writer, oid::CERTIFICATE_POLICIES, self.critical, |writer| {
 			writer.write_sequence_of(|writer| {
 				for policy in &self.policy_information {
-					writer.next().write_der(&yasna::encode_der(policy))
+					// writer.next().write_der(&yasna::encode_der(policy))
+
+					// Unwrapped equivalent to the above trait use
+					writer
+						.next()
+						.write_der(&yasna::construct_der(|writer| policy.encode_der(writer)))
 				}
 			})
 		});
@@ -818,7 +835,8 @@ pub struct PolicyInformation {
 	policy_qualifiers: Option<Vec<PolicyQualifierInfo>>,
 }
 
-impl yasna::DEREncodable for PolicyInformation {
+// impl yasna::DEREncodable for PolicyInformation {
+impl PolicyInformation {
 	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
 		writer.write_sequence(|writer| {
 			writer
@@ -829,7 +847,11 @@ impl yasna::DEREncodable for PolicyInformation {
 					for policy_qualifier in policy_qualifiers {
 						writer
 							.next()
-							.write_der(&yasna::encode_der(policy_qualifier));
+							// .write_der(&yasna::encode_der(policy_qualifier));
+							// Unwrapped equivalent to the above trait use
+							.write_der(&yasna::construct_der(|writer| {
+								policy_qualifier.encode_der(writer)
+							}))
 					}
 				})
 			}
@@ -944,11 +966,11 @@ impl TryFrom<x509_parser::extensions::PolicyInformation<'_>> for PolicyInformati
 				policy_qualifiers: None,
 			});
 		};
-
-		let mut policy_qualifiers = Vec::new();
-		for qualifier in qualifiers {
-			policy_qualifiers.push(qualifier.into())
-		}
+		// let policy_qualifiers = qualifiers.into_iter().map(PolicyQualifierInfo::from).collect();
+		let policy_qualifiers = qualifiers
+			.into_iter()
+			.map(PolicyQualifierInfo::from_x509)
+			.collect();
 
 		Ok(Self {
 			policy_identifier,
@@ -967,8 +989,10 @@ pub struct PolicyQualifierInfo {
 }
 
 #[cfg(all(test, feature = "x509-parser"))]
-impl From<x509_parser::extensions::PolicyQualifierInfo<'_>> for PolicyQualifierInfo {
-	fn from(value: x509_parser::extensions::PolicyQualifierInfo<'_>) -> Self {
+// impl From<x509_parser::extensions::PolicyQualifierInfo<'_>> for PolicyQualifierInfo {
+// fn from(value: x509_parser::extensions::PolicyQualifierInfo<'_>) -> Self {
+impl PolicyQualifierInfo {
+	fn from_x509(value: x509_parser::extensions::PolicyQualifierInfo<'_>) -> Self {
 		let mut oid = Vec::new();
 		for arc in value.policy_qualifier_id.as_bytes() {
 			oid.push(arc.to_owned() as u64)
@@ -996,12 +1020,18 @@ impl PolicyQualifierInfo {
 	fn new_user_notice(user_notice: &UserNotice) -> Self {
 		Self {
 			policy_qualifier_id: vec![1, 3, 6, 1, 5, 5, 7, 2, 2],
-			qualifier: yasna::encode_der(user_notice),
+			// qualifier: yasna::encode_der(user_notice),
+
+			// Unwrapped equivalent to the above trait use
+			qualifier: yasna::construct_der(|writer| {
+				user_notice.encode_der(writer);
+			}),
 		}
 	}
 }
 
-impl yasna::DEREncodable for PolicyQualifierInfo {
+// impl yasna::DEREncodable for PolicyQualifierInfo {
+impl PolicyQualifierInfo {
 	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
 		writer.write_sequence(|writer| {
 			writer
@@ -1062,7 +1092,7 @@ impl UserNotice {
 	///
 	/// Consider using [`Self::new_explicit_text`] instead
 	/// Conforming CAs SHOULD NOT use the noticeRef option.
-	pub fn new_full(organization: DisplayText, notice_numbers: Vec<u8>, msg: String) -> Self {
+	pub fn new_full(organization: DisplayText, notice_numbers: NoticeNumbers, msg: String) -> Self {
 		Self {
 			notice_ref: Some(NoticeReference {
 				organization,
@@ -1076,7 +1106,7 @@ impl UserNotice {
 	///
 	/// Consider using [`Self::new_explicit_text`] instead
 	/// Conforming CAs SHOULD NOT use the noticeRef option.
-	pub fn new_notice_reference(organization: String, notice_numbers: Vec<u8>) -> Self {
+	pub fn new_notice_reference(organization: String, notice_numbers: NoticeNumbers) -> Self {
 		Self {
 			notice_ref: Some(NoticeReference {
 				organization: DisplayText::Utf8String(organization),
@@ -1087,7 +1117,8 @@ impl UserNotice {
 	}
 }
 
-impl yasna::DEREncodable for UserNotice {
+// impl yasna::DEREncodable for UserNotice {
+impl UserNotice {
 	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
 		use yasna::encode_der;
 		writer.write_sequence(|writer| {
@@ -1095,11 +1126,21 @@ impl yasna::DEREncodable for UserNotice {
 				writer.next().write_der(&encode_der(notice_ref));
 			}
 			if let Some(explicit_text) = &self.explicit_text {
-				writer.next().write_der(&encode_der(explicit_text));
+				// writer.next().write_der(&encode_der(explicit_text));
+
+				// Unwrapped equivalent to the above trait use
+				writer.next().write_der(&yasna::construct_der(|writer| {
+					explicit_text.encode_der(writer);
+				}))
 			}
 		})
 	}
 }
+
+/// ```ASN.1
+/// noticeNumbers    SEQUENCE OF INTEGER
+/// ```
+type NoticeNumbers = Vec<i64>; // Does INTEGER translate to i64? OpenSSL successfully decodes it
 
 /// Consider using [`UserNotice::explicit_text`] instead.
 ///
@@ -1107,15 +1148,24 @@ impl yasna::DEREncodable for UserNotice {
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct NoticeReference {
 	organization: DisplayText,
-	notice_numbers: Vec<u8>,
+	notice_numbers: NoticeNumbers,
 }
 
+// NoticeRef is private. Should I still remove the Trait impl?
 impl yasna::DEREncodable for NoticeReference {
 	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
-		use yasna::encode_der;
 		writer.write_sequence(|writer| {
-			writer.next().write_der(&encode_der(&self.organization));
-			writer.next().write_der(&self.notice_numbers);
+			// writer.next().write_der(&encode_der(&self.organization));
+			writer.next().write_der(&yasna::construct_der(|writer| {
+				self.organization.encode_der(writer);
+			}));
+			// This is incorrect
+			// writer.next().write_der(&self.notice_numbers);
+			writer.next().write_sequence_of(|writer| {
+				for val in &self.notice_numbers {
+					writer.next().write_i64(*val);
+				}
+			});
 		})
 	}
 }
@@ -1155,7 +1205,8 @@ impl From<String> for DisplayText {
 	}
 }
 
-impl yasna::DEREncodable for DisplayText {
+// impl yasna::DEREncodable for DisplayText {
+impl DisplayText {
 	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
 		match self {
 			DisplayText::Ia5String(string) => writer.write_ia5_string(string.as_str()),
@@ -1209,7 +1260,8 @@ impl InhibitAnyPolicy {
 	}
 }
 
-impl yasna::DEREncodable for InhibitAnyPolicy {
+// impl yasna::DEREncodable for InhibitAnyPolicy {
+impl InhibitAnyPolicy {
 	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
 		// Conforming CAs MUST mark this extension as critical.
 		write_x509_extension(writer, oid::INHIBIT_ANY_POLICY, true, |writer| {
