@@ -197,6 +197,7 @@ impl CertificateParams {
 			not_before: x509.validity().not_before.to_datetime(),
 			not_after: x509.validity().not_after.to_datetime(),
 			certificate_policies: CertificatePolicies::from_x509(&x509)?,
+			inhibit_any_policy: InhibitAnyPolicy::from_x509(&x509)?,
 			..Default::default()
 		})
 	}
@@ -702,13 +703,8 @@ pub struct CertificatePolicies {
 	/// A certificate policy OID MUST NOT appear more than once in a
 	/// certificate policies extension.
 	policy_information: Vec<PolicyInformation>,
-	// Contributor note:
-	// Would it be better/feasible to use a HashSet where the hash is determined by
-	// the OID to ensure RFC compliance here? Is ensuring valid extensions part of
-	// this crate's responsibilities or is it the consumers responsibility?
 }
 
-// Contributer note: Strongly inspired by NameConstraints impl
 impl CertificatePolicies {
 	#[cfg(all(test, feature = "x509-parser"))]
 	fn from_x509(
@@ -737,7 +733,8 @@ impl CertificatePolicies {
 
 		let mut policy_information: Vec<PolicyInformation> = Vec::with_capacity(policies.len());
 		for policy in policies.iter().cloned() {
-			policy_information.push(policy.try_into()?)
+			// policy_information.push(policy.try_into()?)
+			policy_information.push(PolicyInformation::from_x509(policy)?);
 		}
 
 		Ok(Some(Self {
@@ -961,9 +958,11 @@ impl PolicyInformation {
 }
 
 #[cfg(all(test, feature = "x509-parser"))]
-impl TryFrom<x509_parser::extensions::PolicyInformation<'_>> for PolicyInformation {
-	type Error = Error;
-	fn try_from(value: x509_parser::extensions::PolicyInformation) -> Result<Self, Self::Error> {
+// impl TryFrom<x509_parser::extensions::PolicyInformation<'_>> for PolicyInformation {
+// 	type Error = Error;
+// 	fn try_from(value: x509_parser::extensions::PolicyInformation) -> Result<Self, Self::Error> {
+impl PolicyInformation {
+	fn from_x509(value: x509_parser::extensions::PolicyInformation) -> Result<Self, Error> {
 		let mut policy_identifier = Vec::new();
 
 		// Contributor question: What error should be returned here? Is this something that can happen?
@@ -972,11 +971,6 @@ impl TryFrom<x509_parser::extensions::PolicyInformation<'_>> for PolicyInformati
 		)))? {
 			policy_identifier.push(v);
 		}
-
-		// // This is an alternative way to convert the [`Oid<'_>`] but I think it may yield incorrect results because an arc can be larger than [`u8`]
-		// for arc in value.policy_id.as_bytes() {
-		// 	policy_identifier.push(arc.to_owned() as u64)
-		// }
 
 		let Some(qualifiers) = value.policy_qualifiers else {
 			return Ok(Self {
@@ -1275,6 +1269,33 @@ impl InhibitAnyPolicy {
 	/// > in the path.
 	pub fn new(skip_certs: u32) -> Self {
 		Self { skip_certs }
+	}
+}
+
+// #[cfg(feature = "x509-parser")]
+// impl From<x509_parser::extensions::InhibitAnyPolicy> for InhibitAnyPolicy {
+// 	fn from(value: x509_parser::extensions::InhibitAnyPolicy) -> Self {
+// 		Self {
+// 			skip_certs: value.skip_certs
+// 		}
+// 	}
+// }
+#[cfg(all(test, feature = "x509-parser"))]
+impl InhibitAnyPolicy {
+	fn from_x509(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Option<Self>, Error> {
+		let inhibit_any_policy = x509
+			.inhibit_anypolicy()
+			.map_err(|_| Error::CouldNotParseCertificate)?;
+
+		let Some(inhibit_any_policy) = inhibit_any_policy else {
+			return Ok(None);
+		};
+
+		Ok(Some(Self {
+			skip_certs: inhibit_any_policy.value.skip_certs,
+		}))
 	}
 }
 
