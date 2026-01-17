@@ -1096,7 +1096,7 @@ pub struct UserNotice {
 
 impl UserNotice {
 	/// Creates a new [`UserNotice`] with only the
-	/// [`UserNotice::explicit_text`] field populated
+	/// explicit_text field populated
 	///
 	/// Recommended
 	pub fn new_explicit_text(msg: DisplayText) -> Self {
@@ -1239,7 +1239,7 @@ impl DisplayText {
 	}
 }
 
-/// https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.14
+/// Excerpt from [RFC5280 Section 4.2.1.14](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.14)
 ///
 /// > The inhibit anyPolicy extension can be used in certificates issued to
 /// > CAs.  The inhibit anyPolicy extension indicates that the special
