@@ -16,7 +16,7 @@ use crate::ring_like::digest;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	oid, write_distinguished_name, write_dt_utc_or_generalized,
+	oid, string, write_distinguished_name, write_dt_utc_or_generalized,
 	write_x509_authority_key_identifier, write_x509_extension, DistinguishedName, Error, Issuer,
 	KeyIdMethod, KeyUsagePurpose, SanType, SerialNumber, SigningKey,
 };
@@ -61,6 +61,19 @@ pub struct CertificateParams {
 	pub distinguished_name: DistinguishedName,
 	pub is_ca: IsCa,
 	pub key_usages: Vec<KeyUsagePurpose>,
+	/// "\[If the optional extension is present, t\]he certificate policies extension contains a sequence of one or more
+	/// policy information terms, each of which consists of an object
+	/// identifier (OID) and optional qualifiers.
+	///
+	/// In an end entity certificate, these policy information terms indicate
+	/// the policy under which the certificate has been issued and the
+	/// purposes for which the certificate may be used. In a CA certificate,
+	/// these policy information terms limit the set of policies for
+	/// certification paths that include this certificate."[^1]
+	///
+	/// [^1]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.4>
+	pub certificate_policies: Option<CertificatePolicies>,
+	pub inhibit_any_policy: Option<InhibitAnyPolicy>,
 	pub extended_key_usages: Vec<ExtendedKeyUsagePurpose>,
 	pub name_constraints: Option<NameConstraints>,
 	/// An optional list of certificate revocation list (CRL) distribution points as described
@@ -93,6 +106,8 @@ impl Default for CertificateParams {
 			distinguished_name,
 			is_ca: IsCa::NoCa,
 			key_usages: Vec::new(),
+			certificate_policies: None,
+			inhibit_any_policy: None,
 			extended_key_usages: Vec::new(),
 			name_constraints: None,
 			crl_distribution_points: Vec::new(),
@@ -181,6 +196,8 @@ impl CertificateParams {
 			distinguished_name: DistinguishedName::from_name(&x509.tbs_certificate.subject)?,
 			not_before: x509.validity().not_before.to_datetime(),
 			not_after: x509.validity().not_after.to_datetime(),
+			certificate_policies: CertificatePolicies::from_x509(&x509)?,
+			inhibit_any_policy: InhibitAnyPolicy::from_x509(&x509)?,
 			..Default::default()
 		})
 	}
@@ -330,6 +347,8 @@ impl CertificateParams {
 			distinguished_name,
 			is_ca,
 			key_usages,
+			certificate_policies,
+			inhibit_any_policy,
 			extended_key_usages,
 			name_constraints,
 			crl_distribution_points,
@@ -353,6 +372,8 @@ impl CertificateParams {
 		if serial_number.is_some()
 			|| *is_ca != IsCa::NoCa
 			|| name_constraints.is_some()
+			|| certificate_policies.is_some() // I think this extension must be set by the CA and not the requesting party
+			|| inhibit_any_policy.is_some() // Same as policies above
 			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
 		{
@@ -452,6 +473,8 @@ impl CertificateParams {
 				|| self.name_constraints.iter().any(|c| !c.is_empty())
 				|| matches!(self.is_ca, IsCa::ExplicitNoCa)
 				|| matches!(self.is_ca, IsCa::Ca(_))
+				|| self.certificate_policies.is_some()
+				|| self.inhibit_any_policy.is_some()
 				|| !self.custom_extensions.is_empty();
 			if !should_write_exts {
 				return Ok(());
@@ -584,6 +607,38 @@ impl CertificateParams {
 			IsCa::NoCa => {},
 		}
 
+		if let Some(certificate_policies) = &self.certificate_policies {
+			// write_x509_extension(
+			// 	writer.next(),
+			// 	oid::CERTIFICATE_POLICIES,
+			// 	certificate_policies.critical,
+			// 	|writer| {
+			// 		writer.write_sequence_of(|writer| {
+			// 			for policy in &certificate_policies.policy_information {
+			// 				// writer.next().write_der(&yasna::encode_der(policy))
+
+			// 				// Unwrapped equivalent to the above trait use
+			// 				writer.next().write_der(&yasna::construct_der(|writer| {
+			// 					policy.encode_der(writer)
+			// 				}))
+			// 			}
+			// 		})
+			// 	},
+			// );
+			writer.next().write_der(&yasna::construct_der(|writer| {
+				certificate_policies.encode_der(writer);
+			}))
+		}
+
+		if let Some(inhibit_any_policy) = &self.inhibit_any_policy {
+			// write_x509_extension(writer.next(), oid::INHIBIT_ANY_POLICY, true, |writer| {
+			// 	writer.write_i64(inhibit_any_policy.skip_certs as i64)
+			// });
+			writer.next().write_der(&yasna::construct_der(|writer| {
+				inhibit_any_policy.encode_der(writer)
+			}))
+		}
+
 		// Write the custom extensions
 		for ext in &self.custom_extensions {
 			write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
@@ -633,6 +688,756 @@ fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[Gener
 			}
 		});
 	});
+}
+
+/// The [Certificate Policies extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.4)
+///
+/// this qualifier SHOULD only be present in end entity certificates and CA certificates issued to other organizations
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CertificatePolicies {
+	/// Applications with specific policy requirements are expected to have a list of those policies
+	/// that they will accept and to compare the policy OIDs in the certificate to that list. If this
+	/// extension is critical, the path validation software MUST be able to interpret this extension
+	/// (including the optional qualifier), or MUST reject the certificate.
+	critical: bool,
+	/// A sequence of one or more policy information terms
+	///
+	/// A certificate policy OID MUST NOT appear more than once in a
+	/// certificate policies extension.
+	policy_information: Vec<PolicyInformation>,
+}
+
+impl CertificatePolicies {
+	#[cfg(all(test, feature = "x509-parser"))]
+	fn from_x509(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Option<Self>, Error> {
+		use x509_parser::extensions::ParsedExtension;
+		use x509_parser::oid_registry::OID_X509_EXT_CERTIFICATE_POLICIES;
+
+		let ext = x509
+			.get_extension_unique(&OID_X509_EXT_CERTIFICATE_POLICIES)
+			.map_err(|_| Error::CouldNotParseCertificate)?;
+
+		let Some(ext) = ext else {
+			return Ok(None);
+		};
+
+		let ParsedExtension::CertificatePolicies(policies) = ext.parsed_extension() else {
+			// Contributor note:
+			// Since we use get_extension_unique with the ext_certificate_policies and CertificatePolicies
+			// is implemented, this should be `unreachable!()`. I am unsure about the error to return here.
+			// Returning None would probably be worse since the extension is known to be present.
+			// The available parser errors don't seem to be applicable here.
+			// What would have to happen for this branch to be chosen?
+			return Err(Error::UnsupportedExtension);
+		};
+
+		let mut policy_information: Vec<PolicyInformation> = Vec::with_capacity(policies.len());
+		for policy in policies.iter().cloned() {
+			// policy_information.push(policy.try_into()?)
+			policy_information.push(PolicyInformation::from_x509(policy)?);
+		}
+
+		Ok(Some(Self {
+			critical: ext.critical,
+			policy_information,
+		}))
+	}
+}
+
+// impl yasna::DEREncodable for CertificatePolicies {
+impl CertificatePolicies {
+	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
+		write_x509_extension(writer, oid::CERTIFICATE_POLICIES, self.critical, |writer| {
+			writer.write_sequence_of(|writer| {
+				for policy in &self.policy_information {
+					// writer.next().write_der(&yasna::encode_der(policy))
+
+					// Unwrapped equivalent to the above trait use
+					writer
+						.next()
+						.write_der(&yasna::construct_der(|writer| policy.encode_der(writer)))
+				}
+			})
+		});
+	}
+}
+
+impl CertificatePolicies {
+	/// Create a new [`CertificatePolicies`] extension
+	///
+	/// Encorces validity by requiring you to add the first policy.
+	/// Add more policies by using the [`Self::add_policy`] method
+	/// or multiple at once by using the [`Self::add_policies`] method.
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy());
+	/// ```
+	pub fn new(criticality: bool, policy: PolicyInformation) -> Self {
+		Self {
+			critical: criticality,
+			policy_information: vec![policy],
+		}
+	}
+
+	/// Add policy and check if it is already present.
+	/// Returns [`Error::Other`] if the
+	/// PolicyInformation OID is already present
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy())
+	///     .add_policy(PolicyInformation::domain_validated());
+	///
+	/// assert!(policies.is_ok());
+	/// ```
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy())
+	///     .add_policy(PolicyInformation::any_policy());
+	///
+	/// assert_eq!(policies, Err(Error::Other));
+	/// ```
+	///
+	/// This does not prevent logic errors such as adding OIDs with conflicting meaning.
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::extended_validation())
+	///     .add_policy(PolicyInformation::domain_validated()).expect("This OID wasn't added yet")
+	///     .add_policy(PolicyInformation::organization_validated()).expect("This OID wasn't added yet")
+	///     .add_policy(PolicyInformation::individual_validated());
+	///
+	/// assert!(policies.is_ok());
+	/// ```
+	pub fn add_policy(self, policy: PolicyInformation) -> Result<Self, Error> {
+		let mut registered_policies = self.policy_information;
+		for policy_information in &registered_policies {
+			if policy_information.policy_identifier == policy.policy_identifier {
+				return Err(Error::Other); // PolicyInformation must be unique
+			}
+		}
+		registered_policies.push(policy);
+		Ok(Self {
+			critical: self.critical,
+			policy_information: registered_policies,
+		})
+	}
+
+	/// Add multiple policies at once
+	///
+	/// Returns [`Error::Other`] if any of the
+	/// PolicyInformation OIDs are already present
+	///
+	/// ---
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy())
+	///     .add_policies(&[PolicyInformation::domain_validated()]);
+	///
+	/// assert!(policies.is_ok());
+	/// ```
+	///
+	/// ---
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy())
+	///     .add_policies(&[PolicyInformation::any_policy()]);
+	///
+	/// assert_eq!(policies, Err(Error::Other));
+	/// ```
+	///
+	/// ---
+	///
+	/// This does not prevent logic errors such as adding OIDs with conflicting meaning.
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::extended_validation())
+	///     .add_policies(&[
+	///         PolicyInformation::domain_validated(),
+	///         PolicyInformation::organization_validated(),
+	///         PolicyInformation::individual_validated(),
+	///     ]);
+	///
+	/// assert!(policies.is_ok());
+	/// ```
+	pub fn add_policies(self, policies: &[PolicyInformation]) -> Result<Self, Error> {
+		let mut registered_policies = self.policy_information.clone();
+		registered_policies.extend_from_slice(policies);
+		let mut oids = std::collections::HashSet::<&[u64]>::new();
+		for policy in &registered_policies {
+			if !oids.insert(&policy.policy_identifier) {
+				return Err(Error::Other);
+			}
+		}
+		Ok(Self {
+			critical: self.critical,
+			policy_information: registered_policies,
+		})
+	}
+
+	/// Add once policy at a time
+	/// Does not validate if the PolicyInformation OID is unique.
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// // Duplicate policies are added without checks. It is your responsibility to prevent duplicates when using this method.
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy())
+	///     .add_policy_unchecked(PolicyInformation::any_policy()); // Bad
+	/// ```
+	pub fn add_policy_unchecked(self, policy: PolicyInformation) -> Self {
+		let mut registered_policies = self.policy_information.clone();
+		registered_policies.push(policy);
+		Self {
+			critical: self.critical,
+			policy_information: registered_policies,
+		}
+	}
+
+	/// Add multiple policies at once
+	/// Does not validate if the PolicyInformation OID is unique.
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// // Duplicate policies are added without checks. It is your responsibility to prevent duplicates when using this method.
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy())
+	///     .add_policies_unchecked(&[PolicyInformation::any_policy()]); // Bad
+	/// ```
+	pub fn add_policies_unchecked(self, policies: &[PolicyInformation]) -> Self {
+		let mut registered_policies = self.policy_information.clone();
+		registered_policies.extend_from_slice(policies);
+		Self {
+			critical: self.critical,
+			policy_information: registered_policies,
+		}
+	}
+}
+
+/// > A certificate policy OID MUST NOT appear more than once in a
+/// > certificate policies extension.
+/// >
+/// > In an end entity certificate, these policy information terms indicate
+/// > the policy under which the certificate has been issued and the
+/// > purposes for which the certificate may be used.  In a CA certificate,
+/// > these policy information terms limit the set of policies for
+/// > certification paths that include this certificate.  When a CA does
+/// > not wish to limit the set of policies for certification paths that
+/// > include this certificate, it MAY assert the special policy anyPolicy,
+/// > with a value of { 2 5 29 32 0 }.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct PolicyInformation {
+	policy_identifier: Vec<u64>,
+	policy_qualifiers: Option<Vec<PolicyQualifierInfo>>,
+}
+
+// impl yasna::DEREncodable for PolicyInformation {
+impl PolicyInformation {
+	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
+		writer.write_sequence(|writer| {
+			writer
+				.next()
+				.write_oid(&ObjectIdentifier::from_slice(&self.policy_identifier));
+			if let Some(policy_qualifiers) = &self.policy_qualifiers {
+				writer.next().write_sequence_of(|writer| {
+					for policy_qualifier in policy_qualifiers {
+						writer
+							.next()
+							// .write_der(&yasna::encode_der(policy_qualifier));
+							// Unwrapped equivalent to the above trait use
+							.write_der(&yasna::construct_der(|writer| {
+								policy_qualifier.encode_der(writer)
+							}))
+					}
+				})
+			}
+		})
+	}
+}
+
+impl PolicyInformation {
+	/// > To promote interoperability, this profile RECOMMENDS that policy information terms consist of only an OID.
+	pub fn new_oid_only(oid: Vec<u64>) -> Self {
+		Self {
+			policy_identifier: oid,
+			policy_qualifiers: None,
+		}
+	}
+
+	/// Consider using [`Self::new_oid_only`] instead if possible.
+	///
+	/// > To promote interoperability, this profile RECOMMENDS that policy
+	/// > information terms consist of only an OID.  Where an OID alone is
+	/// > insufficient, this profile strongly recommends that the use of
+	/// > qualifiers be limited to those identified in this section.  When
+	/// > qualifiers are used with the special policy anyPolicy, they MUST be
+	/// > limited to the qualifiers identified in this section.  Only those
+	/// > qualifiers returned as a result of path validation are considered.
+	pub fn new_oid_qualifiers(oid: Vec<u64>, qualifiers: Vec<PolicyQualifierInfo>) -> Self {
+		Self {
+			policy_identifier: oid,
+			policy_qualifiers: Some(qualifiers),
+		}
+	}
+
+	/// When a CA does not wish to limit the set of policies
+	/// for certification paths that include this certificate,
+	/// it MAY assert the special policy anyPolicy, with a
+	/// value of { 2 5 29 32 0 }.
+	pub fn any_policy() -> Self {
+		Self::new_oid_only(vec![2, 5, 29, 32, 0])
+	}
+
+	/// Certificate issued in compliance with the Extended Validation Guidelines
+	pub fn extended_validation() -> Self {
+		Self::new_oid_only(vec![2, 23, 140, 1, 1])
+	}
+
+	/// Certificate issued in compliance with the TLS Baseline Requirements – No entity identity asserted
+	pub fn domain_validated() -> Self {
+		Self::new_oid_only(vec![2, 23, 140, 1, 2, 1])
+	}
+
+	/// Certificate issued in compliance with the TLS Baseline Requirements – Organization identity asserted
+	pub fn organization_validated() -> Self {
+		Self::new_oid_only(vec![2, 23, 140, 1, 2, 2])
+	}
+
+	/// Certificate issued in compliance with the TLS Baseline Requirements – Individual identity asserted
+	pub fn individual_validated() -> Self {
+		Self::new_oid_only(vec![2, 23, 140, 1, 2, 3])
+	}
+
+	/// > The CPS Pointer qualifier contains a pointer to a Certification
+	/// > Practice Statement (CPS) published by the CA.  The pointer is in the
+	/// > form of a URI.  Processing requirements for this qualifier are a
+	/// > local matter.  No action is mandated by this specification regardless
+	/// > of the criticality value asserted for the extension.
+	pub fn cps_uri(cps_uris: Vec<string::Ia5String>) -> Self {
+		Self::new_oid_qualifiers(
+			// Didn't find this one in RFC5280 and took it from PKIOverheid (Dutch Government PKI) using Firefox certificate inspection
+			// Is it plausible, that this is matching the PolicyQualifierInfo OID?
+			vec![1, 3, 6, 1, 5, 5, 7, 2, 1],
+			cps_uris
+				.iter()
+				.map(PolicyQualifierInfo::new_cps_uri)
+				.collect(),
+		)
+	}
+
+	/// User notice is intended for display to a relying party when a
+	/// certificate is used. Only user notices returned as a result of path
+	/// validation are intended for display to the user.
+	pub fn user_notice(user_notice: &UserNotice) -> Self {
+		Self::new_oid_qualifiers(
+			// Didn't find this one in RFC5280 and took it from https://github.com/rustls/rcgen/issues/370#issuecomment-3183832371 -> Firefox
+			// Is it plausible, that this is matching the PolicyQualifierInfo OID?
+			vec![1, 3, 6, 1, 5, 5, 7, 2, 2],
+			vec![PolicyQualifierInfo::new_user_notice(user_notice)],
+		)
+	}
+}
+
+#[cfg(all(test, feature = "x509-parser"))]
+// impl TryFrom<x509_parser::extensions::PolicyInformation<'_>> for PolicyInformation {
+// 	type Error = Error;
+// 	fn try_from(value: x509_parser::extensions::PolicyInformation) -> Result<Self, Self::Error> {
+impl PolicyInformation {
+	fn from_x509(value: x509_parser::extensions::PolicyInformation) -> Result<Self, Error> {
+		let mut policy_identifier = Vec::new();
+
+		// Contributor question: What error should be returned here? Is this something that can happen?
+		for v in value.policy_id.iter().ok_or(Error::X509(String::from(
+			"PolicyInformation without a policy_identifier is invalid",
+		)))? {
+			policy_identifier.push(v);
+		}
+
+		let Some(qualifiers) = value.policy_qualifiers else {
+			return Ok(Self {
+				policy_identifier,
+				policy_qualifiers: None,
+			});
+		};
+		// let policy_qualifiers = qualifiers.into_iter().map(PolicyQualifierInfo::from).collect();
+		let policy_qualifiers = qualifiers
+			.into_iter()
+			.map(PolicyQualifierInfo::from_x509)
+			.collect::<Result<Vec<PolicyQualifierInfo>, Error>>()?;
+
+		Ok(Self {
+			policy_identifier,
+			policy_qualifiers: Some(policy_qualifiers),
+		})
+	}
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+/// ```ASN.1
+/// PolicyQualifierInfo ::= SEQUENCE {
+///         policyQualifierId  PolicyQualifierId,
+///         qualifier          ANY DEFINED BY policyQualifierId }
+/// ```
+///
+/// Unless you want to create a custom qualifier, you should probably use a convenience method from [`PolicyInformation`]
+///
+/// RFC5280 strongly recommends that no custom qualifiers are used.
+pub struct PolicyQualifierInfo {
+	policy_qualifier_id: Vec<u64>,
+	/// The DER encoded qualifier
+	///
+	/// > ANY DEFINED BY policyQualifierId
+	qualifier: Vec<u8>,
+}
+
+#[cfg(all(test, feature = "x509-parser"))]
+// impl TryFrom<x509_parser::extensions::PolicyQualifierInfo<'_>> for PolicyQualifierInfo {
+// type Error = Error;
+// fn try_from(value: x509_parser::extensions::PolicyQualifierInfo<'_>) -> Result<Self, Self::Error> {
+impl PolicyQualifierInfo {
+	fn from_x509(value: x509_parser::extensions::PolicyQualifierInfo<'_>) -> Result<Self, Error> {
+		let mut oid = Vec::new();
+		for arc in value
+			.policy_qualifier_id
+			.iter()
+			.ok_or(Error::X509(String::from(
+				"PolicyInformation without a policy_identifier is invalid",
+			)))? {
+			oid.push(arc);
+		}
+
+		Ok(Self {
+			policy_qualifier_id: oid,
+			qualifier: value.qualifier.to_owned(),
+		})
+	}
+}
+
+impl PolicyQualifierInfo {
+	// This seems like a sensible method but I don't think we can expose this trait bound.
+	// /// Create a custom [`PolicyQualifierInfo`] from an OID and any [`yasna::DEREncodable`] object.
+	// pub fn new_custom<Q: yasna::DEREncodable>(policy_qualifier_id: Vec<u64>, qualifier: Q) -> Self {
+	// 	Self {
+	// 		policy_qualifier_id,
+	// 		qualifier: yasna::encode_der(&qualifier),
+	// 	}
+	// }
+
+	/// Create a custom [`PolicyQualifierInfo`]
+	///
+	/// It is your responsibility to provide valid DER for the qualifier.
+	pub fn new_custom(policy_qualifier_id: Vec<u64>, qualifier: Vec<u8>) -> Self {
+		Self {
+			policy_qualifier_id,
+			qualifier,
+		}
+	}
+
+	/// id-qt OBJECT IDENTIFIER ::= { id-pkix 2 }
+	/// id-qt-cps OBJECT IDENTIFIER ::= { id-qt 1 }
+	pub fn new_cps_uri(cps_uri: &string::Ia5String) -> Self {
+		Self {
+			policy_qualifier_id: vec![1, 3, 6, 1, 5, 5, 7, 2, 1],
+			qualifier: yasna::construct_der(|writer| writer.write_ia5_string(cps_uri.as_str())),
+		}
+	}
+
+	/// id-qt OBJECT IDENTIFIER ::= { id-pkix 2 }
+	/// id-qt-unotice OBJECT IDENTIFIER ::= { id-qt 2 }
+	pub fn new_user_notice(user_notice: &UserNotice) -> Self {
+		Self {
+			policy_qualifier_id: vec![1, 3, 6, 1, 5, 5, 7, 2, 2],
+			// qualifier: yasna::encode_der(user_notice),
+
+			// Unwrapped equivalent to the above trait use
+			qualifier: yasna::construct_der(|writer| {
+				user_notice.encode_der(writer);
+			}),
+		}
+	}
+}
+
+// impl yasna::DEREncodable for PolicyQualifierInfo {
+impl PolicyQualifierInfo {
+	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
+		writer.write_sequence(|writer| {
+			writer
+				.next()
+				.write_oid(&ObjectIdentifier::from_slice(&self.policy_qualifier_id));
+			writer.next().write_der(&self.qualifier);
+		});
+	}
+}
+
+/// > The user notice has two optional fields: the noticeRef field and the
+/// > explicitText field.  Conforming CAs SHOULD NOT use the noticeRef
+/// > option.
+///
+/// > If both the noticeRef and explicitText options are included in the
+/// > one qualifier and if the application software can locate the notice
+/// > text indicated by the noticeRef option, then that text SHOULD be
+/// > displayed; otherwise, the explicitText string SHOULD be displayed.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct UserNotice {
+	/// > The noticeRef field, if used, names an organization and
+	/// > identifies, by number, a particular textual statement prepared by
+	/// > that organization.  For example, it might identify the
+	/// > organization "CertsRUs" and notice number 1.  In a typical
+	/// > implementation, the application software will have a notice file
+	/// > containing the current set of notices for CertsRUs; the
+	/// > application will extract the notice text from the file and display
+	/// > it.  Messages MAY be multilingual, allowing the software to select
+	/// > the particular language message for its own environment.
+	notice_ref: Option<NoticeReference>,
+	/// > An explicitText field includes the textual statement directly in
+	/// > the certificate. The explicitText field is a string with a
+	/// > maximum size of 200 characters.  Conforming CAs SHOULD use the
+	/// > UTF8String encoding for explicitText, but MAY use IA5String.
+	/// > Conforming CAs MUST NOT encode explicitText as VisibleString or
+	/// > BMPString.  The explicitText string SHOULD NOT include any control
+	/// > characters (e.g., U+0000 to U+001F and U+007F to U+009F).  When
+	/// > the UTF8String encoding is used, all character sequences SHOULD be
+	/// > normalized according to Unicode normalization form C (NFC)[^1] \[[NFC](https://www.rfc-editor.org/rfc/rfc5280#ref-NFC)\].
+	///
+	/// [^1]: <http://www.unicode.org/reports/tr15/>
+	explicit_text: Option<DisplayText>,
+}
+
+impl UserNotice {
+	/// Creates a new [`UserNotice`] with only the
+	/// explicit_text field populated
+	///
+	/// Recommended
+	pub fn new_explicit_text(msg: DisplayText) -> Self {
+		Self {
+			notice_ref: None,
+			explicit_text: Some(msg),
+		}
+	}
+
+	/// Creates a new [`UserNotice`] with all fields populated
+	///
+	/// Consider using [`Self::new_explicit_text`] instead
+	/// Conforming CAs SHOULD NOT use the noticeRef option.
+	pub fn new_full(organization: DisplayText, notice_numbers: NoticeNumbers, msg: String) -> Self {
+		Self {
+			notice_ref: Some(NoticeReference {
+				organization,
+				notice_numbers,
+			}),
+			explicit_text: Some(DisplayText::Utf8String(msg)), // MSG is defined as DisplayText but RECOMMENDED to be UTF8String. Should we expose all options including those that are discouraged?
+		}
+	}
+
+	/// Creates a new [`UserNotice`] with all fields populated
+	///
+	/// Consider using [`Self::new_explicit_text`] instead
+	/// Conforming CAs SHOULD NOT use the noticeRef option.
+	pub fn new_notice_reference(organization: String, notice_numbers: NoticeNumbers) -> Self {
+		Self {
+			notice_ref: Some(NoticeReference {
+				organization: DisplayText::Utf8String(organization),
+				notice_numbers,
+			}),
+			explicit_text: None,
+		}
+	}
+}
+
+// impl yasna::DEREncodable for UserNotice {
+impl UserNotice {
+	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
+		use yasna::encode_der;
+		writer.write_sequence(|writer| {
+			if let Some(notice_ref) = &self.notice_ref {
+				writer.next().write_der(&encode_der(notice_ref));
+			}
+			if let Some(explicit_text) = &self.explicit_text {
+				// writer.next().write_der(&encode_der(explicit_text));
+
+				// Unwrapped equivalent to the above trait use
+				writer.next().write_der(&yasna::construct_der(|writer| {
+					explicit_text.encode_der(writer);
+				}))
+			}
+		})
+	}
+}
+
+/// ```ASN.1
+/// noticeNumbers    SEQUENCE OF INTEGER
+/// ```
+type NoticeNumbers = Vec<i64>; // Does INTEGER translate to i64? OpenSSL successfully decodes it
+
+/// Consider using [`UserNotice::explicit_text`] instead.
+///
+/// > Conforming CAs SHOULD NOT use the noticeRef option.
+#[derive(Debug, PartialEq, Eq, Clone)]
+struct NoticeReference {
+	organization: DisplayText,
+	notice_numbers: NoticeNumbers,
+}
+
+// NoticeRef is private. Should I still remove the Trait impl?
+impl yasna::DEREncodable for NoticeReference {
+	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
+		writer.write_sequence(|writer| {
+			// writer.next().write_der(&encode_der(&self.organization));
+			writer.next().write_der(&yasna::construct_der(|writer| {
+				self.organization.encode_der(writer);
+			}));
+			// This is incorrect
+			// writer.next().write_der(&self.notice_numbers);
+			writer.next().write_sequence_of(|writer| {
+				for val in &self.notice_numbers {
+					writer.next().write_i64(*val);
+				}
+			});
+		})
+	}
+}
+
+/// ```ASN.1
+///    DisplayText ::= CHOICE {
+///        ia5String        IA5String      (SIZE (1..200)),
+///        visibleString    VisibleString  (SIZE (1..200)),
+///        bmpString        BMPString      (SIZE (1..200)),
+///        utf8String       UTF8String     (SIZE (1..200)) }
+/// ```
+///
+/// Note: While the explicitText has a maximum size of 200
+/// characters, some non-conforming CAs exceed this limit.
+/// Therefore, certificate users SHOULD gracefully handle
+/// explicitText with more than 200 characters.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum DisplayText {
+	/// Prefer [`Self::Utf8String`]
+	Ia5String(string::Ia5String),
+	/// Usually what you want
+	Utf8String(String),
+	// Contributor question:
+	// Should we make non-conformant options available at all?
+
+	// VisibleString(string::VisibleString), // Not implemented yet. Could be imported/inspired from x509_parser
+	// BmpString(string::BmpString),
+}
+
+impl From<&str> for DisplayText {
+	fn from(value: &str) -> Self {
+		Self::from(value.to_string())
+	}
+}
+
+impl From<String> for DisplayText {
+	fn from(value: String) -> Self {
+		Self::Utf8String(value)
+	}
+}
+
+// impl yasna::DEREncodable for DisplayText {
+impl DisplayText {
+	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
+		match self {
+			DisplayText::Ia5String(string) => writer.write_ia5_string(string.as_str()),
+			DisplayText::Utf8String(string) => writer.write_utf8_string(string.as_str()),
+			// DisplayText::BmpString(string) => {
+			//	// [`writer.write_bmp_string`] expects [`&str`].
+			//	// Would I use write_bytes for this?
+			// 	let bytes = string.as_bytes();
+			// 	writer.write_bitvec_bytes(bytes, bytes.len())
+			// },
+		}
+	}
+}
+
+/// Excerpt from [RFC5280 Section 4.2.1.14](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.14)
+///
+/// > The inhibit anyPolicy extension can be used in certificates issued to
+/// > CAs.  The inhibit anyPolicy extension indicates that the special
+/// > anyPolicy OID, with the value { 2 5 29 32 0 }, is not considered an
+/// > explicit match for other certificate policies except when it appears
+/// > in an intermediate self-issued CA certificate.  The value indicates
+/// > the number of additional non-self-issued certificates that may appear
+/// > in the path before anyPolicy is no longer permitted.  For example, a
+/// > value of one indicates that anyPolicy may be processed in
+/// > certificates issued by the subject of this certificate, but not in
+/// > additional certificates in the path.
+/// >
+/// > > Conforming CAs MUST mark this extension as critical.
+/// > >
+/// > > id-ce-inhibitAnyPolicy OBJECT IDENTIFIER ::=  { id-ce 54 }
+/// > >
+/// > > InhibitAnyPolicy ::= SkipCerts
+/// > >
+/// > > SkipCerts ::= INTEGER (0..MAX)
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct InhibitAnyPolicy {
+	skip_certs: u32,
+}
+
+impl InhibitAnyPolicy {
+	/// Builds a new InhibitAnyPolicy Extension.
+	///
+	/// > The value indicates the number of additional non-self-issued
+	/// > certificates that may appear in the path before anyPolicy is
+	/// > no longer permitted.  For example, a value of one indicates
+	/// > that anyPolicy may be processed in certificates issued by the
+	/// > subject of this certificate, but not in additional certificates
+	/// > in the path.
+	pub fn new(skip_certs: u32) -> Self {
+		Self { skip_certs }
+	}
+}
+
+// #[cfg(feature = "x509-parser")]
+// impl From<x509_parser::extensions::InhibitAnyPolicy> for InhibitAnyPolicy {
+// 	fn from(value: x509_parser::extensions::InhibitAnyPolicy) -> Self {
+// 		Self {
+// 			skip_certs: value.skip_certs
+// 		}
+// 	}
+// }
+#[cfg(all(test, feature = "x509-parser"))]
+impl InhibitAnyPolicy {
+	fn from_x509(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Option<Self>, Error> {
+		let inhibit_any_policy = x509
+			.inhibit_anypolicy()
+			.map_err(|_| Error::CouldNotParseCertificate)?;
+
+		let Some(inhibit_any_policy) = inhibit_any_policy else {
+			return Ok(None);
+		};
+
+		Ok(Some(Self {
+			skip_certs: inhibit_any_policy.value.skip_certs,
+		}))
+	}
+}
+
+// impl yasna::DEREncodable for InhibitAnyPolicy {
+impl InhibitAnyPolicy {
+	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
+		// Conforming CAs MUST mark this extension as critical.
+		write_x509_extension(writer, oid::INHIBIT_ANY_POLICY, true, |writer| {
+			writer.write_i64(self.skip_certs as i64)
+		});
+	}
 }
 
 /// A PKCS #10 CSR attribute, as defined in [RFC 5280] and constrained
@@ -1121,6 +1926,325 @@ mod tests {
 	use crate::DnValue;
 	#[cfg(feature = "crypto")]
 	use crate::KeyPair;
+
+	#[test]
+	fn test_policy_information_any_policy_der() {
+		use crate::PolicyInformation;
+		const EXPECTED_DER: &[u8] = &[0x30, 0x06, 0x06, 0x04, 0x55, 0x1D, 0x20, 0x00];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::any_policy().encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_domain_validated_der() {
+		use crate::PolicyInformation;
+		const EXPECTED_DER: &[u8] = &[0x30, 0x08, 0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x01];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::domain_validated().encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_extended_validation_der() {
+		use crate::PolicyInformation;
+		const EXPECTED_DER: &[u8] = &[0x30, 0x07, 0x06, 0x05, 0x67, 0x81, 0x0C, 0x01, 0x01];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::extended_validation().encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	/// Note: ASN.1 JavaScript Decoder didn't recognize this OID
+	fn test_policy_information_individual_validated_der() {
+		use crate::PolicyInformation;
+		const EXPECTED_DER: &[u8] = &[0x30, 0x08, 0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x03];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::individual_validated().encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_organization_validated_der() {
+		use crate::PolicyInformation;
+		const EXPECTED_DER: &[u8] = &[0x30, 0x08, 0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x02];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::organization_validated().encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_cps_uri_der() {
+		use crate::PolicyInformation;
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x31, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x01, 0x30, 0x25,
+			0x30, 0x23, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x01, 0x16, 0x17,
+			0x68, 0x74, 0x74, 0x70, 0x73, 0x3A, 0x2F, 0x2F, 0x63, 0x70, 0x73, 0x2E, 0x65, 0x78,
+			0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x6F, 0x72, 0x67,
+		];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::cps_uri(vec!["https://cps.example.org".try_into().unwrap()])
+				.encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_new_oid_only_der() {
+		use crate::PolicyInformation;
+		const EXPECTED_DER: &[u8] = &[0x30, 0x05, 0x06, 0x03, 0x01, 0x02, 0x03];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::new_oid_only(vec![0, 1, 2, 3]).encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_new_oid_qualifiers_der() {
+		use crate::{PolicyInformation, PolicyQualifierInfo};
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x2C, 0x06, 0x03, 0x2A, 0x03, 0x04, 0x30, 0x25, 0x30, 0x12, 0x06, 0x04, 0x2A,
+			0x03, 0x04, 0x00, 0x0C, 0x0A, 0x55, 0x54, 0x46, 0x38, 0x53, 0x74, 0x72, 0x69, 0x6E,
+			0x67, 0x30, 0x0F, 0x06, 0x04, 0x2A, 0x03, 0x04, 0x01, 0x12, 0x07, 0x31, 0x32, 0x38,
+			0x20, 0x32, 0x35, 0x36,
+		];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::new_oid_qualifiers(
+				vec![1, 2, 3, 4],
+				vec![
+					PolicyQualifierInfo::new_custom(
+						vec![1, 2, 3, 4, 0],
+						yasna::construct_der(|writer| writer.write_utf8string("UTF8String")),
+					),
+					PolicyQualifierInfo::new_custom(
+						vec![1, 2, 3, 4, 1],
+						yasna::construct_der(|writer| writer.write_numeric_string("128 256")),
+					),
+				],
+			)
+			.encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_user_notice_explicit_text_der() {
+		use crate::{DisplayText, PolicyInformation, UserNotice};
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x45, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x39,
+			0x30, 0x37, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x2B,
+			0x16, 0x29, 0x59, 0x6F, 0x75, 0x20, 0x73, 0x68, 0x6F, 0x75, 0x6C, 0x64, 0x20, 0x75,
+			0x73, 0x75, 0x61, 0x6C, 0x6C, 0x79, 0x20, 0x75, 0x73, 0x65, 0x20, 0x61, 0x6E, 0x20,
+			0x55, 0x54, 0x46, 0x38, 0x53, 0x74, 0x72, 0x69, 0x6E, 0x67, 0x20, 0x68, 0x65, 0x72,
+			0x65,
+		];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::user_notice(&UserNotice::new_explicit_text(DisplayText::Ia5String(
+				"You should usually use an UTF8String here"
+					.try_into()
+					.unwrap(),
+			)))
+			.encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der);
+	}
+
+	#[test]
+	fn test_policy_information_user_notice_reference_der() {
+		use crate::{PolicyInformation, UserNotice};
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x37, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x2B,
+			0x30, 0x29, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x1D,
+			0x30, 0x1B, 0x0C, 0x0B, 0x45, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x20, 0x4F, 0x72,
+			0x67, 0x30, 0x0C, 0x02, 0x01, 0x00, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01,
+			0x03,
+		];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::user_notice(&UserNotice::new_notice_reference(
+				"Example Org".to_string(),
+				vec![0, 1, 2, 3],
+			))
+			.encode_der(writer)
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der);
+	}
+
+	#[cfg(feature = "crypto")]
+	#[test]
+	/// [DER Source](https://lapo.it/asn1js/#MIICsTCCAlagAwIBAgIUNIeLHUZBtAK7N0HeSWhxrNt7PpkwCgYIKoZIzj0EAwIwMDEYMBYGA1UECgwPQ3JhYiB3aWRnaXRzIFNFMRQwEgYDVQQDDAtNYXN0ZXIgQ2VydDAgFw03NTAxMDEwMDAwMDBaGA80MDk2MDEwMTAwMDAwMFowMDEYMBYGA1UECgwPQ3JhYiB3aWRnaXRzIFNFMRQwEgYDVQQDDAtNYXN0ZXIgQ2VydDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABKWGpFh06ExqLv-IX2QYQFSeglg3hakmqouV7ghFx_CQp6PKF3uEEniibaJ4OSXivEfigCkiWYAzsTJgs5jTQrSjggFKMIIBRjAhBgNVHREEGjAYggtjcmFicy5jcmFic4IJbG9jYWxob3N0MIIBEAYDVR0gBIIBBzCCAQMwBgYEVR0gADAIBgZngQwBAgEwBwYFZ4EMAQEwCAYGZ4EMAQIDMAgGBmeBDAECAjAFBgMBAgMwLAYDKgMEMCUwEgYEKgMEAAwKVVRGOFN0cmluZzAPBgQqAwQBEgcxMjggMjU2MFYGCCsGAQUFBwIBMEowIwYIKwYBBQUHAgEWF2h0dHBzOi8vY3BzLmV4YW1wbGUuY29tMCMGCCsGAQUFBwIBFhdodHRwczovL2Nwcy5leGFtcGxlLm9yZzBFBggrBgEFBQcCAjA5MDcGCCsGAQUFBwICMCswGwwLRXhhbXBsZSBPcmcwDAIBAAIBAQIBAgIBAwwMVGVzdCBtZXNzYWdlMA0GA1UdNgEB_wQDAgECMAoGCCqGSM49BAMCA0kAMEYCIQCzJmW-eUcSHqdi3V-eb30ZsRIY-tBVohkP06JVxt6IxAIhANKV7alaTWWojOtTXgLkH4nmqEiXGFIb1RXPsNfIhf1H)
+	fn test_certificate_policies_expected_der() {
+		use crate::string::Ia5String;
+		use crate::{CertificatePolicies, PolicyInformation, PolicyQualifierInfo, UserNotice};
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x82, 0x01, 0x10, 0x06, 0x03, 0x55, 0x1D, 0x20, 0x04, 0x82, 0x01, 0x07, 0x30,
+			0x82, 0x01, 0x03, 0x30, 0x06, 0x06, 0x04, 0x55, 0x1D, 0x20, 0x00, 0x30, 0x08, 0x06,
+			0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x01, 0x30, 0x07, 0x06, 0x05, 0x67, 0x81, 0x0C,
+			0x01, 0x01, 0x30, 0x08, 0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x03, 0x30, 0x08,
+			0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x02, 0x30, 0x05, 0x06, 0x03, 0x01, 0x02,
+			0x03, 0x30, 0x2C, 0x06, 0x03, 0x2A, 0x03, 0x04, 0x30, 0x25, 0x30, 0x12, 0x06, 0x04,
+			0x2A, 0x03, 0x04, 0x00, 0x0C, 0x0A, 0x55, 0x54, 0x46, 0x38, 0x53, 0x74, 0x72, 0x69,
+			0x6E, 0x67, 0x30, 0x0F, 0x06, 0x04, 0x2A, 0x03, 0x04, 0x01, 0x12, 0x07, 0x31, 0x32,
+			0x38, 0x20, 0x32, 0x35, 0x36, 0x30, 0x56, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05,
+			0x07, 0x02, 0x01, 0x30, 0x4A, 0x30, 0x23, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05,
+			0x07, 0x02, 0x01, 0x16, 0x17, 0x68, 0x74, 0x74, 0x70, 0x73, 0x3A, 0x2F, 0x2F, 0x63,
+			0x70, 0x73, 0x2E, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D,
+			0x30, 0x23, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x01, 0x16, 0x17,
+			0x68, 0x74, 0x74, 0x70, 0x73, 0x3A, 0x2F, 0x2F, 0x63, 0x70, 0x73, 0x2E, 0x65, 0x78,
+			0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x6F, 0x72, 0x67, 0x30, 0x45, 0x06, 0x08, 0x2B,
+			0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x39, 0x30, 0x37, 0x06, 0x08, 0x2B,
+			0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x2B, 0x30, 0x1B, 0x0C, 0x0B, 0x45,
+			0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x20, 0x4F, 0x72, 0x67, 0x30, 0x0C, 0x02, 0x01,
+			0x00, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01, 0x03, 0x0C, 0x0C, 0x54, 0x65,
+			0x73, 0x74, 0x20, 0x6D, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
+		];
+		let extension_der = yasna::construct_der(|writer| {
+			CertificatePolicies::new(false, PolicyInformation::any_policy())
+				.add_policies_unchecked(&[
+					PolicyInformation::domain_validated(),
+					PolicyInformation::extended_validation(),
+					PolicyInformation::individual_validated(),
+					PolicyInformation::organization_validated(),
+					PolicyInformation::new_oid_only(vec![0, 1, 2, 3]),
+					PolicyInformation::new_oid_qualifiers(
+						vec![1, 2, 3, 4],
+						vec![
+							PolicyQualifierInfo::new_custom(
+								vec![1, 2, 3, 4, 0],
+								yasna::construct_der(|writer| {
+									writer.write_utf8string("UTF8String")
+								}),
+							),
+							PolicyQualifierInfo::new_custom(
+								vec![1, 2, 3, 4, 1],
+								yasna::construct_der(|writer| {
+									writer.write_numeric_string("128 256")
+								}),
+							),
+						],
+					),
+					PolicyInformation::cps_uri(vec![
+						Ia5String::try_from("https://cps.example.com").unwrap(),
+						Ia5String::try_from("https://cps.example.org").unwrap(),
+					]),
+					PolicyInformation::user_notice(&UserNotice::new_full(
+						"Example Org".into(),
+						vec![0, 1, 2, 3],
+						"Test message".into(),
+					)),
+				])
+				.encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &extension_der);
+	}
+
+	#[cfg(feature = "crypto")]
+	#[test]
+	/// This is more or less only a regression test for later.
+	/// The below hex is from a certificate that was created with rcgen
+	/// and represents the CertificatePolicies extension
+	///
+	/// We can assume that it is valid because it successfully decoded in <https://lapo.it/asn1js>, OpenSSL, Chromium (Edge) and Gecko (Firefox)
+	///
+	/// [Source](https://lapo.it/asn1js/#MIICWTCCAf-gAwIBAgIUKv3YJ-6n4Wx68Zu3PVnCJOk5hDswCgYIKoZIzj0EAwIwMDEYMBYGA1UECgwPQ3JhYiB3aWRnaXRzIFNFMRQwEgYDVQQDDAtNYXN0ZXIgQ2VydDAgFw03NTAxMDEwMDAwMDBaGA80MDk2MDEwMTAwMDAwMFowMDEYMBYGA1UECgwPQ3JhYiB3aWRnaXRzIFNFMRQwEgYDVQQDDAtNYXN0ZXIgQ2VydDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABC_pBjrEyqtvBXKiws6h7Q2mPePPNJspjk-HbEqkg_WVRJZWQL90IPIhPFIJvp0Eho0uWISSFbm3hXWwmtcHmxqjgfQwgfEwIQYDVR0RBBowGIILY3JhYnMuY3JhYnOCCWxvY2FsaG9zdDCBvAYDVR0gBIG0MIGxMAYGBFUdIAAwCAYGZ4EMAQIBMFYGCCsGAQUFBwIBMEowIwYIKwYBBQUHAgEWF2h0dHBzOi8vY3BzLmV4YW1wbGUuY29tMCMGCCsGAQUFBwIBFhdodHRwczovL2Nwcy5leGFtcGxlLm9yZzBFBggrBgEFBQcCAjA5MDcGCCsGAQUFBwICMCswGwwLRXhhbXBsZSBPcmcwDAIBAAIBAQIBAgIBAwwMVGVzdCBtZXNzYWdlMA0GA1UdNgEB_wQDAgECMAoGCCqGSM49BAMCA0gAMEUCIDqnBSHeWgQ0tsqgmd8GioEp68y5imF4duQxYxtx0JYDAiEAp4RbNjrVN5PTnbFnE6ySCNuefB70j-29TOyuR2FfD7A)
+	fn test_reasonable_certificate_policies_expected_der() {
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x81, 0xBC, 0x06, 0x03, 0x55, 0x1D, 0x20, 0x04, 0x81, 0xB4, 0x30, 0x81, 0xB1,
+			0x30, 0x06, 0x06, 0x04, 0x55, 0x1D, 0x20, 0x00, 0x30, 0x08, 0x06, 0x06, 0x67, 0x81,
+			0x0C, 0x01, 0x02, 0x01, 0x30, 0x56, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07,
+			0x02, 0x01, 0x30, 0x4A, 0x30, 0x23, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07,
+			0x02, 0x01, 0x16, 0x17, 0x68, 0x74, 0x74, 0x70, 0x73, 0x3A, 0x2F, 0x2F, 0x63, 0x70,
+			0x73, 0x2E, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x30,
+			0x23, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x01, 0x16, 0x17, 0x68,
+			0x74, 0x74, 0x70, 0x73, 0x3A, 0x2F, 0x2F, 0x63, 0x70, 0x73, 0x2E, 0x65, 0x78, 0x61,
+			0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x6F, 0x72, 0x67, 0x30, 0x45, 0x06, 0x08, 0x2B, 0x06,
+			0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x39, 0x30, 0x37, 0x06, 0x08, 0x2B, 0x06,
+			0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x2B, 0x30, 0x1B, 0x0C, 0x0B, 0x45, 0x78,
+			0x61, 0x6D, 0x70, 0x6C, 0x65, 0x20, 0x4F, 0x72, 0x67, 0x30, 0x0C, 0x02, 0x01, 0x00,
+			0x02, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01, 0x03, 0x0C, 0x0C, 0x54, 0x65, 0x73,
+			0x74, 0x20, 0x6D, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
+		];
+		let extension_der = yasna::construct_der(|writer| {
+			CertificatePolicies::new(false, PolicyInformation::any_policy())
+				.add_policy_unchecked(PolicyInformation::domain_validated())
+				.add_policy_unchecked(PolicyInformation::cps_uri(vec![
+					string::Ia5String::try_from("https://cps.example.com").unwrap(),
+					string::Ia5String::try_from("https://cps.example.org").unwrap(),
+				]))
+				.add_policy_unchecked(PolicyInformation::user_notice(&UserNotice::new_full(
+					"Example Org".into(),
+					vec![0, 1, 2, 3],
+					"Test message".into(),
+				)))
+				.encode_der(writer)
+		});
+		assert_eq!(EXPECTED_DER, &extension_der);
+	}
+
+	#[cfg(feature = "crypto")]
+	#[cfg(feature = "x509-parser")]
+	#[test]
+	fn test_certificate_policies_encode_decode() {
+		let params = CertificateParams {
+			certificate_policies: Some(
+				CertificatePolicies::new(false, PolicyInformation::any_policy())
+					.add_policy_unchecked(PolicyInformation::domain_validated())
+					.add_policy_unchecked(PolicyInformation::cps_uri(vec![
+						string::Ia5String::try_from("https://cps.example.com").unwrap(),
+						string::Ia5String::try_from("https://cps.example.org").unwrap(),
+					]))
+					.add_policy_unchecked(PolicyInformation::user_notice(&UserNotice::new_full(
+						"Example Org".into(),
+						vec![0, 1, 2, 3],
+						"Test message".into(),
+					))),
+			),
+			..Default::default()
+		};
+
+		let key_pair = KeyPair::generate().unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
+
+		let parsed_params = CertificateParams::from_ca_cert_der(cert.der())
+			.expect("We should be able to parse the certificate we just created");
+		assert_eq!(
+			params.certificate_policies,
+			parsed_params.certificate_policies
+		)
+	}
+
+	#[cfg(feature = "crypto")]
+	#[test]
+	fn test_inhibit_any_policy_expected_der() {
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x0D, 0x06, 0x03, 0x55, 0x1D, 0x36, 0x01, 0x01, 0xFF, 0x04, 0x03, 0x02, 0x01,
+			0x02,
+		];
+		let extension_der =
+			yasna::construct_der(|writer| InhibitAnyPolicy::new(2).encode_der(writer));
+		assert_eq!(EXPECTED_DER, &extension_der)
+	}
+
+	#[cfg(feature = "crypto")]
+	#[cfg(feature = "x509-parser")]
+	#[test]
+	fn test_inhibit_any_policy_encode_decode() {
+		let params = CertificateParams {
+			inhibit_any_policy: Some(InhibitAnyPolicy::new(2)),
+			..Default::default()
+		};
+
+		let key_pair = KeyPair::generate().unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
+
+		let parsed_params = CertificateParams::from_ca_cert_der(cert.der())
+			.expect("We should be able to parse the certificate we just created");
+		assert_eq!(params.inhibit_any_policy, parsed_params.inhibit_any_policy,)
+	}
 
 	#[cfg(feature = "crypto")]
 	#[test]

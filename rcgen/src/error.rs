@@ -51,6 +51,10 @@ pub enum Error {
 	/// X509 parsing error
 	#[cfg(feature = "x509-parser")]
 	X509(String),
+	/// A placeholder error until I can get some feedback on the right error to use
+	///
+	/// Currently used for invalid builder operations
+	Other,
 }
 
 impl fmt::Display for Error {
@@ -101,6 +105,7 @@ impl fmt::Display for Error {
 			MissingSerialNumber => write!(f, "A serial number must be specified")?,
 			#[cfg(feature = "x509-parser")]
 			X509(e) => write!(f, "X.509 parsing error: {e}")?,
+			Other => write!(f, "Placeholder error until I get some feedback")?,
 		};
 		Ok(())
 	}
