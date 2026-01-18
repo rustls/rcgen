@@ -473,6 +473,8 @@ impl CertificateParams {
 				|| self.name_constraints.iter().any(|c| !c.is_empty())
 				|| matches!(self.is_ca, IsCa::ExplicitNoCa)
 				|| matches!(self.is_ca, IsCa::Ca(_))
+				|| self.certificate_policies.is_some()
+				|| self.inhibit_any_policy.is_some()
 				|| !self.custom_extensions.is_empty();
 			if !should_write_exts {
 				return Ok(());
@@ -768,6 +770,12 @@ impl CertificatePolicies {
 	/// Encorces validity by requiring you to add the first policy.
 	/// Add more policies by using the [`Self::add_policy`] method
 	/// or multiple at once by using the [`Self::add_policies`] method.
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy());
+	/// ```
 	pub fn new(criticality: bool, policy: PolicyInformation) -> Self {
 		Self {
 			critical: criticality,
@@ -778,6 +786,37 @@ impl CertificatePolicies {
 	/// Add policy and check if it is already present.
 	/// Returns [`Error::Other`] if the
 	/// PolicyInformation OID is already present
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy())
+	///     .add_policy(PolicyInformation::domain_validated());
+	///
+	/// assert!(policies.is_ok());
+	/// ```
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy())
+	///     .add_policy(PolicyInformation::any_policy());
+	///
+	/// assert_eq!(policies, Err(Error::Other));
+	/// ```
+	///
+	/// This does not prevent logic errors such as adding OIDs with conflicting meaning.
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::extended_validation())
+	///     .add_policy(PolicyInformation::domain_validated()).expect("This OID wasn't added yet")
+	///     .add_policy(PolicyInformation::organization_validated()).expect("This OID wasn't added yet")
+	///     .add_policy(PolicyInformation::individual_validated());
+	///
+	/// assert!(policies.is_ok());
+	/// ```
 	pub fn add_policy(self, policy: PolicyInformation) -> Result<Self, Error> {
 		let mut registered_policies = self.policy_information;
 		for policy_information in &registered_policies {
@@ -793,8 +832,48 @@ impl CertificatePolicies {
 	}
 
 	/// Add multiple policies at once
+	///
 	/// Returns [`Error::Other`] if any of the
 	/// PolicyInformation OIDs are already present
+	///
+	/// ---
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy())
+	///     .add_policies(&[PolicyInformation::domain_validated()]);
+	///
+	/// assert!(policies.is_ok());
+	/// ```
+	///
+	/// ---
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy())
+	///     .add_policies(&[PolicyInformation::any_policy()]);
+	///
+	/// assert_eq!(policies, Err(Error::Other));
+	/// ```
+	///
+	/// ---
+	///
+	/// This does not prevent logic errors such as adding OIDs with conflicting meaning.
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::extended_validation())
+	///     .add_policies(&[
+	///         PolicyInformation::domain_validated(),
+	///         PolicyInformation::organization_validated(),
+	///         PolicyInformation::individual_validated(),
+	///     ]);
+	///
+	/// assert!(policies.is_ok());
+	/// ```
 	pub fn add_policies(self, policies: &[PolicyInformation]) -> Result<Self, Error> {
 		let mut registered_policies = self.policy_information.clone();
 		registered_policies.extend_from_slice(policies);
@@ -812,6 +891,14 @@ impl CertificatePolicies {
 
 	/// Add once policy at a time
 	/// Does not validate if the PolicyInformation OID is unique.
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// // Duplicate policies are added without checks. It is your responsibility to prevent duplicates when using this method.
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy())
+	///     .add_policy_unchecked(PolicyInformation::any_policy()); // Bad
+	/// ```
 	pub fn add_policy_unchecked(self, policy: PolicyInformation) -> Self {
 		let mut registered_policies = self.policy_information.clone();
 		registered_policies.push(policy);
@@ -823,6 +910,14 @@ impl CertificatePolicies {
 
 	/// Add multiple policies at once
 	/// Does not validate if the PolicyInformation OID is unique.
+	///
+	/// ```rust
+	/// use rcgen::{CertificatePolicies, PolicyInformation, Error};
+	///
+	/// // Duplicate policies are added without checks. It is your responsibility to prevent duplicates when using this method.
+	/// let policies = CertificatePolicies::new(false, PolicyInformation::any_policy())
+	///     .add_policies_unchecked(&[PolicyInformation::any_policy()]); // Bad
+	/// ```
 	pub fn add_policies_unchecked(self, policies: &[PolicyInformation]) -> Self {
 		let mut registered_policies = self.policy_information.clone();
 		registered_policies.extend_from_slice(policies);
@@ -982,7 +1077,7 @@ impl PolicyInformation {
 		let policy_qualifiers = qualifiers
 			.into_iter()
 			.map(PolicyQualifierInfo::from_x509)
-			.collect();
+			.collect::<Result<Vec<PolicyQualifierInfo>, Error>>()?;
 
 		Ok(Self {
 			policy_identifier,
@@ -1001,19 +1096,25 @@ pub struct PolicyQualifierInfo {
 }
 
 #[cfg(all(test, feature = "x509-parser"))]
-// impl From<x509_parser::extensions::PolicyQualifierInfo<'_>> for PolicyQualifierInfo {
-// fn from(value: x509_parser::extensions::PolicyQualifierInfo<'_>) -> Self {
+// impl TryFrom<x509_parser::extensions::PolicyQualifierInfo<'_>> for PolicyQualifierInfo {
+// type Error = Error;
+// fn try_from(value: x509_parser::extensions::PolicyQualifierInfo<'_>) -> Result<Self, Self::Error> {
 impl PolicyQualifierInfo {
-	fn from_x509(value: x509_parser::extensions::PolicyQualifierInfo<'_>) -> Self {
+	fn from_x509(value: x509_parser::extensions::PolicyQualifierInfo<'_>) -> Result<Self, Error> {
 		let mut oid = Vec::new();
-		for arc in value.policy_qualifier_id.as_bytes() {
-			oid.push(arc.to_owned() as u64)
+		for arc in value
+			.policy_qualifier_id
+			.iter()
+			.ok_or(Error::X509(String::from(
+				"PolicyInformation without a policy_identifier is invalid",
+			)))? {
+			oid.push(arc);
 		}
 
-		Self {
+		Ok(Self {
 			policy_qualifier_id: oid,
 			qualifier: value.qualifier.to_owned(),
-		}
+		})
 	}
 }
 
@@ -1795,6 +1896,104 @@ mod tests {
 	use crate::DnValue;
 	#[cfg(feature = "crypto")]
 	use crate::KeyPair;
+
+	#[test]
+	/// This is more or less only a regression test for later.
+	/// The below hex is from a certificate that was created with rcgen
+	/// and represents the CertificatePolicies extension
+	///
+	/// We can assume that it is valid because it successfully decoded in <https://lapo.it/asn1js>, OpenSSL, Chromium (Edge) and Gecko (Firefox)
+	///
+	/// [Source](https://lapo.it/asn1js/#MIICWTCCAf-gAwIBAgIUKv3YJ-6n4Wx68Zu3PVnCJOk5hDswCgYIKoZIzj0EAwIwMDEYMBYGA1UECgwPQ3JhYiB3aWRnaXRzIFNFMRQwEgYDVQQDDAtNYXN0ZXIgQ2VydDAgFw03NTAxMDEwMDAwMDBaGA80MDk2MDEwMTAwMDAwMFowMDEYMBYGA1UECgwPQ3JhYiB3aWRnaXRzIFNFMRQwEgYDVQQDDAtNYXN0ZXIgQ2VydDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABC_pBjrEyqtvBXKiws6h7Q2mPePPNJspjk-HbEqkg_WVRJZWQL90IPIhPFIJvp0Eho0uWISSFbm3hXWwmtcHmxqjgfQwgfEwIQYDVR0RBBowGIILY3JhYnMuY3JhYnOCCWxvY2FsaG9zdDCBvAYDVR0gBIG0MIGxMAYGBFUdIAAwCAYGZ4EMAQIBMFYGCCsGAQUFBwIBMEowIwYIKwYBBQUHAgEWF2h0dHBzOi8vY3BzLmV4YW1wbGUuY29tMCMGCCsGAQUFBwIBFhdodHRwczovL2Nwcy5leGFtcGxlLm9yZzBFBggrBgEFBQcCAjA5MDcGCCsGAQUFBwICMCswGwwLRXhhbXBsZSBPcmcwDAIBAAIBAQIBAgIBAwwMVGVzdCBtZXNzYWdlMA0GA1UdNgEB_wQDAgECMAoGCCqGSM49BAMCA0gAMEUCIDqnBSHeWgQ0tsqgmd8GioEp68y5imF4duQxYxtx0JYDAiEAp4RbNjrVN5PTnbFnE6ySCNuefB70j-29TOyuR2FfD7A)
+	fn test_certificate_policies_expected_der() {
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x81, 0xBC, 0x06, 0x03, 0x55, 0x1D, 0x20, 0x04, 0x81, 0xB4, 0x30, 0x81, 0xB1,
+			0x30, 0x06, 0x06, 0x04, 0x55, 0x1D, 0x20, 0x00, 0x30, 0x08, 0x06, 0x06, 0x67, 0x81,
+			0x0C, 0x01, 0x02, 0x01, 0x30, 0x56, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07,
+			0x02, 0x01, 0x30, 0x4A, 0x30, 0x23, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07,
+			0x02, 0x01, 0x16, 0x17, 0x68, 0x74, 0x74, 0x70, 0x73, 0x3A, 0x2F, 0x2F, 0x63, 0x70,
+			0x73, 0x2E, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x30,
+			0x23, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x01, 0x16, 0x17, 0x68,
+			0x74, 0x74, 0x70, 0x73, 0x3A, 0x2F, 0x2F, 0x63, 0x70, 0x73, 0x2E, 0x65, 0x78, 0x61,
+			0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x6F, 0x72, 0x67, 0x30, 0x45, 0x06, 0x08, 0x2B, 0x06,
+			0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x39, 0x30, 0x37, 0x06, 0x08, 0x2B, 0x06,
+			0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x2B, 0x30, 0x1B, 0x0C, 0x0B, 0x45, 0x78,
+			0x61, 0x6D, 0x70, 0x6C, 0x65, 0x20, 0x4F, 0x72, 0x67, 0x30, 0x0C, 0x02, 0x01, 0x00,
+			0x02, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01, 0x03, 0x0C, 0x0C, 0x54, 0x65, 0x73,
+			0x74, 0x20, 0x6D, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
+		];
+		let extension_der = yasna::construct_der(|writer| {
+			CertificatePolicies::new(false, PolicyInformation::any_policy())
+				.add_policy_unchecked(PolicyInformation::domain_validated())
+				.add_policy_unchecked(PolicyInformation::cps_uri(vec![
+					string::Ia5String::try_from("https://cps.example.com").unwrap(),
+					string::Ia5String::try_from("https://cps.example.org").unwrap(),
+				]))
+				.add_policy_unchecked(PolicyInformation::user_notice(&UserNotice::new_full(
+					"Example Org".into(),
+					vec![0, 1, 2, 3],
+					"Test message".into(),
+				)))
+				.encode_der(writer)
+		});
+		assert_eq!(EXPECTED_DER, &extension_der)
+	}
+
+	#[test]
+	fn test_certificate_policies_encode_decode() {
+		let params = CertificateParams {
+			certificate_policies: Some(
+				CertificatePolicies::new(false, PolicyInformation::any_policy())
+					.add_policy_unchecked(PolicyInformation::domain_validated())
+					.add_policy_unchecked(PolicyInformation::cps_uri(vec![
+						string::Ia5String::try_from("https://cps.example.com").unwrap(),
+						string::Ia5String::try_from("https://cps.example.org").unwrap(),
+					]))
+					.add_policy_unchecked(PolicyInformation::user_notice(&UserNotice::new_full(
+						"Example Org".into(),
+						vec![0, 1, 2, 3],
+						"Test message".into(),
+					))),
+			),
+			..Default::default()
+		};
+
+		let key_pair = KeyPair::generate().unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
+
+		let parsed_params = CertificateParams::from_ca_cert_der(cert.der())
+			.expect("We should be able to parse the certificate we just created");
+		assert_eq!(
+			params.certificate_policies,
+			parsed_params.certificate_policies
+		)
+	}
+
+	#[test]
+	fn test_inhibit_any_policy_expected_der() {
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x0D, 0x06, 0x03, 0x55, 0x1D, 0x36, 0x01, 0x01, 0xFF, 0x04, 0x03, 0x02, 0x01,
+			0x02,
+		];
+		let extension_der =
+			yasna::construct_der(|writer| InhibitAnyPolicy::new(2).encode_der(writer));
+		assert_eq!(EXPECTED_DER, &extension_der)
+	}
+
+	#[test]
+	fn test_inhibit_any_policy_encode_decode() {
+		let params = CertificateParams {
+			inhibit_any_policy: Some(InhibitAnyPolicy::new(2)),
+			..Default::default()
+		};
+
+		let key_pair = KeyPair::generate().unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
+
+		let parsed_params = CertificateParams::from_ca_cert_der(cert.der())
+			.expect("We should be able to parse the certificate we just created");
+		assert_eq!(params.inhibit_any_policy, parsed_params.inhibit_any_policy,)
+	}
 
 	#[cfg(feature = "crypto")]
 	#[test]
