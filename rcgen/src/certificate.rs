@@ -1087,6 +1087,15 @@ impl PolicyInformation {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+/// ```ASN.1
+/// PolicyQualifierInfo ::= SEQUENCE {
+///         policyQualifierId  PolicyQualifierId,
+///         qualifier          ANY DEFINED BY policyQualifierId }
+/// ```
+///
+/// Unless you want to create a custom qualifier, you should probably use a convenience method from [`PolicyInformation`]
+///
+/// RFC5280 strongly recommends that no custom qualifiers are used.
 pub struct PolicyQualifierInfo {
 	policy_qualifier_id: Vec<u64>,
 	/// The DER encoded qualifier
@@ -1119,18 +1128,37 @@ impl PolicyQualifierInfo {
 }
 
 impl PolicyQualifierInfo {
-	// id-qt OBJECT IDENTIFIER ::= { id-pkix 2 }
-	// id-qt-cps OBJECT IDENTIFIER ::= { id-qt 1 }
-	fn new_cps_uri(cps_uri: &string::Ia5String) -> Self {
+	// This seems like a sensible method but I don't think we can expose this trait bound.
+	// /// Create a custom [`PolicyQualifierInfo`] from an OID and any [`yasna::DEREncodable`] object.
+	// pub fn new_custom<Q: yasna::DEREncodable>(policy_qualifier_id: Vec<u64>, qualifier: Q) -> Self {
+	// 	Self {
+	// 		policy_qualifier_id,
+	// 		qualifier: yasna::encode_der(&qualifier),
+	// 	}
+	// }
+
+	/// Create a custom [`PolicyQualifierInfo`]
+	///
+	/// It is your responsibility to provide valid DER for the qualifier.
+	pub fn new_custom(policy_qualifier_id: Vec<u64>, qualifier: Vec<u8>) -> Self {
+		Self {
+			policy_qualifier_id,
+			qualifier,
+		}
+	}
+
+	/// id-qt OBJECT IDENTIFIER ::= { id-pkix 2 }
+	/// id-qt-cps OBJECT IDENTIFIER ::= { id-qt 1 }
+	pub fn new_cps_uri(cps_uri: &string::Ia5String) -> Self {
 		Self {
 			policy_qualifier_id: vec![1, 3, 6, 1, 5, 5, 7, 2, 1],
 			qualifier: yasna::construct_der(|writer| writer.write_ia5_string(cps_uri.as_str())),
 		}
 	}
 
-	// id-qt OBJECT IDENTIFIER ::= { id-pkix 2 }
-	// id-qt-unotice OBJECT IDENTIFIER ::= { id-qt 2 }
-	fn new_user_notice(user_notice: &UserNotice) -> Self {
+	/// id-qt OBJECT IDENTIFIER ::= { id-pkix 2 }
+	/// id-qt-unotice OBJECT IDENTIFIER ::= { id-qt 2 }
+	pub fn new_user_notice(user_notice: &UserNotice) -> Self {
 		Self {
 			policy_qualifier_id: vec![1, 3, 6, 1, 5, 5, 7, 2, 2],
 			// qualifier: yasna::encode_der(user_notice),
@@ -1297,7 +1325,9 @@ impl yasna::DEREncodable for NoticeReference {
 /// explicitText with more than 200 characters.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum DisplayText {
+	/// Prefer [`Self::Utf8String`]
 	Ia5String(string::Ia5String),
+	/// Usually what you want
 	Utf8String(String),
 	// Contributor question:
 	// Should we make non-conformant options available at all?
@@ -1308,7 +1338,7 @@ pub enum DisplayText {
 
 impl From<&str> for DisplayText {
 	fn from(value: &str) -> Self {
-		Self::Utf8String(value.to_string())
+		Self::from(value.to_string())
 	}
 }
 
@@ -1898,6 +1928,211 @@ mod tests {
 	use crate::KeyPair;
 
 	#[test]
+	fn test_policy_information_any_policy_der() {
+		const EXPECTED_DER: &[u8] = &[0x30, 0x06, 0x06, 0x04, 0x55, 0x1D, 0x20, 0x00];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::any_policy().encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_domain_validated_der() {
+		const EXPECTED_DER: &[u8] = &[0x30, 0x08, 0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x01];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::domain_validated().encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_extended_validation_der() {
+		const EXPECTED_DER: &[u8] = &[0x30, 0x07, 0x06, 0x05, 0x67, 0x81, 0x0C, 0x01, 0x01];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::extended_validation().encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	/// Note: ASN.1 JavaScript Decoder didn't recognize this OID
+	fn test_policy_information_individual_validated_der() {
+		const EXPECTED_DER: &[u8] = &[0x30, 0x08, 0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x03];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::individual_validated().encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_organization_validated_der() {
+		const EXPECTED_DER: &[u8] = &[0x30, 0x08, 0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x02];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::organization_validated().encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_cps_uri_der() {
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x31, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x01, 0x30, 0x25,
+			0x30, 0x23, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x01, 0x16, 0x17,
+			0x68, 0x74, 0x74, 0x70, 0x73, 0x3A, 0x2F, 0x2F, 0x63, 0x70, 0x73, 0x2E, 0x65, 0x78,
+			0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x6F, 0x72, 0x67,
+		];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::cps_uri(vec!["https://cps.example.org".try_into().unwrap()])
+				.encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_new_oid_only_der() {
+		const EXPECTED_DER: &[u8] = &[0x30, 0x05, 0x06, 0x03, 0x01, 0x02, 0x03];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::new_oid_only(vec![0, 1, 2, 3]).encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_new_oid_qualifiers_der() {
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x2C, 0x06, 0x03, 0x2A, 0x03, 0x04, 0x30, 0x25, 0x30, 0x12, 0x06, 0x04, 0x2A,
+			0x03, 0x04, 0x00, 0x0C, 0x0A, 0x55, 0x54, 0x46, 0x38, 0x53, 0x74, 0x72, 0x69, 0x6E,
+			0x67, 0x30, 0x0F, 0x06, 0x04, 0x2A, 0x03, 0x04, 0x01, 0x12, 0x07, 0x31, 0x32, 0x38,
+			0x20, 0x32, 0x35, 0x36,
+		];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::new_oid_qualifiers(
+				vec![1, 2, 3, 4],
+				vec![
+					PolicyQualifierInfo::new_custom(
+						vec![1, 2, 3, 4, 0],
+						yasna::construct_der(|writer| writer.write_utf8string("UTF8String")),
+					),
+					PolicyQualifierInfo::new_custom(
+						vec![1, 2, 3, 4, 1],
+						yasna::construct_der(|writer| writer.write_numeric_string("128 256")),
+					),
+				],
+			)
+			.encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der)
+	}
+
+	#[test]
+	fn test_policy_information_user_notice_explicit_text_der() {
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x45, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x39,
+			0x30, 0x37, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x2B,
+			0x16, 0x29, 0x59, 0x6F, 0x75, 0x20, 0x73, 0x68, 0x6F, 0x75, 0x6C, 0x64, 0x20, 0x75,
+			0x73, 0x75, 0x61, 0x6C, 0x6C, 0x79, 0x20, 0x75, 0x73, 0x65, 0x20, 0x61, 0x6E, 0x20,
+			0x55, 0x54, 0x46, 0x38, 0x53, 0x74, 0x72, 0x69, 0x6E, 0x67, 0x20, 0x68, 0x65, 0x72,
+			0x65,
+		];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::user_notice(&UserNotice::new_explicit_text(DisplayText::Ia5String(
+				"You should usually use an UTF8String here"
+					.try_into()
+					.unwrap(),
+			)))
+			.encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der);
+	}
+
+	#[test]
+	fn test_policy_information_user_notice_reference_der() {
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x37, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x2B,
+			0x30, 0x29, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x1D,
+			0x30, 0x1B, 0x0C, 0x0B, 0x45, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x20, 0x4F, 0x72,
+			0x67, 0x30, 0x0C, 0x02, 0x01, 0x00, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01,
+			0x03,
+		];
+		let policy_information_der = yasna::construct_der(|writer| {
+			PolicyInformation::user_notice(&UserNotice::new_notice_reference(
+				"Example Org".to_string(),
+				vec![0, 1, 2, 3],
+			))
+			.encode_der(writer)
+		});
+		assert_eq!(EXPECTED_DER, &policy_information_der);
+	}
+
+	#[cfg(feature = "crypto")]
+	#[test]
+	/// [DER Source](https://lapo.it/asn1js/#MIICsTCCAlagAwIBAgIUNIeLHUZBtAK7N0HeSWhxrNt7PpkwCgYIKoZIzj0EAwIwMDEYMBYGA1UECgwPQ3JhYiB3aWRnaXRzIFNFMRQwEgYDVQQDDAtNYXN0ZXIgQ2VydDAgFw03NTAxMDEwMDAwMDBaGA80MDk2MDEwMTAwMDAwMFowMDEYMBYGA1UECgwPQ3JhYiB3aWRnaXRzIFNFMRQwEgYDVQQDDAtNYXN0ZXIgQ2VydDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABKWGpFh06ExqLv-IX2QYQFSeglg3hakmqouV7ghFx_CQp6PKF3uEEniibaJ4OSXivEfigCkiWYAzsTJgs5jTQrSjggFKMIIBRjAhBgNVHREEGjAYggtjcmFicy5jcmFic4IJbG9jYWxob3N0MIIBEAYDVR0gBIIBBzCCAQMwBgYEVR0gADAIBgZngQwBAgEwBwYFZ4EMAQEwCAYGZ4EMAQIDMAgGBmeBDAECAjAFBgMBAgMwLAYDKgMEMCUwEgYEKgMEAAwKVVRGOFN0cmluZzAPBgQqAwQBEgcxMjggMjU2MFYGCCsGAQUFBwIBMEowIwYIKwYBBQUHAgEWF2h0dHBzOi8vY3BzLmV4YW1wbGUuY29tMCMGCCsGAQUFBwIBFhdodHRwczovL2Nwcy5leGFtcGxlLm9yZzBFBggrBgEFBQcCAjA5MDcGCCsGAQUFBwICMCswGwwLRXhhbXBsZSBPcmcwDAIBAAIBAQIBAgIBAwwMVGVzdCBtZXNzYWdlMA0GA1UdNgEB_wQDAgECMAoGCCqGSM49BAMCA0kAMEYCIQCzJmW-eUcSHqdi3V-eb30ZsRIY-tBVohkP06JVxt6IxAIhANKV7alaTWWojOtTXgLkH4nmqEiXGFIb1RXPsNfIhf1H)
+	fn test_certificate_policies_expected_der() {
+		use crate::string::Ia5String;
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x82, 0x01, 0x10, 0x06, 0x03, 0x55, 0x1D, 0x20, 0x04, 0x82, 0x01, 0x07, 0x30,
+			0x82, 0x01, 0x03, 0x30, 0x06, 0x06, 0x04, 0x55, 0x1D, 0x20, 0x00, 0x30, 0x08, 0x06,
+			0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x01, 0x30, 0x07, 0x06, 0x05, 0x67, 0x81, 0x0C,
+			0x01, 0x01, 0x30, 0x08, 0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x03, 0x30, 0x08,
+			0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x02, 0x30, 0x05, 0x06, 0x03, 0x01, 0x02,
+			0x03, 0x30, 0x2C, 0x06, 0x03, 0x2A, 0x03, 0x04, 0x30, 0x25, 0x30, 0x12, 0x06, 0x04,
+			0x2A, 0x03, 0x04, 0x00, 0x0C, 0x0A, 0x55, 0x54, 0x46, 0x38, 0x53, 0x74, 0x72, 0x69,
+			0x6E, 0x67, 0x30, 0x0F, 0x06, 0x04, 0x2A, 0x03, 0x04, 0x01, 0x12, 0x07, 0x31, 0x32,
+			0x38, 0x20, 0x32, 0x35, 0x36, 0x30, 0x56, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05,
+			0x07, 0x02, 0x01, 0x30, 0x4A, 0x30, 0x23, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05,
+			0x07, 0x02, 0x01, 0x16, 0x17, 0x68, 0x74, 0x74, 0x70, 0x73, 0x3A, 0x2F, 0x2F, 0x63,
+			0x70, 0x73, 0x2E, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D,
+			0x30, 0x23, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x01, 0x16, 0x17,
+			0x68, 0x74, 0x74, 0x70, 0x73, 0x3A, 0x2F, 0x2F, 0x63, 0x70, 0x73, 0x2E, 0x65, 0x78,
+			0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x6F, 0x72, 0x67, 0x30, 0x45, 0x06, 0x08, 0x2B,
+			0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x39, 0x30, 0x37, 0x06, 0x08, 0x2B,
+			0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x2B, 0x30, 0x1B, 0x0C, 0x0B, 0x45,
+			0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x20, 0x4F, 0x72, 0x67, 0x30, 0x0C, 0x02, 0x01,
+			0x00, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01, 0x03, 0x0C, 0x0C, 0x54, 0x65,
+			0x73, 0x74, 0x20, 0x6D, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
+		];
+		let extension_der = yasna::construct_der(|writer| {
+			CertificatePolicies::new(false, PolicyInformation::any_policy())
+				.add_policies_unchecked(&[
+					PolicyInformation::domain_validated(),
+					PolicyInformation::extended_validation(),
+					PolicyInformation::individual_validated(),
+					PolicyInformation::organization_validated(),
+					PolicyInformation::new_oid_only(vec![0, 1, 2, 3]),
+					PolicyInformation::new_oid_qualifiers(
+						vec![1, 2, 3, 4],
+						vec![
+							PolicyQualifierInfo::new_custom(
+								vec![1, 2, 3, 4, 0],
+								yasna::construct_der(|writer| {
+									writer.write_utf8string("UTF8String")
+								}),
+							),
+							PolicyQualifierInfo::new_custom(
+								vec![1, 2, 3, 4, 1],
+								yasna::construct_der(|writer| {
+									writer.write_numeric_string("128 256")
+								}),
+							),
+						],
+					),
+					PolicyInformation::cps_uri(vec![
+						Ia5String::try_from("https://cps.example.com").unwrap(),
+						Ia5String::try_from("https://cps.example.org").unwrap(),
+					]),
+					PolicyInformation::user_notice(&UserNotice::new_full(
+						"Example Org".into(),
+						vec![0, 1, 2, 3],
+						"Test message".into(),
+					)),
+				])
+				.encode_der(writer);
+		});
+		assert_eq!(EXPECTED_DER, &extension_der);
+	}
+
+	#[cfg(feature = "crypto")]
+	#[test]
 	/// This is more or less only a regression test for later.
 	/// The below hex is from a certificate that was created with rcgen
 	/// and represents the CertificatePolicies extension
@@ -1905,7 +2140,7 @@ mod tests {
 	/// We can assume that it is valid because it successfully decoded in <https://lapo.it/asn1js>, OpenSSL, Chromium (Edge) and Gecko (Firefox)
 	///
 	/// [Source](https://lapo.it/asn1js/#MIICWTCCAf-gAwIBAgIUKv3YJ-6n4Wx68Zu3PVnCJOk5hDswCgYIKoZIzj0EAwIwMDEYMBYGA1UECgwPQ3JhYiB3aWRnaXRzIFNFMRQwEgYDVQQDDAtNYXN0ZXIgQ2VydDAgFw03NTAxMDEwMDAwMDBaGA80MDk2MDEwMTAwMDAwMFowMDEYMBYGA1UECgwPQ3JhYiB3aWRnaXRzIFNFMRQwEgYDVQQDDAtNYXN0ZXIgQ2VydDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABC_pBjrEyqtvBXKiws6h7Q2mPePPNJspjk-HbEqkg_WVRJZWQL90IPIhPFIJvp0Eho0uWISSFbm3hXWwmtcHmxqjgfQwgfEwIQYDVR0RBBowGIILY3JhYnMuY3JhYnOCCWxvY2FsaG9zdDCBvAYDVR0gBIG0MIGxMAYGBFUdIAAwCAYGZ4EMAQIBMFYGCCsGAQUFBwIBMEowIwYIKwYBBQUHAgEWF2h0dHBzOi8vY3BzLmV4YW1wbGUuY29tMCMGCCsGAQUFBwIBFhdodHRwczovL2Nwcy5leGFtcGxlLm9yZzBFBggrBgEFBQcCAjA5MDcGCCsGAQUFBwICMCswGwwLRXhhbXBsZSBPcmcwDAIBAAIBAQIBAgIBAwwMVGVzdCBtZXNzYWdlMA0GA1UdNgEB_wQDAgECMAoGCCqGSM49BAMCA0gAMEUCIDqnBSHeWgQ0tsqgmd8GioEp68y5imF4duQxYxtx0JYDAiEAp4RbNjrVN5PTnbFnE6ySCNuefB70j-29TOyuR2FfD7A)
-	fn test_certificate_policies_expected_der() {
+	fn test_reasonable_certificate_policies_expected_der() {
 		const EXPECTED_DER: &[u8] = &[
 			0x30, 0x81, 0xBC, 0x06, 0x03, 0x55, 0x1D, 0x20, 0x04, 0x81, 0xB4, 0x30, 0x81, 0xB1,
 			0x30, 0x06, 0x06, 0x04, 0x55, 0x1D, 0x20, 0x00, 0x30, 0x08, 0x06, 0x06, 0x67, 0x81,
@@ -1936,9 +2171,11 @@ mod tests {
 				)))
 				.encode_der(writer)
 		});
-		assert_eq!(EXPECTED_DER, &extension_der)
+		assert_eq!(EXPECTED_DER, &extension_der);
 	}
 
+	#[cfg(feature = "crypto")]
+	#[cfg(feature = "x509-parser")]
 	#[test]
 	fn test_certificate_policies_encode_decode() {
 		let params = CertificateParams {
@@ -1969,6 +2206,7 @@ mod tests {
 		)
 	}
 
+	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_inhibit_any_policy_expected_der() {
 		const EXPECTED_DER: &[u8] = &[
@@ -1980,6 +2218,8 @@ mod tests {
 		assert_eq!(EXPECTED_DER, &extension_der)
 	}
 
+	#[cfg(feature = "crypto")]
+	#[cfg(feature = "x509-parser")]
 	#[test]
 	fn test_inhibit_any_policy_encode_decode() {
 		let params = CertificateParams {
