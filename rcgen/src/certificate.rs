@@ -1929,6 +1929,7 @@ mod tests {
 
 	#[test]
 	fn test_policy_information_any_policy_der() {
+		use crate::PolicyInformation;
 		const EXPECTED_DER: &[u8] = &[0x30, 0x06, 0x06, 0x04, 0x55, 0x1D, 0x20, 0x00];
 		let policy_information_der = yasna::construct_der(|writer| {
 			PolicyInformation::any_policy().encode_der(writer);
@@ -1938,6 +1939,7 @@ mod tests {
 
 	#[test]
 	fn test_policy_information_domain_validated_der() {
+		use crate::PolicyInformation;
 		const EXPECTED_DER: &[u8] = &[0x30, 0x08, 0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x01];
 		let policy_information_der = yasna::construct_der(|writer| {
 			PolicyInformation::domain_validated().encode_der(writer);
@@ -1947,6 +1949,7 @@ mod tests {
 
 	#[test]
 	fn test_policy_information_extended_validation_der() {
+		use crate::PolicyInformation;
 		const EXPECTED_DER: &[u8] = &[0x30, 0x07, 0x06, 0x05, 0x67, 0x81, 0x0C, 0x01, 0x01];
 		let policy_information_der = yasna::construct_der(|writer| {
 			PolicyInformation::extended_validation().encode_der(writer);
@@ -1957,6 +1960,7 @@ mod tests {
 	#[test]
 	/// Note: ASN.1 JavaScript Decoder didn't recognize this OID
 	fn test_policy_information_individual_validated_der() {
+		use crate::PolicyInformation;
 		const EXPECTED_DER: &[u8] = &[0x30, 0x08, 0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x03];
 		let policy_information_der = yasna::construct_der(|writer| {
 			PolicyInformation::individual_validated().encode_der(writer);
@@ -1966,6 +1970,7 @@ mod tests {
 
 	#[test]
 	fn test_policy_information_organization_validated_der() {
+		use crate::PolicyInformation;
 		const EXPECTED_DER: &[u8] = &[0x30, 0x08, 0x06, 0x06, 0x67, 0x81, 0x0C, 0x01, 0x02, 0x02];
 		let policy_information_der = yasna::construct_der(|writer| {
 			PolicyInformation::organization_validated().encode_der(writer);
@@ -1975,6 +1980,7 @@ mod tests {
 
 	#[test]
 	fn test_policy_information_cps_uri_der() {
+		use crate::PolicyInformation;
 		const EXPECTED_DER: &[u8] = &[
 			0x30, 0x31, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x01, 0x30, 0x25,
 			0x30, 0x23, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x01, 0x16, 0x17,
@@ -1990,6 +1996,7 @@ mod tests {
 
 	#[test]
 	fn test_policy_information_new_oid_only_der() {
+		use crate::PolicyInformation;
 		const EXPECTED_DER: &[u8] = &[0x30, 0x05, 0x06, 0x03, 0x01, 0x02, 0x03];
 		let policy_information_der = yasna::construct_der(|writer| {
 			PolicyInformation::new_oid_only(vec![0, 1, 2, 3]).encode_der(writer);
@@ -1999,6 +2006,7 @@ mod tests {
 
 	#[test]
 	fn test_policy_information_new_oid_qualifiers_der() {
+		use crate::{PolicyInformation, PolicyQualifierInfo};
 		const EXPECTED_DER: &[u8] = &[
 			0x30, 0x2C, 0x06, 0x03, 0x2A, 0x03, 0x04, 0x30, 0x25, 0x30, 0x12, 0x06, 0x04, 0x2A,
 			0x03, 0x04, 0x00, 0x0C, 0x0A, 0x55, 0x54, 0x46, 0x38, 0x53, 0x74, 0x72, 0x69, 0x6E,
@@ -2026,6 +2034,7 @@ mod tests {
 
 	#[test]
 	fn test_policy_information_user_notice_explicit_text_der() {
+		use crate::{DisplayText, PolicyInformation, UserNotice};
 		const EXPECTED_DER: &[u8] = &[
 			0x30, 0x45, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x39,
 			0x30, 0x37, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x2B,
@@ -2047,6 +2056,7 @@ mod tests {
 
 	#[test]
 	fn test_policy_information_user_notice_reference_der() {
+		use crate::{PolicyInformation, UserNotice};
 		const EXPECTED_DER: &[u8] = &[
 			0x30, 0x37, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x2B,
 			0x30, 0x29, 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x02, 0x30, 0x1D,
@@ -2068,7 +2078,13 @@ mod tests {
 	#[test]
 	/// [DER Source](https://lapo.it/asn1js/#MIICsTCCAlagAwIBAgIUNIeLHUZBtAK7N0HeSWhxrNt7PpkwCgYIKoZIzj0EAwIwMDEYMBYGA1UECgwPQ3JhYiB3aWRnaXRzIFNFMRQwEgYDVQQDDAtNYXN0ZXIgQ2VydDAgFw03NTAxMDEwMDAwMDBaGA80MDk2MDEwMTAwMDAwMFowMDEYMBYGA1UECgwPQ3JhYiB3aWRnaXRzIFNFMRQwEgYDVQQDDAtNYXN0ZXIgQ2VydDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABKWGpFh06ExqLv-IX2QYQFSeglg3hakmqouV7ghFx_CQp6PKF3uEEniibaJ4OSXivEfigCkiWYAzsTJgs5jTQrSjggFKMIIBRjAhBgNVHREEGjAYggtjcmFicy5jcmFic4IJbG9jYWxob3N0MIIBEAYDVR0gBIIBBzCCAQMwBgYEVR0gADAIBgZngQwBAgEwBwYFZ4EMAQEwCAYGZ4EMAQIDMAgGBmeBDAECAjAFBgMBAgMwLAYDKgMEMCUwEgYEKgMEAAwKVVRGOFN0cmluZzAPBgQqAwQBEgcxMjggMjU2MFYGCCsGAQUFBwIBMEowIwYIKwYBBQUHAgEWF2h0dHBzOi8vY3BzLmV4YW1wbGUuY29tMCMGCCsGAQUFBwIBFhdodHRwczovL2Nwcy5leGFtcGxlLm9yZzBFBggrBgEFBQcCAjA5MDcGCCsGAQUFBwICMCswGwwLRXhhbXBsZSBPcmcwDAIBAAIBAQIBAgIBAwwMVGVzdCBtZXNzYWdlMA0GA1UdNgEB_wQDAgECMAoGCCqGSM49BAMCA0kAMEYCIQCzJmW-eUcSHqdi3V-eb30ZsRIY-tBVohkP06JVxt6IxAIhANKV7alaTWWojOtTXgLkH4nmqEiXGFIb1RXPsNfIhf1H)
 	fn test_certificate_policies_expected_der() {
-		use crate::string::Ia5String;
+		use crate::{
+			string::Ia5String,
+			CertificatePolicies,
+			PolicyInformation,
+			PolicyQualifierInfo,
+			UserNotice,
+		};
 		const EXPECTED_DER: &[u8] = &[
 			0x30, 0x82, 0x01, 0x10, 0x06, 0x03, 0x55, 0x1D, 0x20, 0x04, 0x82, 0x01, 0x07, 0x30,
 			0x82, 0x01, 0x03, 0x30, 0x06, 0x06, 0x04, 0x55, 0x1D, 0x20, 0x00, 0x30, 0x08, 0x06,
