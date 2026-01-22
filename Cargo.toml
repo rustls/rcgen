@@ -23,6 +23,6 @@ pki-types = { package = "rustls-pki-types", version = "1.4.1" }
 ring = "0.17"
 rustls-webpki = { version = "0.103", features = ["ring", "std"] }
 time = { version = "0.3.6", default-features = false }
-x509-parser = "0.18"
+x509-parser = { version = "0.18", features = ["verify", "verify-aws"] }
 yasna = { version = "0.5.2", features = ["time", "std"] }
 zeroize = { version = "1.2" }
