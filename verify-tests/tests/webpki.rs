@@ -7,8 +7,8 @@ use aws_lc_rs::unstable::signature::{
 use pki_types::{CertificateDer, ServerName, SignatureVerificationAlgorithm, UnixTime};
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, CertificateRevocationListParams, DnType,
-	Error, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair, KeyUsagePurpose, PublicKeyData,
-	RevocationReason, RevokedCertParams, SerialNumber, SigningKey,
+	Error, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyIdMethod, KeyPair, KeyUsagePurpose,
+	PublicKeyData, RevocationReason, RevokedCertParams, SerialNumber, SigningKey,
 };
 #[cfg(feature = "x509-parser")]
 use rcgen::{CertificateSigningRequestParams, DnValue};
@@ -691,22 +691,21 @@ fn test_webpki_crl_revoke() {
 		.expect("failed to validate ee cert with issuer");
 
 	// Generate a CRL with the issuer that revokes the EE cert.
+	let mut revoked_certs = RevokedCertParams::new(
+		ee.serial_number.clone().unwrap(),
+		OffsetDateTime::from_unix_timestamp(unix_time as i64).unwrap(),
+	);
+	revoked_certs.reason_code = Some(RevocationReason::KeyCompromise);
+
 	let now = OffsetDateTime::from_unix_timestamp(unix_time as i64).unwrap();
-	let crl = CertificateRevocationListParams {
-		this_update: now,
-		next_update: now + Duration::weeks(1),
-		crl_number: rcgen::SerialNumber::from(1234),
-		issuing_distribution_point: None,
-		revoked_certs: vec![RevokedCertParams {
-			serial_number: ee.serial_number.clone().unwrap(),
-			revocation_time: now,
-			reason_code: Some(RevocationReason::KeyCompromise),
-			invalidity_date: None,
-		}],
-		key_identifier_method: rcgen::KeyIdMethod::Sha256,
-	}
-	.signed_by(&issuer)
-	.unwrap();
+	let mut crl_params = CertificateRevocationListParams::new(
+		now,
+		now + Duration::weeks(1),
+		SerialNumber::from(1234),
+		KeyIdMethod::Sha256,
+	);
+	crl_params.revoked_certs.push(revoked_certs);
+	let crl = crl_params.signed_by(&issuer).unwrap();
 
 	let crl = CertRevocationList::from(BorrowedCertRevocationList::from_der(crl.der()).unwrap());
 

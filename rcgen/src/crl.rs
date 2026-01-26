@@ -45,24 +45,21 @@ use crate::{
 /// let issuer = Issuer::new(issuer_params, key_pair);
 ///
 /// // Describe a revoked certificate.
-/// let revoked_cert = RevokedCertParams{
-///   serial_number: SerialNumber::from(9999),
-///   revocation_time: date_time_ymd(2024, 06, 17),
-///   reason_code: Some(RevocationReason::KeyCompromise),
-///   invalidity_date: None,
-/// };
+/// let mut revoked_cert = RevokedCertParams::new(SerialNumber::from(9999), date_time_ymd(2024, 06, 17));
+/// revoked_cert.reason_code = Some(RevocationReason::KeyCompromise);
+///
 /// // Create a CRL signed by the issuer, revoking revoked_cert.
-/// let crl = CertificateRevocationListParams{
-///   this_update: date_time_ymd(2023, 06, 17),
-///   next_update: date_time_ymd(2024, 06, 17),
-///   crl_number: SerialNumber::from(1234),
-///   issuing_distribution_point: None,
-///   revoked_certs: vec![revoked_cert],
-///   #[cfg(feature = "crypto")]
-///   key_identifier_method: KeyIdMethod::Sha256,
-///   #[cfg(not(feature = "crypto"))]
-///   key_identifier_method: KeyIdMethod::PreSpecified(vec![]),
-/// }.signed_by(&issuer).unwrap();
+/// #[cfg(feature = "crypto")]
+/// let mut crl = CertificateRevocationListParams::new(
+///   date_time_ymd(2023, 06, 17),
+///   date_time_ymd(2024, 06, 17),
+///   SerialNumber::from(1234),
+///   KeyIdMethod::Sha256,
+/// );
+/// #[cfg(feature = "crypto")]
+/// crl.revoked_certs.push(revoked_cert);
+/// #[cfg(feature = "crypto")]
+/// crl.signed_by(&issuer).unwrap();
 ///# }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CertificateRevocationList {
@@ -95,6 +92,7 @@ impl From<CertificateRevocationList> for CertificateRevocationListDer<'static> {
 /// A certificate revocation list (CRL) distribution point, to be included in a certificate's
 /// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13) or
 /// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5)
+#[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CrlDistributionPoint {
 	/// One or more URI distribution point names, indicating a place the current CRL can
@@ -103,6 +101,11 @@ pub struct CrlDistributionPoint {
 }
 
 impl CrlDistributionPoint {
+	/// Construct a new `CrlDistributionPoint` with the given URIs.
+	pub fn new(uris: Vec<String>) -> Self {
+		Self { uris }
+	}
+
 	pub(crate) fn write_der(&self, writer: DERWriter) {
 		// DistributionPoint SEQUENCE
 		writer.write_sequence(|writer| {
@@ -142,6 +145,7 @@ fn write_distribution_point_name_uris<'a>(
 /// See [RFC 5280 §5.3.1][1]
 ///
 /// [1]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 #[allow(missing_docs)] // Not much to add above the code name.
 pub enum RevocationReason {
@@ -159,6 +163,7 @@ pub enum RevocationReason {
 }
 
 /// Parameters used for certificate revocation list (CRL) generation
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CertificateRevocationListParams {
 	/// Issue date of the CRL.
@@ -181,6 +186,23 @@ pub struct CertificateRevocationListParams {
 }
 
 impl CertificateRevocationListParams {
+	/// Construct a new `CertificateRevocationListParams` with the given parameters.
+	pub fn new(
+		this_update: OffsetDateTime,
+		next_update: OffsetDateTime,
+		crl_number: SerialNumber,
+		key_identifier_method: KeyIdMethod,
+	) -> Self {
+		Self {
+			this_update,
+			next_update,
+			crl_number,
+			issuing_distribution_point: None,
+			revoked_certs: Vec::new(),
+			key_identifier_method,
+		}
+	}
+
 	/// Serializes the certificate revocation list (CRL).
 	///
 	/// Including a signature from the issuing certificate authority's key.
@@ -294,6 +316,7 @@ impl CertificateRevocationListParams {
 
 /// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
 /// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CrlIssuingDistributionPoint {
 	/// The CRL's distribution point, containing a sequence of URIs the CRL can be retrieved from.
@@ -304,6 +327,14 @@ pub struct CrlIssuingDistributionPoint {
 }
 
 impl CrlIssuingDistributionPoint {
+	/// Construct a new `CrlIssuingDistributionPoint` with the given distribution point.
+	pub fn new(distribution_point: CrlDistributionPoint) -> Self {
+		Self {
+			distribution_point,
+			scope: None,
+		}
+	}
+
 	fn write_der(&self, writer: DERWriter) {
 		// IssuingDistributionPoint SEQUENCE
 		writer.write_sequence(|writer| {
@@ -328,6 +359,7 @@ impl CrlIssuingDistributionPoint {
 }
 
 /// Describes the scope of a CRL for an issuing distribution point extension.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum CrlScope {
 	/// The CRL contains only end-entity user certificates.
@@ -337,6 +369,7 @@ pub enum CrlScope {
 }
 
 /// Parameters used for describing a revoked certificate included in a [`CertificateRevocationList`].
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RevokedCertParams {
 	/// Serial number identifying the revoked certificate.
@@ -352,6 +385,16 @@ pub struct RevokedCertParams {
 }
 
 impl RevokedCertParams {
+	/// Construct a new `RevokedCertParams` with the given serial number and revocation time.
+	pub fn new(serial_number: SerialNumber, revocation_time: OffsetDateTime) -> Self {
+		Self {
+			serial_number,
+			revocation_time,
+			reason_code: None,
+			invalidity_date: None,
+		}
+	}
+
 	fn write_der(&self, writer: DERWriter) {
 		writer.write_sequence(|writer| {
 			// Write serial number.

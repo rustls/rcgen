@@ -66,6 +66,7 @@ impl From<CertificateSigningRequest> for CertificateSigningRequestDer<'static> {
 }
 
 /// Parameters for a certificate signing request
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CertificateSigningRequestParams {
 	/// Parameters for the certificate to be signed.

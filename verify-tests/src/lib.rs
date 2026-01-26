@@ -94,26 +94,23 @@ pub fn test_crl() -> (
 
 	let now = OffsetDateTime::now_utc();
 	let next_week = now + Duration::weeks(1);
-	let revoked_cert = RevokedCertParams {
-		serial_number: SerialNumber::from_slice(&[0x00, 0xC0, 0xFF, 0xEE]),
-		revocation_time: now,
-		reason_code: Some(RevocationReason::KeyCompromise),
-		invalidity_date: None,
-	};
+	let mut revoked_cert =
+		RevokedCertParams::new(SerialNumber::from_slice(&[0x00, 0xC0, 0xFF, 0xEE]), now);
+	revoked_cert.reason_code = Some(RevocationReason::KeyCompromise);
 
-	let params = CertificateRevocationListParams {
-		this_update: now,
-		next_update: next_week,
-		crl_number: SerialNumber::from(1234),
-		issuing_distribution_point: Some(CrlIssuingDistributionPoint {
-			distribution_point: CrlDistributionPoint {
-				uris: vec!["http://example.com/crl".to_string()],
-			},
-			scope: Some(CrlScope::UserCertsOnly),
-		}),
-		revoked_certs: vec![revoked_cert],
-		key_identifier_method: KeyIdMethod::Sha256,
-	};
+	let mut dp = CrlIssuingDistributionPoint::new(CrlDistributionPoint::new(vec![
+		"http://example.com/crl".to_string(),
+	]));
+	dp.scope = Some(CrlScope::UserCertsOnly);
+
+	let mut params = CertificateRevocationListParams::new(
+		now,
+		next_week,
+		SerialNumber::from(1234),
+		KeyIdMethod::Sha256,
+	);
+	params.issuing_distribution_point = Some(dp);
+	params.revoked_certs = vec![revoked_cert];
 
 	let crl = params.signed_by(&ca).unwrap();
 	(params, crl, issuer_cert)
@@ -123,15 +120,11 @@ pub fn test_crl() -> (
 pub fn cert_with_crl_dps() -> Vec<u8> {
 	let (mut params, key_pair) = default_params();
 	params.crl_distribution_points = vec![
-		CrlDistributionPoint {
-			uris: vec![
-				"http://example.com/crl.der".to_string(),
-				"http://crls.example.com/1234".to_string(),
-			],
-		},
-		CrlDistributionPoint {
-			uris: vec!["ldap://example.com/crl.der".to_string()],
-		},
+		CrlDistributionPoint::new(vec![
+			"http://example.com/crl.der".to_string(),
+			"http://crls.example.com/1234".to_string(),
+		]),
+		CrlDistributionPoint::new(vec!["ldap://example.com/crl.der".to_string()]),
 	];
 
 	params.self_signed(&key_pair).unwrap().der().to_vec()

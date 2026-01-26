@@ -30,7 +30,7 @@ println!("{}", signing_key.serialize_pem());
 #![forbid(non_ascii_idents)]
 #![deny(missing_docs)]
 #![cfg_attr(rcgen_docsrs, feature(doc_cfg))]
-#![warn(unreachable_pub)]
+#![warn(unreachable_pub, clippy::exhaustive_enums, clippy::exhaustive_structs)]
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -87,6 +87,7 @@ pub mod string;
 pub type RcgenError = Error;
 
 /// An issued certificate, together with the subject keypair.
+#[allow(clippy::exhaustive_structs)]
 #[derive(PartialEq, Eq)]
 pub struct CertifiedKey<S: SigningKey> {
 	/// An issued certificate.
@@ -586,6 +587,7 @@ impl<'a> Iterator for DistinguishedNameIterator<'a> {
 }
 
 /// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension
+#[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum KeyUsagePurpose {
 	/// digitalSignature
