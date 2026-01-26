@@ -10,7 +10,7 @@ use crate::{
 	Certificate, CertificateParams, Error, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey,
 };
 #[cfg(feature = "x509-parser")]
-use crate::{DistinguishedName, ExtendedKeyUsagePurpose, KeyUsagePurpose, SanType};
+use crate::{DistinguishedName, ExtendedKeyUsagePurpose, GeneralName, KeyUsagePurpose};
 
 /// A public key, extracted from a CSR
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -136,7 +136,7 @@ impl CertificateSigningRequestParams {
 						for name in &san.general_names {
 							params
 								.subject_alt_names
-								.push(SanType::try_from_general(name)?);
+								.push(GeneralName::try_from_general(name)?);
 						}
 					},
 					x509_parser::extensions::ParsedExtension::ExtendedKeyUsage(eku) => {

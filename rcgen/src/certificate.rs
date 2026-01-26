@@ -17,8 +17,8 @@ use crate::ring_like::digest;
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_authority_key_identifier, write_x509_extension, DistinguishedName, Error, Issuer,
-	KeyIdMethod, KeyUsagePurpose, SanType, SerialNumber, SigningKey,
+	write_x509_authority_key_identifier, write_x509_extension, DistinguishedName, Error,
+	GeneralName, Issuer, KeyIdMethod, KeyUsagePurpose, SerialNumber, SigningKey,
 };
 
 /// An issued certificate
@@ -57,7 +57,7 @@ pub struct CertificateParams {
 	pub not_before: OffsetDateTime,
 	pub not_after: OffsetDateTime,
 	pub serial_number: Option<SerialNumber>,
-	pub subject_alt_names: Vec<SanType>,
+	pub subject_alt_names: Vec<GeneralName>,
 	pub distinguished_name: DistinguishedName,
 	pub is_ca: IsCa,
 	pub key_usages: Vec<KeyUsagePurpose>,
@@ -114,8 +114,8 @@ impl CertificateParams {
 			.into_iter()
 			.map(|s| {
 				Ok(match IpAddr::from_str(&s) {
-					Ok(ip) => SanType::IpAddress(ip),
-					Err(_) => SanType::DnsName(s.try_into()?),
+					Ok(ip) => GeneralName::IpAddress(ip),
+					Err(_) => GeneralName::DnsName(s.try_into()?),
 				})
 			})
 			.collect::<Result<Vec<_>, _>>()?;
@@ -172,7 +172,7 @@ impl CertificateParams {
 
 		Ok(CertificateParams {
 			is_ca: IsCa::from_x509(&x509)?,
-			subject_alt_names: SanType::from_x509(&x509)?,
+			subject_alt_names: GeneralName::from_x509(&x509)?,
 			key_usages: KeyUsagePurpose::from_x509(&x509)?,
 			extended_key_usages: ExtendedKeyUsagePurpose::from_x509(&x509)?,
 			name_constraints: NameConstraints::from_x509(&x509)?,
@@ -265,16 +265,16 @@ impl CertificateParams {
 					writer.next().write_tagged_implicit(
 						Tag::context(san.tag()),
 						|writer| match san {
-							SanType::Rfc822Name(name)
-							| SanType::DnsName(name)
-							| SanType::URI(name) => writer.write_ia5_string(name.as_str()),
-							SanType::IpAddress(IpAddr::V4(addr)) => {
+							GeneralName::Rfc822Name(name)
+							| GeneralName::DnsName(name)
+							| GeneralName::URI(name) => writer.write_ia5_string(name.as_str()),
+							GeneralName::IpAddress(IpAddr::V4(addr)) => {
 								writer.write_bytes(&addr.octets())
 							},
-							SanType::IpAddress(IpAddr::V6(addr)) => {
+							GeneralName::IpAddress(IpAddr::V6(addr)) => {
 								writer.write_bytes(&addr.octets())
 							},
-							SanType::OtherName((oid, value)) => {
+							GeneralName::OtherName((oid, value)) => {
 								// otherName SEQUENCE { OID, [0] explicit any defined by oid }
 								// https://datatracker.ietf.org/doc/html/rfc5280#page-38
 								writer.write_sequence(|writer| {
@@ -1282,7 +1282,7 @@ mod tests {
 	fn parse_other_name_alt_name() {
 		// Create and serialize a certificate with an alternative name containing an "OtherName".
 		let mut params = CertificateParams::default();
-		let other_name = SanType::OtherName((vec![1, 2, 3, 4], "Foo".into()));
+		let other_name = GeneralName::OtherName((vec![1, 2, 3, 4], "Foo".into()));
 		params.subject_alt_names.push(other_name.clone());
 		let key_pair = KeyPair::generate().unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
@@ -1336,7 +1336,7 @@ mod tests {
 	#[test]
 	fn converts_from_ip() {
 		let ip = Ipv4Addr::new(2, 4, 6, 8);
-		let ip_san = SanType::IpAddress(IpAddr::V4(ip));
+		let ip_san = GeneralName::IpAddress(IpAddr::V4(ip));
 
 		let mut params = CertificateParams::new(vec!["crabs".to_owned()]).unwrap();
 		let ca_key = KeyPair::generate().unwrap();
