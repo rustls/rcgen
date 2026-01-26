@@ -13,153 +13,6 @@ use crate::{
 	KeyUsagePurpose, SerialNumber, SigningKey,
 };
 
-/// A certificate revocation list (CRL)
-///
-/// ## Example
-///
-/// ```
-/// extern crate rcgen;
-/// use rcgen::*;
-///
-/// #[cfg(not(feature = "crypto"))]
-/// struct MyKeyPair { public_key: Vec<u8> }
-/// #[cfg(not(feature = "crypto"))]
-/// impl SigningKey for MyKeyPair {
-///   fn sign(&self, _: &[u8]) -> Result<Vec<u8>, rcgen::Error> { Ok(vec![]) }
-/// }
-/// #[cfg(not(feature = "crypto"))]
-/// impl PublicKeyData for MyKeyPair {
-///   fn der_bytes(&self) -> &[u8] { &self.public_key }
-///   fn algorithm(&self) -> &'static SignatureAlgorithm { &PKCS_ED25519 }
-/// }
-/// # fn main () {
-/// // Generate a CRL issuer.
-/// let mut issuer_params = CertificateParams::new(vec!["crl.issuer.example.com".to_string()]).unwrap();
-/// issuer_params.serial_number = Some(SerialNumber::from(9999));
-/// issuer_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-/// issuer_params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::CrlSign];
-/// #[cfg(feature = "crypto")]
-/// let key_pair = KeyPair::generate().unwrap();
-/// #[cfg(not(feature = "crypto"))]
-/// let key_pair = MyKeyPair { public_key: vec![] };
-/// let issuer = Issuer::new(issuer_params, key_pair);
-///
-/// // Describe a revoked certificate.
-/// let revoked_cert = RevokedCertParams{
-///   serial_number: SerialNumber::from(9999),
-///   revocation_time: date_time_ymd(2024, 06, 17),
-///   reason_code: Some(RevocationReason::KeyCompromise),
-///   invalidity_date: None,
-/// };
-/// // Create a CRL signed by the issuer, revoking revoked_cert.
-/// let crl = CertificateRevocationListParams{
-///   this_update: date_time_ymd(2023, 06, 17),
-///   next_update: date_time_ymd(2024, 06, 17),
-///   crl_number: SerialNumber::from(1234),
-///   issuing_distribution_point: None,
-///   revoked_certs: vec![revoked_cert],
-///   #[cfg(feature = "crypto")]
-///   key_identifier_method: KeyIdMethod::Sha256,
-///   #[cfg(not(feature = "crypto"))]
-///   key_identifier_method: KeyIdMethod::PreSpecified(vec![]),
-/// }.signed_by(&issuer).unwrap();
-///# }
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CertificateRevocationList {
-	der: CertificateRevocationListDer<'static>,
-}
-
-impl CertificateRevocationList {
-	/// Get the CRL in PEM encoded format.
-	#[cfg(feature = "pem")]
-	pub fn pem(&self) -> Result<String, Error> {
-		let p = Pem::new("X509 CRL", &*self.der);
-		Ok(pem::encode_config(&p, ENCODE_CONFIG))
-	}
-
-	/// Get the CRL in DER encoded format.
-	///
-	/// [`CertificateRevocationListDer`] implements `Deref<Target = [u8]>` and `AsRef<[u8]>`,
-	/// so you can easily extract the DER bytes from the return value.
-	pub fn der(&self) -> &CertificateRevocationListDer<'static> {
-		&self.der
-	}
-}
-
-impl From<CertificateRevocationList> for CertificateRevocationListDer<'static> {
-	fn from(crl: CertificateRevocationList) -> Self {
-		crl.der
-	}
-}
-
-/// A certificate revocation list (CRL) distribution point, to be included in a certificate's
-/// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13) or
-/// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5)
-#[non_exhaustive]
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct CrlDistributionPoint {
-	/// One or more URI distribution point names, indicating a place the current CRL can
-	/// be retrieved. When present, SHOULD include at least one LDAP or HTTP URI.
-	pub uris: Vec<String>,
-}
-
-impl CrlDistributionPoint {
-	pub(crate) fn write_der(&self, writer: DERWriter) {
-		// DistributionPoint SEQUENCE
-		writer.write_sequence(|writer| {
-			write_distribution_point_name_uris(writer.next(), &self.uris);
-		});
-	}
-}
-
-fn write_distribution_point_name_uris<'a>(
-	writer: DERWriter,
-	uris: impl IntoIterator<Item = &'a String>,
-) {
-	// distributionPoint DistributionPointName
-	writer.write_tagged_implicit(Tag::context(0), |writer| {
-		writer.write_sequence(|writer| {
-			// fullName GeneralNames
-			writer
-				.next()
-				.write_tagged_implicit(Tag::context(0), |writer| {
-					// GeneralNames
-					writer.write_sequence(|writer| {
-						for uri in uris.into_iter() {
-							// uniformResourceIdentifier [6] IA5String,
-							writer
-								.next()
-								.write_tagged_implicit(Tag::context(6), |writer| {
-									writer.write_ia5_string(uri)
-								});
-						}
-					})
-				});
-		});
-	});
-}
-
-/// Identifies the reason a certificate was revoked.
-/// See [RFC 5280 §5.3.1][1]
-///
-/// [1]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-#[allow(missing_docs)] // Not much to add above the code name.
-pub enum RevocationReason {
-	Unspecified = 0,
-	KeyCompromise = 1,
-	CaCompromise = 2,
-	AffiliationChanged = 3,
-	Superseded = 4,
-	CessationOfOperation = 5,
-	CertificateHold = 6,
-	// 7 is not defined.
-	RemoveFromCrl = 8,
-	PrivilegeWithdrawn = 9,
-	AaCompromise = 10,
-}
-
 /// Parameters used for certificate revocation list (CRL) generation
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -295,6 +148,85 @@ impl CertificateRevocationListParams {
 	}
 }
 
+/// A certificate revocation list (CRL)
+///
+/// ## Example
+///
+/// ```
+/// extern crate rcgen;
+/// use rcgen::*;
+///
+/// #[cfg(not(feature = "crypto"))]
+/// struct MyKeyPair { public_key: Vec<u8> }
+/// #[cfg(not(feature = "crypto"))]
+/// impl SigningKey for MyKeyPair {
+///   fn sign(&self, _: &[u8]) -> Result<Vec<u8>, rcgen::Error> { Ok(vec![]) }
+/// }
+/// #[cfg(not(feature = "crypto"))]
+/// impl PublicKeyData for MyKeyPair {
+///   fn der_bytes(&self) -> &[u8] { &self.public_key }
+///   fn algorithm(&self) -> &'static SignatureAlgorithm { &PKCS_ED25519 }
+/// }
+/// # fn main () {
+/// // Generate a CRL issuer.
+/// let mut issuer_params = CertificateParams::new(vec!["crl.issuer.example.com".to_string()]).unwrap();
+/// issuer_params.serial_number = Some(SerialNumber::from(9999));
+/// issuer_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+/// issuer_params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::CrlSign];
+/// #[cfg(feature = "crypto")]
+/// let key_pair = KeyPair::generate().unwrap();
+/// #[cfg(not(feature = "crypto"))]
+/// let key_pair = MyKeyPair { public_key: vec![] };
+/// let issuer = Issuer::new(issuer_params, key_pair);
+///
+/// // Describe a revoked certificate.
+/// let revoked_cert = RevokedCertParams{
+///   serial_number: SerialNumber::from(9999),
+///   revocation_time: date_time_ymd(2024, 06, 17),
+///   reason_code: Some(RevocationReason::KeyCompromise),
+///   invalidity_date: None,
+/// };
+/// // Create a CRL signed by the issuer, revoking revoked_cert.
+/// let crl = CertificateRevocationListParams{
+///   this_update: date_time_ymd(2023, 06, 17),
+///   next_update: date_time_ymd(2024, 06, 17),
+///   crl_number: SerialNumber::from(1234),
+///   issuing_distribution_point: None,
+///   revoked_certs: vec![revoked_cert],
+///   #[cfg(feature = "crypto")]
+///   key_identifier_method: KeyIdMethod::Sha256,
+///   #[cfg(not(feature = "crypto"))]
+///   key_identifier_method: KeyIdMethod::PreSpecified(vec![]),
+/// }.signed_by(&issuer).unwrap();
+///# }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CertificateRevocationList {
+	der: CertificateRevocationListDer<'static>,
+}
+
+impl CertificateRevocationList {
+	/// Get the CRL in PEM encoded format.
+	#[cfg(feature = "pem")]
+	pub fn pem(&self) -> Result<String, Error> {
+		let p = Pem::new("X509 CRL", &*self.der);
+		Ok(pem::encode_config(&p, ENCODE_CONFIG))
+	}
+
+	/// Get the CRL in DER encoded format.
+	///
+	/// [`CertificateRevocationListDer`] implements `Deref<Target = [u8]>` and `AsRef<[u8]>`,
+	/// so you can easily extract the DER bytes from the return value.
+	pub fn der(&self) -> &CertificateRevocationListDer<'static> {
+		&self.der
+	}
+}
+
+impl From<CertificateRevocationList> for CertificateRevocationListDer<'static> {
+	fn from(crl: CertificateRevocationList) -> Self {
+		crl.der
+	}
+}
+
 /// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
 /// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
 #[non_exhaustive]
@@ -331,14 +263,51 @@ impl CrlIssuingDistributionPoint {
 	}
 }
 
-/// Describes the scope of a CRL for an issuing distribution point extension.
+/// A certificate revocation list (CRL) distribution point, to be included in a certificate's
+/// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13) or
+/// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5)
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum CrlScope {
-	/// The CRL contains only end-entity user certificates.
-	UserCertsOnly,
-	/// The CRL contains only CA certificates.
-	CaCertsOnly,
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CrlDistributionPoint {
+	/// One or more URI distribution point names, indicating a place the current CRL can
+	/// be retrieved. When present, SHOULD include at least one LDAP or HTTP URI.
+	pub uris: Vec<String>,
+}
+
+impl CrlDistributionPoint {
+	pub(crate) fn write_der(&self, writer: DERWriter) {
+		// DistributionPoint SEQUENCE
+		writer.write_sequence(|writer| {
+			write_distribution_point_name_uris(writer.next(), &self.uris);
+		});
+	}
+}
+
+fn write_distribution_point_name_uris<'a>(
+	writer: DERWriter,
+	uris: impl IntoIterator<Item = &'a String>,
+) {
+	// distributionPoint DistributionPointName
+	writer.write_tagged_implicit(Tag::context(0), |writer| {
+		writer.write_sequence(|writer| {
+			// fullName GeneralNames
+			writer
+				.next()
+				.write_tagged_implicit(Tag::context(0), |writer| {
+					// GeneralNames
+					writer.write_sequence(|writer| {
+						for uri in uris.into_iter() {
+							// uniformResourceIdentifier [6] IA5String,
+							writer
+								.next()
+								.write_tagged_implicit(Tag::context(6), |writer| {
+									writer.write_ia5_string(uri)
+								});
+						}
+					})
+				});
+		});
+	});
 }
 
 /// Parameters used for describing a revoked certificate included in a [`CertificateRevocationList`].
@@ -408,4 +377,35 @@ impl RevokedCertParams {
 			}
 		})
 	}
+}
+
+/// Identifies the reason a certificate was revoked.
+/// See [RFC 5280 §5.3.1][1]
+///
+/// [1]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[allow(missing_docs)] // Not much to add above the code name.
+pub enum RevocationReason {
+	Unspecified = 0,
+	KeyCompromise = 1,
+	CaCompromise = 2,
+	AffiliationChanged = 3,
+	Superseded = 4,
+	CessationOfOperation = 5,
+	CertificateHold = 6,
+	// 7 is not defined.
+	RemoveFromCrl = 8,
+	PrivilegeWithdrawn = 9,
+	AaCompromise = 10,
+}
+
+/// Describes the scope of a CRL for an issuing distribution point extension.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum CrlScope {
+	/// The CRL contains only end-entity user certificates.
+	UserCertsOnly,
+	/// The CRL contains only CA certificates.
+	CaCertsOnly,
 }
