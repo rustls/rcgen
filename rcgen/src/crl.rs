@@ -95,6 +95,7 @@ impl From<CertificateRevocationList> for CertificateRevocationListDer<'static> {
 /// A certificate revocation list (CRL) distribution point, to be included in a certificate's
 /// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13) or
 /// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5)
+#[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CrlDistributionPoint {
 	/// One or more URI distribution point names, indicating a place the current CRL can
@@ -142,6 +143,7 @@ fn write_distribution_point_name_uris<'a>(
 /// See [RFC 5280 §5.3.1][1]
 ///
 /// [1]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 #[allow(missing_docs)] // Not much to add above the code name.
 pub enum RevocationReason {
@@ -159,6 +161,7 @@ pub enum RevocationReason {
 }
 
 /// Parameters used for certificate revocation list (CRL) generation
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CertificateRevocationListParams {
 	/// Issue date of the CRL.
@@ -294,6 +297,7 @@ impl CertificateRevocationListParams {
 
 /// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
 /// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CrlIssuingDistributionPoint {
 	/// The CRL's distribution point, containing a sequence of URIs the CRL can be retrieved from.
@@ -328,6 +332,7 @@ impl CrlIssuingDistributionPoint {
 }
 
 /// Describes the scope of a CRL for an issuing distribution point extension.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum CrlScope {
 	/// The CRL contains only end-entity user certificates.
@@ -337,6 +342,7 @@ pub enum CrlScope {
 }
 
 /// Parameters used for describing a revoked certificate included in a [`CertificateRevocationList`].
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RevokedCertParams {
 	/// Serial number identifying the revoked certificate.

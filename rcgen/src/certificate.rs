@@ -640,6 +640,7 @@ fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[Gener
 ///
 /// [RFC 5280]: <https://datatracker.ietf.org/doc/html/rfc5280#appendix-A.1>
 /// [RFC 2986]: <https://datatracker.ietf.org/doc/html/rfc2986#section-4>
+#[allow(clippy::exhaustive_structs)]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Attribute {
 	/// `AttributeType` of the `Attribute`, defined as an `OBJECT IDENTIFIER`.
@@ -755,8 +756,9 @@ impl DnType {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 /// One of the purposes contained in the [extended key usage extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.12)
+#[non_exhaustive]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum ExtendedKeyUsagePurpose {
 	/// anyExtendedKeyUsage
 	Any,
@@ -831,6 +833,7 @@ impl ExtendedKeyUsagePurpose {
 
 /// The [NameConstraints extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.10)
 /// (only relevant for CA certificates)
+#[allow(clippy::exhaustive_structs)]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct NameConstraints {
 	/// A list of subtrees that the domain has to match.
@@ -944,8 +947,6 @@ impl GeneralSubtree {
 	}
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[allow(missing_docs)]
 /// CIDR subnet, as per [RFC 4632](https://tools.ietf.org/html/rfc4632)
 ///
 /// You might know CIDR subnets better by their textual representation
@@ -954,6 +955,9 @@ impl GeneralSubtree {
 ///
 /// The first field in the enum is the address, the second is the mask.
 /// Both are specified in network byte order.
+#[allow(clippy::exhaustive_enums)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub enum CidrSubnet {
 	V4([u8; 4], [u8; 4]),
 	V6([u8; 16], [u8; 16]),
@@ -1056,6 +1060,7 @@ pub fn date_time_ymd(year: i32, month: u8, day: u8) -> OffsetDateTime {
 }
 
 /// Whether the certificate is allowed to sign other certificates
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum IsCa {
 	/// The certificate can only sign itself
@@ -1099,6 +1104,7 @@ impl IsCa {
 ///
 /// Sets an optional upper limit on the length of the intermediate certificate chain
 /// length allowed for this CA certificate (not including the end entity certificate).
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BasicConstraints {
 	/// No constraint
