@@ -419,7 +419,7 @@ impl BmpString {
 
 	/// Decode a UTF-16BE–encoded vector `vec` into a `BmpString`, returning [Err](`std::result::Result::Err`) if `vec` contains any invalid data.
 	pub fn from_utf16be(vec: Vec<u8>) -> Result<Self, Error> {
-		if vec.len() % 2 != 0 {
+		if !vec.len().is_multiple_of(2) {
 			return Err(Error::InvalidAsn1String(InvalidAsn1String::BmpString(
 				"Invalid UTF-16 encoding".to_string(),
 			)));
@@ -538,7 +538,7 @@ impl UniversalString {
 
 	/// Decode a UTF-32BE–encoded vector `vec` into a `UniversalString`, returning [Err](`std::result::Result::Err`) if `vec` contains any invalid data.
 	pub fn from_utf32be(vec: Vec<u8>) -> Result<UniversalString, Error> {
-		if vec.len() % 4 != 0 {
+		if !vec.len().is_multiple_of(4) {
 			return Err(Error::InvalidAsn1String(
 				InvalidAsn1String::UniversalString("Invalid UTF-32 encoding".to_string()),
 			));
