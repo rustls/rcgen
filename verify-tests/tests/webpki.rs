@@ -150,7 +150,7 @@ fn test_webpki() {
 #[test]
 fn test_webpki_256() {
 	let (params, _, _) = util::default_params();
-	let (key_pair, key_der) = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let (key_pair, key_der) = KeyPair::generate_for(&rcgen::ECDSA_P256_SHA256).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -167,7 +167,7 @@ fn test_webpki_256() {
 #[test]
 fn test_webpki_384() {
 	let (params, _, _) = util::default_params();
-	let (key_pair, key_der) = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P384_SHA384).unwrap();
+	let (key_pair, key_der) = KeyPair::generate_for(&rcgen::ECDSA_P384_SHA384).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -184,7 +184,7 @@ fn test_webpki_384() {
 #[test]
 fn test_webpki_25519() {
 	let (params, _, _) = util::default_params();
-	let (key_pair, key_der) = KeyPair::generate_for(&rcgen::PKCS_ED25519).unwrap();
+	let (key_pair, key_der) = KeyPair::generate_for(&rcgen::ED25519).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -274,17 +274,17 @@ const ML_DSA_ALGS: &[(
 	&PqdsaSigningAlgorithm,
 )] = &[
 	(
-		&rcgen::PKCS_ML_DSA_44,
+		&rcgen::ML_DSA_44,
 		webpki::aws_lc_rs::ML_DSA_44,
 		&ML_DSA_44_SIGNING,
 	),
 	(
-		&rcgen::PKCS_ML_DSA_65,
+		&rcgen::ML_DSA_65,
 		webpki::aws_lc_rs::ML_DSA_65,
 		&ML_DSA_65_SIGNING,
 	),
 	(
-		&rcgen::PKCS_ML_DSA_87,
+		&rcgen::ML_DSA_87,
 		webpki::aws_lc_rs::ML_DSA_87,
 		&ML_DSA_87_SIGNING,
 	),
@@ -295,17 +295,17 @@ const ML_DSA_ALGS: &[(
 fn test_webpki_rsa_combinations_given() {
 	let configs: &[(_, _, &'static dyn signature::RsaEncoding)] = &[
 		(
-			&rcgen::PKCS_RSA_SHA256,
+			&rcgen::RSA_PKCS1_SHA256,
 			webpki::ring::RSA_PKCS1_2048_8192_SHA256,
 			&signature::RSA_PKCS1_SHA256,
 		),
 		(
-			&rcgen::PKCS_RSA_SHA384,
+			&rcgen::RSA_PKCS1_SHA384,
 			webpki::ring::RSA_PKCS1_2048_8192_SHA384,
 			&signature::RSA_PKCS1_SHA384,
 		),
 		(
-			&rcgen::PKCS_RSA_SHA512,
+			&rcgen::RSA_PKCS1_SHA512,
 			webpki::ring::RSA_PKCS1_2048_8192_SHA512,
 			&signature::RSA_PKCS1_SHA512,
 		),
@@ -357,7 +357,7 @@ fn test_webpki_separate_ca() {
 fn test_webpki_separate_ca_with_other_signing_alg() {
 	let (mut ca_params, _, _) = util::default_params();
 	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-	let (ca_key, _) = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let (ca_key, _) = KeyPair::generate_for(&rcgen::ECDSA_P256_SHA256).unwrap();
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
@@ -368,7 +368,7 @@ fn test_webpki_separate_ca_with_other_signing_alg() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 
-	let (key_pair, key_der) = KeyPair::generate_for(&rcgen::PKCS_ED25519).unwrap();
+	let (key_pair, key_der) = KeyPair::generate_for(&rcgen::ED25519).unwrap();
 	let ca = Issuer::new(ca_params, ca_key);
 	let cert = params.signed_by(&key_pair, &ca).unwrap();
 	check_cert_ca(
@@ -401,12 +401,12 @@ fn from_remote() {
 		}
 
 		fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
-			&rcgen::PKCS_ECDSA_P256_SHA256
+			&rcgen::ECDSA_P256_SHA256
 		}
 	}
 
 	let rng = ring::rand::SystemRandom::new();
-	let (_, key_der) = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let (_, key_der) = KeyPair::generate_for(&rcgen::ECDSA_P256_SHA256).unwrap();
 	let remote = EcdsaKeyPair::from_pkcs8(
 		&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
 		key_der.secret_der(),
@@ -669,7 +669,7 @@ fn test_webpki_crl_parse() {
 #[test]
 fn test_webpki_crl_revoke() {
 	// Create an issuer CA.
-	let alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+	let alg = &rcgen::ECDSA_P256_SHA256;
 	let (mut issuer, _, _) = util::default_params();
 	issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	issuer.key_usages = vec![
