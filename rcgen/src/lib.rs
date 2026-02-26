@@ -43,7 +43,8 @@ use std::ops::Deref;
 
 pub use certificate::{
 	date_time_ymd, Attribute, BasicConstraints, Certificate, CertificateParams, CidrSubnet,
-	CustomExtension, DnType, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, NameConstraints,
+	CustomExtension, DnType, ExtendedKeyUsagePurpose, GeneralSubtree, InhibitAnyPolicy, IsCa,
+	NameConstraints,
 };
 pub use crl::{
 	CertificateRevocationList, CertificateRevocationListParams, CrlDistributionPoint,

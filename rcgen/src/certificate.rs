@@ -61,6 +61,7 @@ pub struct CertificateParams {
 	pub distinguished_name: DistinguishedName,
 	pub is_ca: IsCa,
 	pub key_usages: Vec<KeyUsagePurpose>,
+	pub inhibit_any_policy: Option<InhibitAnyPolicy>,
 	pub extended_key_usages: Vec<ExtendedKeyUsagePurpose>,
 	pub name_constraints: Option<NameConstraints>,
 	/// An optional list of certificate revocation list (CRL) distribution points as described
@@ -93,6 +94,7 @@ impl Default for CertificateParams {
 			distinguished_name,
 			is_ca: IsCa::NoCa,
 			key_usages: Vec::new(),
+			inhibit_any_policy: None,
 			extended_key_usages: Vec::new(),
 			name_constraints: None,
 			crl_distribution_points: Vec::new(),
@@ -181,6 +183,7 @@ impl CertificateParams {
 			distinguished_name: DistinguishedName::from_name(&x509.tbs_certificate.subject)?,
 			not_before: x509.validity().not_before.to_datetime(),
 			not_after: x509.validity().not_after.to_datetime(),
+			inhibit_any_policy: InhibitAnyPolicy::from_x509(&x509)?,
 			..Default::default()
 		})
 	}
@@ -330,6 +333,7 @@ impl CertificateParams {
 			distinguished_name,
 			is_ca,
 			key_usages,
+			inhibit_any_policy,
 			extended_key_usages,
 			name_constraints,
 			crl_distribution_points,
@@ -353,6 +357,7 @@ impl CertificateParams {
 		if serial_number.is_some()
 			|| *is_ca != IsCa::NoCa
 			|| name_constraints.is_some()
+			|| inhibit_any_policy.is_some()
 			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
 		{
@@ -452,6 +457,7 @@ impl CertificateParams {
 				|| self.name_constraints.iter().any(|c| !c.is_empty())
 				|| matches!(self.is_ca, IsCa::ExplicitNoCa)
 				|| matches!(self.is_ca, IsCa::Ca(_))
+				|| self.inhibit_any_policy.is_some()
 				|| !self.custom_extensions.is_empty();
 			if !should_write_exts {
 				return Ok(());
@@ -584,6 +590,12 @@ impl CertificateParams {
 			IsCa::NoCa => {},
 		}
 
+		if let Some(inhibit_any_policy) = &self.inhibit_any_policy {
+			writer.next().write_der(&yasna::construct_der(|writer| {
+				inhibit_any_policy.encode_der(writer)
+			}))
+		}
+
 		// Write the custom extensions
 		for ext in &self.custom_extensions {
 			write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
@@ -633,6 +645,62 @@ fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[Gener
 			}
 		});
 	});
+}
+
+/// Excerpt from [RFC5280 Section 4.2.1.14](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.14)
+///
+/// > The inhibit anyPolicy extension can be used in certificates issued to
+/// > CAs.  The inhibit anyPolicy extension indicates that the special
+/// > anyPolicy OID, with the value { 2 5 29 32 0 }, is not considered an
+/// > explicit match for other certificate policies except when it appears
+/// > in an intermediate self-issued CA certificate.  The value indicates
+/// > the number of additional non-self-issued certificates that may appear
+/// > in the path before anyPolicy is no longer permitted.  For example, a
+/// > value of one indicates that anyPolicy may be processed in
+/// > certificates issued by the subject of this certificate, but not in
+/// > additional certificates in the path.
+/// >
+/// > > Conforming CAs MUST mark this extension as critical.
+/// > >
+/// > > id-ce-inhibitAnyPolicy OBJECT IDENTIFIER ::=  { id-ce 54 }
+/// > >
+/// > > InhibitAnyPolicy ::= SkipCerts
+/// > >
+/// > > SkipCerts ::= INTEGER (0..MAX)
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct InhibitAnyPolicy {
+	/// The number of additional non-self-issued certificates that may appear
+	/// in the path before anyPolicy is no longer permitted.
+	pub skip_certs: u32,
+}
+
+#[cfg(all(test, feature = "x509-parser"))]
+impl InhibitAnyPolicy {
+	fn from_x509(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Option<Self>, Error> {
+		let inhibit_any_policy = x509
+			.inhibit_anypolicy()
+			.map_err(|_| Error::CouldNotParseCertificate)?;
+
+		let Some(inhibit_any_policy) = inhibit_any_policy else {
+			return Ok(None);
+		};
+
+		Ok(Some(Self {
+			skip_certs: inhibit_any_policy.value.skip_certs,
+		}))
+	}
+}
+
+// impl yasna::DEREncodable for InhibitAnyPolicy {
+impl InhibitAnyPolicy {
+	fn encode_der<'a>(&self, writer: DERWriter<'a>) {
+		// Conforming CAs MUST mark this extension as critical.
+		write_x509_extension(writer, oid::INHIBIT_ANY_POLICY, true, |writer| {
+			writer.write_i64(self.skip_certs as i64)
+		});
+	}
 }
 
 /// A PKCS #10 CSR attribute, as defined in [RFC 5280] and constrained
@@ -1121,6 +1189,35 @@ mod tests {
 	use crate::DnValue;
 	#[cfg(feature = "crypto")]
 	use crate::KeyPair;
+
+	#[cfg(feature = "crypto")]
+	#[test]
+	fn test_inhibit_any_policy_expected_der() {
+		const EXPECTED_DER: &[u8] = &[
+			0x30, 0x0D, 0x06, 0x03, 0x55, 0x1D, 0x36, 0x01, 0x01, 0xFF, 0x04, 0x03, 0x02, 0x01,
+			0x02,
+		];
+		let extension_der =
+			yasna::construct_der(|writer| InhibitAnyPolicy { skip_certs: 2 }.encode_der(writer));
+		assert_eq!(EXPECTED_DER, &extension_der)
+	}
+
+	#[cfg(feature = "crypto")]
+	#[cfg(feature = "x509-parser")]
+	#[test]
+	fn test_inhibit_any_policy_encode_decode() {
+		let params = CertificateParams {
+			inhibit_any_policy: Some(InhibitAnyPolicy { skip_certs: 2 }),
+			..Default::default()
+		};
+
+		let key_pair = KeyPair::generate().unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
+
+		let parsed = CertificateParams::from_ca_cert_der(cert.der())
+			.expect("We should be able to parse the certificate we just created");
+		assert_eq!(params.inhibit_any_policy, parsed.inhibit_any_policy,)
+	}
 
 	#[cfg(feature = "crypto")]
 	#[test]
