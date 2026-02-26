@@ -12,16 +12,16 @@ mod test_key_params_mismatch {
 	#[test]
 	fn test_key_params_mismatch() {
 		let available_key_params = [
-			&rcgen::PKCS_RSA_SHA256,
-			&rcgen::PKCS_ECDSA_P256_SHA256,
-			&rcgen::PKCS_ECDSA_P384_SHA384,
+			&rcgen::RSA_PKCS1_SHA256,
+			&rcgen::ECDSA_P256_SHA256,
+			&rcgen::ECDSA_P384_SHA384,
 			#[cfg(feature = "aws_lc_rs")]
-			&rcgen::PKCS_ECDSA_P521_SHA256,
+			&rcgen::ECDSA_P521_SHA256,
 			#[cfg(feature = "aws_lc_rs")]
-			&rcgen::PKCS_ECDSA_P521_SHA384,
+			&rcgen::ECDSA_P521_SHA384,
 			#[cfg(feature = "aws_lc_rs")]
-			&rcgen::PKCS_ECDSA_P521_SHA512,
-			&rcgen::PKCS_ED25519,
+			&rcgen::ECDSA_P521_SHA512,
+			&rcgen::ED25519,
 		];
 		for (i, kalg_1) in available_key_params.iter().enumerate() {
 			for (j, kalg_2) in available_key_params.iter().enumerate() {
@@ -33,7 +33,7 @@ mod test_key_params_mismatch {
 
 				assert_ne!(*kalg_1, *kalg_2);
 				let names = [format!("{kalg_1:?}"), format!("{kalg_2:?}")];
-				if names.into_iter().all(|n| n.starts_with("PKCS_ECDSA_P521")) {
+				if names.into_iter().all(|n| n.starts_with("ECDSA_P521")) {
 					continue;
 				}
 
