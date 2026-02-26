@@ -78,6 +78,12 @@ impl SignatureAlgorithm {
 			#[cfg(feature = "aws_lc_rs")]
 			&ECDSA_P521_SHA512,
 			&ED25519,
+			#[cfg(feature = "aws_lc_rs")]
+			&ML_DSA_44,
+			#[cfg(feature = "aws_lc_rs")]
+			&ML_DSA_65,
+			#[cfg(feature = "aws_lc_rs")]
+			&ML_DSA_87,
 		];
 		ALGORITHMS.iter()
 	}
