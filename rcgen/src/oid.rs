@@ -41,6 +41,9 @@ pub(crate) const RSASSA_PSS: &[u64] = &[1, 2, 840, 113549, 1, 1, 10];
 /// id-ce-keyUsage in [RFC 5280](https://tools.ietf.org/html/rfc5280#appendix-A.2)
 pub(crate) const KEY_USAGE: &[u64] = &[2, 5, 29, 15];
 
+/// id-ce-inhibitAnyPolicy in [RFC 5280](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.14)
+pub(crate) const INHIBIT_ANY_POLICY: &[u64] = &[2, 5, 29, 54];
+
 /// id-ce-subjectAltName in [RFC 5280](https://tools.ietf.org/html/rfc5280#appendix-A.2)
 pub(crate) const SUBJECT_ALT_NAME: &[u64] = &[2, 5, 29, 17];
 
