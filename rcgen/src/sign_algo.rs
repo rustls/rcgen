@@ -268,7 +268,7 @@ pub(crate) mod algo {
 		params: SignatureAlgorithmParams::None,
 	};
 
-	/// ML-DSA-44 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
+	/// ML-DSA-65 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
 	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
 	pub static PKCS_ML_DSA_65: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[ML_DSA_65],
@@ -278,7 +278,7 @@ pub(crate) mod algo {
 		params: SignatureAlgorithmParams::None,
 	};
 
-	/// ML-DSA-44 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
+	/// ML-DSA-87 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
 	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
 	pub static PKCS_ML_DSA_87: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[ML_DSA_87],
