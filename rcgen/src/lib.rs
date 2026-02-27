@@ -42,8 +42,10 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::ops::Deref;
 
 pub use certificate::{
-	date_time_ymd, Attribute, BasicConstraints, Certificate, CertificateParams, CidrSubnet,
-	CustomExtension, DnType, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, NameConstraints,
+	date_time_ymd, Attribute, BasicConstraints, Certificate, CertificateParams,
+	CertificatePolicies, CidrSubnet, CustomExtension, DnType, ExtendedKeyUsagePurpose,
+	GeneralSubtree, InhibitAnyPolicy, IsCa, NameConstraints, PolicyInformation,
+	PolicyQualifierInfo,
 };
 pub use crl::{
 	CertificateRevocationList, CertificateRevocationListParams, CrlDistributionPoint,
