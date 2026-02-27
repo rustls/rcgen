@@ -51,6 +51,8 @@ pub enum Error {
 	/// X509 parsing error
 	#[cfg(feature = "x509-parser")]
 	X509(String),
+	/// A certificate policy OID MUST NOT appear more than once in a certificate policies extension.
+	DuplicatePolicyInformation(Vec<u64>),
 }
 
 impl fmt::Display for Error {
@@ -101,6 +103,14 @@ impl fmt::Display for Error {
 			MissingSerialNumber => write!(f, "A serial number must be specified")?,
 			#[cfg(feature = "x509-parser")]
 			X509(e) => write!(f, "X.509 parsing error: {e}")?,
+			DuplicatePolicyInformation(oid) => write!(
+				f,
+				"Encountered duplicate PolicyInformationOID: {}",
+				oid.iter()
+					.map(|&node| node.to_string())
+					.collect::<Vec<String>>()
+					.join("."),
+			)?,
 		};
 		Ok(())
 	}
