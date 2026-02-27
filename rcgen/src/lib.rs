@@ -30,7 +30,7 @@ println!("{}", signing_key.serialize_pem());
 #![forbid(non_ascii_idents)]
 #![deny(missing_docs)]
 #![cfg_attr(rcgen_docsrs, feature(doc_cfg))]
-#![warn(unreachable_pub)]
+#![warn(unreachable_pub, clippy::exhaustive_enums, clippy::exhaustive_structs)]
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -87,6 +87,7 @@ pub mod string;
 pub type RcgenError = Error;
 
 /// An issued certificate, together with the subject keypair.
+#[allow(clippy::exhaustive_structs)]
 #[derive(PartialEq, Eq)]
 pub struct CertifiedKey<S: SigningKey> {
 	/// An issued certificate.
@@ -305,7 +306,7 @@ const ENCODE_CONFIG: pem::EncodeConfig = {
 #[allow(missing_docs)]
 #[non_exhaustive]
 /// The type of subject alt name
-pub enum SanType {
+pub enum GeneralName {
 	/// Also known as E-Mail address
 	Rfc822Name(Ia5String),
 	DnsName(Ia5String),
@@ -314,7 +315,7 @@ pub enum SanType {
 	OtherName((Vec<u64>, OtherNameValue)),
 }
 
-impl SanType {
+impl GeneralName {
 	#[cfg(all(test, feature = "x509-parser"))]
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
 		let sans = x509
@@ -376,20 +377,22 @@ fn ip_addr_from_octets(octets: &[u8]) -> Result<IpAddr, Error> {
 	}
 }
 
-impl SanType {
+impl GeneralName {
 	#[cfg(feature = "x509-parser")]
 	fn try_from_general(name: &x509_parser::extensions::GeneralName<'_>) -> Result<Self, Error> {
 		use x509_parser::der_parser::asn1_rs::{self, FromDer, Tag, TaggedExplicit};
 		Ok(match name {
 			x509_parser::extensions::GeneralName::RFC822Name(name) => {
-				SanType::Rfc822Name((*name).try_into()?)
+				GeneralName::Rfc822Name((*name).try_into()?)
 			},
 			x509_parser::extensions::GeneralName::DNSName(name) => {
-				SanType::DnsName((*name).try_into()?)
+				GeneralName::DnsName((*name).try_into()?)
 			},
-			x509_parser::extensions::GeneralName::URI(name) => SanType::URI((*name).try_into()?),
+			x509_parser::extensions::GeneralName::URI(name) => {
+				GeneralName::URI((*name).try_into()?)
+			},
 			x509_parser::extensions::GeneralName::IPAddress(octets) => {
-				SanType::IpAddress(ip_addr_from_octets(octets)?)
+				GeneralName::IpAddress(ip_addr_from_octets(octets)?)
 			},
 			x509_parser::extensions::GeneralName::OtherName(oid, value) => {
 				let oid = oid.iter().ok_or(Error::CouldNotParseCertificate)?;
@@ -406,7 +409,7 @@ impl SanType {
 					),
 					_ => return Err(Error::CouldNotParseCertificate),
 				};
-				SanType::OtherName((oid.collect(), other_name_value))
+				GeneralName::OtherName((oid.collect(), other_name_value))
 			},
 			_ => return Err(Error::InvalidNameType),
 		})
@@ -422,10 +425,10 @@ impl SanType {
 		const TAG_IP_ADDRESS: u64 = 7;
 
 		match self {
-			SanType::Rfc822Name(_name) => TAG_RFC822_NAME,
-			SanType::DnsName(_name) => TAG_DNS_NAME,
-			SanType::URI(_name) => TAG_URI,
-			SanType::IpAddress(_addr) => TAG_IP_ADDRESS,
+			GeneralName::Rfc822Name(_name) => TAG_RFC822_NAME,
+			GeneralName::DnsName(_name) => TAG_DNS_NAME,
+			GeneralName::URI(_name) => TAG_URI,
+			GeneralName::IpAddress(_addr) => TAG_IP_ADDRESS,
 			Self::OtherName(_oid) => TAG_OTHER_NAME,
 		}
 	}
@@ -584,6 +587,7 @@ impl<'a> Iterator for DistinguishedNameIterator<'a> {
 }
 
 /// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension
+#[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum KeyUsagePurpose {
 	/// digitalSignature
@@ -1033,17 +1037,17 @@ mod tests {
 	mod test_san_type_from_general_name {
 		use std::net::IpAddr;
 
-		use x509_parser::extensions::GeneralName;
+		use x509_parser::extensions::GeneralName as X509GeneralName;
 
-		use crate::SanType;
+		use crate::GeneralName;
 
 		#[test]
 		fn with_ipv4() {
 			let octets = [1, 2, 3, 4];
-			let value = GeneralName::IPAddress(&octets);
-			let actual = SanType::try_from_general(&value).unwrap();
+			let value = X509GeneralName::IPAddress(&octets);
+			let actual = GeneralName::try_from_general(&value).unwrap();
 
-			assert_eq!(SanType::IpAddress(IpAddr::from(octets)), actual);
+			assert_eq!(GeneralName::IpAddress(IpAddr::from(octets)), actual);
 		}
 	}
 }

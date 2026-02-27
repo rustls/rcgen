@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use bpaf::Bpaf;
-use rcgen::{Error, SanType};
+use rcgen::{Error, GeneralName};
 
 mod cert;
 use cert::{key_pair_algorithm, CertificateBuilder, KeyPairAlgorithm};
@@ -71,7 +71,7 @@ struct Options {
 	pub ca_file_name: String,
 	/// Subject Alt Name (apply multiple times for multiple names/Ips)
 	#[bpaf(many, long, argument::<String>("san"), parse(parse_sans))]
-	pub san: Vec<SanType>,
+	pub san: Vec<GeneralName>,
 	/// Common Name (Currently only used for end-entity)
 	#[bpaf(long, fallback("Tls End-Entity Certificate".into()), display_fallback)]
 	pub common_name: String,
@@ -83,15 +83,16 @@ struct Options {
 	pub organization_name: String,
 }
 
-/// Parse cli input into SanType. Try first `IpAddr`, if that fails
-/// declare it to be a DnsName.
-fn parse_sans(hosts: Vec<String>) -> Result<Vec<SanType>, Error> {
+/// Parse cli input into [`GeneralName`].
+///
+/// Try first `IpAddr`, if that fails declare it to be a DnsName.
+fn parse_sans(hosts: Vec<String>) -> Result<Vec<GeneralName>, Error> {
 	hosts
 		.into_iter()
 		.map(|s| {
 			Ok(match IpAddr::from_str(&s) {
-				Ok(ip) => SanType::IpAddress(ip),
-				Err(_) => SanType::DnsName(s.try_into()?),
+				Ok(ip) => GeneralName::IpAddress(ip),
+				Err(_) => GeneralName::DnsName(s.try_into()?),
 			})
 		})
 		.collect()
@@ -112,15 +113,21 @@ mod tests {
 		.into_iter()
 		.map(Into::into)
 		.collect();
-		let sans: Vec<SanType> = parse_sans(hosts).unwrap();
-		assert_eq!(SanType::DnsName("my.host.com".try_into().unwrap()), sans[0]);
-		assert_eq!(SanType::DnsName("localhost".try_into().unwrap()), sans[1]);
+		let sans: Vec<GeneralName> = parse_sans(hosts).unwrap();
 		assert_eq!(
-			SanType::IpAddress("185.199.108.153".parse().unwrap()),
+			GeneralName::DnsName("my.host.com".try_into().unwrap()),
+			sans[0]
+		);
+		assert_eq!(
+			GeneralName::DnsName("localhost".try_into().unwrap()),
+			sans[1]
+		);
+		assert_eq!(
+			GeneralName::IpAddress("185.199.108.153".parse().unwrap()),
 			sans[2]
 		);
 		assert_eq!(
-			SanType::IpAddress("2001:0db8:85a3:0000:0000:8a2e:0370:7334".parse().unwrap()),
+			GeneralName::IpAddress("2001:0db8:85a3:0000:0000:8a2e:0370:7334".parse().unwrap()),
 			sans[3]
 		);
 	}
