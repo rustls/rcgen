@@ -1493,4 +1493,43 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 			);
 		}
 	}
+
+	#[cfg(feature = "x509-parser")]
+	#[test]
+	fn test_certificate_with_multiple_domain_components_roundtrip() {
+		let domain_component_dn_type = DnType::CustomDnType(vec![0, 9, 2342, 19200300, 100, 1, 25]); // Domain Component (DC)
+
+		let dc_value_1 = DnValue::Ia5String("example".try_into().unwrap());
+		let dc_value_2 = DnValue::Ia5String("com".try_into().unwrap());
+
+		let mut params = CertificateParams::new(vec!["crabs".to_owned()]).unwrap();
+		params.distinguished_name = DistinguishedName::new();
+		params
+			.distinguished_name
+			.push(domain_component_dn_type.clone(), dc_value_1.clone());
+
+		params
+			.distinguished_name
+			.push(domain_component_dn_type.clone(), dc_value_2.clone());
+
+		let key_pair = KeyPair::generate().unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
+
+		// We should be able to parse the certificate with x509-parser.
+		assert!(x509_parser::parse_x509_certificate(cert.der()).is_ok());
+
+		// We should be able to reconstitute params from the DER using x509-parser.
+		let params_from_cert = CertificateParams::from_ca_cert_der(cert.der()).unwrap();
+
+		// We should find the expected distinguished name in the reconstituted params.
+		let expected_names = &[
+			(&domain_component_dn_type, &dc_value_1),
+			(&domain_component_dn_type, &dc_value_2),
+		];
+		let names = params_from_cert
+			.distinguished_name
+			.iter()
+			.collect::<Vec<(_, _)>>();
+		assert_eq!(names, expected_names);
+	}
 }
