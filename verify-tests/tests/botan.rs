@@ -224,20 +224,16 @@ fn test_botan_crl_parse() {
 
 	// Generate a CRL with the issuer that revokes the EE cert.
 	let now = OffsetDateTime::now_utc();
-	let crl = CertificateRevocationListParams {
-		this_update: now,
-		next_update: now + Duration::weeks(1),
-		crl_number: rcgen::SerialNumber::from(1234),
-		issuing_distribution_point: None,
-		revoked_certs: vec![RevokedCertParams {
-			serial_number: ee.serial_number.clone().unwrap(),
-			revocation_time: now,
-			reason_code: Some(RevocationReason::KeyCompromise),
-			invalidity_date: None,
-		}],
-		key_identifier_method: rcgen::KeyIdMethod::Sha256,
-	};
+	let mut revoked_certs = RevokedCertParams::new(ee.serial_number.clone().unwrap(), now);
+	revoked_certs.reason_code = Some(RevocationReason::KeyCompromise);
 
+	let mut crl = CertificateRevocationListParams::new(
+		now,
+		now + Duration::weeks(1),
+		SerialNumber::from(1234),
+		rcgen::KeyIdMethod::Sha256,
+	);
+	crl.revoked_certs = vec![revoked_certs];
 	let crl = crl.signed_by(&ca).unwrap();
 
 	// We should be able to load the CRL in both serializations.
