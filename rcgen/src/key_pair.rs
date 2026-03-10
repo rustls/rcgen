@@ -80,15 +80,15 @@ impl fmt::Debug for KeyPair {
 
 #[cfg(feature = "crypto")]
 impl KeyPair {
-	/// Generate a new random [`PKCS_ECDSA_P256_SHA256`] key pair
+	/// Generate a new random [`ECDSA_P256_SHA256`] key pair
 	#[cfg(feature = "crypto")]
 	pub fn generate() -> Result<Self, Error> {
-		Self::generate_for(&PKCS_ECDSA_P256_SHA256)
+		Self::generate_for(&ECDSA_P256_SHA256)
 	}
 
 	/// Generate a new random key pair for the specified signature algorithm
 	///
-	/// If you're not sure which algorithm to use, [`PKCS_ECDSA_P256_SHA256`] is a good choice.
+	/// If you're not sure which algorithm to use, [`ECDSA_P256_SHA256`] is a good choice.
 	/// If passed an RSA signature algorithm, it depends on the backend whether we return
 	/// a generated key or an error for key generation being unavailable.
 	/// Currently, only `aws-lc-rs` supports RSA key generation.
@@ -236,47 +236,47 @@ impl KeyPair {
 		let rng = &SystemRandom::new();
 		let serialized_der = pkcs8.secret_pkcs8_der().to_vec();
 
-		let kind = if alg == &PKCS_ED25519 {
+		let kind = if alg == &ED25519 {
 			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(&serialized_der)._err()?)
-		} else if alg == &PKCS_ECDSA_P256_SHA256 {
+		} else if alg == &ECDSA_P256_SHA256 {
 			KeyPairKind::Ec(ecdsa_from_pkcs8(
 				&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
 				&serialized_der,
 				rng,
 			)?)
-		} else if alg == &PKCS_ECDSA_P384_SHA384 {
+		} else if alg == &ECDSA_P384_SHA384 {
 			KeyPairKind::Ec(ecdsa_from_pkcs8(
 				&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
 				&serialized_der,
 				rng,
 			)?)
-		} else if alg == &PKCS_RSA_SHA256 {
+		} else if alg == &RSA_PKCS1_SHA256 {
 			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
-		} else if alg == &PKCS_RSA_SHA384 {
+		} else if alg == &RSA_PKCS1_SHA384 {
 			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
-		} else if alg == &PKCS_RSA_SHA512 {
+		} else if alg == &RSA_PKCS1_SHA512 {
 			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
-		} else if alg == &PKCS_RSA_PSS_SHA256 {
+		} else if alg == &RSA_PSS_SHA256 {
 			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
 			#[cfg(feature = "aws_lc_rs")]
-			if alg == &PKCS_ECDSA_P521_SHA256 {
+			if alg == &ECDSA_P521_SHA256 {
 				KeyPairKind::Ec(ecdsa_from_pkcs8(
 					&signature::ECDSA_P521_SHA256_ASN1_SIGNING,
 					&serialized_der,
 					rng,
 				)?)
-			} else if alg == &PKCS_ECDSA_P521_SHA384 {
+			} else if alg == &ECDSA_P521_SHA384 {
 				KeyPairKind::Ec(ecdsa_from_pkcs8(
 					&signature::ECDSA_P521_SHA384_ASN1_SIGNING,
 					&serialized_der,
 					rng,
 				)?)
-			} else if alg == &PKCS_ECDSA_P521_SHA512 {
+			} else if alg == &ECDSA_P521_SHA512 {
 				KeyPairKind::Ec(ecdsa_from_pkcs8(
 					&signature::ECDSA_P521_SHA512_ASN1_SIGNING,
 					&serialized_der,
@@ -360,33 +360,33 @@ impl KeyPair {
 
 			let serialized_der = key.secret_der().to_vec();
 
-			let kind = if alg == &PKCS_ED25519 {
+			let kind = if alg == &ED25519 {
 				KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(&serialized_der)._err()?)
-			} else if alg == &PKCS_ECDSA_P256_SHA256 {
+			} else if alg == &ECDSA_P256_SHA256 {
 				KeyPairKind::Ec(ecdsa_from_private_key_der(
 					&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
 					&serialized_der,
 				)?)
-			} else if alg == &PKCS_ECDSA_P384_SHA384 {
+			} else if alg == &ECDSA_P384_SHA384 {
 				KeyPairKind::Ec(ecdsa_from_private_key_der(
 					&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
 					&serialized_der,
 				)?)
-			} else if alg == &PKCS_ECDSA_P521_SHA512 {
+			} else if alg == &ECDSA_P521_SHA512 {
 				KeyPairKind::Ec(ecdsa_from_private_key_der(
 					&signature::ECDSA_P521_SHA512_ASN1_SIGNING,
 					&serialized_der,
 				)?)
-			} else if alg == &PKCS_RSA_SHA256 {
+			} else if alg == &RSA_PKCS1_SHA256 {
 				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
 				KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
-			} else if alg == &PKCS_RSA_SHA384 {
+			} else if alg == &RSA_PKCS1_SHA384 {
 				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
 				KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
-			} else if alg == &PKCS_RSA_SHA512 {
+			} else if alg == &RSA_PKCS1_SHA512 {
 				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
 				KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
-			} else if alg == &PKCS_RSA_PSS_SHA256 {
+			} else if alg == &RSA_PSS_SHA256 {
 				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
 				KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 			} else {
@@ -542,19 +542,19 @@ impl TryFrom<&PrivateKeyDer<'_>> for KeyPair {
 			let pkcs8 = pkcs8.secret_pkcs8_der();
 			let rng = SystemRandom::new();
 			let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8) {
-				(KeyPairKind::Ed(edkp), &PKCS_ED25519)
+				(KeyPairKind::Ed(edkp), &ED25519)
 			} else if let Ok(eckp) =
 				ecdsa_from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, &rng)
 			{
-				(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
+				(KeyPairKind::Ec(eckp), &ECDSA_P256_SHA256)
 			} else if let Ok(eckp) =
 				ecdsa_from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8, &rng)
 			{
-				(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
+				(KeyPairKind::Ec(eckp), &ECDSA_P384_SHA384)
 			} else if let Ok(rsakp) = RsaKeyPair::from_pkcs8(pkcs8) {
 				(
 					KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256),
-					&PKCS_RSA_SHA256,
+					&RSA_PKCS1_SHA256,
 				)
 			} else {
 				return Err(Error::CouldNotParseKeyPair);
@@ -575,23 +575,23 @@ impl TryFrom<&PrivateKeyDer<'_>> for KeyPair {
 			};
 
 			let (kind, alg) = if let Ok(edkp) = Ed25519KeyPair::from_pkcs8_maybe_unchecked(key) {
-				(KeyPairKind::Ed(edkp), &PKCS_ED25519)
+				(KeyPairKind::Ed(edkp), &ED25519)
 			} else if let Ok(eckp) =
 				ecdsa_from_private_key_der(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, key)
 			{
-				(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P256_SHA256)
+				(KeyPairKind::Ec(eckp), &ECDSA_P256_SHA256)
 			} else if let Ok(eckp) =
 				ecdsa_from_private_key_der(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, key)
 			{
-				(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P384_SHA384)
+				(KeyPairKind::Ec(eckp), &ECDSA_P384_SHA384)
 			} else if let Ok(eckp) =
 				ecdsa_from_private_key_der(&signature::ECDSA_P521_SHA512_ASN1_SIGNING, key)
 			{
-				(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P521_SHA512)
+				(KeyPairKind::Ec(eckp), &ECDSA_P521_SHA512)
 			} else if let Ok(rsakp) = rsa_key_pair_from(key) {
 				(
 					KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256),
-					&PKCS_RSA_SHA256,
+					&RSA_PKCS1_SHA256,
 				)
 			} else {
 				return Err(Error::CouldNotParseKeyPair);
@@ -794,13 +794,13 @@ mod test {
 	#[test]
 	fn test_subject_public_key_parsing() {
 		for alg in [
-			&PKCS_ED25519,
-			&PKCS_ECDSA_P256_SHA256,
-			&PKCS_ECDSA_P384_SHA384,
+			&ED25519,
+			&ECDSA_P256_SHA256,
+			&ECDSA_P384_SHA384,
 			#[cfg(feature = "aws_lc_rs")]
-			&PKCS_ECDSA_P521_SHA512,
+			&ECDSA_P521_SHA512,
 			#[cfg(feature = "aws_lc_rs")]
-			&PKCS_RSA_SHA256,
+			&RSA_PKCS1_SHA256,
 		] {
 			let kp = KeyPair::generate_for(alg).expect("keygen");
 			let pem = kp.public_key_pem();
@@ -821,6 +821,6 @@ mod test {
 		let der = pkcs8.as_ref().to_vec();
 
 		let key_pair = KeyPair::try_from(der).unwrap();
-		assert_eq!(key_pair.algorithm(), &PKCS_ECDSA_P256_SHA256);
+		assert_eq!(key_pair.algorithm(), &ECDSA_P256_SHA256);
 	}
 }
