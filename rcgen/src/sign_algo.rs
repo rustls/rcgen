@@ -29,6 +29,7 @@ pub(crate) enum SignatureAlgorithmParams {
 	/// Write null parameters
 	Null,
 	/// RSASSA-PSS-params as per RFC 4055
+	#[allow(unused)] // RsaPss only used by feature `aws_lc_rs`
 	RsaPss {
 		hash_algorithm: &'static [u64],
 		salt_length: u64,
@@ -54,12 +55,6 @@ impl fmt::Debug for SignatureAlgorithm {
 			write!(f, "PKCS_RSA_SHA384")
 		} else if self == &PKCS_RSA_SHA512 {
 			write!(f, "PKCS_RSA_SHA512")
-		} else if self == &PKCS_RSA_PSS_SHA256 {
-			write!(f, "PKCS_RSA_PSS_SHA256")
-		} else if self == &PKCS_RSA_PSS_SHA384 {
-			write!(f, "PKCS_RSA_PSS_SHA384")
-		} else if self == &PKCS_RSA_PSS_SHA512 {
-			write!(f, "PKCS_RSA_PSS_SHA512")
 		} else if self == &PKCS_ECDSA_P256_SHA256 {
 			write!(f, "PKCS_ECDSA_P256_SHA256")
 		} else if self == &PKCS_ECDSA_P384_SHA384 {
@@ -67,6 +62,18 @@ impl fmt::Debug for SignatureAlgorithm {
 		} else if self == &PKCS_ED25519 {
 			write!(f, "PKCS_ED25519")
 		} else {
+			#[cfg(feature = "aws_lc_rs")]
+			if self == &PKCS_RSA_PSS_SHA256 {
+				return write!(f, "PKCS_RSA_PSS_SHA256");
+			}
+			#[cfg(feature = "aws_lc_rs")]
+			if self == &PKCS_RSA_PSS_SHA384 {
+				return write!(f, "PKCS_RSA_PSS_SHA384");
+			}
+			#[cfg(feature = "aws_lc_rs")]
+			if self == &PKCS_RSA_PSS_SHA512 {
+				return write!(f, "PKCS_RSA_PSS_SHA512");
+			}
 			#[cfg(feature = "aws_lc_rs")]
 			if self == &PKCS_ECDSA_P521_SHA256 {
 				return write!(f, "PKCS_ECDSA_P521_SHA256");
@@ -87,7 +94,15 @@ impl fmt::Debug for SignatureAlgorithm {
 
 impl PartialEq for SignatureAlgorithm {
 	fn eq(&self, other: &Self) -> bool {
-		(self.oids_sign_alg, self.oid_components) == (other.oids_sign_alg, other.oid_components)
+		// RSA-PSS algs all have the same OID with different `params` fields
+		if let SignatureAlgorithmParams::RsaPss{hash_algorithm: selfhash, ..} = self.params {
+			if let SignatureAlgorithmParams::RsaPss{hash_algorithm: otherhash, ..} = other.params {
+				return (self.oids_sign_alg, self.oid_components, selfhash) ==
+					(other.oids_sign_alg, other.oid_components, otherhash)
+			}
+		}
+		(self.oids_sign_alg, self.oid_components) == 
+			(other.oids_sign_alg, other.oid_components)
 	}
 }
 
@@ -107,8 +122,11 @@ impl SignatureAlgorithm {
 			&PKCS_RSA_SHA256,
 			&PKCS_RSA_SHA384,
 			&PKCS_RSA_SHA512,
+			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_RSA_PSS_SHA256,
+			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_RSA_PSS_SHA384,
+			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_RSA_PSS_SHA512,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
@@ -169,6 +187,7 @@ pub(crate) mod algo {
 		params: SignatureAlgorithmParams::Null,
 	};
 
+	#[cfg(feature = "aws_lc_rs")]
 	/// RSA signing with PKCS#1 2.1 RSASSA-PSS padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_PSS_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		// We could also use RSA_ENCRYPTION here, but it's recommended
@@ -176,6 +195,7 @@ pub(crate) mod algo {
 		oids_sign_alg: &[RSASSA_PSS],
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::Rsa(&signature::RSA_PSS_SHA256),
+		// rSASSA-PSS-SHA256-Identifier
 		oid_components: RSASSA_PSS, //&[1, 2, 840, 113549, 1, 1, 13],
 		// rSASSA-PSS-SHA256-Params in RFC 4055
 		params: SignatureAlgorithmParams::RsaPss {
@@ -186,10 +206,9 @@ pub(crate) mod algo {
 		},
 	};
 
+	#[cfg(feature = "aws_lc_rs")]
 	/// RSA signing with PKCS#1 2.1 RSASSA-PSS padding and SHA-384 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_PSS_SHA384: SignatureAlgorithm = SignatureAlgorithm {
-		// We could also use RSA_ENCRYPTION here, but it's recommended
-		// to use ID-RSASSA-PSS if possible.
 		oids_sign_alg: &[RSASSA_PSS],
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::Rsa(&signature::RSA_PSS_SHA384),
@@ -202,10 +221,9 @@ pub(crate) mod algo {
 		},
 	};
 
+	#[cfg(feature = "aws_lc_rs")]
 	/// RSA signing with PKCS#1 2.1 RSASSA-PSS padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_PSS_SHA512: SignatureAlgorithm = SignatureAlgorithm {
-		// We could also use RSA_ENCRYPTION here, but it's recommended
-		// to use ID-RSASSA-PSS if possible.
 		oids_sign_alg: &[RSASSA_PSS],
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::Rsa(&signature::RSA_PSS_SHA512),
