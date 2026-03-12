@@ -107,6 +107,7 @@ impl PartialEq for SignatureAlgorithm {
 			{
 				return (self.oids_sign_alg, self.oid_components, selfhash)
 					== (other.oids_sign_alg, other.oid_components, otherhash);
+			}
 		}
 		(self.oids_sign_alg, self.oid_components) == (other.oids_sign_alg, other.oid_components)
 	}
