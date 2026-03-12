@@ -56,6 +56,10 @@ impl fmt::Debug for SignatureAlgorithm {
 			write!(f, "PKCS_RSA_SHA512")
 		} else if self == &PKCS_RSA_PSS_SHA256 {
 			write!(f, "PKCS_RSA_PSS_SHA256")
+		} else if self == &PKCS_RSA_PSS_SHA384 {
+			write!(f, "PKCS_RSA_PSS_SHA384")
+		} else if self == &PKCS_RSA_PSS_SHA512 {
+			write!(f, "PKCS_RSA_PSS_SHA512")
 		} else if self == &PKCS_ECDSA_P256_SHA256 {
 			write!(f, "PKCS_ECDSA_P256_SHA256")
 		} else if self == &PKCS_ECDSA_P384_SHA384 {
@@ -103,7 +107,9 @@ impl SignatureAlgorithm {
 			&PKCS_RSA_SHA256,
 			&PKCS_RSA_SHA384,
 			&PKCS_RSA_SHA512,
-			//&PKCS_RSA_PSS_SHA256,
+			&PKCS_RSA_PSS_SHA256,
+			&PKCS_RSA_PSS_SHA384,
+			&PKCS_RSA_PSS_SHA512,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
 			#[cfg(feature = "aws_lc_rs")]
@@ -163,13 +169,8 @@ pub(crate) mod algo {
 		params: SignatureAlgorithmParams::Null,
 	};
 
-	// TODO: not really sure whether the certs we generate actually work.
-	// Both openssl and webpki reject them. It *might* be possible that openssl
-	// accepts the certificate if the key is a proper RSA-PSS key, but ring doesn't
-	// support those: https://github.com/briansmith/ring/issues/1353
-	//
 	/// RSA signing with PKCS#1 2.1 RSASSA-PSS padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
-	pub(crate) static PKCS_RSA_PSS_SHA256: SignatureAlgorithm = SignatureAlgorithm {
+	pub static PKCS_RSA_PSS_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		// We could also use RSA_ENCRYPTION here, but it's recommended
 		// to use ID-RSASSA-PSS if possible.
 		oids_sign_alg: &[RSASSA_PSS],
@@ -180,7 +181,40 @@ pub(crate) mod algo {
 		params: SignatureAlgorithmParams::RsaPss {
 			// id-sha256 in https://datatracker.ietf.org/doc/html/rfc4055#section-2.1
 			hash_algorithm: &[2, 16, 840, 1, 101, 3, 4, 2, 1],
-			salt_length: 20,
+			// Salt length = hash octets (RFC 4055, pg. 9)
+			salt_length: 32,
+		},
+	};
+
+	/// RSA signing with PKCS#1 2.1 RSASSA-PSS padding and SHA-384 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+	pub static PKCS_RSA_PSS_SHA384: SignatureAlgorithm = SignatureAlgorithm {
+		// We could also use RSA_ENCRYPTION here, but it's recommended
+		// to use ID-RSASSA-PSS if possible.
+		oids_sign_alg: &[RSASSA_PSS],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PSS_SHA384),
+		oid_components: RSASSA_PSS, //&[1, 2, 840, 113549, 1, 1, 13],
+		params: SignatureAlgorithmParams::RsaPss {
+			// id-sha256 in https://datatracker.ietf.org/doc/html/rfc4055#section-2.1
+			hash_algorithm: &[2, 16, 840, 1, 101, 3, 4, 2, 2],
+			// Salt length = hash octets (RFC 4055, pg. 9)
+			salt_length: 48,
+		},
+	};
+
+	/// RSA signing with PKCS#1 2.1 RSASSA-PSS padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+	pub static PKCS_RSA_PSS_SHA512: SignatureAlgorithm = SignatureAlgorithm {
+		// We could also use RSA_ENCRYPTION here, but it's recommended
+		// to use ID-RSASSA-PSS if possible.
+		oids_sign_alg: &[RSASSA_PSS],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PSS_SHA512),
+		oid_components: RSASSA_PSS, //&[1, 2, 840, 113549, 1, 1, 13],
+		params: SignatureAlgorithmParams::RsaPss {
+			// id-sha256 in https://datatracker.ietf.org/doc/html/rfc4055#section-2.1
+			hash_algorithm: &[2, 16, 840, 1, 101, 3, 4, 2, 3],
+			// Salt length = hash octets (RFC 4055, pg. 9)
+			salt_length: 64,
 		},
 	};
 
