@@ -95,14 +95,20 @@ impl fmt::Debug for SignatureAlgorithm {
 impl PartialEq for SignatureAlgorithm {
 	fn eq(&self, other: &Self) -> bool {
 		// RSA-PSS algs all have the same OID with different `params` fields
-		if let SignatureAlgorithmParams::RsaPss{hash_algorithm: selfhash, ..} = self.params {
-			if let SignatureAlgorithmParams::RsaPss{hash_algorithm: otherhash, ..} = other.params {
-				return (self.oids_sign_alg, self.oid_components, selfhash) ==
-					(other.oids_sign_alg, other.oid_components, otherhash)
-			}
+		if let SignatureAlgorithmParams::RsaPss {
+			hash_algorithm: selfhash,
+			..
+		} = self.params
+		{
+			if let SignatureAlgorithmParams::RsaPss {
+				hash_algorithm: otherhash,
+				..
+			} = other.params
+			{
+				return (self.oids_sign_alg, self.oid_components, selfhash)
+					== (other.oids_sign_alg, other.oid_components, otherhash);
 		}
-		(self.oids_sign_alg, self.oid_components) == 
-			(other.oids_sign_alg, other.oid_components)
+		(self.oids_sign_alg, self.oid_components) == (other.oids_sign_alg, other.oid_components)
 	}
 }
 
