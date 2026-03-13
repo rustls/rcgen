@@ -187,6 +187,7 @@ fn test_request() {
 	verify_csr(&params, &key_pair);
 }
 
+#[cfg(feature = "aws_lc_rs")]
 #[test]
 fn test_openssl_rsa_pss_sha256() {
 	let (params, _) = util::default_params();
@@ -198,6 +199,7 @@ fn test_openssl_rsa_pss_sha256() {
 	verify_csr(&params, &key_pair);
 }
 
+#[cfg(feature = "aws_lc_rs")]
 #[test]
 fn test_openssl_rsa_pss_sha384() {
 	let (params, _) = util::default_params();
@@ -209,6 +211,7 @@ fn test_openssl_rsa_pss_sha384() {
 	verify_csr(&params, &key_pair);
 }
 
+#[cfg(feature = "aws_lc_rs")]
 #[test]
 fn test_openssl_rsa_pss_sha512() {
 	let (params, _) = util::default_params();
