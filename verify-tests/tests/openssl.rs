@@ -188,6 +188,39 @@ fn test_request() {
 }
 
 #[test]
+fn test_openssl_rsa_pss_sha256() {
+	let (params, _) = util::default_params();
+	let key_pair = KeyPair::generate_for(&rcgen::PKCS_RSA_PSS_SHA256).unwrap();
+	let cert = params.self_signed(&key_pair).unwrap();
+
+	// Now verify the certificate.
+	verify_cert(&cert, &key_pair);
+	verify_csr(&params, &key_pair);
+}
+
+#[test]
+fn test_openssl_rsa_pss_sha384() {
+	let (params, _) = util::default_params();
+	let key_pair = KeyPair::generate_for(&rcgen::PKCS_RSA_PSS_SHA384).unwrap();
+	let cert = params.self_signed(&key_pair).unwrap();
+
+	// Now verify the certificate.
+	verify_cert(&cert, &key_pair);
+	verify_csr(&params, &key_pair);
+}
+
+#[test]
+fn test_openssl_rsa_pss_sha512() {
+	let (params, _) = util::default_params();
+	let key_pair = KeyPair::generate_for(&rcgen::PKCS_RSA_PSS_SHA512).unwrap();
+	let cert = params.self_signed(&key_pair).unwrap();
+
+	// Now verify the certificate.
+	verify_cert(&cert, &key_pair);
+	verify_csr(&params, &key_pair);
+}
+
+#[test]
 fn test_openssl_256() {
 	let (params, _) = util::default_params();
 	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
