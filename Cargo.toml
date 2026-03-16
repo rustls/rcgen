@@ -24,5 +24,5 @@ ring = "0.17"
 rustls-webpki = { version = "0.103", features = ["ring", "std"] }
 time = { version = "0.3.6", default-features = false }
 x509-parser = "0.18"
-yasna = { version = "0.5.2", features = ["time", "std"] }
+yasna = { version = "0.6", features = ["time", "std"] }
 zeroize = { version = "1.2" }
