@@ -7,7 +7,7 @@ use bpaf::Bpaf;
 use rcgen::DnValue::PrintableString;
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, CertifiedIssuer, DistinguishedName, DnType,
-	ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType, SignatureAlgorithm,
+	ExtendedKeyUsagePurpose, GeneralName, IsCa, KeyPair, KeyUsagePurpose, SignatureAlgorithm,
 };
 
 /// Builder to configure TLS [CertificateParams] to be finalized
@@ -156,10 +156,10 @@ impl EndEntityBuilder {
 			.push(DnType::CommonName, name);
 		self
 	}
-	/// `SanTypes` that will be recorded as
+	/// [`GeneralName`]s that will be recorded as
 	/// `subject_alt_names`. Multiple calls will append to previous
 	/// values.
-	pub fn subject_alternative_names(mut self, sans: Vec<SanType>) -> Self {
+	pub fn subject_alternative_names(mut self, sans: Vec<GeneralName>) -> Self {
 		self.params.subject_alt_names.extend(sans);
 		self
 	}
@@ -451,13 +451,13 @@ mod tests {
 			.build()
 			.unwrap();
 		let name = "unexpected.oomyoo.xyz";
-		let names = vec![SanType::DnsName(name.try_into().unwrap())];
+		let names = vec![GeneralName::DnsName(name.try_into().unwrap())];
 		let params = CertificateParams::default();
 		let cert = EndEntityBuilder::new(params, KeyPairAlgorithm::default())
 			.subject_alternative_names(names);
 		assert_eq!(
 			cert.params.subject_alt_names,
-			vec![rcgen::SanType::DnsName(name.try_into().unwrap())]
+			vec![rcgen::GeneralName::DnsName(name.try_into().unwrap())]
 		);
 	}
 	#[test]

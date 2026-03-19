@@ -1,6 +1,6 @@
 use std::fs;
 
-use rcgen::{date_time_ymd, CertificateParams, DistinguishedName, DnType, KeyPair, SanType};
+use rcgen::{date_time_ymd, CertificateParams, DistinguishedName, DnType, GeneralName, KeyPair};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let mut params: CertificateParams = Default::default();
@@ -14,8 +14,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.distinguished_name
 		.push(DnType::CommonName, "Master Cert");
 	params.subject_alt_names = vec![
-		SanType::DnsName("crabs.crabs".try_into()?),
-		SanType::DnsName("localhost".try_into()?),
+		GeneralName::DnsName("crabs.crabs".try_into()?),
+		GeneralName::DnsName("localhost".try_into()?),
 	];
 
 	let key_pair = KeyPair::generate()?;
