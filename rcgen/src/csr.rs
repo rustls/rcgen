@@ -10,7 +10,7 @@ use crate::{
 	Certificate, CertificateParams, Error, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey,
 };
 #[cfg(feature = "x509-parser")]
-use crate::{DistinguishedName, ExtendedKeyUsagePurpose, KeyUsagePurpose, SanType};
+use crate::{DistinguishedName, ExtendedKeyUsagePurpose, IsCa, KeyUsagePurpose, SanType};
 
 /// A public key, extracted from a CSR
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -90,6 +90,7 @@ impl CertificateSigningRequestParams {
 	/// - `Subject Alternative Name` (see [`SanType`])
 	/// - `Key Usage` (see [`KeyUsagePurpose`])
 	/// - `Extended Key Usage` (see [`ExtendedKeyUsagePurpose`])
+	/// - `Basic Constraints` (see [`crate::BasicConstraints`])
 	///
 	/// On encountering other extensions, this function will return [`Error::UnsupportedExtension`].
 	/// If the request's signature is invalid, it will return
@@ -167,13 +168,15 @@ impl CertificateSigningRequestParams {
 							return Err(Error::UnsupportedExtension);
 						}
 					},
+					x509_parser::extensions::ParsedExtension::BasicConstraints(bc) => {
+						params.is_ca = IsCa::from_basic_constraints(bc)?;
+					},
 					_ => return Err(Error::UnsupportedExtension),
 				}
 			}
 		}
 
 		// Not yet handled:
-		// * is_ca
 		// * name_constraints
 		// and any other extensions.
 
