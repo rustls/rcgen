@@ -1069,28 +1069,37 @@ pub enum IsCa {
 impl IsCa {
 	#[cfg(all(test, feature = "x509-parser"))]
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Self, Error> {
-		use x509_parser::extensions::BasicConstraints as B;
-
 		let basic_constraints = x509
 			.basic_constraints()
 			.map_err(|_| Error::CouldNotParseCertificate)?
 			.map(|ext| ext.value);
 
+		match basic_constraints {
+			Some(bc) => Self::from_basic_constraints(bc),
+			None => Ok(Self::NoCa),
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_basic_constraints(
+		basic_constraints: &x509_parser::extensions::BasicConstraints,
+	) -> Result<Self, Error> {
+		use x509_parser::extensions::BasicConstraints as B;
+
 		Ok(match basic_constraints {
-			Some(B {
+			B {
 				ca: true,
 				path_len_constraint: Some(n),
-			}) if *n <= u8::MAX as u32 => Self::Ca(BasicConstraints::Constrained(*n as u8)),
-			Some(B {
+			} if *n <= u8::MAX as u32 => Self::Ca(BasicConstraints::Constrained(*n as u8)),
+			B {
 				ca: true,
 				path_len_constraint: Some(_),
-			}) => return Err(Error::CouldNotParseCertificate),
-			Some(B {
+			} => return Err(Error::CouldNotParseCertificate),
+			B {
 				ca: true,
 				path_len_constraint: None,
-			}) => Self::Ca(BasicConstraints::Unconstrained),
-			Some(B { ca: false, .. }) => Self::ExplicitNoCa,
-			None => Self::NoCa,
+			} => Self::Ca(BasicConstraints::Unconstrained),
+			B { ca: false, .. } => Self::ExplicitNoCa,
 		})
 	}
 }
