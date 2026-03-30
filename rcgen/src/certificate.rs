@@ -251,6 +251,25 @@ impl CertificateParams {
 		}
 	}
 
+	/// Write a certificate's BasicConstraints as defined in RFC 5280.
+	fn write_is_ca(&self, writer: DERWriter) {
+		let is_ca = match &self.is_ca {
+			IsCa::Ca(bc) => Some(bc),
+			IsCa::ExplicitNoCa => None,
+			IsCa::NoCa => return,
+		};
+
+		// Write basic_constraints
+		write_x509_extension(writer, oid::BASIC_CONSTRAINTS, true, |writer| {
+			writer.write_sequence(|writer| {
+				writer.next().write_bool(is_ca.is_some()); // cA flag
+				if let Some(BasicConstraints::Constrained(path_len_constraint)) = is_ca {
+					writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
+				}
+			});
+		});
+	}
+
 	fn write_subject_alt_names(&self, writer: DERWriter) {
 		if self.subject_alt_names.is_empty() {
 			return;
