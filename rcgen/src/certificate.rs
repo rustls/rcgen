@@ -200,6 +200,8 @@ impl CertificateParams {
 					// Write subject_alt_names
 					self.write_subject_alt_names(writer.next());
 					self.write_extended_key_usage(writer.next());
+					// Write is_ca
+					self.write_is_ca(writer.next());
 
 					// Write custom extensions
 					for ext in &self.custom_extensions {
@@ -370,7 +372,6 @@ impl CertificateParams {
 			extended_key_usages,
 		);
 		if serial_number.is_some()
-			|| *is_ca != IsCa::NoCa
 			|| name_constraints.is_some()
 			|| !crl_distribution_points.is_empty()
 			|| *use_authority_key_identifier_extension
@@ -382,7 +383,8 @@ impl CertificateParams {
 		let write_extension_request = !key_usages.is_empty()
 			|| !subject_alt_names.is_empty()
 			|| !extended_key_usages.is_empty()
-			|| !custom_extensions.is_empty();
+			|| !custom_extensions.is_empty()
+			|| matches!(is_ca, IsCa::ExplicitNoCa | IsCa::Ca(_));
 
 		let der = sign_der(subject_key, |writer| {
 			// Write version
