@@ -212,7 +212,10 @@ mod tests {
 	use x509_parser::certification_request::X509CertificationRequest;
 	use x509_parser::prelude::{FromDer, ParsedExtension};
 
-	use crate::{CertificateParams, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose};
+	use crate::{
+		BasicConstraints, CertificateParams, CertificateSigningRequestParams,
+		ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose,
+	};
 
 	#[test]
 	fn dont_write_sans_extension_if_no_sans_are_present() {
@@ -244,5 +247,43 @@ mod tests {
 			requested_extensions.first().unwrap(),
 			ParsedExtension::ExtendedKeyUsage(_)
 		));
+	}
+
+	#[test]
+	fn write_basic_constraints_if_present() {
+		use x509_parser::extensions::BasicConstraints as B;
+
+		let params = CertificateParams {
+			is_ca: IsCa::ExplicitNoCa,
+			..Default::default()
+		};
+		let key_pair = KeyPair::generate().unwrap();
+		let csr = params.serialize_request(&key_pair).unwrap();
+		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
+		let requested_extensions = parsed_csr
+			.requested_extensions()
+			.unwrap()
+			.collect::<Vec<_>>();
+
+		assert!(matches!(
+			requested_extensions.first().unwrap(),
+			ParsedExtension::BasicConstraints(B {
+				ca: false,
+				path_len_constraint: None
+			})
+		));
+	}
+
+	#[test]
+	fn serialize_and_deserialize_eq_basic_constraints() {
+		let params = CertificateParams {
+			is_ca: IsCa::Ca(BasicConstraints::Constrained(10)),
+			..Default::default()
+		};
+		let key_pair = KeyPair::generate().unwrap();
+		let csr = params.serialize_request(&key_pair).unwrap();
+		let csr_de = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
+
+		assert_eq!(csr_de.params.is_ca, params.is_ca);
 	}
 }
