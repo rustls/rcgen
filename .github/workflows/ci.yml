@@ -249,7 +249,7 @@ jobs:
             - name: Measure coverage
               run: cargo llvm-cov --features ring,pem,x509-parser --lcov --output-path ./lcov.info
             - name: Report to codecov.io
-              uses: codecov/codecov-action@v5
+              uses: codecov/codecov-action@v6
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   files: ./lcov.info
