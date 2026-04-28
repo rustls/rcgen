@@ -33,7 +33,6 @@ println!("{}", signing_key.serialize_pem());
 #![warn(unreachable_pub)]
 
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::fmt;
 use std::hash::Hash;
 use std::net::IpAddr;
@@ -462,16 +461,17 @@ where
 /**
 Distinguished name used e.g. for the issuer and subject fields of a certificate
 
-A distinguished name is a set of (attribute type, attribute value) tuples.
+A distinguished name is a sequence of (attribute type, attribute value) pairs.
 
-This datastructure keeps them ordered by insertion order.
+This datastructure preserves insertion order and supports multiple attributes
+of the same type (multi-valued RDNs), which is required to represent subjects
+such as `OU=Engineering, OU=Platform` as separate RDNs.
 
 See also the RFC 5280 sections on the [issuer](https://tools.ietf.org/html/rfc5280#section-4.1.2.4)
 and [subject](https://tools.ietf.org/html/rfc5280#section-4.1.2.6) fields.
 */
 pub struct DistinguishedName {
-	entries: HashMap<DnType, DnValue>,
-	order: Vec<DnType>,
+	entries: Vec<(DnType, DnValue)>,
 }
 
 impl DistinguishedName {
@@ -479,23 +479,37 @@ impl DistinguishedName {
 	pub fn new() -> Self {
 		Self::default()
 	}
-	/// Obtains the attribute value for the given attribute type
-	pub fn get(&self, ty: &DnType) -> Option<&DnValue> {
-		self.entries.get(ty)
+	/// Returns `true` if the distinguished name contains no attributes
+	pub fn is_empty(&self) -> bool {
+		self.entries.is_empty()
 	}
-	/// Removes the attribute with the specified DnType
+	/// Obtains the first attribute value for the given attribute type
+	pub fn get(&self, ty: &DnType) -> Option<&DnValue> {
+		self.entries.iter().find(|(t, _)| t == ty).map(|(_, v)| v)
+	}
+	/// Returns an iterator over all values for the given attribute type
+	pub fn get_all(&self, ty: &DnType) -> impl Iterator<Item = &DnValue> + '_ {
+		let ty = ty.clone();
+		self.entries
+			.iter()
+			.filter_map(move |(t, v)| if t == &ty { Some(v) } else { None })
+	}
+	/// Removes all attributes with the specified DnType
 	///
 	/// Returns true when an actual removal happened, false
 	/// when no attribute with the specified DnType was
 	/// found.
 	pub fn remove(&mut self, ty: DnType) -> bool {
-		let removed = self.entries.remove(&ty).is_some();
-		if removed {
-			self.order.retain(|ty_o| &ty != ty_o);
-		}
-		removed
+		let before = self.entries.len();
+		self.entries.retain(|(t, _)| t != &ty);
+		self.entries.len() < before
 	}
 	/// Inserts or updates an attribute that consists of type and name
+	///
+	/// If one or more attributes of the same type already exist, all of them are
+	/// replaced by this single attribute at the position of the first occurrence.
+	/// Use [`push_multi`](Self::push_multi) to append an additional attribute
+	/// of the same type without replacing any existing ones.
 	///
 	/// ```
 	/// # use rcgen::{DistinguishedName, DnType, DnValue};
@@ -506,16 +520,34 @@ impl DistinguishedName {
 	/// assert_eq!(dn.get(&DnType::CommonName), Some(&DnValue::PrintableString("Master Cert".try_into().unwrap())));
 	/// ```
 	pub fn push(&mut self, ty: DnType, s: impl Into<DnValue>) {
-		if !self.entries.contains_key(&ty) {
-			self.order.push(ty.clone());
+		let value = s.into();
+		if let Some(pos) = self.entries.iter().position(|(t, _)| t == &ty) {
+			self.entries.retain(|(t, _)| t != &ty);
+			self.entries.insert(pos, (ty, value));
+		} else {
+			self.entries.push((ty, value));
 		}
-		self.entries.insert(ty, s.into());
+	}
+	/// Appends an additional attribute without replacing any existing attribute of the same type
+	///
+	/// This allows building subjects with multiple attributes of the same type,
+	/// such as multiple `OU` entries. Each call appends a new entry at the end of
+	/// the sequence regardless of whether an attribute of that type already exists.
+	///
+	/// ```
+	/// # use rcgen::{DistinguishedName, DnType};
+	/// let mut dn = DistinguishedName::new();
+	/// dn.push_multi(DnType::OrganizationalUnitName, "Engineering");
+	/// dn.push_multi(DnType::OrganizationalUnitName, "Platform");
+	/// assert_eq!(dn.get_all(&DnType::OrganizationalUnitName).count(), 2);
+	/// ```
+	pub fn push_multi(&mut self, ty: DnType, s: impl Into<DnValue>) {
+		self.entries.push((ty, s.into()));
 	}
 	/// Iterate over the entries
 	pub fn iter(&self) -> DistinguishedNameIterator<'_> {
 		DistinguishedNameIterator {
-			distinguished_name: self,
-			iter: self.order.iter(),
+			iter: self.entries.iter(),
 		}
 	}
 
@@ -525,40 +557,32 @@ impl DistinguishedName {
 
 		let mut dn = DistinguishedName::new();
 		for rdn in name.iter() {
-			let mut rdn_iter = rdn.iter();
-			let dn_opt = rdn_iter.next();
-			let attr = if let Some(dn) = dn_opt {
-				if rdn_iter.next().is_some() {
-					// no support for distinguished names with more than one attribute
-					return Err(Error::CouldNotParseCertificate);
-				} else {
-					dn
-				}
-			} else {
-				panic!("x509-parser distinguished name set is empty");
-			};
-
-			let attr_type_oid = attr
-				.attr_type()
-				.iter()
-				.ok_or(Error::CouldNotParseCertificate)?;
-			let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
-			let data = attr.attr_value().data;
-			let try_str =
-				|data| std::str::from_utf8(data).map_err(|_| Error::CouldNotParseCertificate);
-			let dn_value = match attr.attr_value().header.tag() {
-				Tag::BmpString => DnValue::BmpString(BmpString::from_utf16be(data.to_vec())?),
-				Tag::Ia5String => DnValue::Ia5String(try_str(data)?.try_into()?),
-				Tag::PrintableString => DnValue::PrintableString(try_str(data)?.try_into()?),
-				Tag::T61String => DnValue::TeletexString(try_str(data)?.try_into()?),
-				Tag::UniversalString => {
-					DnValue::UniversalString(UniversalString::from_utf32be(data.to_vec())?)
-				},
-				Tag::Utf8String => DnValue::Utf8String(try_str(data)?.to_owned()),
-				_ => return Err(Error::CouldNotParseCertificate),
-			};
-
-			dn.push(dn_type, dn_value);
+			// Each RDN is a SET of attribute/value pairs. Multi-attribute RDNs are uncommon
+			// but valid per RFC 5280. We flatten them: each attribute becomes a separate
+			// entry, so a round-trip through rcgen will emit them as individual single-
+			// attribute RDNs rather than preserving the original SET grouping.
+			for attr in rdn.iter() {
+				let attr_type_oid = attr
+					.attr_type()
+					.iter()
+					.ok_or(Error::CouldNotParseCertificate)?;
+				let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
+				let data = attr.attr_value().data;
+				let try_str =
+					|data| std::str::from_utf8(data).map_err(|_| Error::CouldNotParseCertificate);
+				let dn_value = match attr.attr_value().header.tag() {
+					Tag::BmpString => DnValue::BmpString(BmpString::from_utf16be(data.to_vec())?),
+					Tag::Ia5String => DnValue::Ia5String(try_str(data)?.try_into()?),
+					Tag::PrintableString => DnValue::PrintableString(try_str(data)?.try_into()?),
+					Tag::T61String => DnValue::TeletexString(try_str(data)?.try_into()?),
+					Tag::UniversalString => {
+						DnValue::UniversalString(UniversalString::from_utf32be(data.to_vec())?)
+					},
+					Tag::Utf8String => DnValue::Utf8String(try_str(data)?.to_owned()),
+					_ => return Err(Error::CouldNotParseCertificate),
+				};
+				dn.push_multi(dn_type, dn_value);
+			}
 		}
 		Ok(dn)
 	}
@@ -569,17 +593,14 @@ Iterator over [`DistinguishedName`] entries
 */
 #[derive(Clone, Debug)]
 pub struct DistinguishedNameIterator<'a> {
-	distinguished_name: &'a DistinguishedName,
-	iter: std::slice::Iter<'a, DnType>,
+	iter: std::slice::Iter<'a, (DnType, DnValue)>,
 }
 
 impl<'a> Iterator for DistinguishedNameIterator<'a> {
 	type Item = (&'a DnType, &'a DnValue);
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.iter
-			.next()
-			.and_then(|ty| self.distinguished_name.entries.get(ty).map(|v| (ty, v)))
+		self.iter.next().map(|(ty, v)| (ty, v))
 	}
 }
 
@@ -1044,6 +1065,109 @@ mod tests {
 			let actual = SanType::try_from_general(&value).unwrap();
 
 			assert_eq!(SanType::IpAddress(IpAddr::from(octets)), actual);
+		}
+	}
+
+	mod test_distinguished_name {
+		use super::super::{DistinguishedName, DnType, DnValue};
+
+		#[test]
+		fn push_upserts_existing_key() {
+			let mut dn = DistinguishedName::new();
+			dn.push(DnType::CommonName, "first");
+			dn.push(DnType::CommonName, "second");
+			assert_eq!(dn.get(&DnType::CommonName), Some(&DnValue::from("second")));
+			assert_eq!(dn.iter().count(), 1);
+		}
+
+		#[test]
+		fn push_multi_appends() {
+			let mut dn = DistinguishedName::new();
+			dn.push_multi(DnType::OrganizationalUnitName, "A");
+			dn.push_multi(DnType::OrganizationalUnitName, "B");
+			assert_eq!(
+				dn.get(&DnType::OrganizationalUnitName),
+				Some(&DnValue::from("A"))
+			);
+			assert_eq!(dn.get_all(&DnType::OrganizationalUnitName).count(), 2);
+			let vals: Vec<_> = dn.get_all(&DnType::OrganizationalUnitName).collect();
+			assert_eq!(vals[0], &DnValue::from("A"));
+			assert_eq!(vals[1], &DnValue::from("B"));
+		}
+
+		#[test]
+		fn push_and_push_multi_interaction() {
+			let mut dn = DistinguishedName::new();
+			dn.push(DnType::OrganizationalUnitName, "first");
+			dn.push_multi(DnType::OrganizationalUnitName, "second");
+			assert_eq!(dn.get_all(&DnType::OrganizationalUnitName).count(), 2);
+			assert_eq!(
+				dn.get(&DnType::OrganizationalUnitName),
+				Some(&DnValue::from("first"))
+			);
+		}
+
+		#[test]
+		fn remove_removes_all_matching() {
+			let mut dn = DistinguishedName::new();
+			dn.push_multi(DnType::OrganizationalUnitName, "A");
+			dn.push_multi(DnType::OrganizationalUnitName, "B");
+			dn.push_multi(DnType::OrganizationalUnitName, "C");
+			assert!(dn.remove(DnType::OrganizationalUnitName));
+			assert_eq!(dn.get_all(&DnType::OrganizationalUnitName).count(), 0);
+			assert!(dn.is_empty());
+		}
+
+		#[test]
+		fn remove_nonexistent_returns_false() {
+			let mut dn = DistinguishedName::new();
+			assert!(!dn.remove(DnType::CommonName));
+		}
+
+		#[test]
+		fn iter_with_duplicate_types() {
+			let mut dn = DistinguishedName::new();
+			dn.push_multi(DnType::OrganizationalUnitName, "OU-A");
+			dn.push(DnType::CommonName, "CN-x");
+			dn.push_multi(DnType::OrganizationalUnitName, "OU-B");
+			let entries: Vec<_> = dn.iter().collect();
+			assert_eq!(entries.len(), 3);
+			assert_eq!(
+				entries[0],
+				(&DnType::OrganizationalUnitName, &DnValue::from("OU-A"))
+			);
+			assert_eq!(entries[1], (&DnType::CommonName, &DnValue::from("CN-x")));
+			assert_eq!(
+				entries[2],
+				(&DnType::OrganizationalUnitName, &DnValue::from("OU-B"))
+			);
+		}
+
+		#[test]
+		fn get_returns_first_match() {
+			let mut dn = DistinguishedName::new();
+			dn.push_multi(DnType::OrganizationalUnitName, "first");
+			dn.push_multi(DnType::OrganizationalUnitName, "second");
+			assert_eq!(
+				dn.get(&DnType::OrganizationalUnitName),
+				Some(&DnValue::from("first"))
+			);
+		}
+
+		#[test]
+		fn push_collapses_multi_at_first_position() {
+			let mut dn = DistinguishedName::new();
+			dn.push_multi(DnType::OrganizationalUnitName, "A");
+			dn.push(DnType::CommonName, "CN");
+			dn.push_multi(DnType::OrganizationalUnitName, "B");
+			dn.push(DnType::OrganizationalUnitName, "new");
+			let entries: Vec<_> = dn.iter().collect();
+			assert_eq!(entries.len(), 2);
+			assert_eq!(
+				entries[0],
+				(&DnType::OrganizationalUnitName, &DnValue::from("new"))
+			);
+			assert_eq!(entries[1], (&DnType::CommonName, &DnValue::from("CN")));
 		}
 	}
 }

@@ -731,3 +731,23 @@ fn test_webpki_cert_crl_dps() {
 	// Webpki doesn't expose the parsed CRL distribution extension, so we can't interrogate that
 	// it matches the expected form. See `openssl.rs` for more extensive coverage.
 }
+
+#[test]
+fn test_webpki_multi_ou() {
+	use rcgen::DistinguishedName;
+	use webpki::anchor_from_trusted_cert;
+
+	let mut dn = DistinguishedName::new();
+	dn.push(DnType::CommonName, "Multi-OU Test");
+	dn.push_multi(DnType::OrganizationalUnitName, "Engineering");
+	dn.push_multi(DnType::OrganizationalUnitName, "Platform");
+
+	let mut params = CertificateParams::default();
+	params.distinguished_name = dn;
+	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	let key = KeyPair::generate().unwrap();
+	let cert = params.self_signed(&key).unwrap();
+
+	// Confirm webpki can parse the DER as a trust anchor (validates the encoding).
+	anchor_from_trusted_cert(cert.der()).expect("webpki should accept multi-OU CA DER");
+}
