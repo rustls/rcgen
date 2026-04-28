@@ -528,3 +528,36 @@ fn test_openssl_pkcs1_and_sec1_keys() {
 	let pkcs8_ec_key_der = PrivateKeyDer::try_from(ec_key.private_key_to_pkcs8().unwrap()).unwrap();
 	KeyPair::try_from(&pkcs8_ec_key_der).unwrap();
 }
+
+#[test]
+fn test_openssl_multi_ou() {
+	use openssl::nid::Nid;
+	use rcgen::DistinguishedName;
+
+	let mut dn = DistinguishedName::new();
+	dn.push(DnType::CommonName, "Multi-OU Test");
+	dn.push_multi(DnType::OrganizationalUnitName, "Engineering");
+	dn.push_multi(DnType::OrganizationalUnitName, "Platform");
+
+	let mut params = CertificateParams::default();
+	params.distinguished_name = dn;
+	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	let key = KeyPair::generate().unwrap();
+	let cert = params.self_signed(&key).unwrap();
+
+	verify_cert_basic(&cert);
+
+	let cert_pem = cert.pem();
+	let x509 = X509::from_pem(cert_pem.as_bytes()).unwrap();
+	let ou_entries: Vec<_> = x509
+		.subject_name()
+		.entries_by_nid(Nid::ORGANIZATIONALUNITNAME)
+		.collect();
+	assert_eq!(ou_entries.len(), 2);
+	let ou_values: Vec<_> = ou_entries
+		.iter()
+		.map(|e| e.data().as_utf8().unwrap().to_string())
+		.collect();
+	assert!(ou_values.contains(&"Engineering".to_owned()));
+	assert!(ou_values.contains(&"Platform".to_owned()));
+}

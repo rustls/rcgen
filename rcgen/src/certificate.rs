@@ -279,7 +279,7 @@ impl CertificateParams {
 
 		// Per https://tools.ietf.org/html/rfc5280#section-4.1.2.6, SAN must be marked
 		// as critical if subject is empty.
-		let critical = self.distinguished_name.entries.is_empty();
+		let critical = self.distinguished_name.is_empty();
 		write_x509_extension(writer, oid::SUBJECT_ALT_NAME, critical, |writer| {
 			writer.write_sequence(|writer| {
 				for san in self.subject_alt_names.iter() {
@@ -1520,6 +1520,38 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 						_ => None,
 					})
 					.unwrap()
+			);
+		}
+
+		#[cfg(all(feature = "x509-parser", feature = "crypto"))]
+		#[test]
+		fn parse_multi_ou_subject() {
+			use crate::{DistinguishedName, DnType};
+
+			let mut dn = DistinguishedName::new();
+			dn.push(DnType::CommonName, "Multi-OU Cert");
+			dn.push_multi(DnType::OrganizationalUnitName, "Engineering");
+			dn.push_multi(DnType::OrganizationalUnitName, "Platform");
+
+			let params = CertificateParams {
+				distinguished_name: dn,
+				is_ca: IsCa::Ca(BasicConstraints::Unconstrained),
+				..CertificateParams::default()
+			};
+			let key = KeyPair::generate().unwrap();
+			let cert = params.self_signed(&key).unwrap();
+
+			let reparsed = CertificateParams::from_ca_cert_der(cert.der()).unwrap();
+			let ou_vals: Vec<_> = reparsed
+				.distinguished_name
+				.get_all(&DnType::OrganizationalUnitName)
+				.collect();
+			assert_eq!(ou_vals.len(), 2);
+			assert_eq!(ou_vals[0], &DnValue::Utf8String("Engineering".to_owned()));
+			assert_eq!(ou_vals[1], &DnValue::Utf8String("Platform".to_owned()));
+			assert_eq!(
+				reparsed.distinguished_name.get(&DnType::CommonName),
+				Some(&DnValue::Utf8String("Multi-OU Cert".to_owned()))
 			);
 		}
 	}
