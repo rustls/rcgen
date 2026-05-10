@@ -634,21 +634,19 @@ fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[Gener
 		writer.write_sequence(|writer| {
 			for subtree in general_subtrees.iter() {
 				writer.next().write_sequence(|writer| {
-					writer
-						.next()
-						.write_tagged_implicit(
-							Tag::context(subtree.tag()),
-							|writer| match subtree {
-								GeneralSubtree::Rfc822Name(name)
-								| GeneralSubtree::DnsName(name) => writer.write_ia5_string(name),
-								GeneralSubtree::DirectoryName(name) => {
-									write_distinguished_name(writer, name)
-								},
-								GeneralSubtree::IpAddress(subnet) => {
-									writer.write_bytes(&subnet.to_bytes())
-								},
-							},
-						);
+					let writer = writer.next();
+					let tag = Tag::context(subtree.tag());
+					match subtree {
+						GeneralSubtree::Rfc822Name(name) | GeneralSubtree::DnsName(name) => writer
+							.write_tagged_implicit(tag, |writer| writer.write_ia5_string(name)),
+						// `Name` is a CHOICE, so X.680 §31.2.7 requires explicit tagging.
+						GeneralSubtree::DirectoryName(name) => writer
+							.write_tagged(tag, |writer| write_distinguished_name(writer, name)),
+						GeneralSubtree::IpAddress(subnet) => writer
+							.write_tagged_implicit(tag, |writer| {
+								writer.write_bytes(&subnet.to_bytes())
+							}),
+					}
 					// minimum must be 0 (the default) and maximum must be absent
 				});
 			}
