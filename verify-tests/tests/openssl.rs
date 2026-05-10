@@ -12,8 +12,8 @@ use openssl::stack::Stack;
 use openssl::x509::store::{X509Store, X509StoreBuilder};
 use openssl::x509::{CrlStatus, X509Crl, X509Req, X509StoreContext, X509};
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DnType, DnValue, GeneralSubtree, IsCa,
-	Issuer, KeyPair, NameConstraints,
+	BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType, DnValue,
+	GeneralSubtree, IsCa, Issuer, KeyPair, NameConstraints,
 };
 use verify_tests as util;
 
@@ -391,6 +391,39 @@ fn test_openssl_separate_ca_name_constraints() {
 	let ca = Issuer::new(ca_params, ca_key);
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
+	params
+		.distinguished_name
+		.push(DnType::OrganizationName, "Crab widgits SE");
+	params
+		.distinguished_name
+		.push(DnType::CommonName, "Dev domain");
+	let cert_key = KeyPair::generate().unwrap();
+	let cert = params.signed_by(&cert_key, &ca).unwrap();
+	let key = cert_key.serialize_der();
+
+	verify_cert_ca(&cert.pem(), &key, &ca_cert.pem());
+}
+
+#[test]
+fn test_openssl_separate_ca_name_constraints_directory_name() {
+	let (mut ca_params, ca_key) = util::default_params();
+	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+
+	let mut permitted = DistinguishedName::new();
+	permitted.push(DnType::OrganizationName, "Crab widgits SE");
+
+	ca_params.name_constraints = Some(NameConstraints {
+		permitted_subtrees: vec![
+			GeneralSubtree::DnsName("crabs.crabs".to_string()),
+			GeneralSubtree::DirectoryName(permitted),
+		],
+		excluded_subtrees: Vec::new(),
+	});
+	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
+	let ca = Issuer::new(ca_params, ca_key);
+
+	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
+	params.distinguished_name = DistinguishedName::new();
 	params
 		.distinguished_name
 		.push(DnType::OrganizationName, "Crab widgits SE");
