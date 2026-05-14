@@ -259,12 +259,18 @@ impl KeyPair {
 		} else if alg == &PKCS_RSA_SHA512 {
 			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
-		} else if alg == &PKCS_RSA_PSS_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
-			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
 			#[cfg(feature = "aws_lc_rs")]
-			if alg == &PKCS_ECDSA_P521_SHA256 {
+			if alg == &PKCS_RSA_PSS_SHA256 {
+				let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
+				KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
+			} else if alg == &PKCS_RSA_PSS_SHA384 {
+				let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
+				KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA384)
+			} else if alg == &PKCS_RSA_PSS_SHA512 {
+				let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
+				KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA512)
+			} else if alg == &PKCS_ECDSA_P521_SHA256 {
 				KeyPairKind::Ec(ecdsa_from_pkcs8(
 					&signature::ECDSA_P521_SHA256_ASN1_SIGNING,
 					&serialized_der,

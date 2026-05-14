@@ -35,6 +35,7 @@ pub(crate) const ML_DSA_87: &[u64] = &[2, 16, 840, 1, 101, 3, 4, 3, 19];
 /// rsaEncryption in [RFC 4055](https://www.rfc-editor.org/rfc/rfc4055#section-6)
 pub(crate) const RSA_ENCRYPTION: &[u64] = &[1, 2, 840, 113549, 1, 1, 1];
 
+#[cfg(feature = "aws_lc_rs")]
 /// id-RSASSA-PSS in [RFC 4055](https://www.rfc-editor.org/rfc/rfc4055#section-6)
 pub(crate) const RSASSA_PSS: &[u64] = &[1, 2, 840, 113549, 1, 1, 10];
 
