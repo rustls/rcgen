@@ -46,5 +46,8 @@ pub(crate) fn rsa_key_pair_public_modulus_len(kp: &signature::RsaKeyPair) -> usi
 	}
 }
 
-#[cfg(all(feature = "crypto", not(any(feature = "ring", feature = "_aws_lc_like"))))]
+#[cfg(all(
+	feature = "crypto",
+	not(any(feature = "ring", feature = "_aws_lc_like"))
+))]
 compile_error!("At least one of the 'ring' or 'aws_lc_rs' features must be activated when the 'crypto' feature is enabled");
