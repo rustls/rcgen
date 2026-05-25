@@ -195,7 +195,7 @@ pub enum KeyPairAlgorithm {
 	#[default]
 	EcdsaP256,
 	EcdsaP384,
-	#[cfg(feature = "aws_lc_rs")]
+	#[cfg(feature = "_aws_lc_like")]
 	EcdsaP521,
 	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
 	MlDsa44,
@@ -212,7 +212,7 @@ impl From<KeyPairAlgorithm> for &'static SignatureAlgorithm {
 			KeyPairAlgorithm::Ed25519 => &rcgen::PKCS_ED25519,
 			KeyPairAlgorithm::EcdsaP256 => &rcgen::PKCS_ECDSA_P256_SHA256,
 			KeyPairAlgorithm::EcdsaP384 => &rcgen::PKCS_ECDSA_P384_SHA384,
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			KeyPairAlgorithm::EcdsaP521 => &rcgen::PKCS_ECDSA_P521_SHA512,
 			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
 			KeyPairAlgorithm::MlDsa44 => &rcgen::PKCS_ML_DSA_44,
@@ -231,7 +231,7 @@ impl fmt::Display for KeyPairAlgorithm {
 			KeyPairAlgorithm::Ed25519 => write!(f, "ed25519"),
 			KeyPairAlgorithm::EcdsaP256 => write!(f, "ecdsa-p256"),
 			KeyPairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			KeyPairAlgorithm::EcdsaP521 => write!(f, "ecdsa-p521"),
 			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
 			KeyPairAlgorithm::MlDsa44 => write!(f, "ml-dsa-44"),
@@ -252,7 +252,7 @@ impl FromStr for KeyPairAlgorithm {
 			"ed25519" => Ok(Self::Ed25519),
 			"ecdsa-p256" => Ok(Self::EcdsaP256),
 			"ecdsa-p384" => Ok(Self::EcdsaP384),
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			"ecdsa-p521" => Ok(Self::EcdsaP521),
 			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
 			"ml-dsa-44" => Ok(Self::MlDsa44),
@@ -367,7 +367,7 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "aws_lc_rs")]
+	#[cfg(feature = "_aws_lc_like")]
 	fn serialize_end_entity_ecdsa_p521_sha512_sig() -> anyhow::Result<()> {
 		let ca = CertificateBuilder::new().certificate_authority().build()?;
 		let end_entity = CertificateBuilder::new()
@@ -488,7 +488,7 @@ mod tests {
 			"PKCS_ECDSA_P384_SHA384"
 		);
 
-		#[cfg(feature = "aws_lc_rs")]
+		#[cfg(feature = "_aws_lc_like")]
 		{
 			let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP521.into())?;
 			assert_eq!(

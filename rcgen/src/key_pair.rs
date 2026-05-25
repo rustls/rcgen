@@ -11,9 +11,9 @@ use yasna::{DERWriter, DERWriterSeq};
 
 #[cfg(any(feature = "crypto", feature = "pem"))]
 use crate::error::ExternalError;
-#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+#[cfg(all(feature = "crypto", feature = "_aws_lc_like"))]
 use crate::ring_like::ecdsa_from_private_key_der;
-#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+#[cfg(all(feature = "crypto", feature = "_aws_lc_like"))]
 use crate::ring_like::rsa::KeySize;
 #[cfg(feature = "crypto")]
 use crate::ring_like::{
@@ -130,12 +130,12 @@ impl KeyPair {
 					serialized_der: key_pair_serialized,
 				})
 			},
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			SignAlgo::Rsa(sign_alg) => Self::generate_rsa_inner(alg, sign_alg, KeySize::Rsa2048),
 			// Ring doesn't have RSA key generation yet:
 			// https://github.com/briansmith/ring/issues/219
 			// https://github.com/briansmith/ring/pull/733
-			#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
+			#[cfg(all(feature = "ring", not(feature = "_aws_lc_like")))]
 			SignAlgo::Rsa(_sign_alg) => Err(Error::KeyGenerationUnavailable),
 		}
 	}
@@ -144,7 +144,7 @@ impl KeyPair {
 	///
 	/// If passed a signature algorithm that is not RSA, it will return
 	/// [`Error::KeyGenerationUnavailable`].
-	#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+	#[cfg(all(feature = "crypto", feature = "_aws_lc_like"))]
 	pub fn generate_rsa_for(
 		alg: &'static SignatureAlgorithm,
 		key_size: RsaKeySize,
@@ -162,7 +162,7 @@ impl KeyPair {
 		}
 	}
 
-	#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+	#[cfg(all(feature = "crypto", feature = "_aws_lc_like"))]
 	fn generate_rsa_inner(
 		alg: &'static SignatureAlgorithm,
 		sign_alg: &'static dyn RsaEncoding,
@@ -263,7 +263,7 @@ impl KeyPair {
 			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			if alg == &PKCS_ECDSA_P521_SHA256 {
 				KeyPairKind::Ec(ecdsa_from_pkcs8(
 					&signature::ECDSA_P521_SHA256_ASN1_SIGNING,
@@ -286,7 +286,7 @@ impl KeyPair {
 				panic!("Unknown SignatureAlgorithm specified!");
 			}
 
-			#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
+			#[cfg(all(feature = "ring", not(feature = "_aws_lc_like")))]
 			panic!("Unknown SignatureAlgorithm specified!");
 		};
 
@@ -340,7 +340,7 @@ impl KeyPair {
 		key: &PrivateKeyDer<'_>,
 		alg: &'static SignatureAlgorithm,
 	) -> Result<Self, Error> {
-		#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
+		#[cfg(all(feature = "ring", not(feature = "_aws_lc_like")))]
 		{
 			if let PrivateKeyDer::Pkcs8(key) = key {
 				Self::from_pkcs8_der_and_sign_algo(key, alg)
@@ -348,7 +348,7 @@ impl KeyPair {
 				Err(Error::CouldNotParseKeyPair)
 			}
 		}
-		#[cfg(feature = "aws_lc_rs")]
+		#[cfg(feature = "_aws_lc_like")]
 		{
 			let is_pkcs8 = matches!(key, PrivateKeyDer::Pkcs8(_));
 
@@ -534,7 +534,7 @@ impl TryFrom<&PrivateKeyDer<'_>> for KeyPair {
 	type Error = Error;
 
 	fn try_from(key: &PrivateKeyDer) -> Result<KeyPair, Error> {
-		#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
+		#[cfg(all(feature = "ring", not(feature = "_aws_lc_like")))]
 		let (kind, alg) = {
 			let PrivateKeyDer::Pkcs8(pkcs8) = key else {
 				return Err(Error::CouldNotParseKeyPair);
@@ -562,7 +562,7 @@ impl TryFrom<&PrivateKeyDer<'_>> for KeyPair {
 
 			(kind, alg)
 		};
-		#[cfg(feature = "aws_lc_rs")]
+		#[cfg(feature = "_aws_lc_like")]
 		let (kind, alg) = {
 			let is_pkcs8 = matches!(key, PrivateKeyDer::Pkcs8(_));
 
@@ -622,7 +622,7 @@ impl From<KeyPair> for PrivateKeyDer<'static> {
 }
 
 /// The key size used for RSA key generation
-#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+#[cfg(all(feature = "crypto", feature = "_aws_lc_like"))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum RsaKeySize {
@@ -797,9 +797,9 @@ mod test {
 			&PKCS_ED25519,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			&PKCS_ECDSA_P521_SHA512,
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			&PKCS_RSA_SHA256,
 		] {
 			let kp = KeyPair::generate_for(alg).expect("keygen");

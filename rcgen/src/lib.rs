@@ -53,7 +53,7 @@ pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, Public
 pub use error::{Error, InvalidAsn1String};
 #[cfg(feature = "crypto")]
 pub use key_pair::KeyPair;
-#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+#[cfg(all(feature = "crypto", feature = "_aws_lc_like"))]
 pub use key_pair::RsaKeySize;
 pub use key_pair::{PublicKeyData, SigningKey, SubjectPublicKeyInfo};
 #[cfg(feature = "pem")]
