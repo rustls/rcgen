@@ -37,6 +37,11 @@ impl PublicKeyData for PublicKey {
 }
 
 /// A certificate signing request (CSR) that can be encoded to PEM or DER.
+///
+/// A new certificate signing request is created by filling out a [`CertificateParams`] object
+/// and then calling [`CertificateParams::serialize_request()`] or
+/// [`CertificateParams::serialize_request_with_attributes()`] with a
+/// [`crate::KeyPair`] (or other [`SigningKey`] capable trait).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CertificateSigningRequest {
 	pub(crate) der: CertificateSigningRequestDer<'static>,
