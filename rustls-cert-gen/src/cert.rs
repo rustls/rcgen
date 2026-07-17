@@ -279,11 +279,11 @@ impl PemCertifiedKey {
 
 		let key_path = dir.join(format!("{name}.key.pem"));
 		let mut key_out = File::create(key_path)?;
-		write!(key_out, "{}", &self.private_key_pem)?;
+		write!(key_out, "{}", self.private_key_pem)?;
 
 		let cert_path = dir.join(format!("{name}.pem"));
 		let mut cert_out = File::create(cert_path)?;
-		write!(cert_out, "{}", &self.cert_pem)?;
+		write!(cert_out, "{}", self.cert_pem)?;
 
 		Ok(())
 	}
