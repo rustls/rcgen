@@ -208,18 +208,18 @@ pub enum KeyPairAlgorithm {
 impl From<KeyPairAlgorithm> for &'static SignatureAlgorithm {
 	fn from(alg: KeyPairAlgorithm) -> Self {
 		match alg {
-			KeyPairAlgorithm::Rsa => &rcgen::PKCS_RSA_SHA256,
-			KeyPairAlgorithm::Ed25519 => &rcgen::PKCS_ED25519,
-			KeyPairAlgorithm::EcdsaP256 => &rcgen::PKCS_ECDSA_P256_SHA256,
-			KeyPairAlgorithm::EcdsaP384 => &rcgen::PKCS_ECDSA_P384_SHA384,
+			KeyPairAlgorithm::Rsa => &rcgen::RSA_PKCS1_SHA256,
+			KeyPairAlgorithm::Ed25519 => &rcgen::ED25519,
+			KeyPairAlgorithm::EcdsaP256 => &rcgen::ECDSA_P256_SHA256,
+			KeyPairAlgorithm::EcdsaP384 => &rcgen::ECDSA_P384_SHA384,
 			#[cfg(feature = "aws_lc_rs")]
-			KeyPairAlgorithm::EcdsaP521 => &rcgen::PKCS_ECDSA_P521_SHA512,
+			KeyPairAlgorithm::EcdsaP521 => &rcgen::ECDSA_P521_SHA512,
 			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
-			KeyPairAlgorithm::MlDsa44 => &rcgen::PKCS_ML_DSA_44,
+			KeyPairAlgorithm::MlDsa44 => &rcgen::ML_DSA_44,
 			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
-			KeyPairAlgorithm::MlDsa65 => &rcgen::PKCS_ML_DSA_65,
+			KeyPairAlgorithm::MlDsa65 => &rcgen::ML_DSA_65,
 			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
-			KeyPairAlgorithm::MlDsa87 => &rcgen::PKCS_ML_DSA_87,
+			KeyPairAlgorithm::MlDsa87 => &rcgen::ML_DSA_87,
 		}
 	}
 }
@@ -476,25 +476,16 @@ mod tests {
 	#[test]
 	fn key_pair_algorithm_to_keypair() -> anyhow::Result<()> {
 		let keypair = KeyPair::generate_for(KeyPairAlgorithm::Ed25519.into())?;
-		assert_eq!(format!("{:?}", keypair.algorithm()), "PKCS_ED25519");
+		assert_eq!(format!("{:?}", keypair.algorithm()), "ED25519");
 		let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP256.into())?;
-		assert_eq!(
-			format!("{:?}", keypair.algorithm()),
-			"PKCS_ECDSA_P256_SHA256"
-		);
+		assert_eq!(format!("{:?}", keypair.algorithm()), "ECDSA_P256_SHA256");
 		let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP384.into())?;
-		assert_eq!(
-			format!("{:?}", keypair.algorithm()),
-			"PKCS_ECDSA_P384_SHA384"
-		);
+		assert_eq!(format!("{:?}", keypair.algorithm()), "ECDSA_P384_SHA384");
 
 		#[cfg(feature = "aws_lc_rs")]
 		{
 			let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP521.into())?;
-			assert_eq!(
-				format!("{:?}", keypair.algorithm()),
-				"PKCS_ECDSA_P521_SHA512"
-			);
+			assert_eq!(format!("{:?}", keypair.algorithm()), "ECDSA_P521_SHA512");
 		}
 		Ok(())
 	}

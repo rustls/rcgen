@@ -190,7 +190,7 @@ fn test_request() {
 #[test]
 fn test_openssl_256() {
 	let (params, _) = util::default_params();
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::ECDSA_P256_SHA256).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -201,7 +201,7 @@ fn test_openssl_256() {
 #[test]
 fn test_openssl_384() {
 	let (params, _) = util::default_params();
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P384_SHA384).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::ECDSA_P384_SHA384).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -213,7 +213,7 @@ fn test_openssl_384() {
 #[cfg(feature = "aws_lc_rs")]
 fn test_openssl_521() {
 	let (params, _) = util::default_params();
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P521_SHA512).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::ECDSA_P521_SHA512).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -224,7 +224,7 @@ fn test_openssl_521() {
 #[test]
 fn test_openssl_25519() {
 	let (params, _) = util::default_params();
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ED25519).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::ED25519).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -281,9 +281,9 @@ fn test_openssl_rsa_given() {
 #[test]
 fn test_openssl_rsa_combinations_given() {
 	let alg_list = [
-		&rcgen::PKCS_RSA_SHA256,
-		&rcgen::PKCS_RSA_SHA384,
-		&rcgen::PKCS_RSA_SHA512,
+		&rcgen::RSA_PKCS1_SHA256,
+		&rcgen::RSA_PKCS1_SHA384,
+		&rcgen::RSA_PKCS1_SHA512,
 		//&rcgen::PKCS_RSA_PSS_SHA256,
 	];
 	for (i, alg) in alg_list.iter().enumerate() {
@@ -355,7 +355,7 @@ fn test_openssl_separate_ca_with_printable_string() {
 fn test_openssl_separate_ca_with_other_signing_alg() {
 	let (mut ca_params, _) = util::default_params();
 	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-	let ca_key = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let ca_key = KeyPair::generate_for(&rcgen::ECDSA_P256_SHA256).unwrap();
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 	let ca = Issuer::new(ca_params, ca_key);
 
@@ -366,7 +366,7 @@ fn test_openssl_separate_ca_with_other_signing_alg() {
 	params
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
-	let cert_key = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P384_SHA384).unwrap();
+	let cert_key = KeyPair::generate_for(&rcgen::ECDSA_P384_SHA384).unwrap();
 	let cert = params.signed_by(&cert_key, &ca).unwrap();
 	let key = cert_key.serialize_der();
 
