@@ -210,7 +210,7 @@ fn test_openssl_384() {
 }
 
 #[test]
-#[cfg(feature = "aws_lc_rs")]
+#[cfg(feature = "_aws_lc_like")]
 fn test_openssl_521() {
 	let (params, _) = util::default_params();
 	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P521_SHA512).unwrap();
@@ -533,7 +533,7 @@ fn test_openssl_crl_dps_parse() {
 }
 
 #[test]
-#[cfg(feature = "aws_lc_rs")]
+#[cfg(feature = "_aws_lc_like")]
 fn test_openssl_pkcs1_and_sec1_keys() {
 	use openssl::ec::{EcGroup, EcKey};
 	use openssl::nid::Nid;

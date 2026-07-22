@@ -75,7 +75,7 @@ fn test_botan_384() {
 }
 
 #[test]
-#[cfg(feature = "aws_lc_rs")]
+#[cfg(feature = "_aws_lc_like")]
 fn test_botan_521() {
 	let (params, _) = default_params();
 	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P521_SHA512).unwrap();

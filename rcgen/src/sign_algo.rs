@@ -63,15 +63,15 @@ impl fmt::Debug for SignatureAlgorithm {
 		} else if self == &PKCS_ED25519 {
 			write!(f, "PKCS_ED25519")
 		} else {
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			if self == &PKCS_ECDSA_P521_SHA256 {
 				return write!(f, "PKCS_ECDSA_P521_SHA256");
 			}
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			if self == &PKCS_ECDSA_P521_SHA384 {
 				return write!(f, "PKCS_ECDSA_P521_SHA384");
 			}
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			if self == &PKCS_ECDSA_P521_SHA512 {
 				return write!(f, "PKCS_ECDSA_P521_SHA512");
 			}
@@ -106,11 +106,11 @@ impl SignatureAlgorithm {
 			//&PKCS_RSA_PSS_SHA256,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			&PKCS_ECDSA_P521_SHA256,
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			&PKCS_ECDSA_P521_SHA384,
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			&PKCS_ECDSA_P521_SHA512,
 			&PKCS_ED25519,
 		];
@@ -209,7 +209,7 @@ pub(crate) mod algo {
 	/// Note that this algorithm is not widely supported, and is not supported in TLS 1.3.
 	///
 	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
+	#[cfg(feature = "_aws_lc_like")]
 	pub static PKCS_ECDSA_P521_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
 		#[cfg(feature = "crypto")]
@@ -224,7 +224,7 @@ pub(crate) mod algo {
 	/// Note that this algorithm is not widely supported, and is not supported in TLS 1.3.
 	///
 	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
+	#[cfg(feature = "_aws_lc_like")]
 	pub static PKCS_ECDSA_P521_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
 		#[cfg(feature = "crypto")]
@@ -237,7 +237,7 @@ pub(crate) mod algo {
 	/// ECDSA signing using the P-521 curves and SHA-512 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	///
 	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
+	#[cfg(feature = "_aws_lc_like")]
 	pub static PKCS_ECDSA_P521_SHA512: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
 		#[cfg(feature = "crypto")]
