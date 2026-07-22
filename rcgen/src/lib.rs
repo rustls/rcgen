@@ -33,6 +33,7 @@ println!("{}", signing_key.serialize_pem());
 #![warn(unreachable_pub)]
 
 use std::borrow::Cow;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::Hash;
@@ -470,7 +471,7 @@ See also the RFC 5280 sections on the [issuer](https://tools.ietf.org/html/rfc52
 and [subject](https://tools.ietf.org/html/rfc5280#section-4.1.2.6) fields.
 */
 pub struct DistinguishedName {
-	entries: HashMap<DnType, DnValue>,
+	entries: HashMap<DnType, Vec<DnValue>>,
 	order: Vec<DnType>,
 }
 
@@ -479,10 +480,17 @@ impl DistinguishedName {
 	pub fn new() -> Self {
 		Self::default()
 	}
-	/// Obtains the attribute value for the given attribute type
-	pub fn get(&self, ty: &DnType) -> Option<&DnValue> {
-		self.entries.get(ty)
+
+	/// Obtains the first attribute value for the given attribute type
+	pub fn first(&self, ty: &DnType) -> Option<&DnValue> {
+		self.entries.get(ty)?.first()
 	}
+
+	/// Obtains all attribute values for the given attribute type
+	pub fn get(&self, ty: &DnType) -> Option<&[DnValue]> {
+		self.entries.get(ty).map(|v| v.as_slice())
+	}
+
 	/// Removes the attribute with the specified DnType
 	///
 	/// Returns true when an actual removal happened, false
@@ -502,20 +510,24 @@ impl DistinguishedName {
 	/// let mut dn = DistinguishedName::new();
 	/// dn.push(DnType::OrganizationName, "Crab widgits SE");
 	/// dn.push(DnType::CommonName, DnValue::PrintableString("Master Cert".try_into().unwrap()));
-	/// assert_eq!(dn.get(&DnType::OrganizationName), Some(&DnValue::Utf8String("Crab widgits SE".to_string())));
-	/// assert_eq!(dn.get(&DnType::CommonName), Some(&DnValue::PrintableString("Master Cert".try_into().unwrap())));
+	/// assert_eq!(dn.first(&DnType::OrganizationName), Some(&DnValue::Utf8String("Crab widgits SE".to_string())));
+	/// assert_eq!(dn.first(&DnType::CommonName), Some(&DnValue::PrintableString("Master Cert".try_into().unwrap())));
 	/// ```
 	pub fn push(&mut self, ty: DnType, s: impl Into<DnValue>) {
-		if !self.entries.contains_key(&ty) {
-			self.order.push(ty.clone());
+		match self.entries.entry(ty.clone()) {
+			Entry::Occupied(mut o) => o.get_mut().push(s.into()),
+			Entry::Vacant(v) => {
+				v.insert(Vec::new()).push(s.into());
+				self.order.push(ty);
+			},
 		}
-		self.entries.insert(ty, s.into());
 	}
 	/// Iterate over the entries
 	pub fn iter(&self) -> DistinguishedNameIterator<'_> {
 		DistinguishedNameIterator {
 			distinguished_name: self,
 			iter: self.order.iter(),
+			current: None,
 		}
 	}
 
@@ -571,15 +583,36 @@ Iterator over [`DistinguishedName`] entries
 pub struct DistinguishedNameIterator<'a> {
 	distinguished_name: &'a DistinguishedName,
 	iter: std::slice::Iter<'a, DnType>,
+	current: Option<(&'a DnType, std::slice::Iter<'a, DnValue>)>,
 }
 
 impl<'a> Iterator for DistinguishedNameIterator<'a> {
 	type Item = (&'a DnType, &'a DnValue);
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.iter
-			.next()
-			.and_then(|ty| self.distinguished_name.entries.get(ty).map(|v| (ty, v)))
+		if let Some((ty, values)) = &mut self.current {
+			match values.next() {
+				Some(val) => return Some((ty, val)),
+				None => self.current = None,
+			}
+		}
+
+		for ty in &mut self.iter {
+			let Some(values) = self.distinguished_name.entries.get(ty) else {
+				continue;
+			};
+
+			match values.as_slice() {
+				[] => continue,
+				[first] => return Some((ty, first)),
+				[first, rest @ ..] => {
+					self.current = Some((ty, rest.iter()));
+					return Some((ty, first));
+				},
+			}
+		}
+
+		None
 	}
 }
 
