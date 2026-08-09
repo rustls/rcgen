@@ -195,15 +195,10 @@ impl CertificateParams {
 			));
 			writer.next().write_set(|writer| {
 				writer.next().write_sequence(|writer| {
-					// Write key_usage
 					self.write_key_usage(writer.next());
-					// Write subject_alt_names
 					self.write_subject_alt_names(writer.next());
 					self.write_extended_key_usage(writer.next());
-					// Write is_ca
-					self.write_is_ca(writer.next());
-
-					// Write custom extensions
+					self.write_ca_extensions(writer, None);
 					for ext in &self.custom_extensions {
 						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
 							writer.write_der(ext.content())
@@ -254,15 +249,26 @@ impl CertificateParams {
 	}
 
 	/// Write a certificate's BasicConstraints as defined in RFC 5280.
-	fn write_is_ca(&self, writer: DERWriter) {
+	fn write_ca_extensions(&self, writer: &mut DERWriterSeq, pub_key_spki: Option<&[u8]>) {
 		let is_ca = match &self.is_ca {
 			IsCa::Ca(bc) => Some(bc),
 			IsCa::ExplicitNoCa => None,
 			IsCa::NoCa => return,
 		};
 
+		if let Some(pub_key_spki) = pub_key_spki {
+			write_x509_extension(
+				writer.next(),
+				oid::SUBJECT_KEY_IDENTIFIER,
+				false,
+				|writer| {
+					writer.write_bytes(&self.key_identifier_method.derive(pub_key_spki));
+				},
+			);
+		}
+
 		// Write basic_constraints
-		write_x509_extension(writer, oid::BASIC_CONSTRAINTS, true, |writer| {
+		write_x509_extension(writer.next(), oid::BASIC_CONSTRAINTS, true, |writer| {
 			writer.write_sequence(|writer| {
 				writer.next().write_bool(is_ca.is_some()); // cA flag
 				if let Some(BasicConstraints::Constrained(path_len_constraint)) = is_ca {
@@ -550,48 +556,8 @@ impl CertificateParams {
 			);
 		}
 
-		match self.is_ca {
-			IsCa::Ca(ref constraint) => {
-				// Write subject_key_identifier
-				write_x509_extension(
-					writer.next(),
-					oid::SUBJECT_KEY_IDENTIFIER,
-					false,
-					|writer| {
-						writer.write_bytes(&self.key_identifier_method.derive(pub_key_spki));
-					},
-				);
-				// Write basic_constraints
-				write_x509_extension(writer.next(), oid::BASIC_CONSTRAINTS, true, |writer| {
-					writer.write_sequence(|writer| {
-						writer.next().write_bool(true); // cA flag
-						if let BasicConstraints::Constrained(path_len_constraint) = constraint {
-							writer.next().write_u8(*path_len_constraint);
-						}
-					});
-				});
-			},
-			IsCa::ExplicitNoCa => {
-				// Write subject_key_identifier
-				write_x509_extension(
-					writer.next(),
-					oid::SUBJECT_KEY_IDENTIFIER,
-					false,
-					|writer| {
-						writer.write_bytes(&self.key_identifier_method.derive(pub_key_spki));
-					},
-				);
-				// Write basic_constraints
-				write_x509_extension(writer.next(), oid::BASIC_CONSTRAINTS, true, |writer| {
-					writer.write_sequence(|writer| {
-						writer.next().write_bool(false); // cA flag
-					});
-				});
-			},
-			IsCa::NoCa => {},
-		}
+		self.write_ca_extensions(writer, Some(pub_key_spki));
 
-		// Write the custom extensions
 		for ext in &self.custom_extensions {
 			write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
 				writer.write_der(ext.content())
