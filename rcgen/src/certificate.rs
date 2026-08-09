@@ -270,9 +270,16 @@ impl CertificateParams {
 		// Write basic_constraints
 		write_x509_extension(writer.next(), oid::BASIC_CONSTRAINTS, true, |writer| {
 			writer.write_sequence(|writer| {
-				writer.next().write_bool(is_ca.is_some()); // cA flag
-				if let Some(BasicConstraints::Constrained(path_len_constraint)) = is_ca {
-					writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
+				let Some(constraints) = is_ca else {
+					return;
+				};
+
+				writer.next().write_bool(true); // cA flag
+				match constraints {
+					BasicConstraints::Unconstrained => {},
+					BasicConstraints::Constrained(path_len_constraint) => {
+						writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
+					},
 				}
 			});
 		});
@@ -1094,6 +1101,8 @@ mod tests {
 
 	#[cfg(feature = "x509-parser")]
 	use pki_types::pem::PemObject;
+	#[cfg(feature = "crypto")]
+	use x509_parser::oid_registry::OID_X509_EXT_BASIC_CONSTRAINTS;
 
 	#[cfg(feature = "pem")]
 	use super::*;
@@ -1139,6 +1148,40 @@ mod tests {
 					ext.parsed_extension()
 				{
 					assert!(usage.flags == 7);
+					found = true;
+				}
+			}
+		}
+
+		assert!(found);
+	}
+
+	#[cfg(feature = "crypto")]
+	#[test]
+	fn test_explicit_no_ca() {
+		let params = CertificateParams {
+			is_ca: IsCa::ExplicitNoCa,
+			..CertificateParams::default()
+		};
+
+		// Make the cert
+		let key_pair = KeyPair::generate().unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
+
+		// Parse it
+		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
+
+		// Check the basic constraints extension
+		let mut found = false;
+		for ext in cert.extensions() {
+			if ext.oid == OID_X509_EXT_BASIC_CONSTRAINTS {
+				// The cA flag is DEFAULT FALSE, so DER requires it to be omitted:
+				// the extension value must be an empty SEQUENCE
+				assert_eq!(ext.value, vec![0x30, 0x00]);
+				if let x509_parser::extensions::ParsedExtension::BasicConstraints(bc) =
+					ext.parsed_extension()
+				{
+					assert!(!bc.ca);
 					found = true;
 				}
 			}
