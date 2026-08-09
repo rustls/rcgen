@@ -507,23 +507,9 @@ impl CertificateParams {
 			);
 		}
 
-		// Write subject_alt_names
 		self.write_subject_alt_names(writer.next());
-
-		// Write standard key usage
 		self.write_key_usage(writer.next());
-
-		// Write extended key usage
-		if !self.extended_key_usages.is_empty() {
-			write_x509_extension(writer.next(), oid::EXT_KEY_USAGE, false, |writer| {
-				writer.write_sequence(|writer| {
-					for usage in self.extended_key_usages.iter() {
-						let oid = ObjectIdentifier::from_slice(usage.oid());
-						writer.next().write_oid(&oid);
-					}
-				});
-			});
-		}
+		self.write_extended_key_usage(writer.next());
 
 		if let Some(name_constraints) = &self.name_constraints {
 			// If both trees are empty, the extension must be omitted.
