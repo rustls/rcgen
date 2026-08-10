@@ -284,7 +284,6 @@ fn test_openssl_rsa_combinations_given() {
 		&rcgen::PKCS_RSA_SHA256,
 		&rcgen::PKCS_RSA_SHA384,
 		&rcgen::PKCS_RSA_SHA512,
-		//&rcgen::PKCS_RSA_PSS_SHA256,
 	];
 	for (i, alg) in alg_list.iter().enumerate() {
 		let (params, _) = util::default_params();

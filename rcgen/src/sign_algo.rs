@@ -6,7 +6,7 @@ use aws_lc_rs::unstable::signature::{
 	PqdsaSigningAlgorithm, ML_DSA_44_SIGNING, ML_DSA_65_SIGNING, ML_DSA_87_SIGNING,
 };
 use yasna::models::ObjectIdentifier;
-use yasna::{DERWriter, Tag};
+use yasna::DERWriter;
 
 #[cfg(feature = "crypto")]
 use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters, RsaEncoding};
@@ -28,11 +28,6 @@ pub(crate) enum SignatureAlgorithmParams {
 	None,
 	/// Write null parameters
 	Null,
-	/// RSASSA-PSS-params as per RFC 4055
-	RsaPss {
-		hash_algorithm: &'static [u64],
-		salt_length: u64,
-	},
 }
 
 /// Signature algorithm type
@@ -54,8 +49,6 @@ impl fmt::Debug for SignatureAlgorithm {
 			write!(f, "PKCS_RSA_SHA384")
 		} else if self == &PKCS_RSA_SHA512 {
 			write!(f, "PKCS_RSA_SHA512")
-		} else if self == &PKCS_RSA_PSS_SHA256 {
-			write!(f, "PKCS_RSA_PSS_SHA256")
 		} else if self == &PKCS_ECDSA_P256_SHA256 {
 			write!(f, "PKCS_ECDSA_P256_SHA256")
 		} else if self == &PKCS_ECDSA_P384_SHA384 {
@@ -103,7 +96,6 @@ impl SignatureAlgorithm {
 			&PKCS_RSA_SHA256,
 			&PKCS_RSA_SHA384,
 			&PKCS_RSA_SHA512,
-			//&PKCS_RSA_PSS_SHA256,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
 			#[cfg(feature = "aws_lc_rs")]
@@ -161,27 +153,6 @@ pub(crate) mod algo {
 		// sha512WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 13],
 		params: SignatureAlgorithmParams::Null,
-	};
-
-	// TODO: not really sure whether the certs we generate actually work.
-	// Both openssl and webpki reject them. It *might* be possible that openssl
-	// accepts the certificate if the key is a proper RSA-PSS key, but ring doesn't
-	// support those: https://github.com/briansmith/ring/issues/1353
-	//
-	/// RSA signing with PKCS#1 2.1 RSASSA-PSS padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
-	pub(crate) static PKCS_RSA_PSS_SHA256: SignatureAlgorithm = SignatureAlgorithm {
-		// We could also use RSA_ENCRYPTION here, but it's recommended
-		// to use ID-RSASSA-PSS if possible.
-		oids_sign_alg: &[RSASSA_PSS],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::Rsa(&signature::RSA_PSS_SHA256),
-		oid_components: RSASSA_PSS, //&[1, 2, 840, 113549, 1, 1, 13],
-		// rSASSA-PSS-SHA256-Params in RFC 4055
-		params: SignatureAlgorithmParams::RsaPss {
-			// id-sha256 in https://datatracker.ietf.org/doc/html/rfc4055#section-2.1
-			hash_algorithm: &[2, 16, 840, 1, 101, 3, 4, 2, 1],
-			salt_length: 20,
-		},
 	};
 
 	/// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
@@ -298,41 +269,6 @@ impl SignatureAlgorithm {
 			SignatureAlgorithmParams::None => (),
 			SignatureAlgorithmParams::Null => {
 				writer.next().write_null();
-			},
-			SignatureAlgorithmParams::RsaPss {
-				hash_algorithm,
-				salt_length,
-			} => {
-				writer.next().write_sequence(|writer| {
-					// https://datatracker.ietf.org/doc/html/rfc4055#section-3.1
-
-					let oid = ObjectIdentifier::from_slice(hash_algorithm);
-					// hashAlgorithm
-					writer.next().write_tagged(Tag::context(0), |writer| {
-						writer.write_sequence(|writer| {
-							writer.next().write_oid(&oid);
-						});
-					});
-					// maskGenAlgorithm
-					writer.next().write_tagged(Tag::context(1), |writer| {
-						writer.write_sequence(|writer| {
-							// id-mgf1 in RFC 4055
-							const ID_MGF1: &[u64] = &[1, 2, 840, 113549, 1, 1, 8];
-							let oid = ObjectIdentifier::from_slice(ID_MGF1);
-							writer.next().write_oid(&oid);
-							writer.next().write_sequence(|writer| {
-								let oid = ObjectIdentifier::from_slice(hash_algorithm);
-								writer.next().write_oid(&oid);
-								writer.next().write_null();
-							});
-						});
-					});
-					// saltLength
-					writer.next().write_tagged(Tag::context(2), |writer| {
-						writer.write_u64(salt_length);
-					});
-					// We *must* omit the trailerField element as per RFC 4055 section 3.1
-				})
 			},
 		}
 	}
