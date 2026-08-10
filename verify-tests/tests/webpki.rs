@@ -291,7 +291,6 @@ fn test_webpki_rsa_combinations_given() {
 			webpki::ring::RSA_PKCS1_2048_8192_SHA512,
 			&signature::RSA_PKCS1_SHA512,
 		),
-		//(&rcgen::PKCS_RSA_PSS_SHA256, &webpki::RSA_PSS_2048_8192_SHA256_LEGACY_KEY, &signature::RSA_PSS_SHA256),
 	];
 	for c in configs {
 		let (params, _) = util::default_params();
