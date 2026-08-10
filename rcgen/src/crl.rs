@@ -196,6 +196,17 @@ impl CertificateRevocationListParams {
 			return Err(Error::IssuerNotCrlSigner);
 		}
 
+		// An empty distribution point would be encoded as an empty fullName,
+		// violating GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
+		// (RFC 5280 §4.2.1.13).
+		if self
+			.issuing_distribution_point
+			.as_ref()
+			.is_some_and(|idp| idp.distribution_point.uris.is_empty())
+		{
+			return Err(Error::EmptyCrlDistributionPointUris);
+		}
+
 		Ok(CertificateRevocationList {
 			der: self.serialize_der(issuer)?.into(),
 		})
@@ -415,6 +426,29 @@ mod tests {
 
 	use super::*;
 	use crate::{date_time_ymd, BasicConstraints, CertificateParams, IsCa, KeyPair};
+
+	#[test]
+	fn test_empty_issuing_distribution_point_uris_rejected() {
+		let crl = CertificateRevocationListParams {
+			this_update: date_time_ymd(2025, 5, 1),
+			next_update: date_time_ymd(2026, 5, 1),
+			crl_number: SerialNumber::from(1234u64),
+			issuing_distribution_point: Some(CrlIssuingDistributionPoint {
+				distribution_point: CrlDistributionPoint { uris: Vec::new() },
+				scope: None,
+			}),
+			revoked_certs: Vec::new(),
+			key_identifier_method: KeyIdMethod::Sha256,
+		};
+
+		// A distribution point with no URIs would be encoded as an empty
+		// fullName, violating GeneralNames ::= SEQUENCE SIZE (1..MAX) OF
+		// GeneralName (RFC 5280 §4.2.1.13), so it must be rejected.
+		assert_eq!(
+			crl.signed_by(&test_issuer()).unwrap_err(),
+			Error::EmptyCrlDistributionPointUris
+		);
+	}
 
 	#[test]
 	fn test_invalidity_date_generalized_time() {

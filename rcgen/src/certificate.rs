@@ -437,6 +437,17 @@ impl CertificateParams {
 		pub_key: &K,
 		issuer: &Issuer<'_, impl SigningKey>,
 	) -> Result<CertificateDer<'static>, Error> {
+		// An empty distribution point would be encoded as an empty fullName,
+		// violating GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
+		// (RFC 5280 §4.2.1.13).
+		if self
+			.crl_distribution_points
+			.iter()
+			.any(|dp| dp.uris.is_empty())
+		{
+			return Err(Error::EmptyCrlDistributionPointUris);
+		}
+
 		let der = sign_der(&issuer.signing_key, |writer| {
 			let pub_key_spki = pub_key.subject_public_key_info();
 			// Write version
@@ -1188,6 +1199,24 @@ mod tests {
 		}
 
 		assert!(found);
+	}
+
+	#[cfg(feature = "crypto")]
+	#[test]
+	fn test_empty_crl_distribution_point_uris_rejected() {
+		let params = CertificateParams {
+			crl_distribution_points: vec![CrlDistributionPoint { uris: Vec::new() }],
+			..CertificateParams::default()
+		};
+
+		// A distribution point with no URIs would be encoded as an empty
+		// fullName, violating GeneralNames ::= SEQUENCE SIZE (1..MAX) OF
+		// GeneralName (RFC 5280 §4.2.1.13), so it must be rejected.
+		let key_pair = KeyPair::generate().unwrap();
+		assert_eq!(
+			params.self_signed(&key_pair).unwrap_err(),
+			Error::EmptyCrlDistributionPointUris
+		);
 	}
 
 	#[cfg(feature = "crypto")]
