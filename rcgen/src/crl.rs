@@ -386,13 +386,16 @@ impl RevokedCertParams {
 			//   optional for conforming CRL issuers and applications.  However, CRL
 			//   issuers SHOULD include reason codes (Section 5.3.1) and invalidity
 			//   dates (Section 5.3.2) whenever this information is available.
-			let has_reason_code =
-				matches!(self.reason_code, Some(reason) if reason != RevocationReason::Unspecified);
+			// RFC 5280 §5.3.1: "The reason code CRL entry extension SHOULD be
+			// absent instead of using the unspecified (0) reasonCode value."
+			let reason_code = self
+				.reason_code
+				.filter(|reason| *reason != RevocationReason::Unspecified);
 			let has_invalidity_date = self.invalidity_date.is_some();
-			if has_reason_code || has_invalidity_date {
+			if reason_code.is_some() || has_invalidity_date {
 				writer.next().write_sequence(|writer| {
 					// Write reason code if present.
-					if let Some(reason_code) = self.reason_code {
+					if let Some(reason_code) = reason_code {
 						write_x509_extension(writer.next(), oid::CRL_REASONS, false, |writer| {
 							writer.write_enum(reason_code as i64);
 						});
@@ -448,6 +451,25 @@ mod tests {
 			crl.signed_by(&test_issuer()).unwrap_err(),
 			Error::EmptyCrlDistributionPointUris
 		);
+	}
+
+	#[test]
+	fn test_unspecified_reason_code_not_written() {
+		let crl = test_crl(RevokedCertParams {
+			serial_number: SerialNumber::from(9999u64),
+			revocation_time: date_time_ymd(2025, 5, 1),
+			reason_code: Some(RevocationReason::Unspecified),
+			invalidity_date: Some(date_time_ymd(2025, 4, 1)),
+		});
+
+		let (_rem, parsed) = parse_x509_crl(crl.der()).unwrap();
+		let revoked = parsed.iter_revoked_certificates().next().unwrap();
+		// RFC 5280 §5.3.1: "The reason code CRL entry extension SHOULD be
+		// absent instead of using the unspecified (0) reasonCode value."
+		assert!(revoked
+			.extensions()
+			.iter()
+			.all(|ext| ext.oid != oid_registry::OID_X509_EXT_REASON_CODE));
 	}
 
 	#[test]
