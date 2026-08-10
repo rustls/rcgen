@@ -45,6 +45,8 @@ pub enum Error {
 	InvalidCrlNextUpdate,
 	/// CRL issuer specifies Key Usages that don't include cRLSign.
 	IssuerNotCrlSigner,
+	/// A CRL distribution point was specified without any URIs.
+	EmptyCrlDistributionPointUris,
 	#[cfg(not(feature = "crypto"))]
 	/// Missing serial number
 	MissingSerialNumber,
@@ -97,6 +99,9 @@ impl fmt::Display for Error {
 				f,
 				"CRL issuer must specify no key usage, or key usage including cRLSign"
 			)?,
+			EmptyCrlDistributionPointUris => {
+				write!(f, "CRL distribution points must include at least one URI")?
+			},
 			#[cfg(not(feature = "crypto"))]
 			MissingSerialNumber => write!(f, "A serial number must be specified")?,
 			#[cfg(feature = "x509-parser")]
