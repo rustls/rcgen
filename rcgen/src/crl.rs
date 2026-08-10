@@ -8,7 +8,7 @@ use crate::key_pair::sign_der;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	oid, write_distinguished_name, write_dt_utc_or_generalized,
+	dt_to_generalized, oid, write_distinguished_name, write_dt_utc_or_generalized,
 	write_x509_authority_key_identifier, write_x509_extension, Error, Issuer, KeyIdMethod,
 	KeyUsagePurpose, SerialNumber, SigningKey,
 };
@@ -388,18 +388,81 @@ impl RevokedCertParams {
 					}
 
 					// Write invalidity date if present.
+					// RFC 5280 §5.3.2: InvalidityDate ::= GeneralizedTime.
+					// Unlike the Time CHOICE used elsewhere, dates in the
+					// UTCTime range (1950-2049) must still be encoded as
+					// GeneralizedTime.
 					if let Some(invalidity_date) = self.invalidity_date {
 						write_x509_extension(
 							writer.next(),
 							oid::CRL_INVALIDITY_DATE,
 							false,
 							|writer| {
-								write_dt_utc_or_generalized(writer, invalidity_date);
+								writer.write_generalized_time(&dt_to_generalized(invalidity_date));
 							},
 						)
 					}
 				});
 			}
 		})
+	}
+}
+
+#[cfg(all(test, feature = "crypto"))]
+mod tests {
+	use x509_parser::num_bigint::BigUint;
+	use x509_parser::{oid_registry, parse_x509_crl};
+
+	use super::*;
+	use crate::{date_time_ymd, BasicConstraints, CertificateParams, IsCa, KeyPair};
+
+	#[test]
+	fn test_invalidity_date_generalized_time() {
+		let crl = test_crl(RevokedCertParams {
+			serial_number: SerialNumber::from(9999u64),
+			revocation_time: date_time_ymd(2025, 5, 1),
+			reason_code: None,
+			invalidity_date: Some(date_time_ymd(2025, 4, 1)),
+		});
+
+		let (_rem, parsed) = parse_x509_crl(crl.der()).unwrap();
+		let revoked = parsed.iter_revoked_certificates().next().unwrap();
+		assert_eq!(revoked.user_certificate, BigUint::from(9999u64));
+
+		let invalidity_date = revoked
+			.extensions()
+			.iter()
+			.find(|ext| ext.oid == oid_registry::OID_X509_EXT_INVALIDITY_DATE)
+			.unwrap();
+		// RFC 5280 §5.3.2: InvalidityDate ::= GeneralizedTime. Unlike the Time
+		// CHOICE used elsewhere, dates in the UTCTime range (1950-2049) must
+		// still be encoded as GeneralizedTime.
+		assert_eq!(invalidity_date.value, b"\x18\x0f20250401000000Z");
+	}
+
+	fn test_crl(revoked_cert: RevokedCertParams) -> CertificateRevocationList {
+		CertificateRevocationListParams {
+			this_update: date_time_ymd(2025, 5, 1),
+			next_update: date_time_ymd(2026, 5, 1),
+			crl_number: SerialNumber::from(1234u64),
+			issuing_distribution_point: None,
+			revoked_certs: vec![revoked_cert],
+			key_identifier_method: KeyIdMethod::Sha256,
+		}
+		.signed_by(&test_issuer())
+		.unwrap()
+	}
+
+	fn test_issuer() -> Issuer<'static, KeyPair> {
+		let mut issuer_params =
+			CertificateParams::new(vec!["crl.issuer.example.com".to_string()]).unwrap();
+		issuer_params.serial_number = Some(SerialNumber::from(9999u64));
+		issuer_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+		issuer_params.key_usages = vec![
+			KeyUsagePurpose::KeyCertSign,
+			KeyUsagePurpose::DigitalSignature,
+			KeyUsagePurpose::CrlSign,
+		];
+		Issuer::new(issuer_params, KeyPair::generate().unwrap())
 	}
 }
