@@ -57,7 +57,7 @@ fn test_botan() {
 #[test]
 fn test_botan_256() {
 	let (params, _) = default_params();
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::ECDSA_P256_SHA256).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -67,7 +67,7 @@ fn test_botan_256() {
 #[test]
 fn test_botan_384() {
 	let (params, _) = default_params();
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P384_SHA384).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::ECDSA_P384_SHA384).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -78,7 +78,7 @@ fn test_botan_384() {
 #[cfg(feature = "aws_lc_rs")]
 fn test_botan_521() {
 	let (params, _) = default_params();
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P521_SHA512).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::ECDSA_P521_SHA512).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -88,7 +88,7 @@ fn test_botan_521() {
 #[test]
 fn test_botan_25519() {
 	let (params, _) = default_params();
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ED25519).unwrap();
+	let key_pair = KeyPair::generate_for(&rcgen::ED25519).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -201,7 +201,7 @@ fn test_botan_imported_ca_with_printable_string() {
 #[test]
 fn test_botan_crl_parse() {
 	// Create an issuer CA.
-	let alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+	let alg = &rcgen::ECDSA_P256_SHA256;
 	let (mut issuer, _) = util::default_params();
 	issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	issuer.key_usages = vec![

@@ -30,7 +30,7 @@ use crate::{
 /// #[cfg(not(feature = "crypto"))]
 /// impl PublicKeyData for MyKeyPair {
 ///   fn der_bytes(&self) -> &[u8] { &self.public_key }
-///   fn algorithm(&self) -> &'static SignatureAlgorithm { &PKCS_ED25519 }
+///   fn algorithm(&self) -> &'static SignatureAlgorithm { &ED25519 }
 /// }
 /// # fn main () {
 /// // Generate a CRL issuer.
