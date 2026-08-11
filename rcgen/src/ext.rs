@@ -7,12 +7,13 @@ use std::str::FromStr;
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
+#[cfg(feature = "crypto")]
+use crate::ring_like::digest;
 use crate::string::Ia5String;
 #[cfg(feature = "x509-parser")]
 use crate::Error;
 use crate::{
-	oid, write_distinguished_name, CertificateParams, DistinguishedName, Issuer, KeyIdMethod,
-	SigningKey,
+	oid, write_distinguished_name, CertificateParams, DistinguishedName, Issuer, SigningKey,
 };
 
 /// An X.509v3 authority key identifier extension according to [RFC 5280 §4.2.1.1].
@@ -976,6 +977,115 @@ impl StaticExtension for CrlDistributionPoints<'_> {
 	const CRITICALITY: Criticality = Criticality::NonCritical;
 
 	const OID: &'static [u64] = oid::CRL_DISTRIBUTION_POINTS;
+}
+
+/// Method to generate key identifiers from public keys.
+///
+/// Key identifiers should be derived from the public key data. [RFC 7093] defines
+/// three methods to do so using a choice of SHA256 (method 1), SHA384 (method 2), or SHA512
+/// (method 3). In each case the first 160 bits of the hash are used as the key identifier
+/// to match the output length that would be produced were SHA1 used (a legacy option defined
+/// in RFC 5280).
+///
+/// In addition to the RFC 7093 mechanisms, rcgen supports using a pre-specified key identifier.
+/// This can be helpful when working with an existing `Certificate`.
+///
+/// [RFC 7093]: https://www.rfc-editor.org/rfc/rfc7093
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[non_exhaustive]
+pub enum KeyIdMethod {
+	/// RFC 7093 method 1 - a truncated SHA256 digest.
+	#[cfg(feature = "crypto")]
+	Sha256,
+	/// RFC 7093 method 2 - a truncated SHA384 digest.
+	#[cfg(feature = "crypto")]
+	Sha384,
+	/// RFC 7093 method 3 - a truncated SHA512 digest.
+	#[cfg(feature = "crypto")]
+	Sha512,
+	/// Pre-specified identifier. The exact given value is used as the key identifier.
+	PreSpecified(Vec<u8>),
+}
+
+impl KeyIdMethod {
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_x509(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Self, Error> {
+		let key_identifier_method =
+			x509.iter_extensions()
+				.find_map(|ext| match ext.parsed_extension() {
+					x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(key_id) => {
+						Some(KeyIdMethod::PreSpecified(key_id.0.into()))
+					},
+					_ => None,
+				});
+
+		Ok(match key_identifier_method {
+			Some(method) => method,
+			None => {
+				#[cfg(not(feature = "crypto"))]
+				return Err(Error::UnsupportedSignatureAlgorithm);
+				#[cfg(feature = "crypto")]
+				KeyIdMethod::Sha256
+			},
+		})
+	}
+
+	/// Derive a key identifier for the provided subject public key info using the key ID method.
+	///
+	/// Typically this is a truncated hash over the raw subject public key info, but may
+	/// be a pre-specified value.
+	///
+	/// This key identifier is used in the SubjectKeyIdentifier and AuthorityKeyIdentifier
+	/// X.509v3 extensions.
+	#[allow(unused_variables)]
+	pub(crate) fn derive(&self, subject_public_key_info: impl AsRef<[u8]>) -> Vec<u8> {
+		#[cfg_attr(not(feature = "crypto"), expect(clippy::let_unit_value))]
+		let digest_method = match &self {
+			#[cfg(feature = "crypto")]
+			Self::Sha256 => &digest::SHA256,
+			#[cfg(feature = "crypto")]
+			Self::Sha384 => &digest::SHA384,
+			#[cfg(feature = "crypto")]
+			Self::Sha512 => &digest::SHA512,
+			Self::PreSpecified(b) => {
+				return b.to_vec();
+			},
+		};
+		#[cfg(feature = "crypto")]
+		{
+			let digest = digest::digest(digest_method, subject_public_key_info.as_ref());
+			digest.as_ref()[0..20].to_vec()
+		}
+	}
+}
+
+/// An X.509v3 subject key identifier extension according to [RFC 5280 §4.2.1.2].
+///
+/// [RFC 5280 §4.2.1.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.2>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SubjectKeyIdentifier(Vec<u8>);
+
+impl SubjectKeyIdentifier {
+	pub(crate) fn new(key_identifier_method: &KeyIdMethod, pub_key_spki: &[u8]) -> Self {
+		Self(key_identifier_method.derive(pub_key_spki))
+	}
+}
+
+impl StaticExtension for SubjectKeyIdentifier {
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   SubjectKeyIdentifier ::= KeyIdentifier
+		   KeyIdentifier ::= OCTET STRING
+		*/
+		writer.write_bytes(&self.0)
+	}
+
+	// RFC 5280 §4.2.1.2: "Conforming CAs MUST mark this extension as non-critical."
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	const OID: &'static [u64] = oid::SUBJECT_KEY_IDENTIFIER;
 }
 
 #[cfg(test)]
