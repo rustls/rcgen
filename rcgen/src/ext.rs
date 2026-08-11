@@ -636,22 +636,6 @@ pub struct CustomExtension {
 }
 
 impl CustomExtension {
-	/// Creates a new acmeIdentifier extension for ACME TLS-ALPN-01
-	/// as specified in [RFC 8737](https://tools.ietf.org/html/rfc8737#section-3)
-	///
-	/// Panics if the passed `sha_digest` parameter doesn't hold 32 bytes (256 bits).
-	pub fn new_acme_identifier(sha_digest: &[u8]) -> Self {
-		assert_eq!(sha_digest.len(), 32, "wrong size of sha_digest");
-		let der_value = yasna::construct_der(|writer| {
-			writer.write_bytes(sha_digest);
-		});
-		Self {
-			oid: oid::PE_ACME.to_owned(),
-			criticality: Criticality::Critical,
-			der_value,
-		}
-	}
-
 	/// Create a new custom extension with the specified content
 	pub fn from_oid_content(oid: &[u64], criticality: Criticality, der_value: Vec<u8>) -> Self {
 		Self {
@@ -678,6 +662,51 @@ impl Extension for &CustomExtension {
 
 	fn write_value(&self, writer: DERWriter) {
 		writer.write_der(&self.der_value)
+	}
+}
+
+/// An ACME TLS-ALPN-01 challenge response certificate extension.
+///
+/// Add it to [`CertificateParams::custom_extensions`] by converting it into a
+/// [`CustomExtension`]. See [RFC 8737 §3] for more information.
+///
+/// If you have a `Vec<u8>` or `&[u8]` digest, use `try_from` and handle the
+/// potential error if the input length is not 32 bytes.
+///
+/// [RFC 8737 §3]: <https://www.rfc-editor.org/rfc/rfc8737#section-3>
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcmeIdentifier(
+	/// The SHA-256 digest of the RFC 8555 key authorization for a TLS-ALPN-01
+	/// challenge issued by the CA.
+	pub [u8; 32],
+);
+
+impl TryFrom<&[u8]> for AcmeIdentifier {
+	type Error = Error;
+
+	fn try_from(key_auth_digest: &[u8]) -> Result<Self, Self::Error> {
+		// All TLS-ALPN-01 challenge response digests are 32 bytes long,
+		// matching the output of the SHA-256 digest algorithm.
+		Ok(Self(
+			key_auth_digest
+				.try_into()
+				.map_err(|_| Error::InvalidAcmeIdentifierLength)?,
+		))
+	}
+}
+
+impl From<AcmeIdentifier> for CustomExtension {
+	fn from(identifier: AcmeIdentifier) -> Self {
+		Self {
+			oid: oid::PE_ACME.to_owned(),
+			// RFC 8737 §3: "The acmeIdentifier extension MUST be critical so that
+			// the certificate isn't inadvertently used by non-ACME software."
+			criticality: Criticality::Critical,
+			der_value: yasna::construct_der(|writer| {
+				// Authorization ::= OCTET STRING (SIZE (32))
+				writer.write_bytes(&identifier.0)
+			}),
+		}
 	}
 }
 
@@ -937,6 +966,27 @@ mod tests {
 					}));
 				})
 			})
+		);
+	}
+
+	#[test]
+	fn acme_identifier_to_custom_extension() {
+		let identifier = AcmeIdentifier::try_from([0xAB; 32].as_slice()).unwrap();
+		let custom_ext = CustomExtension::from(identifier);
+		assert_eq!(custom_ext.oid, oid::PE_ACME);
+		// RFC 8737 §3: the acmeIdentifier extension MUST be critical.
+		assert_eq!(custom_ext.criticality, Criticality::Critical);
+		// Authorization ::= OCTET STRING (SIZE (32))
+		let mut expected = vec![0x04, 0x20];
+		expected.extend([0xAB; 32]);
+		assert_eq!(custom_ext.der_value, expected);
+	}
+
+	#[test]
+	fn acme_identifier_rejects_wrong_digest_length() {
+		assert_eq!(
+			AcmeIdentifier::try_from([0u8; 31].as_slice()).unwrap_err(),
+			Error::InvalidAcmeIdentifierLength,
 		);
 	}
 
