@@ -429,6 +429,33 @@ impl StaticExtension for CrlDistributionPoints<'_> {
 	}
 }
 
+/// An X.509v3 subject key identifier extension according to [RFC 5280 §4.2.1.2].
+///
+/// [RFC 5280 §4.2.1.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.2>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SubjectKeyIdentifier(Vec<u8>);
+
+impl SubjectKeyIdentifier {
+	pub(crate) fn new(key_identifier_method: &KeyIdMethod, pub_key_spki: &[u8]) -> Self {
+		Self(key_identifier_method.derive(pub_key_spki))
+	}
+}
+
+impl StaticExtension for SubjectKeyIdentifier {
+	const OID: &'static [u64] = oid::SUBJECT_KEY_IDENTIFIER;
+
+	// RFC 5280 §4.2.1.2: "Conforming CAs MUST mark this extension as non-critical."
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   SubjectKeyIdentifier ::= KeyIdentifier
+		   KeyIdentifier ::= OCTET STRING
+		*/
+		writer.write_bytes(&self.0)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

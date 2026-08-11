@@ -12,7 +12,7 @@ use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
 use crate::ext::{
 	write_extension, AuthorityKeyIdentifier, CrlDistributionPoints, ExtendedKeyUsage, KeyUsage,
-	NameConstraints as NameConstraintsExt, SubjectAlternativeName,
+	NameConstraints as NameConstraintsExt, SubjectAlternativeName, SubjectKeyIdentifier,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -208,7 +208,7 @@ impl CertificateParams {
 					if let Some(eku) = ExtendedKeyUsage::from_params(self) {
 						write_extension(writer.next(), &eku);
 					}
-					self.write_ca_extensions(writer, None);
+					self.write_ca_extensions(writer);
 					for ext in &self.custom_extensions {
 						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
 							writer.write_der(ext.content())
@@ -220,23 +220,12 @@ impl CertificateParams {
 	}
 
 	/// Write a certificate's BasicConstraints as defined in RFC 5280.
-	fn write_ca_extensions(&self, writer: &mut DERWriterSeq, pub_key_spki: Option<&[u8]>) {
+	fn write_ca_extensions(&self, writer: &mut DERWriterSeq) {
 		let is_ca = match &self.is_ca {
 			IsCa::Ca(bc) => Some(bc),
 			IsCa::ExplicitNoCa => None,
 			IsCa::NoCa => return,
 		};
-
-		if let Some(pub_key_spki) = pub_key_spki {
-			write_x509_extension(
-				writer.next(),
-				oid::SUBJECT_KEY_IDENTIFIER,
-				false,
-				|writer| {
-					writer.write_bytes(&self.key_identifier_method.derive(pub_key_spki));
-				},
-			);
-		}
 
 		// Write basic_constraints
 		write_x509_extension(writer.next(), oid::BASIC_CONSTRAINTS, true, |writer| {
@@ -475,7 +464,16 @@ impl CertificateParams {
 			write_extension(writer.next(), &crl_dps);
 		}
 
-		self.write_ca_extensions(writer, Some(pub_key_spki));
+		// SKI is currently only written for CA certificates (IsCa::Ca or
+		// IsCa::ExplicitNoCa).
+		if self.is_ca != IsCa::NoCa {
+			write_extension(
+				writer.next(),
+				&SubjectKeyIdentifier::new(&self.key_identifier_method, pub_key_spki),
+			);
+		}
+
+		self.write_ca_extensions(writer);
 
 		for ext in &self.custom_extensions {
 			write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
