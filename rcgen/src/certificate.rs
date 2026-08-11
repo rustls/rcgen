@@ -11,7 +11,7 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
 use crate::ext::{
-	write_extension, AuthorityKeyIdentifier, ExtendedKeyUsage, KeyUsage,
+	write_extension, AuthorityKeyIdentifier, CrlDistributionPoints, ExtendedKeyUsage, KeyUsage,
 	NameConstraints as NameConstraintsExt, SubjectAlternativeName,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
@@ -471,19 +471,8 @@ impl CertificateParams {
 			write_extension(writer.next(), &nc);
 		}
 
-		if !self.crl_distribution_points.is_empty() {
-			write_x509_extension(
-				writer.next(),
-				oid::CRL_DISTRIBUTION_POINTS,
-				false,
-				|writer| {
-					writer.write_sequence(|writer| {
-						for distribution_point in &self.crl_distribution_points {
-							distribution_point.write_der(writer.next());
-						}
-					})
-				},
-			);
+		if let Some(crl_dps) = CrlDistributionPoints::from_params(self) {
+			write_extension(writer.next(), &crl_dps);
 		}
 
 		self.write_ca_extensions(writer, Some(pub_key_spki));

@@ -4,6 +4,7 @@ use std::net::IpAddr;
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
+use crate::crl::CrlDistributionPoint;
 use crate::{
 	oid, write_distinguished_name, CertificateParams, ExtendedKeyUsagePurpose, GeneralSubtree,
 	Issuer, KeyIdMethod, KeyUsagePurpose, SanType, SigningKey,
@@ -393,6 +394,38 @@ impl StaticExtension for NameConstraints<'_> {
 				Self::write_general_subtrees(writer.next(), 1, self.excluded_subtrees);
 			}
 		});
+	}
+}
+
+/// An X.509v3 CRL distribution points extension according to [RFC 5280 §4.2.1.13].
+///
+/// [RFC 5280 §4.2.1.13]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct CrlDistributionPoints<'params>(&'params [CrlDistributionPoint]);
+
+impl<'params> CrlDistributionPoints<'params> {
+	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
+		if params.crl_distribution_points.is_empty() {
+			return None;
+		}
+
+		Some(Self(&params.crl_distribution_points))
+	}
+}
+
+impl StaticExtension for CrlDistributionPoints<'_> {
+	const OID: &'static [u64] = oid::CRL_DISTRIBUTION_POINTS;
+
+	// RFC 5280 §4.2.1.13: "The extension SHOULD be non-critical".
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	fn write_value(&self, writer: DERWriter) {
+		// CRLDistributionPoints ::= SEQUENCE SIZE (1..MAX) OF DistributionPoint
+		writer.write_sequence(|writer| {
+			for distribution_point in self.0 {
+				distribution_point.write_der(writer.next());
+			}
+		})
 	}
 }
 
