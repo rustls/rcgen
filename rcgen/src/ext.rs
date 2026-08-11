@@ -5,8 +5,8 @@ use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
 use crate::{
-	oid, CertificateParams, ExtendedKeyUsagePurpose, Issuer, KeyIdMethod, KeyUsagePurpose, SanType,
-	SigningKey,
+	oid, write_distinguished_name, CertificateParams, ExtendedKeyUsagePurpose, GeneralSubtree,
+	Issuer, KeyIdMethod, KeyUsagePurpose, SanType, SigningKey,
 };
 
 /// An X.509 extension whose OID and criticality are fixed by the profile
@@ -315,6 +315,87 @@ impl StaticExtension for ExtendedKeyUsage<'_> {
 	}
 }
 
+/// An X.509v3 name constraints extension according to [RFC 5280 §4.2.1.10].
+///
+/// [RFC 5280 §4.2.1.10]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.10>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NameConstraints<'params> {
+	permitted_subtrees: &'params [GeneralSubtree],
+	excluded_subtrees: &'params [GeneralSubtree],
+}
+
+impl<'params> NameConstraints<'params> {
+	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
+		match &params.name_constraints {
+			// If both subtrees are empty, the extension must be omitted.
+			Some(nc) if !nc.is_empty() => Some(Self {
+				permitted_subtrees: &nc.permitted_subtrees,
+				excluded_subtrees: &nc.excluded_subtrees,
+			}),
+			_ => None,
+		}
+	}
+
+	fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
+		/*
+		   GeneralSubtrees ::= SEQUENCE SIZE (1..MAX) OF GeneralSubtree
+		   GeneralSubtree ::= SEQUENCE {
+				base                    GeneralName,
+				minimum         [0]     BaseDistance DEFAULT 0,
+				maximum         [1]     BaseDistance OPTIONAL }
+		   BaseDistance ::= INTEGER (0..MAX)
+		*/
+		writer.write_tagged_implicit(Tag::context(tag), |writer| {
+			writer.write_sequence(|writer| {
+				for subtree in general_subtrees.iter() {
+					writer.next().write_sequence(|writer| {
+						let writer = writer.next();
+						let tag = Tag::context(subtree.tag());
+						match subtree {
+							GeneralSubtree::Rfc822Name(name) | GeneralSubtree::DnsName(name) => {
+								writer.write_tagged_implicit(tag, |writer| {
+									writer.write_ia5_string(name)
+								})
+							},
+							// `Name` is a CHOICE, so X.680 §31.2.7 requires explicit tagging.
+							GeneralSubtree::DirectoryName(name) => writer
+								.write_tagged(tag, |writer| write_distinguished_name(writer, name)),
+							GeneralSubtree::IpAddress(subnet) => writer
+								.write_tagged_implicit(tag, |writer| {
+									writer.write_bytes(&subnet.to_bytes())
+								}),
+						}
+						// minimum must be 0 (the default) and maximum must be absent
+					});
+				}
+			});
+		});
+	}
+}
+
+impl StaticExtension for NameConstraints<'_> {
+	const OID: &'static [u64] = oid::NAME_CONSTRAINTS;
+
+	// RFC 5280 §4.2.1.10: "Conforming CAs MUST mark this extension as critical."
+	const CRITICALITY: Criticality = Criticality::Critical;
+
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   NameConstraints ::= SEQUENCE {
+				permittedSubtrees       [0]     GeneralSubtrees OPTIONAL,
+				excludedSubtrees        [1]     GeneralSubtrees OPTIONAL }
+		*/
+		writer.write_sequence(|writer| {
+			if !self.permitted_subtrees.is_empty() {
+				Self::write_general_subtrees(writer.next(), 0, self.permitted_subtrees);
+			}
+			if !self.excluded_subtrees.is_empty() {
+				Self::write_general_subtrees(writer.next(), 1, self.excluded_subtrees);
+			}
+		});
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -389,6 +470,20 @@ mod tests {
 				})
 			})
 		);
+	}
+
+	#[test]
+	fn name_constraints_absent_when_subtrees_empty() {
+		// A name constraints extension with no permitted or excluded subtrees
+		// would violate SEQUENCE SIZE (1..MAX) and must be omitted.
+		let params = CertificateParams {
+			name_constraints: Some(crate::NameConstraints {
+				permitted_subtrees: Vec::new(),
+				excluded_subtrees: Vec::new(),
+			}),
+			..CertificateParams::default()
+		};
+		assert!(NameConstraints::from_params(&params).is_none());
 	}
 
 	#[test]

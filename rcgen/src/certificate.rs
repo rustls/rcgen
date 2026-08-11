@@ -11,7 +11,8 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
 use crate::ext::{
-	write_extension, AuthorityKeyIdentifier, ExtendedKeyUsage, KeyUsage, SubjectAlternativeName,
+	write_extension, AuthorityKeyIdentifier, ExtendedKeyUsage, KeyUsage,
+	NameConstraints as NameConstraintsExt, SubjectAlternativeName,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -466,28 +467,8 @@ impl CertificateParams {
 			write_extension(writer.next(), &eku);
 		}
 
-		if let Some(name_constraints) = &self.name_constraints {
-			// If both trees are empty, the extension must be omitted.
-			if !name_constraints.is_empty() {
-				write_x509_extension(writer.next(), oid::NAME_CONSTRAINTS, true, |writer| {
-					writer.write_sequence(|writer| {
-						if !name_constraints.permitted_subtrees.is_empty() {
-							write_general_subtrees(
-								writer.next(),
-								0,
-								&name_constraints.permitted_subtrees,
-							);
-						}
-						if !name_constraints.excluded_subtrees.is_empty() {
-							write_general_subtrees(
-								writer.next(),
-								1,
-								&name_constraints.excluded_subtrees,
-							);
-						}
-					});
-				});
-			}
+		if let Some(nc) = NameConstraintsExt::from_params(self) {
+			write_extension(writer.next(), &nc);
 		}
 
 		if !self.crl_distribution_points.is_empty() {
@@ -528,31 +509,6 @@ impl AsRef<CertificateParams> for CertificateParams {
 	fn as_ref(&self) -> &CertificateParams {
 		self
 	}
-}
-
-fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
-	writer.write_tagged_implicit(Tag::context(tag), |writer| {
-		writer.write_sequence(|writer| {
-			for subtree in general_subtrees.iter() {
-				writer.next().write_sequence(|writer| {
-					let writer = writer.next();
-					let tag = Tag::context(subtree.tag());
-					match subtree {
-						GeneralSubtree::Rfc822Name(name) | GeneralSubtree::DnsName(name) => writer
-							.write_tagged_implicit(tag, |writer| writer.write_ia5_string(name)),
-						// `Name` is a CHOICE, so X.680 §31.2.7 requires explicit tagging.
-						GeneralSubtree::DirectoryName(name) => writer
-							.write_tagged(tag, |writer| write_distinguished_name(writer, name)),
-						GeneralSubtree::IpAddress(subnet) => writer
-							.write_tagged_implicit(tag, |writer| {
-								writer.write_bytes(&subnet.to_bytes())
-							}),
-					}
-					// minimum must be 0 (the default) and maximum must be absent
-				});
-			}
-		});
-	});
 }
 
 /// A PKCS #10 CSR attribute, as defined in [RFC 5280] and constrained
@@ -793,7 +749,7 @@ impl NameConstraints {
 		}))
 	}
 
-	fn is_empty(&self) -> bool {
+	pub(crate) fn is_empty(&self) -> bool {
 		self.permitted_subtrees.is_empty() && self.excluded_subtrees.is_empty()
 	}
 }
@@ -847,7 +803,7 @@ impl GeneralSubtree {
 		Ok(result)
 	}
 
-	fn tag(&self) -> u64 {
+	pub(crate) fn tag(&self) -> u64 {
 		// Defined in the GeneralName list in
 		// https://tools.ietf.org/html/rfc5280#page-38
 		const TAG_RFC822_NAME: u64 = 1;
@@ -917,7 +873,7 @@ impl CidrSubnet {
 	pub fn from_v6_prefix(addr: [u8; 16], prefix: u8) -> Self {
 		CidrSubnet::V6(addr, mask!(u128, prefix))
 	}
-	fn to_bytes(self) -> Vec<u8> {
+	pub(crate) fn to_bytes(self) -> Vec<u8> {
 		let mut res = Vec::new();
 		match self {
 			CidrSubnet::V4(addr, mask) => {
