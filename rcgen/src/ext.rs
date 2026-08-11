@@ -1,9 +1,15 @@
 use std::fmt::Debug;
+use std::net::IpAddr;
+#[cfg(feature = "x509-parser")]
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
-use crate::{oid, Issuer, KeyIdMethod, SigningKey};
+use crate::string::Ia5String;
+#[cfg(feature = "x509-parser")]
+use crate::Error;
+use crate::{oid, CertificateParams, Issuer, KeyIdMethod, SigningKey};
 
 /// An X.509v3 authority key identifier extension according to [RFC 5280 §4.2.1.1].
 ///
@@ -154,6 +160,204 @@ impl From<bool> for Criticality {
 	}
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[allow(missing_docs)]
+#[non_exhaustive]
+/// The type of subject alt name
+pub enum SanType {
+	/// Also known as E-Mail address
+	Rfc822Name(Ia5String),
+	DnsName(Ia5String),
+	URI(Ia5String),
+	IpAddress(IpAddr),
+	OtherName((Vec<u64>, OtherNameValue)),
+}
+
+impl SanType {
+	#[cfg(all(test, feature = "x509-parser"))]
+	pub(crate) fn from_x509(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Vec<Self>, Error> {
+		let sans = x509
+			.subject_alternative_name()
+			.map_err(|_| Error::CouldNotParseCertificate)?
+			.map(|ext| &ext.value.general_names);
+
+		let Some(sans) = sans else {
+			return Ok(Vec::new());
+		};
+
+		let mut subject_alt_names = Vec::with_capacity(sans.len());
+		for san in sans {
+			subject_alt_names.push(Self::try_from_general(san)?);
+		}
+		Ok(subject_alt_names)
+	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn try_from_general(
+		name: &x509_parser::extensions::GeneralName<'_>,
+	) -> Result<Self, Error> {
+		use x509_parser::der_parser::asn1_rs::{self, FromDer, Tag, TaggedExplicit};
+		Ok(match name {
+			x509_parser::extensions::GeneralName::RFC822Name(name) => {
+				SanType::Rfc822Name((*name).try_into()?)
+			},
+			x509_parser::extensions::GeneralName::DNSName(name) => {
+				SanType::DnsName((*name).try_into()?)
+			},
+			x509_parser::extensions::GeneralName::URI(name) => SanType::URI((*name).try_into()?),
+			x509_parser::extensions::GeneralName::IPAddress(octets) => {
+				SanType::IpAddress(ip_addr_from_octets(octets)?)
+			},
+			x509_parser::extensions::GeneralName::OtherName(oid, value) => {
+				let oid = oid.iter().ok_or(Error::CouldNotParseCertificate)?;
+				// We first remove the explicit tag ([0] EXPLICIT)
+				let (_, other_name) = TaggedExplicit::<asn1_rs::Any, _, 0>::from_der(value)
+					.map_err(|_| Error::CouldNotParseCertificate)?;
+				let other_name = other_name.into_inner();
+
+				let other_name_value = match other_name.tag() {
+					Tag::Utf8String => OtherNameValue::Utf8String(
+						std::str::from_utf8(other_name.data)
+							.map_err(|_| Error::CouldNotParseCertificate)?
+							.to_owned(),
+					),
+					_ => return Err(Error::CouldNotParseCertificate),
+				};
+				SanType::OtherName((oid.collect(), other_name_value))
+			},
+			_ => return Err(Error::InvalidNameType),
+		})
+	}
+
+	fn tag(&self) -> u64 {
+		// Defined in the GeneralName list in
+		// https://tools.ietf.org/html/rfc5280#page-38
+		const TAG_OTHER_NAME: u64 = 0;
+		const TAG_RFC822_NAME: u64 = 1;
+		const TAG_DNS_NAME: u64 = 2;
+		const TAG_URI: u64 = 6;
+		const TAG_IP_ADDRESS: u64 = 7;
+
+		match self {
+			SanType::Rfc822Name(_name) => TAG_RFC822_NAME,
+			SanType::DnsName(_name) => TAG_DNS_NAME,
+			SanType::URI(_name) => TAG_URI,
+			SanType::IpAddress(_addr) => TAG_IP_ADDRESS,
+			Self::OtherName(_oid) => TAG_OTHER_NAME,
+		}
+	}
+}
+
+/// An `OtherName` value, defined in [RFC 5280§4.1.2.4].
+///
+/// While the standard specifies this could be any ASN.1 type rcgen limits
+/// the value to a UTF-8 encoded string as this will cover the most common
+/// use cases, for instance smart card user principal names (UPN).
+///
+/// [RFC 5280§4.1.2.4]: https://datatracker.ietf.org/doc/html/rfc5280#section-4.1.2.4
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[non_exhaustive]
+pub enum OtherNameValue {
+	/// A string encoded using UTF-8
+	Utf8String(String),
+}
+
+impl OtherNameValue {
+	fn write_der(&self, writer: DERWriter) {
+		writer.write_tagged(Tag::context(0), |writer| match self {
+			OtherNameValue::Utf8String(s) => writer.write_utf8_string(s),
+		});
+	}
+}
+
+impl<T> From<T> for OtherNameValue
+where
+	T: Into<String>,
+{
+	fn from(t: T) -> Self {
+		OtherNameValue::Utf8String(t.into())
+	}
+}
+
+#[cfg(feature = "x509-parser")]
+fn ip_addr_from_octets(octets: &[u8]) -> Result<IpAddr, Error> {
+	if let Ok(ipv6_octets) = <&[u8; 16]>::try_from(octets) {
+		Ok(Ipv6Addr::from(*ipv6_octets).into())
+	} else if let Ok(ipv4_octets) = <&[u8; 4]>::try_from(octets) {
+		Ok(Ipv4Addr::from(*ipv4_octets).into())
+	} else {
+		Err(Error::InvalidIpAddressOctetLength(octets.len()))
+	}
+}
+
+/// An X.509v3 subject alternative name extension according to [RFC 5280 §4.2.1.6].
+///
+/// [RFC 5280 §4.2.1.6]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.6>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SubjectAlternativeName<'params> {
+	criticality: Criticality,
+	names: &'params [SanType],
+}
+
+impl<'params> SubjectAlternativeName<'params> {
+	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
+		// GeneralNames ::= SEQUENCE SIZE (1..MAX): an empty SAN can't be encoded,
+		// so the extension is omitted (RFC 5280 §4.2.1.6).
+		if params.subject_alt_names.is_empty() {
+			return None;
+		}
+
+		Some(Self {
+			// Per RFC 5280 §4.1.2.6, SAN must be marked critical if the subject
+			// is an empty sequence, and SHOULD be non-critical otherwise.
+			criticality: params.distinguished_name.entries.is_empty().into(),
+			names: &params.subject_alt_names,
+		})
+	}
+
+	fn write_name(writer: DERWriter, san: &SanType) {
+		writer.write_tagged_implicit(Tag::context(san.tag()), |writer| match san {
+			SanType::Rfc822Name(name) | SanType::DnsName(name) | SanType::URI(name) => {
+				writer.write_ia5_string(name.as_str())
+			},
+			SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
+			SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
+			SanType::OtherName((oid, value)) => {
+				// otherName SEQUENCE { OID, [0] explicit any defined by oid }
+				// https://datatracker.ietf.org/doc/html/rfc5280#page-38
+				writer.write_sequence(|writer| {
+					writer.next().write_oid(&ObjectIdentifier::from_slice(oid));
+					value.write_der(writer.next());
+				});
+			},
+		})
+	}
+}
+
+impl Extension for SubjectAlternativeName<'_> {
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   SubjectAltName ::= GeneralNames
+		   GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
+		*/
+		writer.write_sequence(|writer| {
+			for san in self.names.iter() {
+				Self::write_name(writer.next(), san);
+			}
+		});
+	}
+
+	fn criticality(&self) -> Criticality {
+		self.criticality
+	}
+
+	fn oid(&self) -> &[u64] {
+		oid::SUBJECT_ALT_NAME
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -228,6 +432,85 @@ mod tests {
 				})
 			})
 		);
+	}
+
+	#[test]
+	fn san_absent_when_no_names() {
+		assert!(SubjectAlternativeName::from_params(&CertificateParams::default()).is_none());
+	}
+
+	#[test]
+	fn san_critical_when_subject_empty() {
+		// RFC 5280 §4.1.2.6: SAN must be critical if the subject is an empty sequence.
+		let mut params = CertificateParams {
+			subject_alt_names: vec![SanType::DnsName("example.com".try_into().unwrap())],
+			..CertificateParams::default()
+		};
+		assert_eq!(
+			SubjectAlternativeName::from_params(&params)
+				.unwrap()
+				.criticality(),
+			Criticality::NonCritical
+		);
+
+		params.distinguished_name = crate::DistinguishedName::new();
+		assert_eq!(
+			SubjectAlternativeName::from_params(&params)
+				.unwrap()
+				.criticality(),
+			Criticality::Critical
+		);
+	}
+
+	#[cfg(feature = "x509-parser")]
+	mod test_ip_address_from_octets {
+		use super::*;
+
+		#[test]
+		fn ipv4() {
+			let octets = [10, 20, 30, 40];
+			let actual = ip_addr_from_octets(&octets).unwrap();
+			assert_eq!(IpAddr::from(octets), actual)
+		}
+
+		#[test]
+		fn ipv6() {
+			let octets = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+			let actual = ip_addr_from_octets(&octets).unwrap();
+			assert_eq!(IpAddr::from(octets), actual)
+		}
+
+		#[test]
+		fn mismatch() {
+			let incorrect = Vec::from_iter(0..10);
+			let actual = ip_addr_from_octets(&incorrect).unwrap_err();
+			assert_eq!(Error::InvalidIpAddressOctetLength(10), actual);
+		}
+
+		#[test]
+		fn none() {
+			let actual = ip_addr_from_octets(&[]).unwrap_err();
+			assert_eq!(Error::InvalidIpAddressOctetLength(0), actual);
+		}
+
+		#[test]
+		fn too_many() {
+			let incorrect = Vec::from_iter(0..20);
+			let actual = ip_addr_from_octets(&incorrect).unwrap_err();
+			assert_eq!(Error::InvalidIpAddressOctetLength(20), actual);
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	#[test]
+	fn san_type_from_general_name_with_ipv4() {
+		use x509_parser::extensions::GeneralName;
+
+		let octets = [1, 2, 3, 4];
+		let value = GeneralName::IPAddress(&octets);
+		let actual = SanType::try_from_general(&value).unwrap();
+
+		assert_eq!(SanType::IpAddress(IpAddr::from(octets)), actual);
 	}
 
 	#[derive(Debug)]
