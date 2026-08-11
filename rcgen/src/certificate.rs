@@ -173,19 +173,25 @@ impl CertificateParams {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
 			.map_err(|_| Error::CouldNotParseCertificate)?;
 
-		Ok(CertificateParams {
-			is_ca: IsCa::from_x509(&x509)?,
-			subject_alt_names: SanType::from_x509(&x509)?,
-			key_usages: KeyUsagePurpose::from_x509(&x509)?,
-			extended_key_usages: ExtendedKeyUsagePurpose::from_x509(&x509)?,
-			name_constraints: NameConstraints::from_x509(&x509)?,
+		let mut params = CertificateParams {
 			serial_number: Some(x509.serial.to_bytes_be().into()),
-			key_identifier_method: KeyIdMethod::from_x509(&x509)?,
 			distinguished_name: DistinguishedName::from_name(&x509.tbs_certificate.subject)?,
 			not_before: x509.validity().not_before.to_datetime(),
 			not_after: x509.validity().not_after.to_datetime(),
 			..Default::default()
-		})
+		};
+
+		for parsed in x509.iter_extensions().map(|ext| ext.parsed_extension()) {
+			// Extensions that can't be represented in params are ignored.
+			let _ = BasicConstraints::from_parsed(&mut params, parsed)?
+				|| SubjectAlternativeName::from_parsed(&mut params, parsed)?
+				|| KeyUsage::from_parsed(&mut params, parsed)?
+				|| ExtendedKeyUsage::from_parsed(&mut params, parsed)?
+				|| NameConstraintsExt::from_parsed(&mut params, parsed)?
+				|| SubjectKeyIdentifier::from_parsed(&mut params, parsed)?;
+		}
+
+		Ok(params)
 	}
 
 	/// Returns the X.509 extensions for a CSR extension request attribute as defined
