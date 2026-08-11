@@ -11,7 +11,8 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
 use crate::ext::{
-	AuthorityKeyIdentifier, ExtendedKeyUsage, Extension, KeyUsage, SubjectAlternativeName,
+	AuthorityKeyIdentifier, ExtendedKeyUsage, Extension, KeyUsage, NameConstraintsExt,
+	SubjectAlternativeName,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -21,7 +22,7 @@ use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized, write_x509_extension,
 	DistinguishedName, Error, ExtendedKeyUsagePurpose, Issuer, KeyIdMethod, KeyUsagePurpose,
-	SanType, SerialNumber, SigningKey,
+	NameConstraints, SanType, SerialNumber, SigningKey,
 };
 
 /// An issued certificate
@@ -466,28 +467,8 @@ impl CertificateParams {
 			eku.write(writer.next());
 		}
 
-		if let Some(name_constraints) = &self.name_constraints {
-			// If both trees are empty, the extension must be omitted.
-			if !name_constraints.is_empty() {
-				write_x509_extension(writer.next(), oid::NAME_CONSTRAINTS, true, |writer| {
-					writer.write_sequence(|writer| {
-						if !name_constraints.permitted_subtrees.is_empty() {
-							write_general_subtrees(
-								writer.next(),
-								0,
-								&name_constraints.permitted_subtrees,
-							);
-						}
-						if !name_constraints.excluded_subtrees.is_empty() {
-							write_general_subtrees(
-								writer.next(),
-								1,
-								&name_constraints.excluded_subtrees,
-							);
-						}
-					});
-				});
-			}
+		if let Some(nc) = NameConstraintsExt::from_params(self) {
+			nc.write(writer.next());
 		}
 
 		if !self.crl_distribution_points.is_empty() {
@@ -528,31 +509,6 @@ impl AsRef<CertificateParams> for CertificateParams {
 	fn as_ref(&self) -> &CertificateParams {
 		self
 	}
-}
-
-fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
-	writer.write_tagged_implicit(Tag::context(tag), |writer| {
-		writer.write_sequence(|writer| {
-			for subtree in general_subtrees.iter() {
-				writer.next().write_sequence(|writer| {
-					let writer = writer.next();
-					let tag = Tag::context(subtree.tag());
-					match subtree {
-						GeneralSubtree::Rfc822Name(name) | GeneralSubtree::DnsName(name) => writer
-							.write_tagged_implicit(tag, |writer| writer.write_ia5_string(name)),
-						// `Name` is a CHOICE, so X.680 §31.2.7 requires explicit tagging.
-						GeneralSubtree::DirectoryName(name) => writer
-							.write_tagged(tag, |writer| write_distinguished_name(writer, name)),
-						GeneralSubtree::IpAddress(subnet) => writer
-							.write_tagged_implicit(tag, |writer| {
-								writer.write_bytes(&subnet.to_bytes())
-							}),
-					}
-					// minimum must be 0 (the default) and maximum must be absent
-				});
-			}
-		});
-	});
 }
 
 /// A PKCS #10 CSR attribute, as defined in [RFC 5280] and constrained
@@ -671,215 +627,6 @@ impl DnType {
 			oid::ORG_UNIT_NAME => DnType::OrganizationalUnitName,
 			oid::COMMON_NAME => DnType::CommonName,
 			oid => DnType::CustomDnType(oid.into()),
-		}
-	}
-}
-
-/// The [NameConstraints extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.10)
-/// (only relevant for CA certificates)
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct NameConstraints {
-	/// A list of subtrees that the domain has to match.
-	pub permitted_subtrees: Vec<GeneralSubtree>,
-	/// A list of subtrees that the domain must not match.
-	///
-	/// Any name matching an excluded subtree is invalid even if it also matches a permitted subtree.
-	pub excluded_subtrees: Vec<GeneralSubtree>,
-}
-
-impl NameConstraints {
-	#[cfg(all(test, feature = "x509-parser"))]
-	fn from_x509(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Option<Self>, Error> {
-		let constraints = x509
-			.name_constraints()
-			.map_err(|_| Error::CouldNotParseCertificate)?
-			.map(|ext| ext.value);
-
-		let Some(constraints) = constraints else {
-			return Ok(None);
-		};
-
-		let permitted_subtrees = if let Some(permitted) = &constraints.permitted_subtrees {
-			GeneralSubtree::from_x509(permitted)?
-		} else {
-			Vec::new()
-		};
-
-		let excluded_subtrees = if let Some(excluded) = &constraints.excluded_subtrees {
-			GeneralSubtree::from_x509(excluded)?
-		} else {
-			Vec::new()
-		};
-
-		Ok(Some(Self {
-			permitted_subtrees,
-			excluded_subtrees,
-		}))
-	}
-
-	fn is_empty(&self) -> bool {
-		self.permitted_subtrees.is_empty() && self.excluded_subtrees.is_empty()
-	}
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-#[allow(missing_docs)]
-#[non_exhaustive]
-/// General Subtree type.
-///
-/// This type has similarities to the [`SanType`] enum but is not equal.
-/// For example, `GeneralSubtree` has CIDR subnets for ip addresses
-/// while [`SanType`] has IP addresses.
-pub enum GeneralSubtree {
-	/// Also known as E-Mail address
-	Rfc822Name(String),
-	DnsName(String),
-	DirectoryName(DistinguishedName),
-	IpAddress(CidrSubnet),
-}
-
-impl GeneralSubtree {
-	#[cfg(all(test, feature = "x509-parser"))]
-	fn from_x509(
-		subtrees: &[x509_parser::extensions::GeneralSubtree<'_>],
-	) -> Result<Vec<Self>, Error> {
-		use x509_parser::extensions::GeneralName;
-
-		let mut result = Vec::new();
-		for subtree in subtrees {
-			let subtree = match &subtree.base {
-				GeneralName::RFC822Name(s) => Self::Rfc822Name(s.to_string()),
-				GeneralName::DNSName(s) => Self::DnsName(s.to_string()),
-				GeneralName::DirectoryName(n) => {
-					Self::DirectoryName(DistinguishedName::from_name(n)?)
-				},
-				GeneralName::IPAddress(bytes) if bytes.len() == 8 => {
-					let addr: [u8; 4] = bytes[..4].try_into().unwrap();
-					let mask: [u8; 4] = bytes[4..].try_into().unwrap();
-					Self::IpAddress(CidrSubnet::V4(addr, mask))
-				},
-				GeneralName::IPAddress(bytes) if bytes.len() == 32 => {
-					let addr: [u8; 16] = bytes[..16].try_into().unwrap();
-					let mask: [u8; 16] = bytes[16..].try_into().unwrap();
-					Self::IpAddress(CidrSubnet::V6(addr, mask))
-				},
-				_ => continue,
-			};
-			result.push(subtree);
-		}
-
-		Ok(result)
-	}
-
-	fn tag(&self) -> u64 {
-		// Defined in the GeneralName list in
-		// https://tools.ietf.org/html/rfc5280#page-38
-		const TAG_RFC822_NAME: u64 = 1;
-		const TAG_DNS_NAME: u64 = 2;
-		const TAG_DIRECTORY_NAME: u64 = 4;
-		const TAG_IP_ADDRESS: u64 = 7;
-
-		match self {
-			GeneralSubtree::Rfc822Name(_name) => TAG_RFC822_NAME,
-			GeneralSubtree::DnsName(_name) => TAG_DNS_NAME,
-			GeneralSubtree::DirectoryName(_name) => TAG_DIRECTORY_NAME,
-			GeneralSubtree::IpAddress(_addr) => TAG_IP_ADDRESS,
-		}
-	}
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[allow(missing_docs)]
-/// CIDR subnet, as per [RFC 4632](https://tools.ietf.org/html/rfc4632)
-///
-/// You might know CIDR subnets better by their textual representation
-/// where they consist of an ip address followed by a slash and a prefix
-/// number, for example `192.168.99.0/24`.
-///
-/// The first field in the enum is the address, the second is the mask.
-/// Both are specified in network byte order.
-pub enum CidrSubnet {
-	V4([u8; 4], [u8; 4]),
-	V6([u8; 16], [u8; 16]),
-}
-
-macro_rules! mask {
-	($t:ty, $d:expr) => {{
-		let v = <$t>::MAX;
-		let v = v.checked_shr($d as u32).unwrap_or(0);
-		(!v).to_be_bytes()
-	}};
-}
-
-impl CidrSubnet {
-	/// Obtains the CidrSubnet from an ip address
-	/// as well as the specified prefix number.
-	///
-	/// ```
-	/// # use std::net::IpAddr;
-	/// # use std::str::FromStr;
-	/// # use rcgen::CidrSubnet;
-	/// // The "192.0.2.0/24" example from
-	/// // https://tools.ietf.org/html/rfc5280#page-42
-	/// let addr = IpAddr::from_str("192.0.2.0").unwrap();
-	/// let subnet = CidrSubnet::from_addr_prefix(addr, 24);
-	/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
-	/// ```
-	pub fn from_addr_prefix(addr: IpAddr, prefix: u8) -> Self {
-		match addr {
-			IpAddr::V4(addr) => Self::from_v4_prefix(addr.octets(), prefix),
-			IpAddr::V6(addr) => Self::from_v6_prefix(addr.octets(), prefix),
-		}
-	}
-	/// Obtains the CidrSubnet from an IPv4 address in network byte order
-	/// as well as the specified prefix.
-	pub fn from_v4_prefix(addr: [u8; 4], prefix: u8) -> Self {
-		CidrSubnet::V4(addr, mask!(u32, prefix))
-	}
-	/// Obtains the CidrSubnet from an IPv6 address in network byte order
-	/// as well as the specified prefix.
-	pub fn from_v6_prefix(addr: [u8; 16], prefix: u8) -> Self {
-		CidrSubnet::V6(addr, mask!(u128, prefix))
-	}
-	fn to_bytes(self) -> Vec<u8> {
-		let mut res = Vec::new();
-		match self {
-			CidrSubnet::V4(addr, mask) => {
-				res.extend_from_slice(&addr);
-				res.extend_from_slice(&mask);
-			},
-			CidrSubnet::V6(addr, mask) => {
-				res.extend_from_slice(&addr);
-				res.extend_from_slice(&mask);
-			},
-		}
-		res
-	}
-}
-
-/// Obtains the CidrSubnet from the well-known
-/// addr/prefix notation.
-/// ```
-/// # use std::str::FromStr;
-/// # use rcgen::CidrSubnet;
-/// // The "192.0.2.0/24" example from
-/// // https://tools.ietf.org/html/rfc5280#page-42
-/// let subnet = CidrSubnet::from_str("192.0.2.0/24").unwrap();
-/// assert_eq!(subnet, CidrSubnet::V4([0xC0, 0x00, 0x02, 0x00], [0xFF, 0xFF, 0xFF, 0x00]));
-/// ```
-impl FromStr for CidrSubnet {
-	type Err = ();
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let mut iter = s.split('/');
-		if let (Some(addr_s), Some(prefix_s)) = (iter.next(), iter.next()) {
-			let addr = IpAddr::from_str(addr_s).map_err(|_| ())?;
-			let prefix = u8::from_str(prefix_s).map_err(|_| ())?;
-			Ok(Self::from_addr_prefix(addr, prefix))
-		} else {
-			Err(())
 		}
 	}
 }
