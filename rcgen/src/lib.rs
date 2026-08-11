@@ -43,14 +43,14 @@ pub use certificate::{
 	DnType, IsCa,
 };
 pub use crl::{
-	CertificateRevocationList, CertificateRevocationListParams, CrlDistributionPoint,
-	CrlIssuingDistributionPoint, CrlScope, RevocationReason, RevokedCertParams,
+	CertificateRevocationList, CertificateRevocationListParams, CrlIssuingDistributionPoint,
+	CrlScope, RevocationReason, RevokedCertParams,
 };
 pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
 pub use error::{Error, InvalidAsn1String};
 pub use ext::{
-	CidrSubnet, ExtendedKeyUsagePurpose, GeneralSubtree, KeyUsagePurpose, NameConstraints,
-	OtherNameValue, SanType,
+	CidrSubnet, CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralSubtree, KeyUsagePurpose,
+	NameConstraints, OtherNameValue, SanType,
 };
 #[cfg(feature = "crypto")]
 pub use key_pair::KeyPair;

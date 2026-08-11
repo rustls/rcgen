@@ -8,11 +8,10 @@ use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
 
-use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
 use crate::ext::{
-	AuthorityKeyIdentifier, ExtendedKeyUsage, Extension, KeyUsage, NameConstraintsExt,
-	SubjectAlternativeName,
+	AuthorityKeyIdentifier, CrlDistributionPoints, ExtendedKeyUsage, Extension, KeyUsage,
+	NameConstraintsExt, SubjectAlternativeName,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -21,8 +20,8 @@ use crate::ring_like::digest;
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized, write_x509_extension,
-	DistinguishedName, Error, ExtendedKeyUsagePurpose, Issuer, KeyIdMethod, KeyUsagePurpose,
-	NameConstraints, SanType, SerialNumber, SigningKey,
+	CrlDistributionPoint, DistinguishedName, Error, ExtendedKeyUsagePurpose, Issuer, KeyIdMethod,
+	KeyUsagePurpose, NameConstraints, SanType, SerialNumber, SigningKey,
 };
 
 /// An issued certificate
@@ -471,19 +470,8 @@ impl CertificateParams {
 			nc.write(writer.next());
 		}
 
-		if !self.crl_distribution_points.is_empty() {
-			write_x509_extension(
-				writer.next(),
-				oid::CRL_DISTRIBUTION_POINTS,
-				false,
-				|writer| {
-					writer.write_sequence(|writer| {
-						for distribution_point in &self.crl_distribution_points {
-							distribution_point.write_der(writer.next());
-						}
-					})
-				},
-			);
+		if let Some(crl_dps) = CrlDistributionPoints::from_params(self) {
+			crl_dps.write(writer.next());
 		}
 
 		self.write_ca_extensions(writer, Some(pub_key_spki));

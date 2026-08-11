@@ -4,7 +4,9 @@ use pki_types::CertificateRevocationListDer;
 use time::OffsetDateTime;
 use yasna::{DERWriter, Tag};
 
-use crate::ext::{AuthorityKeyIdentifier, Extension};
+use crate::ext::{
+	write_distribution_point_name_uris, AuthorityKeyIdentifier, CrlDistributionPoint, Extension,
+};
 use crate::key_pair::sign_der;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
@@ -90,52 +92,6 @@ impl From<CertificateRevocationList> for CertificateRevocationListDer<'static> {
 	fn from(crl: CertificateRevocationList) -> Self {
 		crl.der
 	}
-}
-
-/// A certificate revocation list (CRL) distribution point, to be included in a certificate's
-/// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13) or
-/// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5)
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct CrlDistributionPoint {
-	/// One or more URI distribution point names, indicating a place the current CRL can
-	/// be retrieved. When present, SHOULD include at least one LDAP or HTTP URI.
-	pub uris: Vec<String>,
-}
-
-impl CrlDistributionPoint {
-	pub(crate) fn write_der(&self, writer: DERWriter) {
-		// DistributionPoint SEQUENCE
-		writer.write_sequence(|writer| {
-			write_distribution_point_name_uris(writer.next(), &self.uris);
-		});
-	}
-}
-
-fn write_distribution_point_name_uris<'a>(
-	writer: DERWriter,
-	uris: impl IntoIterator<Item = &'a String>,
-) {
-	// distributionPoint DistributionPointName
-	writer.write_tagged_implicit(Tag::context(0), |writer| {
-		writer.write_sequence(|writer| {
-			// fullName GeneralNames
-			writer
-				.next()
-				.write_tagged_implicit(Tag::context(0), |writer| {
-					// GeneralNames
-					writer.write_sequence(|writer| {
-						for uri in uris.into_iter() {
-							// uniformResourceIdentifier [6] IA5String,
-							writer
-								.next()
-								.write_tagged_implicit(Tag::context(6), |writer| {
-									writer.write_ia5_string(uri)
-								});
-						}
-					})
-				});
-		});
-	});
 }
 
 /// Identifies the reason a certificate was revoked.

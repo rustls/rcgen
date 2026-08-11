@@ -900,6 +900,84 @@ impl StaticExtension for NameConstraintsExt<'_> {
 	const OID: &'static [u64] = oid::NAME_CONSTRAINTS;
 }
 
+/// A certificate revocation list (CRL) distribution point, to be included in a certificate's
+/// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13) or
+/// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5)
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CrlDistributionPoint {
+	/// One or more URI distribution point names, indicating a place the current CRL can
+	/// be retrieved. When present, SHOULD include at least one LDAP or HTTP URI.
+	pub uris: Vec<String>,
+}
+
+impl CrlDistributionPoint {
+	fn write_der(&self, writer: DERWriter) {
+		// DistributionPoint SEQUENCE
+		writer.write_sequence(|writer| {
+			write_distribution_point_name_uris(writer.next(), &self.uris);
+		});
+	}
+}
+
+pub(crate) fn write_distribution_point_name_uris<'a>(
+	writer: DERWriter,
+	uris: impl IntoIterator<Item = &'a String>,
+) {
+	// distributionPoint DistributionPointName
+	writer.write_tagged_implicit(Tag::context(0), |writer| {
+		writer.write_sequence(|writer| {
+			// fullName GeneralNames
+			writer
+				.next()
+				.write_tagged_implicit(Tag::context(0), |writer| {
+					// GeneralNames
+					writer.write_sequence(|writer| {
+						for uri in uris.into_iter() {
+							// uniformResourceIdentifier [6] IA5String,
+							writer
+								.next()
+								.write_tagged_implicit(Tag::context(6), |writer| {
+									writer.write_ia5_string(uri)
+								});
+						}
+					})
+				});
+		});
+	});
+}
+
+/// An X.509v3 CRL distribution points extension according to [RFC 5280 §4.2.1.13].
+///
+/// [RFC 5280 §4.2.1.13]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct CrlDistributionPoints<'params>(&'params [CrlDistributionPoint]);
+
+impl<'params> CrlDistributionPoints<'params> {
+	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
+		if params.crl_distribution_points.is_empty() {
+			return None;
+		}
+
+		Some(Self(&params.crl_distribution_points))
+	}
+}
+
+impl StaticExtension for CrlDistributionPoints<'_> {
+	fn write_value(&self, writer: DERWriter) {
+		// CRLDistributionPoints ::= SEQUENCE SIZE (1..MAX) OF DistributionPoint
+		writer.write_sequence(|writer| {
+			for distribution_point in self.0 {
+				distribution_point.write_der(writer.next());
+			}
+		})
+	}
+
+	// RFC 5280 §4.2.1.13: "The extension SHOULD be non-critical".
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	const OID: &'static [u64] = oid::CRL_DISTRIBUTION_POINTS;
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
