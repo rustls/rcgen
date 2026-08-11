@@ -1104,6 +1104,77 @@ mod tests {
 
 	#[cfg(feature = "x509-parser")]
 	#[test]
+	fn test_kitchen_sink_params_round_trip() {
+		// Every requested extension must appear in the serialized certificate:
+		// presence is derived from the built extension collection, and this test
+		// guards against a params field being silently dropped from the output
+		// (see rustls/rcgen#446).
+		let params = CertificateParams {
+			subject_alt_names: vec![
+				SanType::DnsName("kitchen.example.com".try_into().unwrap()),
+				SanType::Rfc822Name("mail@example.com".try_into().unwrap()),
+			],
+			key_usages: vec![
+				KeyUsagePurpose::DigitalSignature,
+				KeyUsagePurpose::KeyCertSign,
+			],
+			extended_key_usages: vec![
+				ExtendedKeyUsagePurpose::ServerAuth,
+				ExtendedKeyUsagePurpose::Other(vec![1, 3, 6, 1, 4, 1, 99, 7]),
+			],
+			name_constraints: Some(NameConstraints {
+				permitted_subtrees: vec![GeneralSubtree::DnsName("example.com".into())],
+				excluded_subtrees: Vec::new(),
+			}),
+			crl_distribution_points: vec![CrlDistributionPoint {
+				uris: vec!["http://crl.example.com/kitchen.crl".into()],
+			}],
+			is_ca: IsCa::Ca(PathLenConstraint::Constrained(1)),
+			custom_extensions: vec![CustomExtension::from_oid_content(
+				&[1, 3, 6, 1, 4, 1, 99, 8],
+				crate::Criticality::NonCritical,
+				vec![0x05, 0x00],
+			)],
+			serial_number: Some(SerialNumber::from_slice(&[0x0A, 0x0B])),
+			..CertificateParams::default()
+		};
+
+		let key_pair = KeyPair::generate().unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
+		let (_rem, x509) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
+
+		// SAN, KU, EKU, NC, CRLDP, SKI, BC and the custom extension: nothing
+		// requested may be missing, and nothing extra may appear.
+		assert_eq!(x509.iter_extensions().count(), 8);
+
+		// Fields recoverable through parsing must match what was requested.
+		let recovered = CertificateParams::from_ca_cert_der(cert.der()).unwrap();
+		assert_eq!(recovered.subject_alt_names, params.subject_alt_names);
+		assert_eq!(recovered.key_usages, params.key_usages);
+		assert_eq!(recovered.extended_key_usages, params.extended_key_usages);
+		assert_eq!(recovered.name_constraints, params.name_constraints);
+		assert_eq!(recovered.is_ca, params.is_ca);
+		assert_eq!(recovered.serial_number, params.serial_number);
+		assert_eq!(
+			recovered.key_identifier_method,
+			KeyIdMethod::PreSpecified(params.key_identifier(&key_pair)),
+		);
+
+		// The CRL distribution points and custom extension are not recovered into
+		// params, so check them against the parsed certificate directly.
+		assert!(x509.iter_extensions().any(|ext| matches!(
+			ext.parsed_extension(),
+			x509_parser::extensions::ParsedExtension::CRLDistributionPoints(_)
+		)));
+		let custom = x509
+			.iter_extensions()
+			.find(|ext| ext.oid.to_id_string() == "1.3.6.1.4.1.99.8")
+			.unwrap();
+		assert_eq!(custom.value, &[0x05, 0x00]);
+	}
+
+	#[cfg(feature = "x509-parser")]
+	#[test]
 	fn parse_other_name_alt_name() {
 		// Create and serialize a certificate with an alternative name containing an "OtherName".
 		let mut params = CertificateParams::default();
