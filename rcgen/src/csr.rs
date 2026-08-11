@@ -4,13 +4,15 @@ use std::hash::Hash;
 use pem::Pem;
 use pki_types::CertificateSigningRequestDer;
 
+#[cfg(feature = "x509-parser")]
+use crate::ext::{BasicConstraints, ExtendedKeyUsage, KeyUsage, SubjectAlternativeName};
+#[cfg(feature = "x509-parser")]
+use crate::DistinguishedName;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
 	Certificate, CertificateParams, Error, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey,
 };
-#[cfg(feature = "x509-parser")]
-use crate::{DistinguishedName, ExtendedKeyUsagePurpose, IsCa, KeyUsagePurpose, SanType};
 
 /// A public key, extracted from a CSR
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -92,9 +94,9 @@ impl CertificateSigningRequestParams {
 	/// Parse and verify a certificate signing request from DER-encoded bytes
 	///
 	/// Currently, this supports the following extensions:
-	/// - `Subject Alternative Name` (see [`SanType`])
-	/// - `Key Usage` (see [`KeyUsagePurpose`])
-	/// - `Extended Key Usage` (see [`ExtendedKeyUsagePurpose`])
+	/// - `Subject Alternative Name` (see [`crate::SanType`])
+	/// - `Key Usage` (see [`crate::KeyUsagePurpose`])
+	/// - `Extended Key Usage` (see [`crate::ExtendedKeyUsagePurpose`])
 	/// - `Basic Constraints` (see [`crate::PathLenConstraint`])
 	///
 	/// On encountering other extensions, this function will return [`Error::UnsupportedExtension`].
@@ -131,52 +133,13 @@ impl CertificateSigningRequestParams {
 		let raw = info.subject_pki.subject_public_key.data.to_vec();
 
 		if let Some(extensions) = csr.requested_extensions() {
-			for ext in extensions {
-				match ext {
-					x509_parser::extensions::ParsedExtension::KeyUsage(key_usage) => {
-						// This x509 parser stores flags in reversed bit BIT STRING order
-						params.key_usages =
-							KeyUsagePurpose::from_u16(key_usage.flags.reverse_bits());
-					},
-					x509_parser::extensions::ParsedExtension::SubjectAlternativeName(san) => {
-						for name in &san.general_names {
-							params
-								.subject_alt_names
-								.push(SanType::try_from_general(name)?);
-						}
-					},
-					x509_parser::extensions::ParsedExtension::ExtendedKeyUsage(eku) => {
-						if eku.any {
-							params.insert_extended_key_usage(ExtendedKeyUsagePurpose::Any);
-						}
-						if eku.server_auth {
-							params.insert_extended_key_usage(ExtendedKeyUsagePurpose::ServerAuth);
-						}
-						if eku.client_auth {
-							params.insert_extended_key_usage(ExtendedKeyUsagePurpose::ClientAuth);
-						}
-						if eku.code_signing {
-							params.insert_extended_key_usage(ExtendedKeyUsagePurpose::CodeSigning);
-						}
-						if eku.email_protection {
-							params.insert_extended_key_usage(
-								ExtendedKeyUsagePurpose::EmailProtection,
-							);
-						}
-						if eku.time_stamping {
-							params.insert_extended_key_usage(ExtendedKeyUsagePurpose::TimeStamping);
-						}
-						if eku.ocsp_signing {
-							params.insert_extended_key_usage(ExtendedKeyUsagePurpose::OcspSigning);
-						}
-						if !eku.other.is_empty() {
-							return Err(Error::UnsupportedExtension);
-						}
-					},
-					x509_parser::extensions::ParsedExtension::BasicConstraints(bc) => {
-						params.is_ca = IsCa::from_basic_constraints(bc)?;
-					},
-					_ => return Err(Error::UnsupportedExtension),
+			for parsed in extensions {
+				let handled = KeyUsage::from_parsed(&mut params, parsed)?
+					|| SubjectAlternativeName::from_parsed(&mut params, parsed)?
+					|| ExtendedKeyUsage::from_parsed(&mut params, parsed)?
+					|| BasicConstraints::from_parsed(&mut params, parsed)?;
+				if !handled {
+					return Err(Error::UnsupportedExtension);
 				}
 			}
 		}
@@ -277,6 +240,26 @@ mod tests {
 				path_len_constraint: None
 			})
 		));
+	}
+
+	#[test]
+	fn serialize_and_deserialize_eq_other_eku() {
+		// Custom EKU purpose OIDs must survive a serialize/parse round trip.
+		let params = CertificateParams {
+			extended_key_usages: vec![
+				ExtendedKeyUsagePurpose::ServerAuth,
+				ExtendedKeyUsagePurpose::Other(vec![1, 3, 6, 1, 4, 1, 99, 7]),
+			],
+			..Default::default()
+		};
+		let key_pair = KeyPair::generate().unwrap();
+		let csr = params.serialize_request(&key_pair).unwrap();
+		let csr_de = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
+
+		assert_eq!(
+			csr_de.params.extended_key_usages,
+			params.extended_key_usages
+		);
 	}
 
 	#[test]

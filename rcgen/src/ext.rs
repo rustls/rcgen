@@ -291,6 +291,27 @@ impl<'params> SubjectAlternativeName<'params> {
 		})
 	}
 
+	/// Recover [`CertificateParams`] state from a parsed SAN extension.
+	///
+	/// Returns true if the parsed extension was a SAN and `params` were updated.
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		parsed: &x509_parser::extensions::ParsedExtension<'_>,
+	) -> Result<bool, Error> {
+		Ok(match parsed {
+			x509_parser::extensions::ParsedExtension::SubjectAlternativeName(san) => {
+				for name in &san.general_names {
+					params
+						.subject_alt_names
+						.push(SanType::try_from_general(name)?);
+				}
+				true
+			},
+			_ => false,
+		})
+	}
+
 	fn write_name(writer: DERWriter, san: &SanType) {
 		writer.write_tagged_implicit(Tag::context(san.tag()), |writer| match san {
 			SanType::Rfc822Name(name) | SanType::DnsName(name) | SanType::URI(name) => {
@@ -346,6 +367,24 @@ impl<'params> KeyUsage<'params> {
 
 		Some(Self(&params.key_usages))
 	}
+
+	/// Recover [`CertificateParams`] state from a parsed KeyUsage extension.
+	///
+	/// Returns true if the parsed extension was a KeyUsage and `params` were updated.
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		parsed: &x509_parser::extensions::ParsedExtension<'_>,
+	) -> Result<bool, Error> {
+		Ok(match parsed {
+			x509_parser::extensions::ParsedExtension::KeyUsage(ku) => {
+				// x509-parser stores BIT STRING flags in reversed bit order
+				params.key_usages = KeyUsagePurpose::from_u16(ku.flags.reverse_bits());
+				true
+			},
+			_ => false,
+		})
+	}
 }
 
 impl StaticExtension for KeyUsage<'_> {
@@ -397,6 +436,53 @@ impl<'params> ExtendedKeyUsage<'params> {
 		}
 
 		Some(Self(&params.extended_key_usages))
+	}
+
+	/// Recover [`CertificateParams`] state from a parsed EKU extension.
+	///
+	/// Returns true if the parsed extension was an EKU and `params` were updated.
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		parsed: &x509_parser::extensions::ParsedExtension<'_>,
+	) -> Result<bool, Error> {
+		use ExtendedKeyUsagePurpose::*;
+
+		Ok(match parsed {
+			x509_parser::extensions::ParsedExtension::ExtendedKeyUsage(eku) => {
+				if eku.any {
+					params.insert_extended_key_usage(Any);
+				}
+				if eku.server_auth {
+					params.insert_extended_key_usage(ServerAuth);
+				}
+				if eku.client_auth {
+					params.insert_extended_key_usage(ClientAuth);
+				}
+				if eku.code_signing {
+					params.insert_extended_key_usage(CodeSigning);
+				}
+				if eku.email_protection {
+					params.insert_extended_key_usage(EmailProtection);
+				}
+				if eku.time_stamping {
+					params.insert_extended_key_usage(TimeStamping);
+				}
+				if eku.ocsp_signing {
+					params.insert_extended_key_usage(OcspSigning);
+				}
+				for other in &eku.other {
+					params.insert_extended_key_usage(Other(
+						other
+							.iter()
+							.ok_or(Error::UnsupportedExtension)?
+							.collect::<Vec<_>>(),
+					));
+				}
+				true
+			},
+			_ => false,
+		})
 	}
 }
 
@@ -579,6 +665,23 @@ impl BasicConstraints {
 		}
 
 		Some(Self(params.is_ca))
+	}
+
+	/// Recover [`CertificateParams`] state from a parsed BasicConstraints extension.
+	///
+	/// Returns true if the parsed extension was a BasicConstraints and `params` were updated.
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		parsed: &x509_parser::extensions::ParsedExtension<'_>,
+	) -> Result<bool, Error> {
+		Ok(match parsed {
+			x509_parser::extensions::ParsedExtension::BasicConstraints(bc) => {
+				params.is_ca = IsCa::from_basic_constraints(bc)?;
+				true
+			},
+			_ => false,
+		})
 	}
 }
 
