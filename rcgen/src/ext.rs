@@ -4,7 +4,10 @@ use std::net::IpAddr;
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
-use crate::{oid, CertificateParams, Issuer, KeyIdMethod, KeyUsagePurpose, SanType, SigningKey};
+use crate::{
+	oid, CertificateParams, ExtendedKeyUsagePurpose, Issuer, KeyIdMethod, KeyUsagePurpose, SanType,
+	SigningKey,
+};
 
 /// An X.509 extension whose OID and criticality are fixed by the profile
 /// defining it.
@@ -270,6 +273,45 @@ impl StaticExtension for KeyUsage<'_> {
 			bits @ 9..=16 => writer.write_bitvec_bytes(&bit_string.to_be_bytes(), bits as usize),
 			_ => unreachable!(),
 		}
+	}
+}
+
+/// An X.509v3 extended key usage extension according to [RFC 5280 §4.2.1.12].
+///
+/// [RFC 5280 §4.2.1.12]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.12>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ExtendedKeyUsage<'params>(&'params [ExtendedKeyUsagePurpose]);
+
+impl<'params> ExtendedKeyUsage<'params> {
+	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
+		if params.extended_key_usages.is_empty() {
+			return None;
+		}
+
+		Some(Self(&params.extended_key_usages))
+	}
+}
+
+impl StaticExtension for ExtendedKeyUsage<'_> {
+	const OID: &'static [u64] = oid::EXT_KEY_USAGE;
+
+	// RFC 5280 §4.2.1.12: "This extension MAY, at the option of the certificate
+	// issuer, be either critical or non-critical."
+	// TODO(XXX): make this configurable?
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   ExtKeyUsageSyntax ::= SEQUENCE SIZE (1..MAX) OF KeyPurposeId
+		   KeyPurposeId ::= OBJECT IDENTIFIER
+		*/
+		writer.write_sequence(|writer| {
+			for usage in self.0.iter() {
+				writer
+					.next()
+					.write_oid(&ObjectIdentifier::from_slice(usage.oid()));
+			}
+		});
 	}
 }
 

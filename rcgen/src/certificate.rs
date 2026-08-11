@@ -10,7 +10,9 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
-use crate::ext::{write_extension, AuthorityKeyIdentifier, KeyUsage, SubjectAlternativeName};
+use crate::ext::{
+	write_extension, AuthorityKeyIdentifier, ExtendedKeyUsage, KeyUsage, SubjectAlternativeName,
+};
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
@@ -202,7 +204,9 @@ impl CertificateParams {
 					if let Some(san) = SubjectAlternativeName::from_params(self) {
 						write_extension(writer.next(), &san);
 					}
-					self.write_extended_key_usage(writer.next());
+					if let Some(eku) = ExtendedKeyUsage::from_params(self) {
+						write_extension(writer.next(), &eku);
+					}
 					self.write_ca_extensions(writer, None);
 					for ext in &self.custom_extensions {
 						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
@@ -212,20 +216,6 @@ impl CertificateParams {
 				});
 			});
 		});
-	}
-
-	fn write_extended_key_usage(&self, writer: DERWriter) {
-		if !self.extended_key_usages.is_empty() {
-			write_x509_extension(writer, oid::EXT_KEY_USAGE, false, |writer| {
-				writer.write_sequence(|writer| {
-					for usage in &self.extended_key_usages {
-						writer
-							.next()
-							.write_oid(&ObjectIdentifier::from_slice(usage.oid()));
-					}
-				});
-			});
-		}
 	}
 
 	/// Write a certificate's BasicConstraints as defined in RFC 5280.
@@ -472,7 +462,9 @@ impl CertificateParams {
 		if let Some(ku) = KeyUsage::from_params(self) {
 			write_extension(writer.next(), &ku);
 		}
-		self.write_extended_key_usage(writer.next());
+		if let Some(eku) = ExtendedKeyUsage::from_params(self) {
+			write_extension(writer.next(), &eku);
+		}
 
 		if let Some(name_constraints) = &self.name_constraints {
 			// If both trees are empty, the extension must be omitted.
@@ -740,7 +732,7 @@ impl ExtendedKeyUsagePurpose {
 		Ok(extended_key_usages)
 	}
 
-	fn oid(&self) -> &[u64] {
+	pub(crate) fn oid(&self) -> &[u64] {
 		use ExtendedKeyUsagePurpose::*;
 		match self {
 			// anyExtendedKeyUsage
