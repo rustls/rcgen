@@ -202,8 +202,8 @@ impl CertificateParams {
 	fn csr_extensions(&self) -> Result<Extensions<'_>, Error> {
 		let mut exts = Extensions::default();
 
-		exts.push_if_some(NonEmptySlice::new(&self.key_usages))?;
 		exts.push_if_some(SubjectAlternativeName::from_params(self))?;
+		exts.push_if_some(NonEmptySlice::new(&self.key_usages))?;
 		exts.push_if_some(NonEmptySlice::new(&self.extended_key_usages))?;
 		exts.push_if_some(self.basic_constraints)?;
 
