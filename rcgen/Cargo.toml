@@ -1,6 +1,6 @@
 [package]
 name = "rcgen"
-version = "0.14.9"
+version = "0.14.10"
 documentation = "https://docs.rs/rcgen"
 description.workspace = true
 repository.workspace = true
@@ -13,7 +13,7 @@ keywords.workspace = true
 [features]
 default = ["crypto", "pem", "ring"]
 aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys", "x509-parser?/verify-aws"]
-aws_lc_rs_unstable = ["aws_lc_rs"]
+aws_lc_rs_unstable = ["aws_lc_rs"] # For backwards compatibility only
 fips = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/fips"]
 crypto = []
 ring = ["crypto", "dep:ring", "x509-parser?/verify"]
