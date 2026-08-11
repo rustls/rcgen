@@ -173,19 +173,25 @@ impl CertificateParams {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
 			.map_err(|_| Error::CouldNotParseCertificate)?;
 
-		Ok(CertificateParams {
-			is_ca: IsCa::from_x509(&x509)?,
-			subject_alt_names: SanType::from_x509(&x509)?,
-			key_usages: KeyUsagePurpose::from_x509(&x509)?,
-			extended_key_usages: ExtendedKeyUsagePurpose::from_x509(&x509)?,
-			name_constraints: NameConstraints::from_x509(&x509)?,
+		let mut params = CertificateParams {
 			serial_number: Some(x509.serial.to_bytes_be().into()),
-			key_identifier_method: KeyIdMethod::from_x509(&x509)?,
 			distinguished_name: DistinguishedName::from_name(&x509.tbs_certificate.subject)?,
 			not_before: x509.validity().not_before.to_datetime(),
 			not_after: x509.validity().not_after.to_datetime(),
 			..Default::default()
-		})
+		};
+
+		for parsed in x509.iter_extensions().map(|ext| ext.parsed_extension()) {
+			// Extensions that can't be represented in params are ignored.
+			let _ = BasicConstraints::from_parsed(&mut params, parsed)?
+				|| SubjectAlternativeName::from_parsed(&mut params, parsed)?
+				|| KeyUsage::from_parsed(&mut params, parsed)?
+				|| ExtendedKeyUsage::from_parsed(&mut params, parsed)?
+				|| NameConstraintsExt::from_parsed(&mut params, parsed)?
+				|| SubjectKeyIdentifier::from_parsed(&mut params, parsed)?;
+		}
+
+		Ok(params)
 	}
 
 	/// Returns the X.509 extensions for a CSR extension request attribute as defined
@@ -548,41 +554,6 @@ pub enum ExtendedKeyUsagePurpose {
 }
 
 impl ExtendedKeyUsagePurpose {
-	#[cfg(all(test, feature = "x509-parser"))]
-	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
-		let extended_key_usage = x509
-			.extended_key_usage()
-			.map_err(|_| Error::CouldNotParseCertificate)?
-			.map(|ext| ext.value);
-
-		let mut extended_key_usages = Vec::new();
-		if let Some(extended_key_usage) = extended_key_usage {
-			if extended_key_usage.any {
-				extended_key_usages.push(Self::Any);
-			}
-			if extended_key_usage.server_auth {
-				extended_key_usages.push(Self::ServerAuth);
-			}
-			if extended_key_usage.client_auth {
-				extended_key_usages.push(Self::ClientAuth);
-			}
-			if extended_key_usage.code_signing {
-				extended_key_usages.push(Self::CodeSigning);
-			}
-			if extended_key_usage.email_protection {
-				extended_key_usages.push(Self::EmailProtection);
-			}
-			if extended_key_usage.time_stamping {
-				extended_key_usages.push(Self::TimeStamping);
-			}
-			if extended_key_usage.ocsp_signing {
-				extended_key_usages.push(Self::OcspSigning);
-			}
-		}
-
-		Ok(extended_key_usages)
-	}
-
 	pub(crate) fn oid(&self) -> &[u64] {
 		use ExtendedKeyUsagePurpose::*;
 		match self {
@@ -613,37 +584,6 @@ pub struct NameConstraints {
 }
 
 impl NameConstraints {
-	#[cfg(all(test, feature = "x509-parser"))]
-	fn from_x509(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Option<Self>, Error> {
-		let constraints = x509
-			.name_constraints()
-			.map_err(|_| Error::CouldNotParseCertificate)?
-			.map(|ext| ext.value);
-
-		let Some(constraints) = constraints else {
-			return Ok(None);
-		};
-
-		let permitted_subtrees = if let Some(permitted) = &constraints.permitted_subtrees {
-			GeneralSubtree::from_x509(permitted)?
-		} else {
-			Vec::new()
-		};
-
-		let excluded_subtrees = if let Some(excluded) = &constraints.excluded_subtrees {
-			GeneralSubtree::from_x509(excluded)?
-		} else {
-			Vec::new()
-		};
-
-		Ok(Some(Self {
-			permitted_subtrees,
-			excluded_subtrees,
-		}))
-	}
-
 	pub(crate) fn is_empty(&self) -> bool {
 		self.permitted_subtrees.is_empty() && self.excluded_subtrees.is_empty()
 	}
@@ -667,7 +607,7 @@ pub enum GeneralSubtree {
 
 impl GeneralSubtree {
 	#[cfg(all(test, feature = "x509-parser"))]
-	fn from_x509(
+	pub(crate) fn from_x509(
 		subtrees: &[x509_parser::extensions::GeneralSubtree<'_>],
 	) -> Result<Vec<Self>, Error> {
 		use x509_parser::extensions::GeneralName;
@@ -838,19 +778,6 @@ pub enum IsCa {
 }
 
 impl IsCa {
-	#[cfg(all(test, feature = "x509-parser"))]
-	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Self, Error> {
-		let basic_constraints = x509
-			.basic_constraints()
-			.map_err(|_| Error::CouldNotParseCertificate)?
-			.map(|ext| ext.value);
-
-		match basic_constraints {
-			Some(bc) => Self::from_basic_constraints(bc),
-			None => Ok(Self::NoCa),
-		}
-	}
-
 	#[cfg(feature = "x509-parser")]
 	pub(crate) fn from_basic_constraints(
 		basic_constraints: &x509_parser::extensions::BasicConstraints,

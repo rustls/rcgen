@@ -530,6 +530,34 @@ impl<'params> NameConstraints<'params> {
 		}
 	}
 
+	/// Recover [`CertificateParams`] state from a parsed NameConstraints extension.
+	///
+	/// Returns true if the parsed extension was a NameConstraints and `params` were updated.
+	#[cfg(all(test, feature = "x509-parser"))]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		parsed: &x509_parser::extensions::ParsedExtension<'_>,
+	) -> Result<bool, Error> {
+		Ok(match parsed {
+			x509_parser::extensions::ParsedExtension::NameConstraints(nc) => {
+				let permitted_subtrees = match &nc.permitted_subtrees {
+					Some(permitted) => GeneralSubtree::from_x509(permitted)?,
+					None => Vec::new(),
+				};
+				let excluded_subtrees = match &nc.excluded_subtrees {
+					Some(excluded) => GeneralSubtree::from_x509(excluded)?,
+					None => Vec::new(),
+				};
+				params.name_constraints = Some(crate::NameConstraints {
+					permitted_subtrees,
+					excluded_subtrees,
+				});
+				true
+			},
+			_ => false,
+		})
+	}
+
 	fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
 		/*
 		   GeneralSubtrees ::= SEQUENCE SIZE (1..MAX) OF GeneralSubtree
@@ -631,6 +659,23 @@ pub(crate) struct SubjectKeyIdentifier(Vec<u8>);
 impl SubjectKeyIdentifier {
 	pub(crate) fn new(key_identifier_method: &KeyIdMethod, pub_key_spki: &[u8]) -> Self {
 		Self(key_identifier_method.derive(pub_key_spki))
+	}
+
+	/// Recover [`CertificateParams`] state from a parsed SKI extension.
+	///
+	/// Returns true if the parsed extension was a SKI and `params` were updated.
+	#[cfg(all(test, feature = "x509-parser"))]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		parsed: &x509_parser::extensions::ParsedExtension<'_>,
+	) -> Result<bool, Error> {
+		Ok(match parsed {
+			x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(ski) => {
+				params.key_identifier_method = KeyIdMethod::PreSpecified(ski.0.to_vec());
+				true
+			},
+			_ => false,
+		})
 	}
 }
 
