@@ -10,7 +10,9 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
-use crate::ext::{AuthorityKeyIdentifier, Extension, KeyUsage, SubjectAlternativeName};
+use crate::ext::{
+	AuthorityKeyIdentifier, ExtendedKeyUsage, Extension, KeyUsage, SubjectAlternativeName,
+};
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
@@ -18,8 +20,8 @@ use crate::ring_like::digest;
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized, write_x509_extension,
-	DistinguishedName, Error, Issuer, KeyIdMethod, KeyUsagePurpose, SanType, SerialNumber,
-	SigningKey,
+	DistinguishedName, Error, ExtendedKeyUsagePurpose, Issuer, KeyIdMethod, KeyUsagePurpose,
+	SanType, SerialNumber, SigningKey,
 };
 
 /// An issued certificate
@@ -202,7 +204,9 @@ impl CertificateParams {
 					if let Some(san) = SubjectAlternativeName::from_params(self) {
 						san.write(writer.next());
 					}
-					self.write_extended_key_usage(writer.next());
+					if let Some(eku) = ExtendedKeyUsage::from_params(self) {
+						eku.write(writer.next());
+					}
 					self.write_ca_extensions(writer, None);
 					for ext in &self.custom_extensions {
 						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
@@ -212,20 +216,6 @@ impl CertificateParams {
 				});
 			});
 		});
-	}
-
-	fn write_extended_key_usage(&self, writer: DERWriter) {
-		if !self.extended_key_usages.is_empty() {
-			write_x509_extension(writer, oid::EXT_KEY_USAGE, false, |writer| {
-				writer.write_sequence(|writer| {
-					for usage in &self.extended_key_usages {
-						writer
-							.next()
-							.write_oid(&ObjectIdentifier::from_slice(usage.oid()));
-					}
-				});
-			});
-		}
 	}
 
 	/// Write a certificate's BasicConstraints as defined in RFC 5280.
@@ -472,7 +462,9 @@ impl CertificateParams {
 		if let Some(ku) = KeyUsage::from_params(self) {
 			ku.write(writer.next());
 		}
-		self.write_extended_key_usage(writer.next());
+		if let Some(eku) = ExtendedKeyUsage::from_params(self) {
+			eku.write(writer.next());
+		}
 
 		if let Some(name_constraints) = &self.name_constraints {
 			// If both trees are empty, the extension must be omitted.
@@ -679,80 +671,6 @@ impl DnType {
 			oid::ORG_UNIT_NAME => DnType::OrganizationalUnitName,
 			oid::COMMON_NAME => DnType::CommonName,
 			oid => DnType::CustomDnType(oid.into()),
-		}
-	}
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-/// One of the purposes contained in the [extended key usage extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.12)
-pub enum ExtendedKeyUsagePurpose {
-	/// anyExtendedKeyUsage
-	Any,
-	/// id-kp-serverAuth
-	ServerAuth,
-	/// id-kp-clientAuth
-	ClientAuth,
-	/// id-kp-codeSigning
-	CodeSigning,
-	/// id-kp-emailProtection
-	EmailProtection,
-	/// id-kp-timeStamping
-	TimeStamping,
-	/// id-kp-OCSPSigning
-	OcspSigning,
-	/// A custom purpose not from the pre-specified list of purposes
-	Other(Vec<u64>),
-}
-
-impl ExtendedKeyUsagePurpose {
-	#[cfg(all(test, feature = "x509-parser"))]
-	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
-		let extended_key_usage = x509
-			.extended_key_usage()
-			.map_err(|_| Error::CouldNotParseCertificate)?
-			.map(|ext| ext.value);
-
-		let mut extended_key_usages = Vec::new();
-		if let Some(extended_key_usage) = extended_key_usage {
-			if extended_key_usage.any {
-				extended_key_usages.push(Self::Any);
-			}
-			if extended_key_usage.server_auth {
-				extended_key_usages.push(Self::ServerAuth);
-			}
-			if extended_key_usage.client_auth {
-				extended_key_usages.push(Self::ClientAuth);
-			}
-			if extended_key_usage.code_signing {
-				extended_key_usages.push(Self::CodeSigning);
-			}
-			if extended_key_usage.email_protection {
-				extended_key_usages.push(Self::EmailProtection);
-			}
-			if extended_key_usage.time_stamping {
-				extended_key_usages.push(Self::TimeStamping);
-			}
-			if extended_key_usage.ocsp_signing {
-				extended_key_usages.push(Self::OcspSigning);
-			}
-		}
-
-		Ok(extended_key_usages)
-	}
-
-	fn oid(&self) -> &[u64] {
-		use ExtendedKeyUsagePurpose::*;
-		match self {
-			// anyExtendedKeyUsage
-			Any => &[2, 5, 29, 37, 0],
-			// id-kp-*
-			ServerAuth => &[1, 3, 6, 1, 5, 5, 7, 3, 1],
-			ClientAuth => &[1, 3, 6, 1, 5, 5, 7, 3, 2],
-			CodeSigning => &[1, 3, 6, 1, 5, 5, 7, 3, 3],
-			EmailProtection => &[1, 3, 6, 1, 5, 5, 7, 3, 4],
-			TimeStamping => &[1, 3, 6, 1, 5, 5, 7, 3, 8],
-			OcspSigning => &[1, 3, 6, 1, 5, 5, 7, 3, 9],
-			Other(oid) => oid,
 		}
 	}
 }

@@ -488,6 +488,121 @@ impl StaticExtension for KeyUsage<'_> {
 	const OID: &'static [u64] = oid::KEY_USAGE;
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+/// One of the purposes contained in the [extended key usage extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.12)
+pub enum ExtendedKeyUsagePurpose {
+	/// anyExtendedKeyUsage
+	Any,
+	/// id-kp-serverAuth
+	ServerAuth,
+	/// id-kp-clientAuth
+	ClientAuth,
+	/// id-kp-codeSigning
+	CodeSigning,
+	/// id-kp-emailProtection
+	EmailProtection,
+	/// id-kp-timeStamping
+	TimeStamping,
+	/// id-kp-OCSPSigning
+	OcspSigning,
+	/// A custom purpose not from the pre-specified list of purposes
+	Other(Vec<u64>),
+}
+
+impl ExtendedKeyUsagePurpose {
+	#[cfg(all(test, feature = "x509-parser"))]
+	pub(crate) fn from_x509(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Vec<Self>, Error> {
+		let extended_key_usage = x509
+			.extended_key_usage()
+			.map_err(|_| Error::CouldNotParseCertificate)?
+			.map(|ext| ext.value);
+
+		let mut extended_key_usages = Vec::new();
+		if let Some(extended_key_usage) = extended_key_usage {
+			if extended_key_usage.any {
+				extended_key_usages.push(Self::Any);
+			}
+			if extended_key_usage.server_auth {
+				extended_key_usages.push(Self::ServerAuth);
+			}
+			if extended_key_usage.client_auth {
+				extended_key_usages.push(Self::ClientAuth);
+			}
+			if extended_key_usage.code_signing {
+				extended_key_usages.push(Self::CodeSigning);
+			}
+			if extended_key_usage.email_protection {
+				extended_key_usages.push(Self::EmailProtection);
+			}
+			if extended_key_usage.time_stamping {
+				extended_key_usages.push(Self::TimeStamping);
+			}
+			if extended_key_usage.ocsp_signing {
+				extended_key_usages.push(Self::OcspSigning);
+			}
+		}
+
+		Ok(extended_key_usages)
+	}
+
+	pub(crate) fn oid(&self) -> &[u64] {
+		use ExtendedKeyUsagePurpose::*;
+		match self {
+			// anyExtendedKeyUsage
+			Any => &[2, 5, 29, 37, 0],
+			// id-kp-*
+			ServerAuth => &[1, 3, 6, 1, 5, 5, 7, 3, 1],
+			ClientAuth => &[1, 3, 6, 1, 5, 5, 7, 3, 2],
+			CodeSigning => &[1, 3, 6, 1, 5, 5, 7, 3, 3],
+			EmailProtection => &[1, 3, 6, 1, 5, 5, 7, 3, 4],
+			TimeStamping => &[1, 3, 6, 1, 5, 5, 7, 3, 8],
+			OcspSigning => &[1, 3, 6, 1, 5, 5, 7, 3, 9],
+			Other(oid) => oid,
+		}
+	}
+}
+
+/// An X.509v3 extended key usage extension according to [RFC 5280 §4.2.1.12].
+///
+/// [RFC 5280 §4.2.1.12]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.12>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ExtendedKeyUsage<'params>(&'params [ExtendedKeyUsagePurpose]);
+
+impl<'params> ExtendedKeyUsage<'params> {
+	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
+		if params.extended_key_usages.is_empty() {
+			return None;
+		}
+
+		Some(Self(&params.extended_key_usages))
+	}
+}
+
+impl StaticExtension for ExtendedKeyUsage<'_> {
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   ExtKeyUsageSyntax ::= SEQUENCE SIZE (1..MAX) OF KeyPurposeId
+		   KeyPurposeId ::= OBJECT IDENTIFIER
+		*/
+		writer.write_sequence(|writer| {
+			for usage in self.0.iter() {
+				writer
+					.next()
+					.write_oid(&ObjectIdentifier::from_slice(usage.oid()));
+			}
+		});
+	}
+
+	// RFC 5280 §4.2.1.12: "This extension MAY, at the option of the certificate
+	// issuer, be either critical or non-critical."
+	// TODO(XXX): make this configurable?
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	const OID: &'static [u64] = oid::EXT_KEY_USAGE;
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
