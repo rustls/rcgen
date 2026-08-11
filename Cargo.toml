@@ -18,7 +18,7 @@ aws-lc-rs = { version = "1.18", default-features = false }
 botan = { version = "0.12", features = ["vendored"] }
 bpaf = { version = "0.9.5", features = ["derive"] }
 openssl = "0.10"
-pem = "3.0.2"
+pem = "4"
 pki-types = { package = "rustls-pki-types", version = "1.4.1" }
 ring = "0.17"
 rustls-webpki = { version = "0.103.14", features = ["ring", "std"] }
