@@ -49,8 +49,8 @@ pub use crl::{
 pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
 pub use error::{Error, InvalidAsn1String};
 pub use ext::{
-	CidrSubnet, CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralSubtree, KeyUsagePurpose,
-	NameConstraints, OtherNameValue, SanType,
+	CidrSubnet, CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralSubtree, KeyIdMethod,
+	KeyUsagePurpose, NameConstraints, OtherNameValue, SanType,
 };
 #[cfg(feature = "crypto")]
 pub use key_pair::KeyPair;
@@ -60,8 +60,6 @@ pub use key_pair::{PublicKeyData, SigningKey, SubjectPublicKeyInfo};
 #[cfg(feature = "pem")]
 use pem::Pem;
 use pki_types::CertificateDer;
-#[cfg(feature = "crypto")]
-use ring_like::digest;
 pub use sign_algo::algo::*;
 pub use sign_algo::SignatureAlgorithm;
 use time::{OffsetDateTime, Time};
@@ -452,86 +450,6 @@ impl<'a> Iterator for DistinguishedNameIterator<'a> {
 		self.iter
 			.next()
 			.and_then(|ty| self.distinguished_name.entries.get(ty).map(|v| (ty, v)))
-	}
-}
-
-/// Method to generate key identifiers from public keys.
-///
-/// Key identifiers should be derived from the public key data. [RFC 7093] defines
-/// three methods to do so using a choice of SHA256 (method 1), SHA384 (method 2), or SHA512
-/// (method 3). In each case the first 160 bits of the hash are used as the key identifier
-/// to match the output length that would be produced were SHA1 used (a legacy option defined
-/// in RFC 5280).
-///
-/// In addition to the RFC 7093 mechanisms, rcgen supports using a pre-specified key identifier.
-/// This can be helpful when working with an existing `Certificate`.
-///
-/// [RFC 7093]: https://www.rfc-editor.org/rfc/rfc7093
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-#[non_exhaustive]
-pub enum KeyIdMethod {
-	/// RFC 7093 method 1 - a truncated SHA256 digest.
-	#[cfg(feature = "crypto")]
-	Sha256,
-	/// RFC 7093 method 2 - a truncated SHA384 digest.
-	#[cfg(feature = "crypto")]
-	Sha384,
-	/// RFC 7093 method 3 - a truncated SHA512 digest.
-	#[cfg(feature = "crypto")]
-	Sha512,
-	/// Pre-specified identifier. The exact given value is used as the key identifier.
-	PreSpecified(Vec<u8>),
-}
-
-impl KeyIdMethod {
-	#[cfg(feature = "x509-parser")]
-	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Self, Error> {
-		let key_identifier_method =
-			x509.iter_extensions()
-				.find_map(|ext| match ext.parsed_extension() {
-					x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(key_id) => {
-						Some(KeyIdMethod::PreSpecified(key_id.0.into()))
-					},
-					_ => None,
-				});
-
-		Ok(match key_identifier_method {
-			Some(method) => method,
-			None => {
-				#[cfg(not(feature = "crypto"))]
-				return Err(Error::UnsupportedSignatureAlgorithm);
-				#[cfg(feature = "crypto")]
-				KeyIdMethod::Sha256
-			},
-		})
-	}
-
-	/// Derive a key identifier for the provided subject public key info using the key ID method.
-	///
-	/// Typically this is a truncated hash over the raw subject public key info, but may
-	/// be a pre-specified value.
-	///
-	/// This key identifier is used in the SubjectKeyIdentifier and AuthorityKeyIdentifier
-	/// X.509v3 extensions.
-	#[allow(unused_variables)]
-	pub(crate) fn derive(&self, subject_public_key_info: impl AsRef<[u8]>) -> Vec<u8> {
-		#[cfg_attr(not(feature = "crypto"), expect(clippy::let_unit_value))]
-		let digest_method = match &self {
-			#[cfg(feature = "crypto")]
-			Self::Sha256 => &digest::SHA256,
-			#[cfg(feature = "crypto")]
-			Self::Sha384 => &digest::SHA384,
-			#[cfg(feature = "crypto")]
-			Self::Sha512 => &digest::SHA512,
-			Self::PreSpecified(b) => {
-				return b.to_vec();
-			},
-		};
-		#[cfg(feature = "crypto")]
-		{
-			let digest = digest::digest(digest_method, subject_public_key_info.as_ref());
-			digest.as_ref()[0..20].to_vec()
-		}
 	}
 }
 
