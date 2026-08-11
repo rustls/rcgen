@@ -4,7 +4,7 @@ use std::net::IpAddr;
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
-use crate::{oid, CertificateParams, Issuer, KeyIdMethod, SanType, SigningKey};
+use crate::{oid, CertificateParams, Issuer, KeyIdMethod, KeyUsagePurpose, SanType, SigningKey};
 
 /// An X.509 extension whose OID and criticality are fixed by the profile
 /// defining it.
@@ -218,6 +218,58 @@ impl Extension for SubjectAlternativeName<'_> {
 				Self::write_name(writer.next(), san);
 			}
 		});
+	}
+}
+
+/// An X.509v3 key usage extension according to [RFC 5280 §4.2.1.3].
+///
+/// [RFC 5280 §4.2.1.3]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.3>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct KeyUsage<'params>(&'params [KeyUsagePurpose]);
+
+impl<'params> KeyUsage<'params> {
+	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
+		if params.key_usages.is_empty() {
+			return None;
+		}
+
+		Some(Self(&params.key_usages))
+	}
+}
+
+impl StaticExtension for KeyUsage<'_> {
+	const OID: &'static [u64] = oid::KEY_USAGE;
+
+	// RFC 5280 §4.2.1.3: "When present, conforming CAs SHOULD mark this extension
+	// as critical."
+	const CRITICALITY: Criticality = Criticality::Critical;
+
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   KeyUsage ::= BIT STRING {
+			  digitalSignature        (0),
+			  nonRepudiation          (1), -- recent editions of X.509 have
+										   -- renamed this bit to contentCommitment
+			  keyEncipherment         (2),
+			  dataEncipherment        (3),
+			  keyAgreement            (4),
+			  keyCertSign             (5),
+			  cRLSign                 (6),
+			  encipherOnly            (7),
+			  decipherOnly            (8) }
+		*/
+		// u16 is large enough to encode the largest possible key usage (two-bytes)
+		let bit_string = self.0.iter().fold(0u16, |bit_string, key_usage| {
+			bit_string | key_usage.to_u16()
+		});
+
+		match u16::BITS - bit_string.trailing_zeros() {
+			bits @ 0..=8 => {
+				writer.write_bitvec_bytes(&bit_string.to_be_bytes()[..1], bits as usize)
+			},
+			bits @ 9..=16 => writer.write_bitvec_bytes(&bit_string.to_be_bytes(), bits as usize),
+			_ => unreachable!(),
+		}
 	}
 }
 

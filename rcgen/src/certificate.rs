@@ -10,7 +10,7 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
-use crate::ext::{write_extension, AuthorityKeyIdentifier, SubjectAlternativeName};
+use crate::ext::{write_extension, AuthorityKeyIdentifier, KeyUsage, SubjectAlternativeName};
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
@@ -196,7 +196,9 @@ impl CertificateParams {
 			));
 			writer.next().write_set(|writer| {
 				writer.next().write_sequence(|writer| {
-					self.write_key_usage(writer.next());
+					if let Some(ku) = KeyUsage::from_params(self) {
+						write_extension(writer.next(), &ku);
+					}
 					if let Some(san) = SubjectAlternativeName::from_params(self) {
 						write_extension(writer.next(), &san);
 					}
@@ -209,31 +211,6 @@ impl CertificateParams {
 					}
 				});
 			});
-		});
-	}
-
-	/// Write a certificate's KeyUsage as defined in RFC 5280.
-	fn write_key_usage(&self, writer: DERWriter) {
-		if self.key_usages.is_empty() {
-			return;
-		}
-
-		// "When present, conforming CAs SHOULD mark this extension as critical."
-		write_x509_extension(writer, oid::KEY_USAGE, true, |writer| {
-			// u16 is large enough to encode the largest possible key usage (two-bytes)
-			let bit_string = self.key_usages.iter().fold(0u16, |bit_string, key_usage| {
-				bit_string | key_usage.to_u16()
-			});
-
-			match u16::BITS - bit_string.trailing_zeros() {
-				bits @ 0..=8 => {
-					writer.write_bitvec_bytes(&bit_string.to_be_bytes()[..1], bits as usize)
-				},
-				bits @ 9..=16 => {
-					writer.write_bitvec_bytes(&bit_string.to_be_bytes(), bits as usize)
-				},
-				_ => unreachable!(),
-			}
 		});
 	}
 
@@ -492,7 +469,9 @@ impl CertificateParams {
 		if let Some(san) = SubjectAlternativeName::from_params(self) {
 			write_extension(writer.next(), &san);
 		}
-		self.write_key_usage(writer.next());
+		if let Some(ku) = KeyUsage::from_params(self) {
+			write_extension(writer.next(), &ku);
+		}
 		self.write_extended_key_usage(writer.next());
 
 		if let Some(name_constraints) = &self.name_constraints {
