@@ -62,9 +62,9 @@ pub use error::{Error, InvalidAsn1String};
 
 mod extension;
 pub use extension::{
-	CidrSubnet, Criticality, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope,
-	CustomExtension, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, KeyIdMethod, KeyUsagePurpose,
-	NameConstraints, OtherNameValue, PathLenConstraint, RevocationReason, SanType,
+	AcmeIdentifier, CidrSubnet, Criticality, CrlDistributionPoint, CrlIssuingDistributionPoint,
+	CrlScope, CustomExtension, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, KeyIdMethod,
+	KeyUsagePurpose, NameConstraints, OtherNameValue, PathLenConstraint, RevocationReason, SanType,
 };
 
 mod key_pair;
