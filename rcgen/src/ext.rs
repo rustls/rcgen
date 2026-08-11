@@ -358,6 +358,136 @@ impl Extension for SubjectAlternativeName<'_> {
 	}
 }
 
+/// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub enum KeyUsagePurpose {
+	/// digitalSignature
+	DigitalSignature,
+	/// contentCommitment / nonRepudiation
+	ContentCommitment,
+	/// keyEncipherment
+	KeyEncipherment,
+	/// dataEncipherment
+	DataEncipherment,
+	/// keyAgreement
+	KeyAgreement,
+	/// keyCertSign
+	KeyCertSign,
+	/// cRLSign
+	CrlSign,
+	/// encipherOnly
+	EncipherOnly,
+	/// decipherOnly
+	DecipherOnly,
+}
+
+impl KeyUsagePurpose {
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_x509(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Vec<Self>, Error> {
+		let key_usage = x509
+			.key_usage()
+			.map_err(|_| Error::CouldNotParseCertificate)?
+			.map(|ext| ext.value);
+		// This x509 parser stores flags in reversed bit BIT STRING order
+		let flags = key_usage.map_or(0u16, |k| k.flags).reverse_bits();
+		Ok(Self::from_u16(flags))
+	}
+
+	/// Encode a key usage as the value of a BIT STRING as defined by RFC 5280.
+	/// [`u16`] is sufficient to encode the largest possible key usage value (two bytes).
+	fn to_u16(self) -> u16 {
+		const FLAG: u16 = 0b1000_0000_0000_0000;
+		FLAG >> match self {
+			KeyUsagePurpose::DigitalSignature => 0,
+			KeyUsagePurpose::ContentCommitment => 1,
+			KeyUsagePurpose::KeyEncipherment => 2,
+			KeyUsagePurpose::DataEncipherment => 3,
+			KeyUsagePurpose::KeyAgreement => 4,
+			KeyUsagePurpose::KeyCertSign => 5,
+			KeyUsagePurpose::CrlSign => 6,
+			KeyUsagePurpose::EncipherOnly => 7,
+			KeyUsagePurpose::DecipherOnly => 8,
+		}
+	}
+
+	/// Parse a collection of key usages from a [`u16`] representing the value
+	/// of a KeyUsage BIT STRING as defined by RFC 5280.
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_u16(value: u16) -> Vec<Self> {
+		[
+			KeyUsagePurpose::DigitalSignature,
+			KeyUsagePurpose::ContentCommitment,
+			KeyUsagePurpose::KeyEncipherment,
+			KeyUsagePurpose::DataEncipherment,
+			KeyUsagePurpose::KeyAgreement,
+			KeyUsagePurpose::KeyCertSign,
+			KeyUsagePurpose::CrlSign,
+			KeyUsagePurpose::EncipherOnly,
+			KeyUsagePurpose::DecipherOnly,
+		]
+		.iter()
+		.filter_map(|key_usage| {
+			let present = key_usage.to_u16() & value != 0;
+			present.then_some(*key_usage)
+		})
+		.collect()
+	}
+}
+
+/// An X.509v3 key usage extension according to [RFC 5280 §4.2.1.3].
+///
+/// [RFC 5280 §4.2.1.3]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.3>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct KeyUsage<'params>(&'params [KeyUsagePurpose]);
+
+impl<'params> KeyUsage<'params> {
+	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
+		if params.key_usages.is_empty() {
+			return None;
+		}
+
+		Some(Self(&params.key_usages))
+	}
+}
+
+impl StaticExtension for KeyUsage<'_> {
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   KeyUsage ::= BIT STRING {
+			  digitalSignature        (0),
+			  nonRepudiation          (1), -- recent editions of X.509 have
+										   -- renamed this bit to contentCommitment
+			  keyEncipherment         (2),
+			  dataEncipherment        (3),
+			  keyAgreement            (4),
+			  keyCertSign             (5),
+			  cRLSign                 (6),
+			  encipherOnly            (7),
+			  decipherOnly            (8) }
+		*/
+		// u16 is large enough to encode the largest possible key usage (two-bytes)
+		let bit_string = self.0.iter().fold(0u16, |bit_string, key_usage| {
+			bit_string | key_usage.to_u16()
+		});
+
+		match u16::BITS - bit_string.trailing_zeros() {
+			bits @ 0..=8 => {
+				writer.write_bitvec_bytes(&bit_string.to_be_bytes()[..1], bits as usize)
+			},
+			bits @ 9..=16 => writer.write_bitvec_bytes(&bit_string.to_be_bytes(), bits as usize),
+			_ => unreachable!(),
+		}
+	}
+
+	// RFC 5280 §4.2.1.3: "When present, conforming CAs SHOULD mark this extension
+	// as critical."
+	const CRITICALITY: Criticality = Criticality::Critical;
+
+	const OID: &'static [u64] = oid::KEY_USAGE;
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
