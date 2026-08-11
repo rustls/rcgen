@@ -1,9 +1,10 @@
 use std::fmt::Debug;
+use std::net::IpAddr;
 
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
-use crate::{oid, Issuer, KeyIdMethod, SigningKey};
+use crate::{oid, CertificateParams, Issuer, KeyIdMethod, SanType, SigningKey};
 
 /// An X.509 extension whose OID and criticality are fixed by the profile
 /// defining it.
@@ -154,6 +155,72 @@ impl StaticExtension for AuthorityKeyIdentifier {
 	}
 }
 
+/// An X.509v3 subject alternative name extension according to [RFC 5280 §4.2.1.6].
+///
+/// [RFC 5280 §4.2.1.6]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.6>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SubjectAlternativeName<'params> {
+	criticality: Criticality,
+	names: &'params [SanType],
+}
+
+impl<'params> SubjectAlternativeName<'params> {
+	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
+		// GeneralNames ::= SEQUENCE SIZE (1..MAX): an empty SAN can't be encoded,
+		// so the extension is omitted (RFC 5280 §4.2.1.6).
+		if params.subject_alt_names.is_empty() {
+			return None;
+		}
+
+		Some(Self {
+			// Per RFC 5280 §4.1.2.6, SAN must be marked critical if the subject
+			// is an empty sequence, and SHOULD be non-critical otherwise.
+			criticality: params.distinguished_name.entries.is_empty().into(),
+			names: &params.subject_alt_names,
+		})
+	}
+
+	fn write_name(writer: DERWriter, san: &SanType) {
+		writer.write_tagged_implicit(Tag::context(san.tag()), |writer| match san {
+			SanType::Rfc822Name(name) | SanType::DnsName(name) | SanType::URI(name) => {
+				writer.write_ia5_string(name.as_str())
+			},
+			SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
+			SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
+			SanType::OtherName((oid, value)) => {
+				// otherName SEQUENCE { OID, [0] explicit any defined by oid }
+				// https://datatracker.ietf.org/doc/html/rfc5280#page-38
+				writer.write_sequence(|writer| {
+					writer.next().write_oid(&ObjectIdentifier::from_slice(oid));
+					value.write_der(writer.next());
+				});
+			},
+		})
+	}
+}
+
+impl Extension for SubjectAlternativeName<'_> {
+	fn oid(&self) -> &[u64] {
+		oid::SUBJECT_ALT_NAME
+	}
+
+	fn criticality(&self) -> Criticality {
+		self.criticality
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   SubjectAltName ::= GeneralNames
+		   GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
+		*/
+		writer.write_sequence(|writer| {
+			for san in self.names.iter() {
+				Self::write_name(writer.next(), san);
+			}
+		});
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -227,6 +294,34 @@ mod tests {
 					}));
 				})
 			})
+		);
+	}
+
+	#[test]
+	fn san_absent_when_no_names() {
+		assert!(SubjectAlternativeName::from_params(&CertificateParams::default()).is_none());
+	}
+
+	#[test]
+	fn san_critical_when_subject_empty() {
+		// RFC 5280 §4.1.2.6: SAN must be critical if the subject is an empty sequence.
+		let mut params = CertificateParams {
+			subject_alt_names: vec![SanType::DnsName("example.com".try_into().unwrap())],
+			..CertificateParams::default()
+		};
+		assert_eq!(
+			SubjectAlternativeName::from_params(&params)
+				.unwrap()
+				.criticality(),
+			Criticality::NonCritical
+		);
+
+		params.distinguished_name = crate::DistinguishedName::new();
+		assert_eq!(
+			SubjectAlternativeName::from_params(&params)
+				.unwrap()
+				.criticality(),
+			Criticality::Critical
 		);
 	}
 

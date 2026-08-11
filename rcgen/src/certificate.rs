@@ -10,7 +10,7 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
-use crate::ext::{write_extension, AuthorityKeyIdentifier};
+use crate::ext::{write_extension, AuthorityKeyIdentifier, SubjectAlternativeName};
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
@@ -197,7 +197,9 @@ impl CertificateParams {
 			writer.next().write_set(|writer| {
 				writer.next().write_sequence(|writer| {
 					self.write_key_usage(writer.next());
-					self.write_subject_alt_names(writer.next());
+					if let Some(san) = SubjectAlternativeName::from_params(self) {
+						write_extension(writer.next(), &san);
+					}
 					self.write_extended_key_usage(writer.next());
 					self.write_ca_extensions(writer, None);
 					for ext in &self.custom_extensions {
@@ -281,44 +283,6 @@ impl CertificateParams {
 					BasicConstraints::Constrained(path_len_constraint) => {
 						writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
 					},
-				}
-			});
-		});
-	}
-
-	fn write_subject_alt_names(&self, writer: DERWriter) {
-		if self.subject_alt_names.is_empty() {
-			return;
-		}
-
-		// Per https://tools.ietf.org/html/rfc5280#section-4.1.2.6, SAN must be marked
-		// as critical if subject is empty.
-		let critical = self.distinguished_name.entries.is_empty();
-		write_x509_extension(writer, oid::SUBJECT_ALT_NAME, critical, |writer| {
-			writer.write_sequence(|writer| {
-				for san in self.subject_alt_names.iter() {
-					writer.next().write_tagged_implicit(
-						Tag::context(san.tag()),
-						|writer| match san {
-							SanType::Rfc822Name(name)
-							| SanType::DnsName(name)
-							| SanType::URI(name) => writer.write_ia5_string(name.as_str()),
-							SanType::IpAddress(IpAddr::V4(addr)) => {
-								writer.write_bytes(&addr.octets())
-							},
-							SanType::IpAddress(IpAddr::V6(addr)) => {
-								writer.write_bytes(&addr.octets())
-							},
-							SanType::OtherName((oid, value)) => {
-								// otherName SEQUENCE { OID, [0] explicit any defined by oid }
-								// https://datatracker.ietf.org/doc/html/rfc5280#page-38
-								writer.write_sequence(|writer| {
-									writer.next().write_oid(&ObjectIdentifier::from_slice(oid));
-									value.write_der(writer.next());
-								});
-							},
-						},
-					);
 				}
 			});
 		});
@@ -525,7 +489,9 @@ impl CertificateParams {
 			write_extension(writer.next(), &AuthorityKeyIdentifier::from(issuer));
 		}
 
-		self.write_subject_alt_names(writer.next());
+		if let Some(san) = SubjectAlternativeName::from_params(self) {
+			write_extension(writer.next(), &san);
+		}
 		self.write_key_usage(writer.next());
 		self.write_extended_key_usage(writer.next());
 
