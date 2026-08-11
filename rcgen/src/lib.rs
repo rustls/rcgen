@@ -39,8 +39,8 @@ use std::hash::Hash;
 use std::ops::Deref;
 
 pub use certificate::{
-	date_time_ymd, Attribute, BasicConstraints, Certificate, CertificateParams, CidrSubnet,
-	CustomExtension, DnType, GeneralSubtree, IsCa, NameConstraints,
+	date_time_ymd, Attribute, BasicConstraints, Certificate, CertificateParams, CustomExtension,
+	DnType, IsCa,
 };
 pub use crl::{
 	CertificateRevocationList, CertificateRevocationListParams, CrlDistributionPoint,
@@ -48,7 +48,10 @@ pub use crl::{
 };
 pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
 pub use error::{Error, InvalidAsn1String};
-pub use ext::{ExtendedKeyUsagePurpose, KeyUsagePurpose, OtherNameValue, SanType};
+pub use ext::{
+	CidrSubnet, ExtendedKeyUsagePurpose, GeneralSubtree, KeyUsagePurpose, NameConstraints,
+	OtherNameValue, SanType,
+};
 #[cfg(feature = "crypto")]
 pub use key_pair::KeyPair;
 #[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
