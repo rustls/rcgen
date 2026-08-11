@@ -198,11 +198,11 @@ impl CertificateParams {
 	fn csr_extensions(&self) -> Result<Extensions<'_>, Error> {
 		let mut exts = Extensions::default();
 
-		if let Some(ku) = KeyUsage::from_params(self) {
-			exts.add_extension(Box::new(ku))?;
-		}
 		if let Some(san) = SubjectAlternativeName::from_params(self) {
 			exts.add_extension(Box::new(san))?;
+		}
+		if let Some(ku) = KeyUsage::from_params(self) {
+			exts.add_extension(Box::new(ku))?;
 		}
 		if let Some(eku) = ExtendedKeyUsage::from_params(self) {
 			exts.add_extension(Box::new(eku))?;
