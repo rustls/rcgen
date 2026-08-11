@@ -15,7 +15,7 @@ keywords = ["mkcert", "ca", "certificate"]
 anyhow = "1.0.75"
 assert_fs = "1.0.13"
 aws-lc-rs = { version = "1.18", default-features = false }
-botan = { version = "0.12", features = ["vendored"] }
+botan = { version = "0.13", features = ["vendored"] }
 bpaf = { version = "0.9.5", features = ["derive"] }
 openssl = "0.10"
 pem = "4"
