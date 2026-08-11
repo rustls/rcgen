@@ -4,13 +4,13 @@ use pki_types::CertificateRevocationListDer;
 use time::OffsetDateTime;
 use yasna::{DERWriter, Tag};
 
+use crate::ext::{write_extension, AuthorityKeyIdentifier};
 use crate::key_pair::sign_der;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
 	dt_to_generalized, oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_authority_key_identifier, write_x509_extension, Error, Issuer, KeyIdMethod,
-	KeyUsagePurpose, SerialNumber, SigningKey,
+	write_x509_extension, Error, Issuer, KeyIdMethod, KeyUsagePurpose, SerialNumber, SigningKey,
 };
 
 /// A certificate revocation list (CRL)
@@ -273,10 +273,12 @@ impl CertificateRevocationListParams {
 			writer.next().write_tagged(Tag::context(0), |writer| {
 				writer.write_sequence(|writer| {
 					// Write authority key identifier.
-					write_x509_authority_key_identifier(
+					write_extension(
 						writer.next(),
-						self.key_identifier_method
-							.derive(issuer.signing_key.subject_public_key_info()),
+						&AuthorityKeyIdentifier(
+							self.key_identifier_method
+								.derive(issuer.signing_key.subject_public_key_info()),
+						),
 					);
 
 					// Write CRL number.

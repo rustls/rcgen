@@ -10,15 +10,16 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
+use crate::ext::{write_extension, AuthorityKeyIdentifier};
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_authority_key_identifier, write_x509_extension, DistinguishedName, Error, Issuer,
-	KeyIdMethod, KeyUsagePurpose, SanType, SerialNumber, SigningKey,
+	oid, write_distinguished_name, write_dt_utc_or_generalized, write_x509_extension,
+	DistinguishedName, Error, Issuer, KeyIdMethod, KeyUsagePurpose, SanType, SerialNumber,
+	SigningKey,
 };
 
 /// An issued certificate
@@ -521,16 +522,7 @@ impl CertificateParams {
 		issuer: &Issuer<'_, impl SigningKey>,
 	) -> Result<(), Error> {
 		if self.use_authority_key_identifier_extension {
-			write_x509_authority_key_identifier(
-				writer.next(),
-				match issuer.key_identifier_method.as_ref() {
-					KeyIdMethod::PreSpecified(aki) => aki.clone(),
-					#[cfg(feature = "crypto")]
-					_ => issuer
-						.key_identifier_method
-						.derive(issuer.signing_key.subject_public_key_info()),
-				},
-			);
+			write_extension(writer.next(), &AuthorityKeyIdentifier::from(issuer));
 		}
 
 		self.write_subject_alt_names(writer.next());
