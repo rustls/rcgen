@@ -1,8 +1,8 @@
 #[cfg(feature = "crypto")]
 use std::fmt;
 
-#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
-use aws_lc_rs::unstable::signature::PqdsaKeyPair;
+#[cfg(feature = "aws_lc_rs")]
+use aws_lc_rs::signature::PqdsaKeyPair;
 #[cfg(feature = "pem")]
 use pem::Pem;
 #[cfg(feature = "crypto")]
@@ -40,7 +40,7 @@ pub(crate) enum KeyPairKind {
 	/// A Ed25519 key pair
 	Ed(Ed25519KeyPair),
 	/// A Pqdsa key pair
-	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	#[cfg(feature = "aws_lc_rs")]
 	Pq(PqdsaKeyPair),
 	/// A RSA key pair
 	Rsa(RsaKeyPair, &'static dyn RsaEncoding),
@@ -52,7 +52,7 @@ impl fmt::Debug for KeyPairKind {
 		match self {
 			Self::Ec(key_pair) => write!(f, "{key_pair:?}"),
 			Self::Ed(key_pair) => write!(f, "{key_pair:?}"),
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			Self::Pq(key_pair) => write!(f, "{key_pair:?}"),
 			Self::Rsa(key_pair, _) => write!(f, "{key_pair:?}"),
 		}
@@ -119,10 +119,10 @@ impl KeyPair {
 					serialized_der: key_pair_serialized,
 				})
 			},
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			SignAlgo::PqDsa(sign_alg) => {
 				let key_pair = PqdsaKeyPair::generate(sign_alg)._err()?;
-				let key_pair_serialized = key_pair.to_pkcs8()._err()?.as_ref().to_vec();
+				let key_pair_serialized = key_pair.to_pkcs8v1()._err()?.as_ref().to_vec();
 
 				Ok(KeyPair {
 					kind: KeyPairKind::Pq(key_pair),
@@ -458,7 +458,7 @@ impl SigningKey for KeyPair {
 				signature.as_ref().to_owned()
 			},
 			KeyPairKind::Ed(kp) => kp.sign(msg).as_ref().to_owned(),
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			KeyPairKind::Pq(kp) => {
 				let mut signature = vec![0; kp.algorithm().signature_len()];
 				kp.sign(msg, &mut signature)._err()?;
@@ -481,7 +481,7 @@ impl PublicKeyData for KeyPair {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => kp.public_key().as_ref(),
 			KeyPairKind::Ed(kp) => kp.public_key().as_ref(),
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			KeyPairKind::Pq(kp) => kp.public_key().as_ref(),
 			KeyPairKind::Rsa(kp, _) => kp.public_key().as_ref(),
 		}

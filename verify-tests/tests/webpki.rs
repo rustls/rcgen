@@ -1,7 +1,7 @@
 use std::time::Duration as StdDuration;
 
-#[cfg(feature = "aws_lc_rs_unstable")]
-use aws_lc_rs::unstable::signature::{
+#[cfg(feature = "aws_lc_rs")]
+use aws_lc_rs::signature::{
 	PqdsaKeyPair, PqdsaSigningAlgorithm, ML_DSA_44_SIGNING, ML_DSA_65_SIGNING, ML_DSA_87_SIGNING,
 };
 use pki_types::{CertificateDer, ServerName, SignatureVerificationAlgorithm, UnixTime};
@@ -39,7 +39,7 @@ fn sign_msg_ed25519(key_pair: &KeyPair, msg: &[u8]) -> Vec<u8> {
 	signature.as_ref().to_vec()
 }
 
-#[cfg(feature = "aws_lc_rs_unstable")]
+#[cfg(feature = "aws_lc_rs")]
 fn sign_msg_pq(key_pair: &KeyPair, msg: &[u8], alg: &'static PqdsaSigningAlgorithm) -> Vec<u8> {
 	let pk_der = key_pair.serialize_der();
 	let key_pair = PqdsaKeyPair::from_pkcs8(alg, &pk_der).unwrap();
@@ -235,7 +235,7 @@ fn test_webpki_rsa_given() {
 	);
 }
 
-#[cfg(all(feature = "pem", feature = "aws_lc_rs_unstable"))]
+#[cfg(feature = "aws_lc_rs")]
 #[test]
 fn test_webpki_ml_dsa() {
 	let (params, _) = util::default_params();
@@ -249,7 +249,7 @@ fn test_webpki_ml_dsa() {
 	}
 }
 
-#[cfg(feature = "aws_lc_rs_unstable")]
+#[cfg(feature = "aws_lc_rs")]
 const ML_DSA_ALGS: &[(
 	&rcgen::SignatureAlgorithm,
 	&dyn SignatureVerificationAlgorithm,

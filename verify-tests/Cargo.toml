@@ -6,8 +6,7 @@ publish = false
 
 [features]
 default = []
-aws_lc_rs = ["rcgen/aws_lc_rs"]
-aws_lc_rs_unstable = ["dep:aws-lc-rs", "rcgen/aws_lc_rs_unstable", "rustls-webpki/aws-lc-rs-unstable"]
+aws_lc_rs = ["rcgen/aws_lc_rs", "rustls-webpki/aws-lc-rs", "dep:aws-lc-rs"]
 fips = ["rcgen/fips"]
 pem = ["dep:pem", "rcgen/pem"]
 ring = ["rcgen/ring"]

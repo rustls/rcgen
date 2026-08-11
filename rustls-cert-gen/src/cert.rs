@@ -197,11 +197,11 @@ pub enum KeyPairAlgorithm {
 	EcdsaP384,
 	#[cfg(feature = "aws_lc_rs")]
 	EcdsaP521,
-	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	#[cfg(feature = "aws_lc_rs")]
 	MlDsa44,
-	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	#[cfg(feature = "aws_lc_rs")]
 	MlDsa65,
-	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	#[cfg(feature = "aws_lc_rs")]
 	MlDsa87,
 }
 
@@ -214,11 +214,11 @@ impl From<KeyPairAlgorithm> for &'static SignatureAlgorithm {
 			KeyPairAlgorithm::EcdsaP384 => &rcgen::PKCS_ECDSA_P384_SHA384,
 			#[cfg(feature = "aws_lc_rs")]
 			KeyPairAlgorithm::EcdsaP521 => &rcgen::PKCS_ECDSA_P521_SHA512,
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			KeyPairAlgorithm::MlDsa44 => &rcgen::PKCS_ML_DSA_44,
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			KeyPairAlgorithm::MlDsa65 => &rcgen::PKCS_ML_DSA_65,
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			KeyPairAlgorithm::MlDsa87 => &rcgen::PKCS_ML_DSA_87,
 		}
 	}
@@ -233,11 +233,11 @@ impl fmt::Display for KeyPairAlgorithm {
 			KeyPairAlgorithm::EcdsaP384 => write!(f, "ecdsa-p384"),
 			#[cfg(feature = "aws_lc_rs")]
 			KeyPairAlgorithm::EcdsaP521 => write!(f, "ecdsa-p521"),
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			KeyPairAlgorithm::MlDsa44 => write!(f, "ml-dsa-44"),
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			KeyPairAlgorithm::MlDsa65 => write!(f, "ml-dsa-65"),
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			KeyPairAlgorithm::MlDsa87 => write!(f, "ml-dsa-87"),
 		}
 	}
@@ -254,11 +254,11 @@ impl FromStr for KeyPairAlgorithm {
 			"ecdsa-p384" => Ok(Self::EcdsaP384),
 			#[cfg(feature = "aws_lc_rs")]
 			"ecdsa-p521" => Ok(Self::EcdsaP521),
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			"ml-dsa-44" => Ok(Self::MlDsa44),
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			"ml-dsa-65" => Ok(Self::MlDsa65),
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			"ml-dsa-87" => Ok(Self::MlDsa87),
 			_ => Err(anyhow::anyhow!("unknown key algorithm: {s}")),
 		}

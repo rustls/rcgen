@@ -1,8 +1,8 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
-use aws_lc_rs::unstable::signature::{
+#[cfg(feature = "aws_lc_rs")]
+use aws_lc_rs::signature::{
 	PqdsaSigningAlgorithm, ML_DSA_44_SIGNING, ML_DSA_65_SIGNING, ML_DSA_87_SIGNING,
 };
 use yasna::models::ObjectIdentifier;
@@ -17,7 +17,7 @@ use crate::Error;
 pub(crate) enum SignAlgo {
 	EcDsa(&'static EcdsaSigningAlgorithm),
 	EdDsa(&'static EdDSAParameters),
-	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	#[cfg(feature = "aws_lc_rs")]
 	PqDsa(&'static PqdsaSigningAlgorithm),
 	Rsa(&'static dyn RsaEncoding),
 }
@@ -230,30 +230,30 @@ pub(crate) mod algo {
 	};
 
 	/// ML-DSA-44 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
-	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	#[cfg(feature = "aws_lc_rs")]
 	pub static PKCS_ML_DSA_44: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[ML_DSA_44],
-		#[cfg(all(feature = "crypto", feature = "aws_lc_rs_unstable"))]
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::PqDsa(&ML_DSA_44_SIGNING),
 		oid_components: ML_DSA_44,
 		params: SignatureAlgorithmParams::None,
 	};
 
 	/// ML-DSA-65 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
-	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	#[cfg(feature = "aws_lc_rs")]
 	pub static PKCS_ML_DSA_65: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[ML_DSA_65],
-		#[cfg(all(feature = "crypto", feature = "aws_lc_rs_unstable"))]
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::PqDsa(&ML_DSA_65_SIGNING),
 		oid_components: ML_DSA_65,
 		params: SignatureAlgorithmParams::None,
 	};
 
 	/// ML-DSA-87 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
-	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	#[cfg(feature = "aws_lc_rs")]
 	pub static PKCS_ML_DSA_87: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[ML_DSA_87],
-		#[cfg(all(feature = "crypto", feature = "aws_lc_rs_unstable"))]
+		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::PqDsa(&ML_DSA_87_SIGNING),
 		oid_components: ML_DSA_87,
 		params: SignatureAlgorithmParams::None,
