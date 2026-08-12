@@ -793,6 +793,23 @@ impl CustomExtension {
 		}
 	}
 
+	/// Recover a custom extension from a parsed X.509 extension that rcgen does not
+	/// represent natively in [`CertificateParams`].
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		parsed: &x509_parser::extensions::X509Extension<'_>,
+	) -> Result<Self, Error> {
+		Ok(Self {
+			oid: parsed
+				.oid
+				.iter()
+				.ok_or(Error::UnsupportedExtension)?
+				.collect::<Vec<_>>(),
+			criticality: parsed.critical.into(),
+			der_value: parsed.value.to_vec(),
+		})
+	}
+
 	/// Obtains the OID components of the extensions, as u64 pieces
 	pub fn oid_components(&self) -> impl Iterator<Item = u64> + '_ {
 		self.oid.iter().copied()

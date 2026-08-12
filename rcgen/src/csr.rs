@@ -6,13 +6,13 @@ use pki_types::CertificateSigningRequestDer;
 
 #[cfg(feature = "x509-parser")]
 use crate::ext::{BasicConstraints, ExtendedKeyUsage, KeyUsage, SubjectAlternativeName};
-#[cfg(feature = "x509-parser")]
-use crate::DistinguishedName;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
 	Certificate, CertificateParams, Error, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey,
 };
+#[cfg(feature = "x509-parser")]
+use crate::{CustomExtension, DistinguishedName};
 
 /// A public key, extracted from a CSR
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -93,14 +93,15 @@ impl CertificateSigningRequestParams {
 
 	/// Parse and verify a certificate signing request from DER-encoded bytes
 	///
-	/// Currently, this supports the following extensions:
+	/// The following requested extensions are parsed natively into params:
 	/// - `Subject Alternative Name` (see [`crate::SanType`])
 	/// - `Key Usage` (see [`crate::KeyUsagePurpose`])
 	/// - `Extended Key Usage` (see [`crate::ExtendedKeyUsagePurpose`])
 	/// - `Basic Constraints` (see [`crate::PathLenConstraint`])
 	///
-	/// On encountering other extensions, this function will return [`Error::UnsupportedExtension`].
-	/// If the request's signature is invalid, it will return
+	/// Any other requested extensions are preserved verbatim in
+	/// [`CertificateParams::custom_extensions`] as [`CustomExtension`]s.
+	/// If the request's signature is invalid, this function will return
 	/// [`Error::InvalidCertificationRequestSignature`].
 	///
 	/// The [`PemObject`] trait is often used to obtain a [`CertificateSigningRequestDer`] from
@@ -132,21 +133,33 @@ impl CertificateSigningRequestParams {
 		};
 		let raw = info.subject_pki.subject_public_key.data.to_vec();
 
-		if let Some(extensions) = csr.requested_extensions() {
-			for parsed in extensions {
+		let requested_extensions =
+			info.iter_attributes()
+				.find_map(|attr| match attr.parsed_attribute() {
+					x509_parser::prelude::ParsedCriAttribute::ExtensionRequest(requested) => {
+						Some(&requested.extensions)
+					},
+					_ => None,
+				});
+
+		if let Some(requested_extensions) = requested_extensions {
+			for extension in requested_extensions {
+				let parsed = extension.parsed_extension();
 				let handled = KeyUsage::from_parsed(&mut params, parsed)?
 					|| SubjectAlternativeName::from_parsed(&mut params, parsed)?
 					|| ExtendedKeyUsage::from_parsed(&mut params, parsed)?
 					|| BasicConstraints::from_parsed(&mut params, parsed)?;
+
+				// Extensions that params can't represent natively are preserved
+				// verbatim, so serializing the recovered params reproduces the
+				// requested extensions.
 				if !handled {
-					return Err(Error::UnsupportedExtension);
+					params
+						.custom_extensions
+						.push(CustomExtension::from_parsed(extension)?);
 				}
 			}
 		}
-
-		// Not yet handled:
-		// * name_constraints
-		// and any other extensions.
 
 		Ok(Self {
 			params,
@@ -181,8 +194,8 @@ mod tests {
 	use x509_parser::prelude::{FromDer, ParsedExtension};
 
 	use crate::{
-		CertificateParams, CertificateSigningRequestParams, ExtendedKeyUsagePurpose, IsCa, KeyPair,
-		KeyUsagePurpose, PathLenConstraint,
+		CertificateParams, CertificateSigningRequestParams, Criticality, CustomExtension,
+		ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, PathLenConstraint,
 	};
 
 	#[test]
@@ -240,6 +253,33 @@ mod tests {
 				path_len_constraint: None
 			})
 		));
+	}
+
+	#[test]
+	fn serialize_and_deserialize_eq_custom_extensions() {
+		// Custom extensions must survive a serialize/parse round trip, preserving
+		// OID, criticality and value. See rustls/rcgen#446 for context: rcgen
+		// previously rejected CSRs containing extensions it wrote itself.
+		let params = CertificateParams {
+			custom_extensions: vec![
+				CustomExtension::from_oid_content(
+					&[1, 3, 6, 1, 4, 1, 99, 9],
+					Criticality::Critical,
+					vec![0x0C, 0x02, 0x68, 0x69],
+				),
+				CustomExtension::from_oid_content(
+					&[1, 3, 6, 1, 4, 1, 99, 10],
+					Criticality::NonCritical,
+					vec![0x05, 0x00],
+				),
+			],
+			..Default::default()
+		};
+		let key_pair = KeyPair::generate().unwrap();
+		let csr = params.serialize_request(&key_pair).unwrap();
+		let csr_de = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
+
+		assert_eq!(csr_de.params.custom_extensions, params.custom_extensions);
 	}
 
 	#[test]
