@@ -6,12 +6,15 @@ publish = false
 
 [features]
 default = []
-aws_lc_rs = ["rcgen/aws_lc_rs"]
+aws_lc_rs = ["_aws_lc_like", "rcgen/aws_lc_rs"]
 aws_lc_rs_unstable = ["dep:aws-lc-rs", "rcgen/aws_lc_rs_unstable", "rustls-webpki/aws-lc-rs-unstable"]
-fips = ["rcgen/fips"]
+fips = ["_aws_lc_like", "rcgen/fips"]
 pem = ["dep:pem", "rcgen/pem"]
 ring = ["rcgen/ring"]
 x509-parser = ["dep:x509-parser", "rcgen/x509-parser"]
+# Internal feature: enabled automatically whenever `aws_lc_rs` or `fips` is on.
+# Do not enable directly; use `aws_lc_rs` or `fips` instead.
+_aws_lc_like = []
 
 [dependencies]
 aws-lc-rs = { workspace = true, optional = true }

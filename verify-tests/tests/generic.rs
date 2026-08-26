@@ -15,11 +15,11 @@ mod test_key_params_mismatch {
 			&rcgen::PKCS_RSA_SHA256,
 			&rcgen::PKCS_ECDSA_P256_SHA256,
 			&rcgen::PKCS_ECDSA_P384_SHA384,
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			&rcgen::PKCS_ECDSA_P521_SHA256,
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			&rcgen::PKCS_ECDSA_P521_SHA384,
-			#[cfg(feature = "aws_lc_rs")]
+			#[cfg(feature = "_aws_lc_like")]
 			&rcgen::PKCS_ECDSA_P521_SHA512,
 			&rcgen::PKCS_ED25519,
 		];

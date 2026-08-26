@@ -12,11 +12,14 @@ keywords.workspace = true
 
 [features]
 default = ["crypto", "pem", "ring"]
-aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys", "x509-parser?/verify-aws"]
-aws_lc_rs_unstable = ["aws_lc_rs", "aws-lc-rs/unstable", "x509-parser?/verify-aws"]
-fips = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/fips"]
+aws_lc_rs = ["_aws_lc_like", "aws-lc-rs/aws-lc-sys"]
+aws_lc_rs_unstable = ["aws_lc_rs", "aws-lc-rs/unstable"]
+fips = ["_aws_lc_like", "aws-lc-rs/fips"]
 crypto = []
 ring = ["crypto", "dep:ring", "x509-parser?/verify"]
+# Internal feature: enabled automatically whenever `aws_lc_rs` or `fips` is on.
+# Do not enable directly; use `aws_lc_rs` or `fips` instead.
+_aws_lc_like = ["crypto", "dep:aws-lc-rs", "x509-parser?/verify-aws"]
 
 [dependencies]
 aws-lc-rs = { workspace = true, optional = true }

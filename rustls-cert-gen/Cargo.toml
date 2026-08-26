@@ -12,10 +12,13 @@ keywords.workspace = true
 
 [features]
 default = ["ring"]
-aws_lc_rs = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/aws-lc-sys"]
+aws_lc_rs = ["_aws_lc_like", "rcgen/aws_lc_rs", "aws-lc-rs/aws-lc-sys"]
 aws_lc_rs_unstable = ["rcgen/aws_lc_rs_unstable"]
-fips = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/fips"]
+fips = ["_aws_lc_like", "rcgen/fips", "aws-lc-rs/fips"]
 ring = ["dep:ring", "rcgen/ring"]
+# Internal feature: enabled automatically whenever `aws_lc_rs` or `fips` is on.
+# Do not enable directly; use `aws_lc_rs` or `fips` instead.
+_aws_lc_like = ["dep:aws-lc-rs"]
 
 [dependencies]
 anyhow = { workspace = true }
