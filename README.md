@@ -17,6 +17,26 @@ println!("{}", cert.pem());
 println!("{}", signing_key.serialize_pem());
 ```
 
+## Pluggable cryptography providers
+
+Key generation, private-key loading, hashing, and CSR signature verification are selected through
+`rcgen::crypto::CryptoProvider`. The `ring` and `aws_lc_rs` features provide built-in providers,
+but neither backend is required.
+
+To use a completely separate cryptography implementation, disable default features and enable the
+backend-neutral `crypto` feature:
+
+```toml
+[dependencies]
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem"] }
+```
+
+Implement `KeyPairProvider`, `DigestProvider`, and `SignatureVerificationProvider`, assemble them
+into a `CryptoProvider`, then either call `CryptoProvider::install_default()` once near process
+startup or use the explicit `*_with_provider` APIs. In this configuration, neither `ring` nor
+`aws-lc-rs` is present in rcgen's dependency graph. The `custom-provider` feature can additionally
+disable automatic built-in selection if another dependency enables a built-in backend feature.
+
 ## Trying it out with openssl
 
 You can do this:

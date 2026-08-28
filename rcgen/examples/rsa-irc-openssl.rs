@@ -18,8 +18,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;
 	let der_serialized = pem.contents();
-	let hash = ring::digest::digest(&ring::digest::SHA512, der_serialized);
-	let hash_hex = hash.as_ref().iter().fold(String::new(), |mut output, b| {
+	let hash = openssl::sha::sha512(der_serialized);
+	let hash_hex = hash.iter().fold(String::new(), |mut output, b| {
 		let _ = write!(output, "{b:02x}");
 		output
 	});

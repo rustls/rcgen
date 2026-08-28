@@ -13,7 +13,7 @@ a key pair to call [`CertificateParams::signed_by()`] or [`CertificateParams::se
 	doc = r##"
 ## Example
 
-```
+```no_run
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
@@ -49,18 +49,20 @@ pub use crl::{
 	CertificateRevocationList, CertificateRevocationListParams, CrlDistributionPoint,
 	CrlIssuingDistributionPoint, CrlScope, RevocationReason, RevokedCertParams,
 };
+#[cfg(feature = "crypto")]
+pub use crypto::{
+	CryptoProvider, DigestProvider, HashAlgorithm, KeyPairProvider, SignatureVerificationProvider,
+};
 pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
 pub use error::{Error, InvalidAsn1String};
 #[cfg(feature = "crypto")]
 pub use key_pair::KeyPair;
-#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+#[cfg(feature = "crypto")]
 pub use key_pair::RsaKeySize;
 pub use key_pair::{PublicKeyData, SigningKey, SubjectPublicKeyInfo};
 #[cfg(feature = "pem")]
 use pem::Pem;
 use pki_types::CertificateDer;
-#[cfg(feature = "crypto")]
-use ring_like::digest;
 pub use sign_algo::algo::*;
 pub use sign_algo::SignatureAlgorithm;
 use time::{OffsetDateTime, Time};
@@ -72,11 +74,12 @@ use crate::string::{BmpString, Ia5String, PrintableString, TeletexString, Univer
 
 mod certificate;
 mod crl;
+#[cfg(feature = "crypto")]
+pub mod crypto;
 mod csr;
 mod error;
 mod key_pair;
 mod oid;
-mod ring_like;
 mod sign_algo;
 pub mod string;
 
@@ -109,7 +112,7 @@ and key pair as output.
 	doc = r##"
 ## Example
 
-```
+```no_run
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
@@ -133,6 +136,18 @@ pub fn generate_simple_self_signed(
 	Ok(CertifiedKey { cert, signing_key })
 }
 
+/// Generate a simple self-signed certificate using an explicit cryptography provider.
+#[cfg(feature = "crypto")]
+pub fn generate_simple_self_signed_with_provider(
+	subject_alt_names: impl Into<Vec<String>>,
+	provider: &CryptoProvider,
+) -> Result<CertifiedKey<KeyPair>, Error> {
+	let signing_key = KeyPair::generate_with_provider(provider)?;
+	let cert = CertificateParams::new(subject_alt_names)?
+		.self_signed_with_provider(&signing_key, provider)?;
+	Ok(CertifiedKey { cert, signing_key })
+}
+
 /// An [`Issuer`] wrapper that also contains the issuer's [`Certificate`].
 #[derive(Debug)]
 pub struct CertifiedIssuer<'a, S> {
@@ -149,6 +164,19 @@ impl<'a, S: SigningKey> CertifiedIssuer<'a, S> {
 		})
 	}
 
+	/// Create a new issuer with a self-signed certificate using `provider`.
+	#[cfg(feature = "crypto")]
+	pub fn self_signed_with_provider(
+		params: CertificateParams,
+		signing_key: S,
+		provider: &CryptoProvider,
+	) -> Result<Self, Error> {
+		Ok(Self {
+			certificate: params.self_signed_with_provider(&signing_key, provider)?,
+			issuer: Issuer::new(params, signing_key),
+		})
+	}
+
 	/// Create a new issuer from the given parameters and key, signed by the given `issuer`.
 	pub fn signed_by(
 		params: CertificateParams,
@@ -157,6 +185,20 @@ impl<'a, S: SigningKey> CertifiedIssuer<'a, S> {
 	) -> Result<Self, Error> {
 		Ok(Self {
 			certificate: params.signed_by(&signing_key, issuer)?,
+			issuer: Issuer::new(params, signing_key),
+		})
+	}
+
+	/// Create a new issuer signed by `issuer` using `provider`.
+	#[cfg(feature = "crypto")]
+	pub fn signed_by_with_provider(
+		params: CertificateParams,
+		signing_key: S,
+		issuer: &Issuer<'_, impl SigningKey>,
+		provider: &CryptoProvider,
+	) -> Result<Self, Error> {
+		Ok(Self {
+			certificate: params.signed_by_with_provider(&signing_key, issuer, provider)?,
 			issuer: Issuer::new(params, signing_key),
 		})
 	}
@@ -315,7 +357,16 @@ pub enum SanType {
 }
 
 impl SanType {
-	#[cfg(all(test, feature = "x509-parser"))]
+	#[cfg(all(
+		test,
+		feature = "x509-parser",
+		any(
+			not(feature = "crypto"),
+			feature = "ring",
+			feature = "aws_lc_rs",
+			feature = "fips"
+		)
+	))]
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
 		let sans = x509
 			.subject_alternative_name()
@@ -717,24 +768,26 @@ impl KeyIdMethod {
 	///
 	/// This key identifier is used in the SubjectKeyIdentifier and AuthorityKeyIdentifier
 	/// X.509v3 extensions.
-	#[allow(unused_variables)]
-	pub(crate) fn derive(&self, subject_public_key_info: impl AsRef<[u8]>) -> Vec<u8> {
-		#[cfg_attr(not(feature = "crypto"), expect(clippy::let_unit_value))]
-		let digest_method = match &self {
-			#[cfg(feature = "crypto")]
-			Self::Sha256 => &digest::SHA256,
-			#[cfg(feature = "crypto")]
-			Self::Sha384 => &digest::SHA384,
-			#[cfg(feature = "crypto")]
-			Self::Sha512 => &digest::SHA512,
-			Self::PreSpecified(b) => {
-				return b.to_vec();
-			},
+	#[cfg(feature = "crypto")]
+	pub(crate) fn derive(
+		&self,
+		provider: &CryptoProvider,
+		subject_public_key_info: impl AsRef<[u8]>,
+	) -> Result<Vec<u8>, Error> {
+		let algorithm = match self {
+			Self::Sha256 => HashAlgorithm::Sha256,
+			Self::Sha384 => HashAlgorithm::Sha384,
+			Self::Sha512 => HashAlgorithm::Sha512,
+			Self::PreSpecified(value) => return Ok(value.clone()),
 		};
-		#[cfg(feature = "crypto")]
-		{
-			let digest = digest::digest(digest_method, subject_public_key_info.as_ref());
-			digest.as_ref()[0..20].to_vec()
+		let digest = provider.digest(algorithm, subject_public_key_info.as_ref())?;
+		Ok(digest[..20].to_vec())
+	}
+
+	#[cfg(not(feature = "crypto"))]
+	pub(crate) fn derive(&self, _subject_public_key_info: impl AsRef<[u8]>) -> Vec<u8> {
+		match self {
+			Self::PreSpecified(value) => value.clone(),
 		}
 	}
 }

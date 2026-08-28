@@ -48,6 +48,12 @@ jobs:
             - run: cargo clippy --features ring,pem,x509-parser --all-targets
             # rustls-cert-gen require either aws_lc_rs or ring feature
             - run: cargo clippy -p rcgen --no-default-features --all-targets
+            - run: cargo clippy -p rcgen --no-default-features --features crypto,pem,x509-parser --all-targets
+            - name: Ensure custom-provider builds have no built-in crypto dependencies
+              run: |
+                  if cargo tree -p rcgen --no-default-features --features crypto --edges normal,build | grep -E 'ring v|aws-lc'; then
+                    exit 1
+                  fi
             - run: cargo clippy --no-default-features --features ring --all-targets
             - run: cargo clippy --no-default-features --features aws_lc_rs,pem,x509-parser --all-targets
             - run: cargo clippy --no-default-features --features aws_lc_rs_unstable,pem,x509-parser --all-targets
@@ -71,6 +77,10 @@ jobs:
                   toolchain: ${{ matrix.toolchain }}
             - name: cargo doc (ring)
               run: cargo doc --features ring,pem,x509-parser --document-private-items
+              env:
+                  RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=rcgen_docsrs' || '-Dwarnings' }}
+            - name: cargo doc (custom provider)
+              run: cargo doc -p rcgen --no-default-features --features crypto,pem,x509-parser
               env:
                   RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=rcgen_docsrs' || '-Dwarnings' }}
             - name: cargo doc (aws_lc_rs_unstable)
@@ -165,6 +175,8 @@ jobs:
               run: cargo test --features x509-parser
             - name: Run the tests with aws_lc_rs backend enabled
               run: cargo test --no-default-features --features aws_lc_rs,pem
+            - name: Run the tests with a custom provider and no built-in backend
+              run: cargo test -p rcgen --no-default-features --features crypto,pem,x509-parser
               # rustls-cert-gen require either aws_lc_rs or ring feature
             - name: Run the tests with no features enabled
               run: cargo test -p rcgen --no-default-features
