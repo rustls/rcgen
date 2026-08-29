@@ -5,7 +5,7 @@ use time::OffsetDateTime;
 use yasna::{DERWriter, Tag};
 
 use crate::ext::{
-	write_extension, AuthorityKeyIdentifier, Criticality, CrlNumber, InvalidityDate, ReasonCode,
+	AuthorityKeyIdentifier, Criticality, CrlNumber, Extensions, InvalidityDate, ReasonCode,
 	StaticExtension,
 };
 use crate::key_pair::sign_der;
@@ -260,42 +260,45 @@ impl CertificateRevocationListParams {
 			if !self.revoked_certs.is_empty() {
 				writer.next().write_sequence(|writer| {
 					for revoked_cert in &self.revoked_certs {
-						revoked_cert.write_der(writer.next());
+						revoked_cert.write_der(writer.next())?;
 					}
-				});
+					Ok::<(), Error>(())
+				})?;
 			}
 
 			// Write crlExtensions.
 			// RFC 5280 §5.1.2.7:
 			//   This field may only appear if the version is 2 (Section 5.1.2.1).  If
 			//   present, this field is a sequence of one or more CRL extensions.
-			// RFC 5280 §5.2:
-			//   Conforming CRL issuers are REQUIRED to include the authority key
-			//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
-			//   extensions in all CRLs issued.
-			writer.next().write_tagged(Tag::context(0), |writer| {
-				writer.write_sequence(|writer| {
-					// Write authority key identifier.
-					write_extension(
-						writer.next(),
-						&AuthorityKeyIdentifier(
-							self.key_identifier_method
-								.derive(issuer.signing_key.subject_public_key_info()),
-						),
-					);
-
-					// Write CRL number.
-					write_extension(writer.next(), &CrlNumber::from(&self.crl_number));
-
-					// Write issuing distribution point (if present).
-					if let Some(idp) = &self.issuing_distribution_point {
-						write_extension(writer.next(), &idp);
-					}
-				});
-			});
+			// The field is elided entirely when the built collection is empty.
+			self.extensions(issuer)?.write_crl_der(writer.next());
 
 			Ok(())
 		})
+	}
+
+	/// Returns the X.509 extensions that the [`CertificateRevocationListParams`]
+	/// describe.
+	///
+	/// Returns an [`Error`] if the described extensions are invalid.
+	fn extensions(&self, issuer: &Issuer<'_, impl SigningKey>) -> Result<Extensions<'_>, Error> {
+		let mut exts = Extensions::default();
+
+		// RFC 5280 §5.2:
+		//   Conforming CRL issuers are REQUIRED to include the authority key
+		//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
+		//   extensions in all CRLs issued.
+		exts.add_extension(Box::new(AuthorityKeyIdentifier(
+			self.key_identifier_method
+				.derive(issuer.signing_key.subject_public_key_info()),
+		)))?;
+		exts.add_extension(Box::new(CrlNumber::from(&self.crl_number)))?;
+
+		if let Some(idp) = &self.issuing_distribution_point {
+			exts.add_extension(Box::new(idp))?;
+		}
+
+		Ok(exts)
 	}
 }
 
@@ -367,7 +370,7 @@ pub struct RevokedCertParams {
 }
 
 impl RevokedCertParams {
-	fn write_der(&self, writer: DERWriter) {
+	fn write_der(&self, writer: DERWriter) -> Result<(), Error> {
 		writer.write_sequence(|writer| {
 			// Write serial number.
 			// RFC 5280 §4.1.2.2:
@@ -384,27 +387,23 @@ impl RevokedCertParams {
 			// Write revocation date.
 			write_dt_utc_or_generalized(writer.next(), self.revocation_time);
 
-			// Write extensions if applicable.
+			// Write crlEntryExtensions.
 			// RFC 5280 §5.3:
 			//   Support for the CRL entry extensions defined in this specification is
 			//   optional for conforming CRL issuers and applications.  However, CRL
 			//   issuers SHOULD include reason codes (Section 5.3.1) and invalidity
 			//   dates (Section 5.3.2) whenever this information is available.
-			let reason_code = ReasonCode::from_params(self);
-			let invalidity_date = InvalidityDate::from_params(self);
-			if reason_code.is_some() || invalidity_date.is_some() {
-				writer.next().write_sequence(|writer| {
-					// Write reason code if present.
-					if let Some(reason_code) = &reason_code {
-						write_extension(writer.next(), reason_code);
-					}
-
-					// Write invalidity date if present.
-					if let Some(invalidity_date) = &invalidity_date {
-						write_extension(writer.next(), invalidity_date);
-					}
-				});
+			// The field is elided entirely when the built collection is empty.
+			let mut exts = Extensions::default();
+			if let Some(reason_code) = ReasonCode::from_params(self) {
+				exts.add_extension(Box::new(reason_code))?;
 			}
+			if let Some(invalidity_date) = InvalidityDate::from_params(self) {
+				exts.add_extension(Box::new(invalidity_date))?;
+			}
+			exts.write_der(writer.next());
+
+			Ok(())
 		})
 	}
 }
