@@ -4,9 +4,9 @@ use pki_types::CertificateRevocationListDer;
 use time::OffsetDateTime;
 use yasna::{DERWriter, Tag};
 
-use crate::extension::{
-	write_distribution_point_name_uris, AuthorityKeyIdentifier, CrlDistributionPoint, Extension,
-};
+#[cfg(all(test, feature = "crypto"))]
+use crate::extension::CrlDistributionPoint;
+use crate::extension::{AuthorityKeyIdentifier, CrlIssuingDistributionPoint, CrlNumber, Extension};
 use crate::key_pair::sign_der;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
@@ -236,20 +236,11 @@ impl CertificateRevocationListParams {
 					.write(writer.next());
 
 					// Write CRL number.
-					write_x509_extension(writer.next(), oid::CRL_NUMBER, false, |writer| {
-						writer.write_bigint_bytes(self.crl_number.as_ref(), true);
-					});
+					CrlNumber::from(&self.crl_number).write(writer.next());
 
 					// Write issuing distribution point (if present).
-					if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
-						write_x509_extension(
-							writer.next(),
-							oid::CRL_ISSUING_DISTRIBUTION_POINT,
-							true,
-							|writer| {
-								issuing_distribution_point.write_der(writer);
-							},
-						);
+					if let Some(idp) = &self.issuing_distribution_point {
+						idp.write(writer.next());
 					}
 				});
 			});
@@ -257,50 +248,6 @@ impl CertificateRevocationListParams {
 			Ok(())
 		})
 	}
-}
-
-/// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
-/// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CrlIssuingDistributionPoint {
-	/// The CRL's distribution point, containing a sequence of URIs the CRL can be retrieved from.
-	pub distribution_point: CrlDistributionPoint,
-	/// An optional description of the CRL's scope. If omitted, the CRL may contain
-	/// both user certs and CA certs.
-	pub scope: Option<CrlScope>,
-}
-
-impl CrlIssuingDistributionPoint {
-	fn write_der(&self, writer: DERWriter) {
-		// IssuingDistributionPoint SEQUENCE
-		writer.write_sequence(|writer| {
-			// distributionPoint [0] DistributionPointName OPTIONAL
-			write_distribution_point_name_uris(writer.next(), &self.distribution_point.uris);
-
-			// -- at most one of onlyContainsUserCerts, onlyContainsCACerts,
-			// -- and onlyContainsAttributeCerts may be set to TRUE.
-			if let Some(scope) = self.scope {
-				let tag = match scope {
-					// onlyContainsUserCerts [1] BOOLEAN DEFAULT FALSE,
-					CrlScope::UserCertsOnly => Tag::context(1),
-					// onlyContainsCACerts [2] BOOLEAN DEFAULT FALSE,
-					CrlScope::CaCertsOnly => Tag::context(2),
-				};
-				writer.next().write_tagged_implicit(tag, |writer| {
-					writer.write_bool(true);
-				});
-			}
-		});
-	}
-}
-
-/// Describes the scope of a CRL for an issuing distribution point extension.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum CrlScope {
-	/// The CRL contains only end-entity user certificates.
-	UserCertsOnly,
-	/// The CRL contains only CA certificates.
-	CaCertsOnly,
 }
 
 /// Parameters used for describing a revoked certificate included in a [`CertificateRevocationList`].

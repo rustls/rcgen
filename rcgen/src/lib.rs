@@ -55,8 +55,7 @@ pub use certificate::{
 
 mod crl;
 pub use crl::{
-	CertificateRevocationList, CertificateRevocationListParams, CrlIssuingDistributionPoint,
-	CrlScope, RevocationReason, RevokedCertParams,
+	CertificateRevocationList, CertificateRevocationListParams, RevocationReason, RevokedCertParams,
 };
 
 mod csr;
@@ -67,8 +66,9 @@ pub use error::{Error, InvalidAsn1String};
 
 mod extension;
 pub use extension::{
-	CidrSubnet, CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, KeyIdMethod,
-	KeyUsagePurpose, NameConstraints, OtherNameValue, PathLenConstraint, SanType,
+	CidrSubnet, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope,
+	ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, KeyIdMethod, KeyUsagePurpose, NameConstraints,
+	OtherNameValue, PathLenConstraint, SanType,
 };
 
 mod key_pair;

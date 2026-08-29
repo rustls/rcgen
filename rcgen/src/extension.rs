@@ -14,7 +14,7 @@ use crate::string::Ia5String;
 use crate::Error;
 use crate::{
 	oid, write_distinguished_name, CertificateParams, CustomExtension, DistinguishedName, Issuer,
-	SigningKey,
+	SerialNumber, SigningKey,
 };
 
 /// An X.509v3 subject alternative name extension according to [RFC 5280 §4.2.1.6].
@@ -917,7 +917,7 @@ impl CrlDistributionPoint {
 	}
 }
 
-pub(crate) fn write_distribution_point_name_uris<'a>(
+fn write_distribution_point_name_uris<'a>(
 	writer: DERWriter,
 	uris: impl IntoIterator<Item = &'a String>,
 ) {
@@ -942,6 +942,83 @@ pub(crate) fn write_distribution_point_name_uris<'a>(
 				});
 		});
 	});
+}
+
+/// An X.509v3 CRL number extension according to [RFC 5280 §5.2.3].
+///
+/// [RFC 5280 §5.2.3]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.2.3>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct CrlNumber<'params>(&'params SerialNumber);
+
+impl<'params> From<&'params SerialNumber> for CrlNumber<'params> {
+	fn from(number: &'params SerialNumber) -> Self {
+		Self(number)
+	}
+}
+
+impl StaticExtension for CrlNumber<'_> {
+	fn write_value(&self, writer: DERWriter) {
+		// CRLNumber ::= INTEGER (0..MAX)
+		writer.write_bigint_bytes(self.0.as_ref(), true);
+	}
+
+	// RFC 5280 §5.2.3: "CRL issuers conforming to this profile MUST include this
+	// extension in all CRLs and MUST mark this extension as non-critical."
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	const OID: &'static [u64] = oid::CRL_NUMBER;
+}
+
+/// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
+/// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CrlIssuingDistributionPoint {
+	/// The CRL's distribution point, containing a sequence of URIs the CRL can be retrieved from.
+	pub distribution_point: CrlDistributionPoint,
+	/// An optional description of the CRL's scope. If omitted, the CRL may contain
+	/// both user certs and CA certs.
+	pub scope: Option<CrlScope>,
+}
+
+// An X.509v3 issuing distribution point extension according to RFC 5280 §5.2.5
+// (<https://www.rfc-editor.org/rfc/rfc5280#section-5.2.5>).
+impl StaticExtension for &CrlIssuingDistributionPoint {
+	fn write_value(&self, writer: DERWriter) {
+		// IssuingDistributionPoint SEQUENCE
+		writer.write_sequence(|writer| {
+			// distributionPoint [0] DistributionPointName OPTIONAL
+			write_distribution_point_name_uris(writer.next(), &self.distribution_point.uris);
+
+			// -- at most one of onlyContainsUserCerts, onlyContainsCACerts,
+			// -- and onlyContainsAttributeCerts may be set to TRUE.
+			if let Some(scope) = self.scope {
+				let tag = match scope {
+					// onlyContainsUserCerts [1] BOOLEAN DEFAULT FALSE,
+					CrlScope::UserCertsOnly => Tag::context(1),
+					// onlyContainsCACerts [2] BOOLEAN DEFAULT FALSE,
+					CrlScope::CaCertsOnly => Tag::context(2),
+				};
+				writer.next().write_tagged_implicit(tag, |writer| {
+					writer.write_bool(true);
+				});
+			}
+		});
+	}
+
+	// RFC 5280 §5.2.5: "Although the extension is critical, conforming
+	// implementations are not required to support this extension."
+	const CRITICALITY: Criticality = Criticality::Critical;
+
+	const OID: &'static [u64] = oid::CRL_ISSUING_DISTRIBUTION_POINT;
+}
+
+/// Describes the scope of a CRL for an issuing distribution point extension.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum CrlScope {
+	/// The CRL contains only end-entity user certificates.
+	UserCertsOnly,
+	/// The CRL contains only CA certificates.
+	CaCertsOnly,
 }
 
 /// An X.509v3 subject key identifier extension according to [RFC 5280 §4.2.1.2].
