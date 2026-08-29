@@ -12,11 +12,9 @@ use crate::crl::RevokedCertParams;
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
 use crate::string::Ia5String;
-#[cfg(feature = "x509-parser")]
-use crate::Error;
 use crate::{
 	dt_to_generalized, oid, write_distinguished_name, CertificateParams, CustomExtension,
-	DistinguishedName, Issuer, SerialNumber, SigningKey,
+	DistinguishedName, Error, Issuer, SerialNumber, SigningKey,
 };
 
 /// An X.509v3 subject alternative name extension according to [RFC 5280 §4.2.1.6].
@@ -1299,6 +1297,60 @@ impl Extension for &CustomExtension {
 	}
 }
 
+/// A collection of X.509 extensions.
+///
+/// Preserves the order that extensions were added and maintains the invariant that
+/// there are no duplicate extension OIDs. The extensions borrow from the params
+/// they were built from for the duration of one serialization.
+#[derive(Debug, Default)]
+pub(crate) struct Extensions<'params> {
+	exts: Vec<Box<dyn Extension + 'params>>,
+}
+
+impl<'params> Extensions<'params> {
+	/// Add an extension to the collection.
+	///
+	/// Returns [`Error::DuplicateExtension`] if the extension's OID is already present
+	/// in the collection.
+	pub(crate) fn add_extension(
+		&mut self,
+		extension: Box<dyn Extension + 'params>,
+	) -> Result<(), Error> {
+		let oid = extension.oid();
+		// A linear scan is plenty: no profile puts more than a handful of
+		// extensions in one certificate.
+		if self.exts.iter().any(|existing| existing.oid() == oid) {
+			return Err(Error::DuplicateExtension(
+				ObjectIdentifier::from_slice(oid).to_string(),
+			));
+		}
+
+		self.exts.push(extension);
+		Ok(())
+	}
+
+	/// Write the certificate's optional extensions field.
+	///
+	/// Nothing is written when the collection is empty: presence is decided by the
+	/// built collection, not predicted from the params, so an empty extensions
+	/// field is never emitted and requested extensions can never be silently
+	/// dropped.
+	pub(crate) fn write_exts_der(&self, writer: DERWriter) {
+		if self.exts.is_empty() {
+			return;
+		}
+
+		writer.write_tagged(Tag::context(3), |writer| {
+			// Extensions ::= SEQUENCE SIZE (1..MAX) OF Extension
+			writer.write_sequence(|writer| {
+				for extension in &self.exts {
+					extension.write(writer.next());
+				}
+			})
+		});
+	}
+}
+
 /// An X.509 extension whose OID and criticality are fixed by the profile
 /// defining it.
 ///
@@ -1388,12 +1440,85 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn extensions_reject_duplicate_oids() {
+		let mut exts = Extensions::default();
+		exts.add_extension(Box::new(DummyExt {
+			oid: TEST_OID,
+			criticality: Criticality::NonCritical,
+		}))
+		.unwrap();
+		assert_eq!(
+			exts.add_extension(Box::new(DummyExt {
+				oid: TEST_OID,
+				criticality: Criticality::Critical,
+			})),
+			Err(Error::DuplicateExtension(
+				ObjectIdentifier::from_slice(TEST_OID).to_string()
+			)),
+		);
+	}
+
+	#[test]
+	fn extensions_preserve_insertion_order() {
+		let mut exts = Extensions::default();
+		// Add an extension with a lexicographically larger OID first: the encoded
+		// SEQUENCE must preserve insertion order, not sort.
+		exts.add_extension(Box::new(DummyExt {
+			oid: &[1, 3, 6, 1, 4, 1, 98],
+			criticality: Criticality::NonCritical,
+		}))
+		.unwrap();
+		exts.add_extension(Box::new(DummyExt {
+			oid: &[1, 3, 6, 1, 4, 1, 97],
+			criticality: Criticality::NonCritical,
+		}))
+		.unwrap();
+
+		let der = yasna::construct_der(|writer| exts.write_exts_der(writer));
+		assert_eq!(
+			der,
+			yasna::construct_der(|writer| {
+				writer.write_tagged(Tag::context(3), |writer| {
+					writer.write_sequence(|writer| {
+						// Insertion order, not OID order: 98 first, then 97.
+						for oid in [&[1, 3, 6, 1, 4, 1, 98], &[1, 3, 6, 1, 4, 1, 97]] {
+							writer.next().write_sequence(|writer| {
+								writer.next().write_oid(&ObjectIdentifier::from_slice(oid));
+								writer.next().write_bytes(&yasna::construct_der(|writer| {
+									writer.write_null()
+								}));
+							});
+						}
+					})
+				})
+			})
+		);
+	}
+
+	#[test]
+	fn extensions_elided_when_empty() {
+		// An empty collection writes nothing at all: no extensions field, no
+		// empty SEQUENCE.
+		let exts = Extensions::default();
+		let der = yasna::construct_der(|writer| {
+			writer.write_sequence(|writer| exts.write_exts_der(writer.next()))
+		});
+		assert_eq!(
+			der,
+			yasna::construct_der(|writer| writer.write_sequence(|_writer| {}))
+		);
+	}
+
+	#[test]
 	fn critical_flag_omitted_when_false() {
 		// The critical flag is DEFAULT FALSE, so DER (X.690 §11.5) requires that a
 		// non-critical extension omit it entirely rather than encode FALSE.
 		// See https://github.com/rustls/rcgen/pull/444 for a past instance of this
 		// bug class.
-		let ext = DummyExt(Criticality::NonCritical);
+		let ext = DummyExt {
+			oid: TEST_OID,
+			criticality: Criticality::NonCritical,
+		};
 		let der = yasna::construct_der(|writer| ext.write(writer));
 		assert_eq!(
 			der,
@@ -1414,7 +1539,10 @@ mod tests {
 
 	#[test]
 	fn critical_flag_written_when_true() {
-		let ext = DummyExt(Criticality::Critical);
+		let ext = DummyExt {
+			oid: TEST_OID,
+			criticality: Criticality::Critical,
+		};
 		let der = yasna::construct_der(|writer| ext.write(writer));
 		assert_eq!(
 			der,
@@ -1596,7 +1724,10 @@ mod tests {
 	}
 
 	#[derive(Debug)]
-	struct DummyExt(Criticality);
+	struct DummyExt {
+		oid: &'static [u64],
+		criticality: Criticality,
+	}
 
 	impl Extension for DummyExt {
 		fn write_value(&self, writer: DERWriter) {
@@ -1604,11 +1735,13 @@ mod tests {
 		}
 
 		fn criticality(&self) -> Criticality {
-			self.0
+			self.criticality
 		}
 
 		fn oid(&self) -> &[u64] {
-			&[1, 3, 6, 1, 4, 1, 99]
+			self.oid
 		}
 	}
+
+	const TEST_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 99];
 }
