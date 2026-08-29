@@ -6,13 +6,16 @@ use yasna::{DERWriter, Tag};
 
 #[cfg(all(test, feature = "crypto"))]
 use crate::extension::CrlDistributionPoint;
-use crate::extension::{AuthorityKeyIdentifier, CrlIssuingDistributionPoint, CrlNumber, Extension};
+use crate::extension::{
+	AuthorityKeyIdentifier, CrlIssuingDistributionPoint, CrlNumber, Extension, InvalidityDate,
+	ReasonCode, RevocationReason,
+};
 use crate::key_pair::sign_der;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	dt_to_generalized, oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_extension, Error, Issuer, KeyIdMethod, KeyUsagePurpose, SerialNumber, SigningKey,
+	write_distinguished_name, write_dt_utc_or_generalized, Error, Issuer, KeyIdMethod,
+	KeyUsagePurpose, SerialNumber, SigningKey,
 };
 
 /// A certificate revocation list (CRL)
@@ -92,26 +95,6 @@ impl From<CertificateRevocationList> for CertificateRevocationListDer<'static> {
 	fn from(crl: CertificateRevocationList) -> Self {
 		crl.der
 	}
-}
-
-/// Identifies the reason a certificate was revoked.
-/// See [RFC 5280 §5.3.1][1]
-///
-/// [1]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-#[allow(missing_docs)] // Not much to add above the code name.
-pub enum RevocationReason {
-	Unspecified = 0,
-	KeyCompromise = 1,
-	CaCompromise = 2,
-	AffiliationChanged = 3,
-	Superseded = 4,
-	CessationOfOperation = 5,
-	CertificateHold = 6,
-	// 7 is not defined.
-	RemoveFromCrl = 8,
-	PrivilegeWithdrawn = 9,
-	AaCompromise = 10,
 }
 
 /// Parameters used for certificate revocation list (CRL) generation
@@ -289,35 +272,18 @@ impl RevokedCertParams {
 			//   optional for conforming CRL issuers and applications.  However, CRL
 			//   issuers SHOULD include reason codes (Section 5.3.1) and invalidity
 			//   dates (Section 5.3.2) whenever this information is available.
-			// RFC 5280 §5.3.1: "The reason code CRL entry extension SHOULD be
-			// absent instead of using the unspecified (0) reasonCode value."
-			let reason_code = self
-				.reason_code
-				.filter(|reason| *reason != RevocationReason::Unspecified);
-			let has_invalidity_date = self.invalidity_date.is_some();
-			if reason_code.is_some() || has_invalidity_date {
+			let reason_code = ReasonCode::from_params(self);
+			let invalidity_date = InvalidityDate::from_params(self);
+			if reason_code.is_some() || invalidity_date.is_some() {
 				writer.next().write_sequence(|writer| {
 					// Write reason code if present.
-					if let Some(reason_code) = reason_code {
-						write_x509_extension(writer.next(), oid::CRL_REASONS, false, |writer| {
-							writer.write_enum(reason_code as i64);
-						});
+					if let Some(reason_code) = &reason_code {
+						reason_code.write(writer.next());
 					}
 
 					// Write invalidity date if present.
-					// RFC 5280 §5.3.2: InvalidityDate ::= GeneralizedTime.
-					// Unlike the Time CHOICE used elsewhere, dates in the
-					// UTCTime range (1950-2049) must still be encoded as
-					// GeneralizedTime.
-					if let Some(invalidity_date) = self.invalidity_date {
-						write_x509_extension(
-							writer.next(),
-							oid::CRL_INVALIDITY_DATE,
-							false,
-							|writer| {
-								writer.write_generalized_time(&dt_to_generalized(invalidity_date));
-							},
-						)
+					if let Some(invalidity_date) = &invalidity_date {
+						invalidity_date.write(writer.next());
 					}
 				});
 			}

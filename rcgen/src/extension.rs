@@ -4,17 +4,19 @@ use std::net::IpAddr;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
+use time::OffsetDateTime;
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
+use crate::crl::RevokedCertParams;
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
 use crate::string::Ia5String;
 #[cfg(feature = "x509-parser")]
 use crate::Error;
 use crate::{
-	oid, write_distinguished_name, CertificateParams, CustomExtension, DistinguishedName, Issuer,
-	SerialNumber, SigningKey,
+	dt_to_generalized, oid, write_distinguished_name, CertificateParams, CustomExtension,
+	DistinguishedName, Issuer, SerialNumber, SigningKey,
 };
 
 /// An X.509v3 subject alternative name extension according to [RFC 5280 §4.2.1.6].
@@ -1019,6 +1021,94 @@ pub enum CrlScope {
 	UserCertsOnly,
 	/// The CRL contains only CA certificates.
 	CaCertsOnly,
+}
+
+/// An X.509v3 CRL reason code entry extension according to [RFC 5280 §5.3.1].
+///
+/// [RFC 5280 §5.3.1]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ReasonCode(RevocationReason);
+
+impl ReasonCode {
+	pub(crate) fn from_params(params: &RevokedCertParams) -> Option<Self> {
+		// RFC 5280 §5.3.1: "The reason code CRL entry extension SHOULD be absent
+		// instead of using the unspecified (0) reasonCode value."
+		params
+			.reason_code
+			.filter(|reason| *reason != RevocationReason::Unspecified)
+			.map(Self)
+	}
+}
+
+impl StaticExtension for ReasonCode {
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   CRLReason ::= ENUMERATED {
+				unspecified             (0),
+				keyCompromise           (1),
+				cACompromise            (2),
+				affiliationChanged      (3),
+				superseded              (4),
+				cessationOfOperation    (5),
+				certificateHold         (6),
+					 -- value 7 is not used
+				removeFromCRL           (8),
+				privilegeWithdrawn      (9),
+				aACompromise           (10) }
+		*/
+		writer.write_enum(self.0 as i64);
+	}
+
+	// RFC 5280 §5.3.1: "The reasonCode is a non-critical CRL entry extension".
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	const OID: &'static [u64] = oid::CRL_REASONS;
+}
+
+/// Identifies the reason a certificate was revoked.
+/// See [RFC 5280 §5.3.1][1]
+///
+/// [1]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[allow(missing_docs)] // Not much to add above the code name.
+pub enum RevocationReason {
+	Unspecified = 0,
+	KeyCompromise = 1,
+	CaCompromise = 2,
+	AffiliationChanged = 3,
+	Superseded = 4,
+	CessationOfOperation = 5,
+	CertificateHold = 6,
+	// 7 is not defined.
+	RemoveFromCrl = 8,
+	PrivilegeWithdrawn = 9,
+	AaCompromise = 10,
+}
+
+/// An X.509v3 CRL invalidity date entry extension according to [RFC 5280 §5.3.2].
+///
+/// [RFC 5280 §5.3.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.2>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct InvalidityDate(OffsetDateTime);
+
+impl InvalidityDate {
+	pub(crate) fn from_params(params: &RevokedCertParams) -> Option<Self> {
+		params.invalidity_date.map(Self)
+	}
+}
+
+impl StaticExtension for InvalidityDate {
+	fn write_value(&self, writer: DERWriter) {
+		// RFC 5280 §5.3.2: InvalidityDate ::= GeneralizedTime. Unlike the Time
+		// CHOICE used elsewhere, dates in the UTCTime range (1950-2049) must still
+		// be encoded as GeneralizedTime.
+		writer.write_generalized_time(&dt_to_generalized(self.0));
+	}
+
+	// RFC 5280 §5.3.2: "The invalidity date is a non-critical CRL entry extension".
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	const OID: &'static [u64] = oid::CRL_INVALIDITY_DATE;
 }
 
 /// An X.509v3 subject key identifier extension according to [RFC 5280 §4.2.1.2].
