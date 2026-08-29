@@ -402,14 +402,12 @@ impl CertificateParams {
 		exts.push_if_some(self.name_constraints.as_ref())?;
 		exts.push_if_some(NonEmptySlice::new(&self.crl_distribution_points))?;
 
-		// SKI is currently written when basic constraints are present, including
-		// an explicit end-entity extension.
-		if self.basic_constraints.is_some() {
-			exts.push(SubjectKeyIdentifier::new(
-				&self.key_identifier_method,
-				pub_key_spki,
-			))?;
-		}
+		// RFC 5280 §4.2.1.2 describes the SKI as a MUST for CA certificates and a
+		// SHOULD for end entity certificates, so it is emitted for all certificates.
+		exts.push(SubjectKeyIdentifier::new(
+			&self.key_identifier_method,
+			pub_key_spki,
+		))?;
 		exts.push_if_some(self.basic_constraints)?;
 
 		for custom_ext in &self.custom_extensions {
@@ -738,6 +736,28 @@ mod tests {
 		}
 
 		assert!(found);
+	}
+
+	#[cfg(feature = "crypto")]
+	#[test]
+	fn test_end_entity_subject_key_identifier() {
+		// RFC 5280 §4.2.1.2 describes the SKI as a SHOULD for end entity
+		// certificates, so we expect it to be present for end entity certs too.
+		let params = CertificateParams::default();
+		let (key_pair, _) = KeyPair::generate().unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
+
+		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
+		let ski = cert
+			.iter_extensions()
+			.find_map(|ext| match ext.parsed_extension() {
+				x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(ski) => {
+					Some(ski.0.to_vec())
+				},
+				_ => None,
+			})
+			.unwrap();
+		assert_eq!(ski, params.key_identifier(&key_pair));
 	}
 
 	#[cfg(feature = "crypto")]
