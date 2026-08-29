@@ -51,7 +51,7 @@ pub use crl::{
 };
 pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
 pub use error::{Error, InvalidAsn1String};
-pub use ext::CustomExtension;
+pub use ext::{Criticality, CustomExtension};
 #[cfg(feature = "crypto")]
 pub use key_pair::KeyPair;
 #[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]

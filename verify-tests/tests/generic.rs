@@ -49,7 +49,7 @@ mod test_key_params_mismatch {
 
 #[cfg(feature = "x509-parser")]
 mod test_x509_custom_ext {
-	use rcgen::CustomExtension;
+	use rcgen::{Criticality, CustomExtension};
 	use verify_tests as util;
 	use x509_parser::oid_registry::asn1_rs;
 	use x509_parser::prelude::{
@@ -63,11 +63,11 @@ mod test_x509_custom_ext {
 		let test_ext = yasna::construct_der(|writer| {
 			writer.write_utf8_string("🦀 greetz to ferris 🦀");
 		});
-		let mut custom_ext = CustomExtension::from_oid_content(
+		let custom_ext = CustomExtension::from_oid_content(
 			test_oid.iter().unwrap().collect::<Vec<u64>>().as_slice(),
+			Criticality::Critical,
 			test_ext.clone(),
 		);
-		custom_ext.set_criticality(true);
 
 		// Generate a certificate with the custom extension, parse it with x509-parser.
 		let (mut params, test_key) = util::default_params();
