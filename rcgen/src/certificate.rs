@@ -6,12 +6,11 @@ use pem::Pem;
 use pki_types::{CertificateDer, CertificateSigningRequestDer};
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
 use yasna::models::ObjectIdentifier;
-use yasna::{DERWriter, Tag};
+use yasna::Tag;
 
 use crate::csr::CertificateSigningRequest;
 use crate::extension::{
-	AuthorityKeyIdentifier, Extension, Extensions, NonEmptySlice, SubjectAlternativeName,
-	SubjectKeyIdentifier,
+	AuthorityKeyIdentifier, Extensions, NonEmptySlice, SubjectAlternativeName, SubjectKeyIdentifier,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -194,34 +193,25 @@ impl CertificateParams {
 		})
 	}
 
-	/// Write a CSR extension request attribute as defined in [RFC 2985].
+	/// Returns the X.509 extensions for a CSR extension request attribute as defined
+	/// in [RFC 2985].
+	///
+	/// Returns an [`Error`] if the described extensions are invalid.
 	///
 	/// [RFC 2985]: <https://datatracker.ietf.org/doc/html/rfc2985>
-	fn write_extension_request_attribute(&self, writer: DERWriter) {
-		writer.write_sequence(|writer| {
-			writer.next().write_oid(&ObjectIdentifier::from_slice(
-				oid::PKCS_9_AT_EXTENSION_REQUEST,
-			));
-			writer.next().write_set(|writer| {
-				writer.next().write_sequence(|writer| {
-					if let Some(ku_ext) = NonEmptySlice::new(&self.key_usages) {
-						ku_ext.write(writer.next());
-					}
-					if let Some(san) = SubjectAlternativeName::from_params(self) {
-						san.write(writer.next());
-					}
-					if let Some(eku_ext) = NonEmptySlice::new(&self.extended_key_usages) {
-						eku_ext.write(writer.next());
-					}
-					if let Some(basic_constraints) = self.basic_constraints {
-						basic_constraints.write(writer.next());
-					}
-					for custom_ext in &self.custom_extensions {
-						custom_ext.write(writer.next());
-					}
-				});
-			});
-		});
+	fn csr_extensions(&self) -> Result<Extensions<'_>, Error> {
+		let mut exts = Extensions::default();
+
+		exts.push_if_some(NonEmptySlice::new(&self.key_usages))?;
+		exts.push_if_some(SubjectAlternativeName::from_params(self))?;
+		exts.push_if_some(NonEmptySlice::new(&self.extended_key_usages))?;
+		exts.push_if_some(self.basic_constraints)?;
+
+		for custom_ext in &self.custom_extensions {
+			exts.push(custom_ext)?;
+		}
+
+		Ok(exts)
 	}
 
 	/// Generate and serialize a certificate signing request (CSR).
@@ -274,7 +264,9 @@ impl CertificateParams {
 		} = self;
 		// - subject_key will be used by the caller
 		// - not_before and not_after cannot be put in a CSR
-		// - key_identifier_method is here because self.write_extended_key_usage uses it
+		// - The extension request fields (subject_alt_names, key_usages,
+		//   extended_key_usages, basic_constraints, custom_extensions) are handled by
+		//   self.csr_extensions()
 		// - There might be a use case for specifying the key identifier
 		// in the CSR, but in the current API it can't be distinguished
 		// from the defaults so this is left for a later version if
@@ -283,7 +275,11 @@ impl CertificateParams {
 			not_before,
 			not_after,
 			key_identifier_method,
+			subject_alt_names,
+			key_usages,
 			extended_key_usages,
+			basic_constraints,
+			custom_extensions,
 		);
 		if serial_number.is_some()
 			|| name_constraints.is_some()
@@ -293,12 +289,9 @@ impl CertificateParams {
 			return Err(Error::UnsupportedInCsr);
 		}
 
-		// Whether or not to write an extension request attribute
-		let write_extension_request = !key_usages.is_empty()
-			|| !subject_alt_names.is_empty()
-			|| !extended_key_usages.is_empty()
-			|| !custom_extensions.is_empty()
-			|| basic_constraints.is_some();
+		// The extension request attribute is elided entirely when the built
+		// collection is empty.
+		let extension_request = self.csr_extensions()?;
 
 		let der = sign_der(subject_key, |writer| {
 			// Write version
@@ -312,9 +305,7 @@ impl CertificateParams {
 				.write_tagged_implicit(Tag::context(0), |writer| {
 					// RFC 2986 specifies that attributes are a SET OF Attribute
 					writer.write_set_of(|writer| {
-						if write_extension_request {
-							self.write_extension_request_attribute(writer.next());
-						}
+						extension_request.write_csr_attribute(writer);
 
 						for Attribute { oid, values } in attrs {
 							writer.next().write_sequence(|writer| {
@@ -545,6 +536,61 @@ mod tests {
 	use crate::GeneralSubtree;
 	#[cfg(feature = "crypto")]
 	use crate::{KeyPair, PathLenConstraint};
+
+	#[cfg(all(feature = "crypto", feature = "x509-parser"))]
+	#[test]
+	fn subject_extension_presence_matches_in_certificates_and_csrs() {
+		use x509_parser::extensions::ParsedExtension;
+		use x509_parser::prelude::FromDer;
+
+		let (key, _) = KeyPair::generate().unwrap();
+		for include_ku in [false, true] {
+			for include_eku in [false, true] {
+				let mut params = CertificateParams::new(vec!["example.com".into()]).unwrap();
+				if include_ku {
+					params.key_usages.push(KeyUsagePurpose::DigitalSignature);
+				}
+				if include_eku {
+					params
+						.extended_key_usages
+						.push(ExtendedKeyUsagePurpose::ServerAuth);
+				}
+				let cert = params.self_signed(&key).unwrap();
+				let (_, parsed) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
+				assert_eq!(parsed.key_usage().unwrap().is_some(), include_ku);
+				assert_eq!(parsed.extended_key_usage().unwrap().is_some(), include_eku);
+				assert!(parsed.subject_alternative_name().unwrap().is_some());
+
+				let csr = params.serialize_request(&key).unwrap();
+				let (_, parsed) =
+					x509_parser::certification_request::X509CertificationRequest::from_der(
+						csr.der(),
+					)
+					.unwrap();
+				let extensions: Vec<_> = parsed.requested_extensions().unwrap().collect();
+				// No malformed empty extension may hide behind a different parsed variant.
+				assert_eq!(
+					extensions.len(),
+					1 + usize::from(include_ku) + usize::from(include_eku)
+				);
+				assert_eq!(
+					extensions
+						.iter()
+						.any(|ext| matches!(ext, ParsedExtension::KeyUsage(_))),
+					include_ku
+				);
+				assert_eq!(
+					extensions
+						.iter()
+						.any(|ext| matches!(ext, ParsedExtension::ExtendedKeyUsage(_))),
+					include_eku
+				);
+				assert!(extensions
+					.iter()
+					.any(|ext| matches!(ext, ParsedExtension::SubjectAlternativeName(_))));
+			}
+		}
+	}
 
 	#[cfg(all(feature = "crypto", feature = "x509-parser"))]
 	#[test]

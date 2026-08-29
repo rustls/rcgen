@@ -6,7 +6,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
 use yasna::models::ObjectIdentifier;
-use yasna::{DERWriter, Tag};
+use yasna::{DERWriter, DERWriterSet, Tag};
 
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
@@ -1186,6 +1186,35 @@ impl<'params> Extensions<'params> {
 		writer.write_tagged(Tag::context(3), |writer| self.write_der(writer));
 	}
 
+	/// Write the PKCS #9 extensionRequest attribute for a CSR into the
+	/// attributes SET, containing the collection as its single `Extensions`
+	/// value.
+	///
+	/// Nothing is written when the collection is empty: attribute values are a
+	/// SET SIZE(1..MAX), so an empty extension request can't be encoded and the
+	/// attribute is elided entirely.
+	pub(crate) fn write_csr_attribute(&self, writer: &mut DERWriterSet<'_>) {
+		if self.exts.is_empty() {
+			return;
+		}
+
+		/*
+		   Attribute { ATTRIBUTE:IOSet } ::= SEQUENCE {
+				type   ATTRIBUTE.&id({IOSet}),
+				values SET SIZE(1..MAX) OF ATTRIBUTE.&Type({IOSet}{@type})
+		   }
+		   ExtensionRequest ::= Extensions
+		*/
+		writer.next().write_sequence(|writer| {
+			writer.next().write_oid(&ObjectIdentifier::from_slice(
+				oid::PKCS_9_AT_EXTENSION_REQUEST,
+			));
+			writer.next().write_set(|writer| {
+				self.write_der(writer.next());
+			});
+		});
+	}
+
 	/// Write `Extensions ::= SEQUENCE SIZE (1..MAX) OF Extension`.
 	///
 	/// For example, the untagged `crlEntryExtensions` field of a CRL entry.
@@ -1457,6 +1486,20 @@ mod tests {
 		assert_eq!(
 			der,
 			yasna::construct_der(|writer| writer.write_sequence(|_writer| {}))
+		);
+	}
+
+	#[test]
+	fn csr_attribute_elided_when_empty() {
+		// An empty collection must not claim a slot in the attributes SET at
+		// all: yasna rejects set elements that produce no output.
+		let exts = Extensions::default();
+		let der = yasna::construct_der(|writer| {
+			writer.write_set_of(|writer| exts.write_csr_attribute(writer))
+		});
+		assert_eq!(
+			der,
+			yasna::construct_der(|writer| writer.write_set_of(|_writer| {}))
 		);
 	}
 
