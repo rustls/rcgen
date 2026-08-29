@@ -47,6 +47,10 @@ pub enum Error {
 	IssuerNotCrlSigner,
 	/// A CRL distribution point was specified without any URIs.
 	EmptyCrlDistributionPointUris,
+	/// Two extensions with the same OID were requested.
+	DuplicateExtension(String),
+	/// An ACME TLS-ALPN-01 key authorization digest was not 32 bytes long.
+	InvalidAcmeIdentifierLength,
 	#[cfg(not(feature = "crypto"))]
 	/// Missing serial number
 	MissingSerialNumber,
@@ -102,6 +106,13 @@ impl fmt::Display for Error {
 			EmptyCrlDistributionPointUris => {
 				write!(f, "CRL distribution points must include at least one URI")?
 			},
+			DuplicateExtension(oid) => {
+				write!(f, "Only one extension with the OID {oid} may be written")?
+			},
+			InvalidAcmeIdentifierLength => write!(
+				f,
+				"An ACME TLS-ALPN-01 key authorization digest must be 32 bytes"
+			)?,
 			#[cfg(not(feature = "crypto"))]
 			MissingSerialNumber => write!(f, "A serial number must be specified")?,
 			#[cfg(feature = "x509-parser")]

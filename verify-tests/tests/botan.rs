@@ -1,9 +1,8 @@
 #![cfg(feature = "x509-parser")]
 
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, CertificateRevocationListParams, DnType,
-	DnValue, IsCa, Issuer, KeyPair, KeyUsagePurpose, RevocationReason, RevokedCertParams,
-	SerialNumber,
+	Certificate, CertificateParams, CertificateRevocationListParams, DnType, DnValue, IsCa, Issuer,
+	KeyPair, KeyUsagePurpose, PathLenConstraint, RevocationReason, RevokedCertParams, SerialNumber,
 };
 use time::{Duration, OffsetDateTime};
 use verify_tests as util;
@@ -128,7 +127,7 @@ fn test_botan_rsa_given() {
 #[test]
 fn test_botan_separate_ca() {
 	let (mut ca_params, ca_key) = default_params();
-	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	ca_params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
@@ -151,7 +150,7 @@ fn test_botan_separate_ca() {
 #[test]
 fn test_botan_imported_ca() {
 	let (mut params, ca_key) = default_params();
-	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
 	let ca_cert = params.self_signed(&ca_key).unwrap();
 	let ca_cert_der = ca_cert.der();
 	let ca = Issuer::from_ca_cert_der(ca_cert.der(), ca_key).unwrap();
@@ -179,7 +178,7 @@ fn test_botan_imported_ca_with_printable_string() {
 		DnType::CountryName,
 		DnValue::PrintableString("US".try_into().unwrap()),
 	);
-	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
 	let ca_cert = params.self_signed(&imported_ca_key).unwrap();
 	let ca = Issuer::from_ca_cert_der(ca_cert.der(), imported_ca_key).unwrap();
 
@@ -203,7 +202,7 @@ fn test_botan_crl_parse() {
 	// Create an issuer CA.
 	let alg = &rcgen::PKCS_ECDSA_P256_SHA256;
 	let (mut issuer, _) = util::default_params();
-	issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	issuer.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
 	issuer.key_usages = vec![
 		KeyUsagePurpose::KeyCertSign,
 		KeyUsagePurpose::DigitalSignature,

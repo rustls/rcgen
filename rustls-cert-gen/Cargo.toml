@@ -23,7 +23,7 @@ aws-lc-rs = { workspace = true, optional = true }
 bpaf = { workspace = true }
 pem = { workspace = true }
 pki-types = { workspace = true }
-rcgen = { version = "0.14.2", path = "../rcgen", default-features = false, features = ["pem"] }
+rcgen = { version = "0.15.0", path = "../rcgen", default-features = false, features = ["pem"] }
 ring = { workspace = true, optional = true }
 
 [dev-dependencies]
