@@ -5,14 +5,15 @@ use time::OffsetDateTime;
 use yasna::{DERWriter, Tag};
 
 use crate::ext::{
-	write_extension, AuthorityKeyIdentifier, Criticality, CrlNumber, StaticExtension,
+	write_extension, AuthorityKeyIdentifier, Criticality, CrlNumber, InvalidityDate, ReasonCode,
+	StaticExtension,
 };
 use crate::key_pair::sign_der;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	dt_to_generalized, oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_extension, Error, Issuer, KeyIdMethod, KeyUsagePurpose, SerialNumber, SigningKey,
+	oid, write_distinguished_name, write_dt_utc_or_generalized, Error, Issuer, KeyIdMethod,
+	KeyUsagePurpose, SerialNumber, SigningKey,
 };
 
 /// A certificate revocation list (CRL)
@@ -389,35 +390,18 @@ impl RevokedCertParams {
 			//   optional for conforming CRL issuers and applications.  However, CRL
 			//   issuers SHOULD include reason codes (Section 5.3.1) and invalidity
 			//   dates (Section 5.3.2) whenever this information is available.
-			// RFC 5280 §5.3.1: "The reason code CRL entry extension SHOULD be
-			// absent instead of using the unspecified (0) reasonCode value."
-			let reason_code = self
-				.reason_code
-				.filter(|reason| *reason != RevocationReason::Unspecified);
-			let has_invalidity_date = self.invalidity_date.is_some();
-			if reason_code.is_some() || has_invalidity_date {
+			let reason_code = ReasonCode::from_params(self);
+			let invalidity_date = InvalidityDate::from_params(self);
+			if reason_code.is_some() || invalidity_date.is_some() {
 				writer.next().write_sequence(|writer| {
 					// Write reason code if present.
-					if let Some(reason_code) = reason_code {
-						write_x509_extension(writer.next(), oid::CRL_REASONS, false, |writer| {
-							writer.write_enum(reason_code as i64);
-						});
+					if let Some(reason_code) = &reason_code {
+						write_extension(writer.next(), reason_code);
 					}
 
 					// Write invalidity date if present.
-					// RFC 5280 §5.3.2: InvalidityDate ::= GeneralizedTime.
-					// Unlike the Time CHOICE used elsewhere, dates in the
-					// UTCTime range (1950-2049) must still be encoded as
-					// GeneralizedTime.
-					if let Some(invalidity_date) = self.invalidity_date {
-						write_x509_extension(
-							writer.next(),
-							oid::CRL_INVALIDITY_DATE,
-							false,
-							|writer| {
-								writer.write_generalized_time(&dt_to_generalized(invalidity_date));
-							},
-						)
+					if let Some(invalidity_date) = &invalidity_date {
+						write_extension(writer.next(), invalidity_date);
 					}
 				});
 			}
