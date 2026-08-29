@@ -49,9 +49,7 @@ use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
 use yasna::DERWriter;
 
 mod certificate;
-pub use certificate::{
-	date_time_ymd, Attribute, Certificate, CertificateParams, CustomExtension, DnType,
-};
+pub use certificate::{date_time_ymd, Attribute, Certificate, CertificateParams, DnType};
 
 mod crl;
 pub use crl::{CertificateRevocationList, CertificateRevocationListParams, RevokedCertParams};
@@ -64,7 +62,7 @@ pub use error::{Error, InvalidAsn1String};
 
 mod extension;
 pub use extension::{
-	CidrSubnet, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope,
+	CidrSubnet, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope, CustomExtension,
 	ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, KeyIdMethod, KeyUsagePurpose, NameConstraints,
 	OtherNameValue, PathLenConstraint, RevocationReason, SanType,
 };
