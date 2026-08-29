@@ -459,6 +459,119 @@ impl ExtendedKeyUsagePurpose {
 	}
 }
 
+/// An X.509v3 basic constraints extension according to [RFC 5280 §4.2.1.9].
+///
+/// [RFC 5280 §4.2.1.9]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.9>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct BasicConstraints(IsCa);
+
+impl BasicConstraints {
+	pub(crate) fn from_params(params: &CertificateParams) -> Option<Self> {
+		// For IsCa::NoCa the extension is omitted entirely: absence implies the
+		// certificate is not a CA. Use IsCa::ExplicitNoCa to emit the extension
+		// with cA absent (FALSE).
+		if params.is_ca == IsCa::NoCa {
+			return None;
+		}
+
+		Some(Self(params.is_ca))
+	}
+}
+
+impl StaticExtension for BasicConstraints {
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   BasicConstraints ::= SEQUENCE {
+				cA                      BOOLEAN DEFAULT FALSE,
+				pathLenConstraint       INTEGER (0..MAX) OPTIONAL }
+		*/
+		writer.write_sequence(|writer| {
+			let IsCa::Ca(constraints) = &self.0 else {
+				// The cA flag is DEFAULT FALSE, so DER (X.690 §11.5) requires it
+				// to be omitted when false: the extension value is an empty
+				// SEQUENCE.
+				return;
+			};
+
+			writer.next().write_bool(true); // cA flag
+			if let PathLenConstraint::Constrained(path_len_constraint) = constraints {
+				writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
+			}
+		});
+	}
+
+	// RFC 5280 §4.2.1.9: "Conforming CAs MUST include this extension in all CA
+	// certificates that contain public keys used to validate digital signatures
+	// on certificates and MUST mark the extension as critical in such
+	// certificates."
+	const CRITICALITY: Criticality = Criticality::Critical;
+
+	const OID: &'static [u64] = oid::BASIC_CONSTRAINTS;
+}
+
+/// Whether the certificate is allowed to sign other certificates
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum IsCa {
+	/// The certificate can only sign itself
+	NoCa,
+	/// The certificate can only sign itself, adding the extension and `CA:FALSE`
+	ExplicitNoCa,
+	/// The certificate may be used to sign other certificates
+	Ca(PathLenConstraint),
+}
+
+impl IsCa {
+	#[cfg(all(test, feature = "x509-parser"))]
+	pub(crate) fn from_x509(
+		x509: &x509_parser::certificate::X509Certificate<'_>,
+	) -> Result<Self, Error> {
+		let basic_constraints = x509
+			.basic_constraints()
+			.map_err(|_| Error::CouldNotParseCertificate)?
+			.map(|ext| ext.value);
+
+		match basic_constraints {
+			Some(bc) => Self::from_basic_constraints(bc),
+			None => Ok(Self::NoCa),
+		}
+	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_basic_constraints(
+		basic_constraints: &x509_parser::extensions::BasicConstraints,
+	) -> Result<Self, Error> {
+		use x509_parser::extensions::BasicConstraints as B;
+
+		Ok(match basic_constraints {
+			B {
+				ca: true,
+				path_len_constraint: Some(n),
+			} if *n <= u8::MAX as u32 => Self::Ca(PathLenConstraint::Constrained(*n as u8)),
+			B {
+				ca: true,
+				path_len_constraint: Some(_),
+			} => return Err(Error::CouldNotParseCertificate),
+			B {
+				ca: true,
+				path_len_constraint: None,
+			} => Self::Ca(PathLenConstraint::Unconstrained),
+			B { ca: false, .. } => Self::ExplicitNoCa,
+		})
+	}
+}
+
+/// The path length constraint (only relevant for CA certificates)
+///
+/// Sets an optional upper limit on the length of the intermediate certificate chain
+/// length allowed for this CA certificate (not including the end entity certificate).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PathLenConstraint {
+	/// No constraint
+	Unconstrained,
+	/// Constrain to the contained number of intermediate certificates
+	Constrained(u8),
+}
+
 /// An X.509v3 name constraints extension according to [RFC 5280 §4.2.1.10].
 ///
 /// [RFC 5280 §4.2.1.10]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.10>
@@ -1162,6 +1275,49 @@ mod tests {
 				})
 			})
 		);
+	}
+
+	#[test]
+	fn basic_constraints_absent_for_no_ca() {
+		// IsCa::NoCa means no BasicConstraints extension at all.
+		assert!(BasicConstraints::from_params(&CertificateParams::default()).is_none());
+	}
+
+	#[test]
+	fn basic_constraints_encoding() {
+		// The cA flag is DEFAULT FALSE, so DER (X.690 §11.5) requires that
+		// ExplicitNoCa encode as an empty SEQUENCE with the flag omitted.
+		// See https://github.com/rustls/rcgen/pull/444.
+		for (is_ca, expected) in [
+			(
+				// cA absent (FALSE): an empty SEQUENCE.
+				IsCa::ExplicitNoCa,
+				yasna::construct_der(|writer| writer.write_sequence(|_writer| {})),
+			),
+			(
+				IsCa::Ca(PathLenConstraint::Unconstrained),
+				yasna::construct_der(|writer| {
+					writer.write_sequence(|writer| writer.next().write_bool(true))
+				}),
+			),
+			(
+				IsCa::Ca(PathLenConstraint::Constrained(5)),
+				yasna::construct_der(|writer| {
+					writer.write_sequence(|writer| {
+						writer.next().write_bool(true);
+						writer.next().write_u8(5);
+					})
+				}),
+			),
+		] {
+			let params = CertificateParams {
+				is_ca,
+				..CertificateParams::default()
+			};
+			let bc = BasicConstraints::from_params(&params).unwrap();
+			let value = yasna::construct_der(|writer| StaticExtension::write_value(&bc, writer));
+			assert_eq!(value, expected, "unexpected encoding for {is_ca:?}");
+		}
 	}
 
 	#[test]

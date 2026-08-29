@@ -10,8 +10,8 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::csr::CertificateSigningRequest;
 use crate::extension::{
-	AuthorityKeyIdentifier, CrlDistributionPoints, ExtendedKeyUsage, Extension, KeyUsage,
-	NameConstraintsExt, SubjectAlternativeName, SubjectKeyIdentifier,
+	AuthorityKeyIdentifier, BasicConstraints, CrlDistributionPoints, ExtendedKeyUsage, Extension,
+	KeyUsage, NameConstraintsExt, SubjectAlternativeName, SubjectKeyIdentifier,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -20,8 +20,8 @@ use crate::ring_like::digest;
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized, write_x509_extension,
-	CrlDistributionPoint, DistinguishedName, Error, ExtendedKeyUsagePurpose, Issuer, KeyIdMethod,
-	KeyUsagePurpose, NameConstraints, SanType, SerialNumber, SigningKey,
+	CrlDistributionPoint, DistinguishedName, Error, ExtendedKeyUsagePurpose, IsCa, Issuer,
+	KeyIdMethod, KeyUsagePurpose, NameConstraints, SanType, SerialNumber, SigningKey,
 };
 
 /// An issued certificate
@@ -207,39 +207,15 @@ impl CertificateParams {
 					if let Some(eku) = ExtendedKeyUsage::from_params(self) {
 						eku.write(writer.next());
 					}
-					self.write_ca_extensions(writer);
+					if let Some(bc) = BasicConstraints::from_params(self) {
+						bc.write(writer.next());
+					}
 					for ext in &self.custom_extensions {
 						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
 							writer.write_der(ext.content())
 						});
 					}
 				});
-			});
-		});
-	}
-
-	/// Write a certificate's BasicConstraints as defined in RFC 5280.
-	fn write_ca_extensions(&self, writer: &mut DERWriterSeq) {
-		let is_ca = match &self.is_ca {
-			IsCa::Ca(bc) => Some(bc),
-			IsCa::ExplicitNoCa => None,
-			IsCa::NoCa => return,
-		};
-
-		// Write basic_constraints
-		write_x509_extension(writer.next(), oid::BASIC_CONSTRAINTS, true, |writer| {
-			writer.write_sequence(|writer| {
-				let Some(constraints) = is_ca else {
-					return;
-				};
-
-				writer.next().write_bool(true); // cA flag
-				match constraints {
-					PathLenConstraint::Unconstrained => {},
-					PathLenConstraint::Constrained(path_len_constraint) => {
-						writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
-					},
-				}
 			});
 		});
 	}
@@ -470,7 +446,9 @@ impl CertificateParams {
 				.write(writer.next());
 		}
 
-		self.write_ca_extensions(writer);
+		if let Some(bc) = BasicConstraints::from_params(self) {
+			bc.write(writer.next());
+		}
 
 		for ext in &self.custom_extensions {
 			write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
@@ -632,67 +610,6 @@ pub fn date_time_ymd(year: i32, month: u8, day: u8) -> OffsetDateTime {
 	primitive_dt.assume_utc()
 }
 
-/// Whether the certificate is allowed to sign other certificates
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum IsCa {
-	/// The certificate can only sign itself
-	NoCa,
-	/// The certificate can only sign itself, adding the extension and `CA:FALSE`
-	ExplicitNoCa,
-	/// The certificate may be used to sign other certificates
-	Ca(PathLenConstraint),
-}
-
-impl IsCa {
-	#[cfg(all(test, feature = "x509-parser"))]
-	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Self, Error> {
-		let basic_constraints = x509
-			.basic_constraints()
-			.map_err(|_| Error::CouldNotParseCertificate)?
-			.map(|ext| ext.value);
-
-		match basic_constraints {
-			Some(bc) => Self::from_basic_constraints(bc),
-			None => Ok(Self::NoCa),
-		}
-	}
-
-	#[cfg(feature = "x509-parser")]
-	pub(crate) fn from_basic_constraints(
-		basic_constraints: &x509_parser::extensions::BasicConstraints,
-	) -> Result<Self, Error> {
-		use x509_parser::extensions::BasicConstraints as B;
-
-		Ok(match basic_constraints {
-			B {
-				ca: true,
-				path_len_constraint: Some(n),
-			} if *n <= u8::MAX as u32 => Self::Ca(PathLenConstraint::Constrained(*n as u8)),
-			B {
-				ca: true,
-				path_len_constraint: Some(_),
-			} => return Err(Error::CouldNotParseCertificate),
-			B {
-				ca: true,
-				path_len_constraint: None,
-			} => Self::Ca(PathLenConstraint::Unconstrained),
-			B { ca: false, .. } => Self::ExplicitNoCa,
-		})
-	}
-}
-
-/// The path length constraint (only relevant for CA certificates)
-///
-/// Sets an optional upper limit on the length of the intermediate certificate chain
-/// length allowed for this CA certificate (not including the end entity certificate).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PathLenConstraint {
-	/// No constraint
-	Unconstrained,
-	/// Constrain to the contained number of intermediate certificates
-	Constrained(u8),
-}
-
 #[cfg(test)]
 mod tests {
 	#[cfg(feature = "x509-parser")]
@@ -708,7 +625,7 @@ mod tests {
 	#[cfg(feature = "x509-parser")]
 	use crate::DnValue;
 	#[cfg(feature = "crypto")]
-	use crate::KeyPair;
+	use crate::{KeyPair, PathLenConstraint};
 
 	#[cfg(feature = "crypto")]
 	#[test]
