@@ -235,8 +235,8 @@ impl CertificateParams {
 
 				writer.next().write_bool(true); // cA flag
 				match constraints {
-					BasicConstraints::Unconstrained => {},
-					BasicConstraints::Constrained(path_len_constraint) => {
+					PathLenConstraint::Unconstrained => {},
+					PathLenConstraint::Constrained(path_len_constraint) => {
 						writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
 					},
 				}
@@ -640,7 +640,7 @@ pub enum IsCa {
 	/// The certificate can only sign itself, adding the extension and `CA:FALSE`
 	ExplicitNoCa,
 	/// The certificate may be used to sign other certificates
-	Ca(BasicConstraints),
+	Ca(PathLenConstraint),
 }
 
 impl IsCa {
@@ -667,7 +667,7 @@ impl IsCa {
 			B {
 				ca: true,
 				path_len_constraint: Some(n),
-			} if *n <= u8::MAX as u32 => Self::Ca(BasicConstraints::Constrained(*n as u8)),
+			} if *n <= u8::MAX as u32 => Self::Ca(PathLenConstraint::Constrained(*n as u8)),
 			B {
 				ca: true,
 				path_len_constraint: Some(_),
@@ -675,7 +675,7 @@ impl IsCa {
 			B {
 				ca: true,
 				path_len_constraint: None,
-			} => Self::Ca(BasicConstraints::Unconstrained),
+			} => Self::Ca(PathLenConstraint::Unconstrained),
 			B { ca: false, .. } => Self::ExplicitNoCa,
 		})
 	}
@@ -686,7 +686,7 @@ impl IsCa {
 /// Sets an optional upper limit on the length of the intermediate certificate chain
 /// length allowed for this CA certificate (not including the end entity certificate).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum BasicConstraints {
+pub enum PathLenConstraint {
 	/// No constraint
 	Unconstrained,
 	/// Constrain to the contained number of intermediate certificates
@@ -721,7 +721,7 @@ mod tests {
 				KeyUsagePurpose::ContentCommitment,
 			],
 			// This can sign things!
-			is_ca: IsCa::Ca(BasicConstraints::Constrained(0)),
+			is_ca: IsCa::Ca(PathLenConstraint::Constrained(0)),
 			..CertificateParams::default()
 		};
 
@@ -856,7 +856,7 @@ mod tests {
 			// Set key usages
 			key_usages: vec![KeyUsagePurpose::DecipherOnly],
 			// This can sign things!
-			is_ca: IsCa::Ca(BasicConstraints::Constrained(0)),
+			is_ca: IsCa::Ca(PathLenConstraint::Constrained(0)),
 			..CertificateParams::default()
 		};
 
@@ -1027,7 +1027,7 @@ mod tests {
 		params.subject_alt_names.push(ip_san.clone());
 
 		// Because we're using a function for CA certificates
-		params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+		params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
 
 		// Serialize our cert that has our chosen san, so we can testing parsing/deserializing it.
 		let cert = params.self_signed(&ca_key).unwrap();

@@ -50,8 +50,8 @@ use yasna::DERWriter;
 
 mod certificate;
 pub use certificate::{
-	date_time_ymd, Attribute, BasicConstraints, Certificate, CertificateParams, CustomExtension,
-	DnType, IsCa,
+	date_time_ymd, Attribute, Certificate, CertificateParams, CustomExtension, DnType, IsCa,
+	PathLenConstraint,
 };
 
 mod crl;
