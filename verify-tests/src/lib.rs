@@ -1,8 +1,7 @@
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, CertificateRevocationList,
-	CertificateRevocationListParams, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope,
-	DnType, IsCa, Issuer, KeyIdMethod, KeyPair, KeyUsagePurpose, RevocationReason,
-	RevokedCertParams, SerialNumber,
+	Certificate, CertificateParams, CertificateRevocationList, CertificateRevocationListParams,
+	CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope, DnType, IsCa, Issuer, KeyIdMethod,
+	KeyPair, KeyUsagePurpose, PathLenConstraint, RevocationReason, RevokedCertParams, SerialNumber,
 };
 use time::{Duration, OffsetDateTime};
 
@@ -82,7 +81,7 @@ pub fn test_crl() -> (
 	Certificate,
 ) {
 	let (mut issuer, key_pair) = default_params();
-	issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	issuer.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
 	issuer.key_usages = vec![
 		KeyUsagePurpose::KeyCertSign,
 		KeyUsagePurpose::DigitalSignature,

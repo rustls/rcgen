@@ -6,8 +6,9 @@ use std::{fmt, io};
 use bpaf::Bpaf;
 use rcgen::DnValue::PrintableString;
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, CertifiedIssuer, DistinguishedName, DnType,
-	ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType, SignatureAlgorithm,
+	Certificate, CertificateParams, CertifiedIssuer, DistinguishedName, DnType,
+	ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, PathLenConstraint, SanType,
+	SignatureAlgorithm,
 };
 
 /// Builder to configure TLS [CertificateParams] to be finalized
@@ -64,7 +65,7 @@ pub struct CaBuilder {
 impl CaBuilder {
 	/// Initialize `CaBuilder`
 	pub fn new(mut params: CertificateParams, alg: KeyPairAlgorithm) -> Self {
-		params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+		params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
 		params.key_usages.push(KeyUsagePurpose::KeyCertSign);
 		params.key_usages.push(KeyUsagePurpose::CrlSign);
@@ -319,7 +320,10 @@ mod tests {
 	#[test]
 	fn init_ca() {
 		let cert = CertificateBuilder::new().certificate_authority();
-		assert_eq!(cert.params.is_ca, IsCa::Ca(BasicConstraints::Unconstrained))
+		assert_eq!(
+			cert.params.is_ca,
+			IsCa::Ca(PathLenConstraint::Unconstrained)
+		)
 	}
 	#[test]
 	fn with_sig_algo_default() -> anyhow::Result<()> {
