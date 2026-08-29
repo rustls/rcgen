@@ -4,7 +4,9 @@ use pki_types::CertificateRevocationListDer;
 use time::OffsetDateTime;
 use yasna::{DERWriter, Tag};
 
-use crate::ext::{write_extension, AuthorityKeyIdentifier};
+use crate::ext::{
+	write_extension, AuthorityKeyIdentifier, Criticality, CrlNumber, StaticExtension,
+};
 use crate::key_pair::sign_der;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
@@ -282,20 +284,11 @@ impl CertificateRevocationListParams {
 					);
 
 					// Write CRL number.
-					write_x509_extension(writer.next(), oid::CRL_NUMBER, false, |writer| {
-						writer.write_bigint_bytes(self.crl_number.as_ref(), true);
-					});
+					write_extension(writer.next(), &CrlNumber::from(&self.crl_number));
 
 					// Write issuing distribution point (if present).
-					if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
-						write_x509_extension(
-							writer.next(),
-							oid::CRL_ISSUING_DISTRIBUTION_POINT,
-							true,
-							|writer| {
-								issuing_distribution_point.write_der(writer);
-							},
-						);
+					if let Some(idp) = &self.issuing_distribution_point {
+						write_extension(writer.next(), &idp);
 					}
 				});
 			});
@@ -316,8 +309,16 @@ pub struct CrlIssuingDistributionPoint {
 	pub scope: Option<CrlScope>,
 }
 
-impl CrlIssuingDistributionPoint {
-	fn write_der(&self, writer: DERWriter) {
+// An X.509v3 issuing distribution point extension according to RFC 5280 §5.2.5
+// (<https://www.rfc-editor.org/rfc/rfc5280#section-5.2.5>).
+impl StaticExtension for &CrlIssuingDistributionPoint {
+	const OID: &'static [u64] = oid::CRL_ISSUING_DISTRIBUTION_POINT;
+
+	// RFC 5280 §5.2.5: "Although the extension is critical, conforming
+	// implementations are not required to support this extension."
+	const CRITICALITY: Criticality = Criticality::Critical;
+
+	fn write_value(&self, writer: DERWriter) {
 		// IssuingDistributionPoint SEQUENCE
 		writer.write_sequence(|writer| {
 			// distributionPoint [0] DistributionPointName OPTIONAL

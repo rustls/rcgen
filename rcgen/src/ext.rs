@@ -8,7 +8,7 @@ use crate::crl::CrlDistributionPoint;
 use crate::{
 	oid, write_distinguished_name, CertificateParams, CustomExtension, ExtendedKeyUsagePurpose,
 	GeneralSubtree, IsCa, Issuer, KeyIdMethod, KeyUsagePurpose, PathLenConstraint, SanType,
-	SigningKey,
+	SerialNumber, SigningKey,
 };
 
 /// An X.509 extension whose OID and criticality are fixed by the profile
@@ -518,6 +518,31 @@ impl Extension for &CustomExtension {
 
 	fn write_value(&self, writer: DERWriter) {
 		writer.write_der(&self.content)
+	}
+}
+
+/// An X.509v3 CRL number extension according to [RFC 5280 §5.2.3].
+///
+/// [RFC 5280 §5.2.3]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.2.3>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct CrlNumber<'params>(&'params SerialNumber);
+
+impl<'params> From<&'params SerialNumber> for CrlNumber<'params> {
+	fn from(number: &'params SerialNumber) -> Self {
+		Self(number)
+	}
+}
+
+impl StaticExtension for CrlNumber<'_> {
+	const OID: &'static [u64] = oid::CRL_NUMBER;
+
+	// RFC 5280 §5.2.3: "CRL issuers conforming to this profile MUST include this
+	// extension in all CRLs and MUST mark this extension as non-critical."
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	fn write_value(&self, writer: DERWriter) {
+		// CRLNumber ::= INTEGER (0..MAX)
+		writer.write_bigint_bytes(self.0.as_ref(), true);
 	}
 }
 
