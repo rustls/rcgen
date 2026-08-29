@@ -47,6 +47,8 @@ pub enum Error {
 	IssuerNotCrlSigner,
 	/// A CRL distribution point was specified without any URIs.
 	EmptyCrlDistributionPointUris,
+	/// Two extensions with the same OID were requested.
+	DuplicateExtension(String),
 	#[cfg(not(feature = "crypto"))]
 	/// Missing serial number
 	MissingSerialNumber,
@@ -101,6 +103,9 @@ impl fmt::Display for Error {
 			)?,
 			EmptyCrlDistributionPointUris => {
 				write!(f, "CRL distribution points must include at least one URI")?
+			},
+			DuplicateExtension(oid) => {
+				write!(f, "Only one extension with the OID {oid} may be written")?
 			},
 			#[cfg(not(feature = "crypto"))]
 			MissingSerialNumber => write!(f, "A serial number must be specified")?,
