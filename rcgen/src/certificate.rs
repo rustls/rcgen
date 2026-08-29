@@ -181,8 +181,18 @@ impl CertificateParams {
 			..Default::default()
 		};
 
-		for parsed in x509.iter_extensions().map(|ext| ext.parsed_extension()) {
+		let mut seen_oids = Vec::new();
+		for ext in x509.iter_extensions() {
+			// RFC 5280 §4.2: "A certificate MUST NOT include more than one
+			// instance of a particular extension." Reject duplicates up front
+			// instead of merging them.
+			if seen_oids.contains(&&ext.oid) {
+				return Err(Error::DuplicateExtension(ext.oid.to_string()));
+			}
+			seen_oids.push(&ext.oid);
+
 			// Extensions that can't be represented in params are ignored.
+			let parsed = ext.parsed_extension();
 			let _ = BasicConstraints::from_parsed(&mut params, parsed)?
 				|| SubjectAlternativeName::from_parsed(&mut params, parsed)?
 				|| KeyUsage::from_parsed(&mut params, parsed)?
@@ -1171,6 +1181,67 @@ mod tests {
 			.find(|ext| ext.oid.to_id_string() == "1.3.6.1.4.1.99.8")
 			.unwrap();
 		assert_eq!(custom.value, &[0x05, 0x00]);
+	}
+
+	#[cfg(feature = "x509-parser")]
+	#[test]
+	fn from_ca_cert_der_rejects_duplicate_extensions() {
+		use yasna::DERWriter;
+
+		use crate::key_pair::sign_der;
+
+		// Hand-build a v3 certificate carrying the same extension twice: rcgen
+		// itself refuses to serialize duplicates, so the DER is written directly.
+		let key_pair = KeyPair::generate().unwrap();
+		let der = sign_der(&key_pair, |writer| {
+			// Write version
+			writer.next().write_tagged(Tag::context(0), |writer| {
+				writer.write_u8(2);
+			});
+			writer.next().write_u8(1); // serialNumber
+			key_pair.algorithm().write_alg_ident(writer.next());
+			write_distinguished_name(writer.next(), &DistinguishedName::new()); // issuer
+			write_validity(writer.next());
+			write_distinguished_name(writer.next(), &DistinguishedName::new()); // subject
+			serialize_public_key_der(&key_pair, writer.next());
+			write_duplicate_extensions(writer.next());
+			Ok(())
+		})
+		.unwrap();
+
+		assert_eq!(
+			CertificateParams::from_ca_cert_der(&der.into()).unwrap_err(),
+			Error::DuplicateExtension("1.3.6.1.4.1.99".into()),
+		);
+
+		fn write_validity(writer: DERWriter) {
+			writer.write_sequence(|writer| {
+				write_dt_utc_or_generalized(writer.next(), date_time_ymd(1975, 1, 1));
+				write_dt_utc_or_generalized(writer.next(), date_time_ymd(4096, 1, 1));
+			});
+		}
+
+		// The X.509v3 extensions field, holding a minimal private-OID extension
+		// twice.
+		fn write_duplicate_extensions(writer: DERWriter) {
+			writer.write_tagged(Tag::context(3), |writer| {
+				writer.write_sequence(|writer| {
+					write_test_extension(writer.next());
+					write_test_extension(writer.next());
+				})
+			});
+		}
+
+		fn write_test_extension(writer: DERWriter) {
+			writer.write_sequence(|writer| {
+				writer
+					.next()
+					.write_oid(&ObjectIdentifier::from_slice(&[1, 3, 6, 1, 4, 1, 99]));
+				writer
+					.next()
+					.write_bytes(&yasna::construct_der(|writer| writer.write_null()));
+			});
+		}
 	}
 
 	#[cfg(feature = "x509-parser")]
