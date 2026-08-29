@@ -11,8 +11,9 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 use crate::crl::CrlDistributionPoint;
 use crate::csr::CertificateSigningRequest;
 use crate::ext::{
-	write_extension, AuthorityKeyIdentifier, CrlDistributionPoints, ExtendedKeyUsage, KeyUsage,
-	NameConstraints as NameConstraintsExt, SubjectAlternativeName, SubjectKeyIdentifier,
+	write_extension, AuthorityKeyIdentifier, BasicConstraints, CrlDistributionPoints,
+	ExtendedKeyUsage, KeyUsage, NameConstraints as NameConstraintsExt, SubjectAlternativeName,
+	SubjectKeyIdentifier,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -208,39 +209,15 @@ impl CertificateParams {
 					if let Some(eku) = ExtendedKeyUsage::from_params(self) {
 						write_extension(writer.next(), &eku);
 					}
-					self.write_ca_extensions(writer);
+					if let Some(bc) = BasicConstraints::from_params(self) {
+						write_extension(writer.next(), &bc);
+					}
 					for ext in &self.custom_extensions {
 						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
 							writer.write_der(ext.content())
 						});
 					}
 				});
-			});
-		});
-	}
-
-	/// Write a certificate's BasicConstraints as defined in RFC 5280.
-	fn write_ca_extensions(&self, writer: &mut DERWriterSeq) {
-		let is_ca = match &self.is_ca {
-			IsCa::Ca(bc) => Some(bc),
-			IsCa::ExplicitNoCa => None,
-			IsCa::NoCa => return,
-		};
-
-		// Write basic_constraints
-		write_x509_extension(writer.next(), oid::BASIC_CONSTRAINTS, true, |writer| {
-			writer.write_sequence(|writer| {
-				let Some(constraints) = is_ca else {
-					return;
-				};
-
-				writer.next().write_bool(true); // cA flag
-				match constraints {
-					PathLenConstraint::Unconstrained => {},
-					PathLenConstraint::Constrained(path_len_constraint) => {
-						writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
-					},
-				}
 			});
 		});
 	}
@@ -473,7 +450,9 @@ impl CertificateParams {
 			);
 		}
 
-		self.write_ca_extensions(writer);
+		if let Some(bc) = BasicConstraints::from_params(self) {
+			write_extension(writer.next(), &bc);
+		}
 
 		for ext in &self.custom_extensions {
 			write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {

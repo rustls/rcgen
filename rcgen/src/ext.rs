@@ -7,7 +7,7 @@ use yasna::{DERWriter, Tag};
 use crate::crl::CrlDistributionPoint;
 use crate::{
 	oid, write_distinguished_name, CertificateParams, ExtendedKeyUsagePurpose, GeneralSubtree,
-	Issuer, KeyIdMethod, KeyUsagePurpose, SanType, SigningKey,
+	IsCa, Issuer, KeyIdMethod, KeyUsagePurpose, PathLenConstraint, SanType, SigningKey,
 };
 
 /// An X.509 extension whose OID and criticality are fixed by the profile
@@ -456,6 +456,56 @@ impl StaticExtension for SubjectKeyIdentifier {
 	}
 }
 
+/// An X.509v3 basic constraints extension according to [RFC 5280 §4.2.1.9].
+///
+/// [RFC 5280 §4.2.1.9]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.9>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct BasicConstraints(IsCa);
+
+impl BasicConstraints {
+	pub(crate) fn from_params(params: &CertificateParams) -> Option<Self> {
+		// For IsCa::NoCa the extension is omitted entirely: absence implies the
+		// certificate is not a CA. Use IsCa::ExplicitNoCa to emit the extension
+		// with cA absent (FALSE).
+		if params.is_ca == IsCa::NoCa {
+			return None;
+		}
+
+		Some(Self(params.is_ca))
+	}
+}
+
+impl StaticExtension for BasicConstraints {
+	const OID: &'static [u64] = oid::BASIC_CONSTRAINTS;
+
+	// RFC 5280 §4.2.1.9: "Conforming CAs MUST include this extension in all CA
+	// certificates that contain public keys used to validate digital signatures
+	// on certificates and MUST mark the extension as critical in such
+	// certificates."
+	const CRITICALITY: Criticality = Criticality::Critical;
+
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   BasicConstraints ::= SEQUENCE {
+				cA                      BOOLEAN DEFAULT FALSE,
+				pathLenConstraint       INTEGER (0..MAX) OPTIONAL }
+		*/
+		writer.write_sequence(|writer| {
+			let IsCa::Ca(constraints) = &self.0 else {
+				// The cA flag is DEFAULT FALSE, so DER (X.690 §11.5) requires it
+				// to be omitted when false: the extension value is an empty
+				// SEQUENCE.
+				return;
+			};
+
+			writer.next().write_bool(true); // cA flag
+			if let PathLenConstraint::Constrained(path_len_constraint) = constraints {
+				writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
+			}
+		});
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -530,6 +580,49 @@ mod tests {
 				})
 			})
 		);
+	}
+
+	#[test]
+	fn basic_constraints_absent_for_no_ca() {
+		// IsCa::NoCa means no BasicConstraints extension at all.
+		assert!(BasicConstraints::from_params(&CertificateParams::default()).is_none());
+	}
+
+	#[test]
+	fn basic_constraints_encoding() {
+		// The cA flag is DEFAULT FALSE, so DER (X.690 §11.5) requires that
+		// ExplicitNoCa encode as an empty SEQUENCE with the flag omitted.
+		// See https://github.com/rustls/rcgen/pull/444.
+		for (is_ca, expected) in [
+			(
+				// cA absent (FALSE): an empty SEQUENCE.
+				IsCa::ExplicitNoCa,
+				yasna::construct_der(|writer| writer.write_sequence(|_writer| {})),
+			),
+			(
+				IsCa::Ca(PathLenConstraint::Unconstrained),
+				yasna::construct_der(|writer| {
+					writer.write_sequence(|writer| writer.next().write_bool(true))
+				}),
+			),
+			(
+				IsCa::Ca(PathLenConstraint::Constrained(5)),
+				yasna::construct_der(|writer| {
+					writer.write_sequence(|writer| {
+						writer.next().write_bool(true);
+						writer.next().write_u8(5);
+					})
+				}),
+			),
+		] {
+			let params = CertificateParams {
+				is_ca,
+				..CertificateParams::default()
+			};
+			let bc = BasicConstraints::from_params(&params).unwrap();
+			let value = yasna::construct_der(|writer| StaticExtension::write_value(&bc, writer));
+			assert_eq!(value, expected, "unexpected encoding for {is_ca:?}");
+		}
 	}
 
 	#[test]
