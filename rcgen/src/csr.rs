@@ -143,7 +143,17 @@ impl CertificateSigningRequestParams {
 				});
 
 		if let Some(requested_extensions) = requested_extensions {
+			let mut seen_oids = Vec::new();
 			for extension in requested_extensions {
+				// RFC 5280 §4.2: "A certificate MUST NOT include more than one
+				// instance of a particular extension." Reject duplicates up front
+				// instead of merging them, or deferring the failure to
+				// re-serialization of the recovered params.
+				if seen_oids.contains(&&extension.oid) {
+					return Err(Error::DuplicateExtension(extension.oid.to_string()));
+				}
+				seen_oids.push(&extension.oid);
+
 				let parsed = extension.parsed_extension();
 				let handled = KeyUsage::from_parsed(&mut params, parsed)?
 					|| SubjectAlternativeName::from_parsed(&mut params, parsed)?
@@ -197,6 +207,65 @@ mod tests {
 		CertificateParams, CertificateSigningRequestParams, Criticality, CustomExtension,
 		ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, PathLenConstraint,
 	};
+
+	#[test]
+	fn rejects_duplicate_requested_extensions() {
+		use yasna::models::ObjectIdentifier;
+		use yasna::{DERWriter, Tag};
+
+		use crate::key_pair::{serialize_public_key_der, sign_der};
+		use crate::{oid, write_distinguished_name, DistinguishedName, Error};
+
+		// Hand-build a CSR requesting the same extension twice: rcgen itself
+		// refuses to serialize duplicates, so the DER is written directly.
+		let key_pair = KeyPair::generate().unwrap();
+		let csr = sign_der(&key_pair, |writer| {
+			writer.next().write_u8(0); // version
+			write_distinguished_name(writer.next(), &DistinguishedName::new());
+			serialize_public_key_der(&key_pair, writer.next());
+			// attributes [0] IMPLICIT SET OF Attribute
+			writer
+				.next()
+				.write_tagged_implicit(Tag::context(0), |writer| {
+					writer.write_set_of(|writer| write_extension_request(writer.next()));
+				});
+			Ok(())
+		})
+		.unwrap();
+
+		assert_eq!(
+			CertificateSigningRequestParams::from_der(&csr.into()).unwrap_err(),
+			Error::DuplicateExtension("1.3.6.1.4.1.99".into()),
+		);
+
+		// The PKCS #9 extensionRequest attribute, requesting the same extension
+		// twice.
+		fn write_extension_request(writer: DERWriter) {
+			writer.write_sequence(|writer| {
+				writer.next().write_oid(&ObjectIdentifier::from_slice(
+					oid::PKCS_9_AT_EXTENSION_REQUEST,
+				));
+				writer.next().write_set(|writer| {
+					writer.next().write_sequence(|writer| {
+						write_test_extension(writer.next());
+						write_test_extension(writer.next());
+					});
+				});
+			});
+		}
+
+		// A minimal extension with a fixed private OID and a NULL value.
+		fn write_test_extension(writer: DERWriter) {
+			writer.write_sequence(|writer| {
+				writer
+					.next()
+					.write_oid(&ObjectIdentifier::from_slice(&[1, 3, 6, 1, 4, 1, 99]));
+				writer
+					.next()
+					.write_bytes(&yasna::construct_der(|writer| writer.write_null()));
+			});
+		}
+	}
 
 	#[test]
 	fn dont_write_sans_extension_if_no_sans_are_present() {
