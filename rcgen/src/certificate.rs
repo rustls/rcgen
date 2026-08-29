@@ -10,8 +10,8 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::csr::CertificateSigningRequest;
 use crate::extension::{
-	AuthorityKeyIdentifier, BasicConstraints, CrlDistributionPoints, ExtendedKeyUsage, Extension,
-	KeyUsage, NameConstraintsExt, SubjectAlternativeName, SubjectKeyIdentifier,
+	AuthorityKeyIdentifier, BasicConstraints, Criticality, CrlDistributionPoints, ExtendedKeyUsage,
+	Extension, KeyUsage, NameConstraintsExt, SubjectAlternativeName, SubjectKeyIdentifier,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -19,9 +19,9 @@ use crate::ring_like::digest;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	oid, write_distinguished_name, write_dt_utc_or_generalized, write_x509_extension,
-	CrlDistributionPoint, DistinguishedName, Error, ExtendedKeyUsagePurpose, IsCa, Issuer,
-	KeyIdMethod, KeyUsagePurpose, NameConstraints, SanType, SerialNumber, SigningKey,
+	oid, write_distinguished_name, write_dt_utc_or_generalized, CrlDistributionPoint,
+	DistinguishedName, Error, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyIdMethod, KeyUsagePurpose,
+	NameConstraints, SanType, SerialNumber, SigningKey,
 };
 
 /// An issued certificate
@@ -210,10 +210,8 @@ impl CertificateParams {
 					if let Some(bc) = BasicConstraints::from_params(self) {
 						bc.write(writer.next());
 					}
-					for ext in &self.custom_extensions {
-						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
-							writer.write_der(ext.content())
-						});
+					for custom_ext in &self.custom_extensions {
+						custom_ext.write(writer.next());
 					}
 				});
 			});
@@ -450,10 +448,8 @@ impl CertificateParams {
 			bc.write(writer.next());
 		}
 
-		for ext in &self.custom_extensions {
-			write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
-				writer.write_der(ext.content())
-			});
+		for custom_ext in &self.custom_extensions {
+			custom_ext.write(writer.next());
 		}
 
 		Ok(())
@@ -496,11 +492,11 @@ pub struct Attribute {
 /// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct CustomExtension {
-	oid: Vec<u64>,
-	critical: bool,
+	pub(crate) oid: Vec<u64>,
+	pub(crate) criticality: Criticality,
 
 	/// The content must be DER-encoded
-	content: Vec<u8>,
+	pub(crate) content: Vec<u8>,
 }
 
 impl CustomExtension {
@@ -515,7 +511,7 @@ impl CustomExtension {
 		});
 		Self {
 			oid: oid::PE_ACME.to_owned(),
-			critical: true,
+			criticality: Criticality::Critical,
 			content,
 		}
 	}
@@ -523,17 +519,17 @@ impl CustomExtension {
 	pub fn from_oid_content(oid: &[u64], content: Vec<u8>) -> Self {
 		Self {
 			oid: oid.to_owned(),
-			critical: false,
+			criticality: Criticality::NonCritical,
 			content,
 		}
 	}
 	/// Sets the criticality flag of the extension.
 	pub fn set_criticality(&mut self, criticality: bool) {
-		self.critical = criticality;
+		self.criticality = criticality.into();
 	}
 	/// Obtains the criticality flag of the extension.
 	pub fn criticality(&self) -> bool {
-		self.critical
+		self.criticality == Criticality::Critical
 	}
 	/// Obtains the content of the extension.
 	pub fn content(&self) -> &[u8] {

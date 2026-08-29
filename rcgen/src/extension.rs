@@ -13,7 +13,8 @@ use crate::string::Ia5String;
 #[cfg(feature = "x509-parser")]
 use crate::Error;
 use crate::{
-	oid, write_distinguished_name, CertificateParams, DistinguishedName, Issuer, SigningKey,
+	oid, write_distinguished_name, CertificateParams, CustomExtension, DistinguishedName, Issuer,
+	SigningKey,
 };
 
 /// An X.509v3 subject alternative name extension according to [RFC 5280 §4.2.1.6].
@@ -1117,6 +1118,20 @@ impl<T: StaticExtension> Extension for T {
 	}
 }
 
+impl Extension for &CustomExtension {
+	fn write_value(&self, writer: DERWriter) {
+		writer.write_der(&self.content)
+	}
+
+	fn criticality(&self) -> Criticality {
+		self.criticality
+	}
+
+	fn oid(&self) -> &[u64] {
+		&self.oid
+	}
+}
+
 /// An X.509 extension whose OID and criticality are fixed by the profile
 /// defining it.
 ///
@@ -1183,7 +1198,7 @@ pub(crate) trait Extension: Debug {
 /// See [RFC 5280 §4.2] for more information.
 ///
 /// [RFC 5280 §4.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2>
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Criticality {
 	/// The extension MUST be recognized and parsed correctly.
 	Critical,
