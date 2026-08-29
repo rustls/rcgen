@@ -6,8 +6,9 @@ use yasna::{DERWriter, Tag};
 
 use crate::crl::CrlDistributionPoint;
 use crate::{
-	oid, write_distinguished_name, CertificateParams, ExtendedKeyUsagePurpose, GeneralSubtree,
-	IsCa, Issuer, KeyIdMethod, KeyUsagePurpose, PathLenConstraint, SanType, SigningKey,
+	oid, write_distinguished_name, CertificateParams, CustomExtension, ExtendedKeyUsagePurpose,
+	GeneralSubtree, IsCa, Issuer, KeyIdMethod, KeyUsagePurpose, PathLenConstraint, SanType,
+	SigningKey,
 };
 
 /// An X.509 extension whose OID and criticality are fixed by the profile
@@ -64,7 +65,7 @@ pub(crate) trait Extension: Debug {
 /// See [RFC 5280 §4.2] for more information.
 ///
 /// [RFC 5280 §4.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2>
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Criticality {
 	/// The extension MUST be recognized and parsed correctly.
 	Critical,
@@ -503,6 +504,20 @@ impl StaticExtension for BasicConstraints {
 				writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
 			}
 		});
+	}
+}
+
+impl Extension for &CustomExtension {
+	fn oid(&self) -> &[u64] {
+		&self.oid
+	}
+
+	fn criticality(&self) -> Criticality {
+		self.criticality
+	}
+
+	fn write_value(&self, writer: DERWriter) {
+		writer.write_der(&self.content)
 	}
 }
 
