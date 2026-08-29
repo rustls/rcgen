@@ -6,11 +6,12 @@ use pem::Pem;
 use pki_types::{CertificateDer, CertificateSigningRequestDer};
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
 use yasna::models::ObjectIdentifier;
-use yasna::{DERWriter, DERWriterSeq, Tag};
+use yasna::{DERWriter, Tag};
 
 use crate::csr::CertificateSigningRequest;
 use crate::extension::{
-	AuthorityKeyIdentifier, Extension, NonEmptySlice, SubjectAlternativeName, SubjectKeyIdentifier,
+	AuthorityKeyIdentifier, Extension, Extensions, NonEmptySlice, SubjectAlternativeName,
+	SubjectKeyIdentifier,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -337,8 +338,9 @@ impl CertificateParams {
 		pub_key: &K,
 		issuer: &Issuer<'_, impl SigningKey>,
 	) -> Result<CertificateDer<'static>, Error> {
+		let pub_key_spki = pub_key.subject_public_key_info();
+		let extensions = self.extensions(&pub_key_spki, issuer)?;
 		let der = sign_der(&issuer.signing_key, |writer| {
-			let pub_key_spki = pub_key.subject_public_key_info();
 			// Write version
 			writer.next().write_tagged(Tag::context(0), |writer| {
 				writer.write_u8(2);
@@ -379,22 +381,9 @@ impl CertificateParams {
 			write_distinguished_name(writer.next(), &self.distinguished_name);
 			// Write subjectPublicKeyInfo
 			serialize_public_key_der(pub_key, writer.next());
-			// write extensions
-			let should_write_exts = self.use_authority_key_identifier_extension
-				|| !self.subject_alt_names.is_empty()
-				|| !self.key_usages.is_empty()
-				|| !self.extended_key_usages.is_empty()
-				|| self.name_constraints.is_some()
-				|| !self.crl_distribution_points.is_empty()
-				|| self.basic_constraints.is_some()
-				|| !self.custom_extensions.is_empty();
-			if !should_write_exts {
-				return Ok(());
-			}
-
-			writer.next().write_tagged(Tag::context(3), |writer| {
-				writer.write_sequence(|writer| self.write_extensions(writer, &pub_key_spki, issuer))
-			})?;
+			// Write extensions. The field is omitted entirely when the built
+			// collection is empty.
+			extensions.write_cert_der(writer.next());
 
 			Ok(())
 		})?;
@@ -402,50 +391,41 @@ impl CertificateParams {
 		Ok(der.into())
 	}
 
-	fn write_extensions(
+	/// Returns the X.509 extensions that the [`CertificateParams`] describe.
+	///
+	/// Returns an [`Error`] if the described extensions are invalid.
+	fn extensions(
 		&self,
-		writer: &mut DERWriterSeq,
 		pub_key_spki: &[u8],
 		issuer: &Issuer<'_, impl SigningKey>,
-	) -> Result<(), Error> {
+	) -> Result<Extensions<'_>, Error> {
+		let mut exts = Extensions::default();
+
 		if self.use_authority_key_identifier_extension {
-			AuthorityKeyIdentifier::from(issuer).write(writer.next());
+			exts.push(AuthorityKeyIdentifier::from(issuer))?;
 		}
 
-		if let Some(san) = SubjectAlternativeName::from_params(self) {
-			san.write(writer.next());
-		}
-		if let Some(ku_ext) = NonEmptySlice::new(&self.key_usages) {
-			ku_ext.write(writer.next());
-		}
-		if let Some(eku_ext) = NonEmptySlice::new(&self.extended_key_usages) {
-			eku_ext.write(writer.next());
-		}
-
-		if let Some(nc) = self.name_constraints.as_ref() {
-			nc.write(writer.next());
-		}
-
-		if let Some(crl_dps_ext) = NonEmptySlice::new(&self.crl_distribution_points) {
-			crl_dps_ext.write(writer.next());
-		}
+		exts.push_if_some(SubjectAlternativeName::from_params(self))?;
+		exts.push_if_some(NonEmptySlice::new(&self.key_usages))?;
+		exts.push_if_some(NonEmptySlice::new(&self.extended_key_usages))?;
+		exts.push_if_some(self.name_constraints.as_ref())?;
+		exts.push_if_some(NonEmptySlice::new(&self.crl_distribution_points))?;
 
 		// SKI is currently written when basic constraints are present, including
 		// an explicit end-entity extension.
 		if self.basic_constraints.is_some() {
-			SubjectKeyIdentifier::new(&self.key_identifier_method, pub_key_spki)
-				.write(writer.next());
+			exts.push(SubjectKeyIdentifier::new(
+				&self.key_identifier_method,
+				pub_key_spki,
+			))?;
 		}
-
-		if let Some(basic_constraints) = self.basic_constraints {
-			basic_constraints.write(writer.next());
-		}
+		exts.push_if_some(self.basic_constraints)?;
 
 		for custom_ext in &self.custom_extensions {
-			custom_ext.write(writer.next());
+			exts.push(custom_ext)?;
 		}
 
-		Ok(())
+		Ok(exts)
 	}
 
 	/// Insert an extended key usage (EKU) into the parameters if it does not already exist

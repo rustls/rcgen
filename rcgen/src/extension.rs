@@ -1134,6 +1134,76 @@ impl Extension for &CustomExtension {
 	}
 }
 
+/// A collection of X.509 extensions.
+///
+/// Preserves the order that extensions were added and maintains the invariant that
+/// there are no duplicate extension OIDs. The extensions borrow from the params
+/// they were built from for the duration of one serialization.
+#[derive(Debug, Default)]
+pub(crate) struct Extensions<'params> {
+	exts: Vec<Box<dyn Extension + 'params>>,
+}
+
+impl<'params> Extensions<'params> {
+	/// Add a prepared extension when its parameters request a value.
+	pub(crate) fn push_if_some(
+		&mut self,
+		extension: Option<impl Extension + 'params>,
+	) -> Result<(), Error> {
+		if let Some(extension) = extension {
+			self.push(extension)?;
+		}
+		Ok(())
+	}
+
+	/// Add an extension to the collection.
+	///
+	/// Returns [`Error::DuplicateExtension`] if the extension's OID is already present
+	/// in the collection.
+	pub(crate) fn push(&mut self, extension: impl Extension + 'params) -> Result<(), Error> {
+		let oid = extension.oid();
+		if self.exts.iter().any(|existing| existing.oid() == oid) {
+			return Err(Error::DuplicateExtension(
+				ObjectIdentifier::from_slice(oid).to_string(),
+			));
+		}
+
+		self.exts.push(Box::new(extension));
+		Ok(())
+	}
+
+	/// Write the certificate's optional extensions field.
+	///
+	/// Nothing is written when the collection is empty: presence is decided by the
+	/// built collection, not predicted from the params, so an empty extensions
+	/// field is never emitted and requested extensions can never be silently
+	/// dropped.
+	pub(crate) fn write_cert_der(&self, writer: DERWriter) {
+		if self.exts.is_empty() {
+			return;
+		}
+
+		writer.write_tagged(Tag::context(3), |writer| self.write_der(writer));
+	}
+
+	/// Write `Extensions ::= SEQUENCE SIZE (1..MAX) OF Extension`.
+	///
+	/// For example, the untagged `crlEntryExtensions` field of a CRL entry.
+	///
+	/// Nothing is written when the collection is empty.
+	pub(crate) fn write_der(&self, writer: DERWriter) {
+		if self.exts.is_empty() {
+			return;
+		}
+
+		writer.write_sequence(|writer| {
+			for extension in &self.exts {
+				extension.write(writer.next());
+			}
+		})
+	}
+}
+
 impl<T: StaticExtension> Extension for T {
 	fn write_value(&self, writer: DERWriter) {
 		// Calling with fully qualified syntax to disambiguate.
@@ -1306,12 +1376,100 @@ mod tests {
 	}
 
 	#[test]
+	fn extensions_elided_when_prepared_values_are_absent() {
+		let mut exts = Extensions::default();
+		exts.push_if_some(NonEmptySlice::<KeyUsagePurpose>::new(&[]))
+			.unwrap();
+		exts.push_if_some(NonEmptySlice::<ExtendedKeyUsagePurpose>::new(&[]))
+			.unwrap();
+		exts.push_if_some(None::<BasicConstraints>).unwrap();
+		exts.push_if_some(None::<&NameConstraints>).unwrap();
+		exts.push_if_some(NonEmptySlice::<CrlDistributionPoint>::new(&[]))
+			.unwrap();
+		let der = yasna::construct_der(|writer| exts.write_der(writer));
+		assert!(der.is_empty());
+	}
+
+	#[test]
+	fn extensions_reject_duplicate_oids() {
+		let mut exts = Extensions::default();
+		exts.push(DummyExt {
+			oid: TEST_OID,
+			criticality: Criticality::NonCritical,
+		})
+		.unwrap();
+		assert_eq!(
+			exts.push(DummyExt {
+				oid: TEST_OID,
+				criticality: Criticality::Critical,
+			}),
+			Err(Error::DuplicateExtension(
+				ObjectIdentifier::from_slice(TEST_OID).to_string()
+			)),
+		);
+	}
+
+	#[test]
+	fn extensions_preserve_insertion_order() {
+		let mut exts = Extensions::default();
+		// Add an extension with a lexicographically larger OID first: the encoded
+		// SEQUENCE must preserve insertion order, not sort.
+		exts.push(DummyExt {
+			oid: &[1, 3, 6, 1, 4, 1, 98],
+			criticality: Criticality::NonCritical,
+		})
+		.unwrap();
+		exts.push(DummyExt {
+			oid: &[1, 3, 6, 1, 4, 1, 97],
+			criticality: Criticality::NonCritical,
+		})
+		.unwrap();
+
+		let der = yasna::construct_der(|writer| exts.write_cert_der(writer));
+		assert_eq!(
+			der,
+			yasna::construct_der(|writer| {
+				writer.write_tagged(Tag::context(3), |writer| {
+					writer.write_sequence(|writer| {
+						// Insertion order, not OID order: 98 first, then 97.
+						for oid in [&[1, 3, 6, 1, 4, 1, 98], &[1, 3, 6, 1, 4, 1, 97]] {
+							writer.next().write_sequence(|writer| {
+								writer.next().write_oid(&ObjectIdentifier::from_slice(oid));
+								writer.next().write_bytes(&yasna::construct_der(|writer| {
+									writer.write_null()
+								}));
+							});
+						}
+					})
+				})
+			})
+		);
+	}
+
+	#[test]
+	fn extensions_elided_when_empty() {
+		// An empty collection writes nothing at all: no extensions field, no
+		// empty SEQUENCE.
+		let exts = Extensions::default();
+		let der = yasna::construct_der(|writer| {
+			writer.write_sequence(|writer| exts.write_cert_der(writer.next()))
+		});
+		assert_eq!(
+			der,
+			yasna::construct_der(|writer| writer.write_sequence(|_writer| {}))
+		);
+	}
+
+	#[test]
 	fn critical_flag_omitted_when_false() {
 		// The critical flag is DEFAULT FALSE, so DER (X.690 §11.5) requires that a
 		// non-critical extension omit it entirely rather than encode FALSE.
 		// See https://github.com/rustls/rcgen/pull/444 for a past instance of this
 		// bug class.
-		let ext = DummyExt(Criticality::NonCritical);
+		let ext = DummyExt {
+			oid: TEST_OID,
+			criticality: Criticality::NonCritical,
+		};
 		let der = yasna::construct_der(|writer| ext.write(writer));
 		assert_eq!(
 			der,
@@ -1332,7 +1490,10 @@ mod tests {
 
 	#[test]
 	fn critical_flag_written_when_true() {
-		let ext = DummyExt(Criticality::Critical);
+		let ext = DummyExt {
+			oid: TEST_OID,
+			criticality: Criticality::Critical,
+		};
 		let der = yasna::construct_der(|writer| ext.write(writer));
 		assert_eq!(
 			der,
@@ -1494,7 +1655,10 @@ mod tests {
 	}
 
 	#[derive(Debug)]
-	struct DummyExt(Criticality);
+	struct DummyExt {
+		oid: &'static [u64],
+		criticality: Criticality,
+	}
 
 	impl Extension for DummyExt {
 		fn write_value(&self, writer: DERWriter) {
@@ -1502,11 +1666,13 @@ mod tests {
 		}
 
 		fn criticality(&self) -> Criticality {
-			self.0
+			self.criticality
 		}
 
 		fn oid(&self) -> &[u64] {
-			&[1, 3, 6, 1, 4, 1, 99]
+			self.oid
 		}
 	}
+
+	const TEST_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 99];
 }
