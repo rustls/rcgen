@@ -42,7 +42,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::ops::Deref;
 
 pub use certificate::{
-	date_time_ymd, Attribute, Certificate, CertificateParams, CidrSubnet, CustomExtension, DnType,
+	date_time_ymd, Attribute, Certificate, CertificateParams, CidrSubnet, DnType,
 	ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, NameConstraints, PathLenConstraint,
 };
 pub use crl::{
@@ -51,6 +51,7 @@ pub use crl::{
 };
 pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
 pub use error::{Error, InvalidAsn1String};
+pub use ext::CustomExtension;
 #[cfg(feature = "crypto")]
 pub use key_pair::KeyPair;
 #[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]

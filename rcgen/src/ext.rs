@@ -7,7 +7,7 @@ use yasna::{DERWriter, DERWriterSet, Tag};
 
 use crate::crl::{CrlDistributionPoint, RevocationReason, RevokedCertParams};
 use crate::{
-	dt_to_generalized, oid, write_distinguished_name, CertificateParams, CustomExtension, Error,
+	dt_to_generalized, oid, write_distinguished_name, CertificateParams, Error,
 	ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, Issuer, KeyIdMethod, KeyUsagePurpose,
 	PathLenConstraint, SanType, SerialNumber, SigningKey,
 };
@@ -610,6 +610,64 @@ impl StaticExtension for BasicConstraints {
 				writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
 			}
 		});
+	}
+}
+
+/// A custom extension of a certificate, as specified in
+/// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct CustomExtension {
+	pub(crate) oid: Vec<u64>,
+	pub(crate) criticality: Criticality,
+
+	/// The content must be DER-encoded
+	pub(crate) content: Vec<u8>,
+}
+
+impl CustomExtension {
+	/// Creates a new acmeIdentifier extension for ACME TLS-ALPN-01
+	/// as specified in [RFC 8737](https://tools.ietf.org/html/rfc8737#section-3)
+	///
+	/// Panics if the passed `sha_digest` parameter doesn't hold 32 bytes (256 bits).
+	pub fn new_acme_identifier(sha_digest: &[u8]) -> Self {
+		assert_eq!(sha_digest.len(), 32, "wrong size of sha_digest");
+		let content = yasna::construct_der(|writer| {
+			writer.write_bytes(sha_digest);
+		});
+		Self {
+			oid: oid::PE_ACME.to_owned(),
+			criticality: Criticality::Critical,
+			content,
+		}
+	}
+
+	/// Create a new custom extension with the specified content
+	pub fn from_oid_content(oid: &[u64], content: Vec<u8>) -> Self {
+		Self {
+			oid: oid.to_owned(),
+			criticality: Criticality::NonCritical,
+			content,
+		}
+	}
+
+	/// Sets the criticality flag of the extension.
+	pub fn set_criticality(&mut self, criticality: bool) {
+		self.criticality = criticality.into();
+	}
+
+	/// Obtains the criticality flag of the extension.
+	pub fn criticality(&self) -> bool {
+		self.criticality == Criticality::Critical
+	}
+
+	/// Obtains the content of the extension.
+	pub fn content(&self) -> &[u8] {
+		&self.content
+	}
+
+	/// Obtains the OID components of the extensions, as u64 pieces
+	pub fn oid_components(&self) -> impl Iterator<Item = u64> + '_ {
+		self.oid.iter().copied()
 	}
 }
 
