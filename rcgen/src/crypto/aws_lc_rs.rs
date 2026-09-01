@@ -8,8 +8,8 @@ use ::aws_lc_rs::signature::{
 	self, EcdsaKeyPair, Ed25519KeyPair, KeyPair as _, RsaEncoding, RsaKeyPair,
 	VerificationAlgorithm,
 };
-#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
-use ::aws_lc_rs::unstable::signature::{
+#[cfg(feature = "aws_lc_rs")]
+use ::aws_lc_rs::signature::{
 	PqdsaKeyPair, PqdsaSigningAlgorithm, ML_DSA_44, ML_DSA_44_SIGNING, ML_DSA_65,
 	ML_DSA_65_SIGNING, ML_DSA_87, ML_DSA_87_SIGNING,
 };
@@ -23,7 +23,7 @@ use crate::{
 	PKCS_ECDSA_P256_SHA256, PKCS_ECDSA_P384_SHA384, PKCS_ECDSA_P521_SHA256, PKCS_ECDSA_P521_SHA384,
 	PKCS_ECDSA_P521_SHA512, PKCS_ED25519, PKCS_RSA_SHA256, PKCS_RSA_SHA384, PKCS_RSA_SHA512,
 };
-#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+#[cfg(feature = "aws_lc_rs")]
 use crate::{PKCS_ML_DSA_44, PKCS_ML_DSA_65, PKCS_ML_DSA_87};
 
 /// Return rcgen's built-in AWS-LC provider.
@@ -128,7 +128,7 @@ impl AwsLcKeyPairProvider {
 				&signature::RSA_PKCS1_SHA512,
 			)
 		} else {
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			{
 				let signing_algorithm = if algorithm == &PKCS_ML_DSA_44 {
 					Some(&ML_DSA_44_SIGNING)
@@ -165,11 +165,11 @@ impl AwsLcKeyPairProvider {
 			&PKCS_ECDSA_P384_SHA384,
 			&PKCS_ECDSA_P521_SHA512,
 			&PKCS_RSA_SHA256,
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_ML_DSA_44,
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_ML_DSA_65,
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_ML_DSA_87,
 		] {
 			if let Ok(key) = self.load_with_algorithm(key_der, is_pkcs8, algorithm) {
@@ -218,7 +218,7 @@ impl AwsLcKeyPairProvider {
 		))
 	}
 
-	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	#[cfg(feature = "aws_lc_rs")]
 	fn generate_pqdsa(
 		&self,
 		algorithm: &'static SignatureAlgorithm,
@@ -226,7 +226,7 @@ impl AwsLcKeyPairProvider {
 	) -> Result<KeyPair, Error> {
 		let key = PqdsaKeyPair::generate(signing_algorithm).map_err(|_| Error::RingUnspecified)?;
 		let serialized_der = key
-			.to_pkcs8()
+			.to_pkcs8v1()
 			.map_err(|_| Error::RingUnspecified)?
 			.as_ref()
 			.to_vec();
@@ -267,7 +267,7 @@ impl KeyPairProvider for AwsLcKeyPairProvider {
 		{
 			self.generate_rsa_inner(algorithm, KeySize::Rsa2048)
 		} else {
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			{
 				if algorithm == &PKCS_ML_DSA_44 {
 					return self.generate_pqdsa(algorithm, &ML_DSA_44_SIGNING);
@@ -317,7 +317,7 @@ impl KeyPairProvider for AwsLcKeyPairProvider {
 enum AwsLcKeyKind {
 	Ec(EcdsaKeyPair),
 	Ed(Ed25519KeyPair),
-	#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+	#[cfg(feature = "aws_lc_rs")]
 	Pq(PqdsaKeyPair),
 	Rsa(RsaKeyPair, &'static dyn RsaEncoding),
 }
@@ -332,7 +332,7 @@ impl PublicKeyData for AwsLcSigningKey {
 		match &self.kind {
 			AwsLcKeyKind::Ec(key) => key.public_key().as_ref(),
 			AwsLcKeyKind::Ed(key) => key.public_key().as_ref(),
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			AwsLcKeyKind::Pq(key) => key.public_key().as_ref(),
 			AwsLcKeyKind::Rsa(key, _) => key.public_key().as_ref(),
 		}
@@ -351,7 +351,7 @@ impl SigningKey for AwsLcSigningKey {
 				.map(|signature| signature.as_ref().to_vec())
 				.map_err(|_| Error::RingUnspecified),
 			AwsLcKeyKind::Ed(key) => Ok(key.sign(message).as_ref().to_vec()),
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			AwsLcKeyKind::Pq(key) => {
 				let mut signature = vec![0; key.algorithm().signature_len()];
 				key.sign(message, &mut signature)
@@ -379,7 +379,7 @@ impl SignatureVerificationProvider for AwsLcSignatureVerificationProvider {
 		message: &[u8],
 		signature_bytes: &[u8],
 	) -> Result<(), Error> {
-		#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+		#[cfg(feature = "aws_lc_rs")]
 		{
 			let pqdsa_algorithm = if algorithm == &PKCS_ML_DSA_44 {
 				Some(&ML_DSA_44)
@@ -428,6 +428,9 @@ impl SignatureVerificationProvider for AwsLcSignatureVerificationProvider {
 
 #[cfg(test)]
 mod tests {
+	#[cfg(feature = "aws_lc_rs")]
+	use pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+
 	use super::*;
 
 	#[test]
@@ -442,5 +445,48 @@ mod tests {
 				0xf2, 0x00, 0x15, 0xad,
 			]
 		);
+	}
+
+	#[cfg(feature = "aws_lc_rs")]
+	#[test]
+	fn ml_dsa_round_trip() {
+		let provider = default_provider();
+		for algorithm in [&PKCS_ML_DSA_44, &PKCS_ML_DSA_65, &PKCS_ML_DSA_87] {
+			let generated = KeyPair::generate_for_with_provider(algorithm, &provider).unwrap();
+			let private_key = PrivatePkcs8KeyDer::from(generated.serialize_der());
+
+			let loaded = KeyPair::from_pkcs8_der_and_sign_algo_with_provider(
+				&private_key,
+				algorithm,
+				&provider,
+			)
+			.unwrap();
+			assert_eq!(loaded.algorithm(), algorithm);
+
+			let detected =
+				KeyPair::from_der_with_provider(&PrivateKeyDer::Pkcs8(private_key), &provider)
+					.unwrap();
+			assert_eq!(detected.algorithm(), algorithm);
+
+			let message = b"stable ML-DSA provider";
+			let signature = loaded.sign(message).unwrap();
+			provider
+				.signature_verification_provider
+				.verify(algorithm, loaded.der_bytes(), message, &signature)
+				.unwrap();
+
+			#[cfg(feature = "x509-parser")]
+			{
+				let request = crate::CertificateParams::default()
+					.serialize_request(&loaded)
+					.unwrap();
+				let parsed = crate::CertificateSigningRequestParams::from_der_with_provider(
+					request.der(),
+					&provider,
+				)
+				.unwrap();
+				assert_eq!(parsed.public_key.algorithm(), algorithm);
+			}
+		}
 	}
 }

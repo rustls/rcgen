@@ -77,11 +77,11 @@ impl SignatureAlgorithm {
 			&PKCS_ECDSA_P521_SHA384,
 			&PKCS_ECDSA_P521_SHA512,
 			&PKCS_ED25519,
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_ML_DSA_44,
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_ML_DSA_65,
-			#[cfg(all(feature = "aws_lc_rs_unstable", not(feature = "fips")))]
+			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_ML_DSA_87,
 		];
 		ALGORITHMS.iter()

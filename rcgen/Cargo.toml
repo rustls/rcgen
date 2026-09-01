@@ -13,7 +13,7 @@ keywords.workspace = true
 [features]
 default = ["crypto", "pem", "ring"]
 aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys"]
-aws_lc_rs_unstable = ["aws_lc_rs", "aws-lc-rs/unstable"] # For backwards compatibility only
+aws_lc_rs_unstable = ["aws_lc_rs"] # For backwards compatibility only
 custom-provider = ["crypto"]
 fips = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/fips"]
 crypto = []
