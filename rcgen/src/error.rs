@@ -11,7 +11,7 @@ pub enum Error {
 	/// The given key pair couldn't be parsed
 	CouldNotParseKeyPair,
 	/// No process-wide cryptography provider has been installed and crate features do not select
-	/// exactly one built-in provider.
+	/// a built-in provider.
 	CryptoProviderNotInstalled,
 	/// A cryptography provider failed an operation.
 	CryptoProviderError(String),

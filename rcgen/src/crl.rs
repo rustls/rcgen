@@ -19,7 +19,7 @@ use crate::{
 ///
 /// ## Example
 ///
-/// ```no_run
+/// ```
 /// extern crate rcgen;
 /// use rcgen::*;
 ///
@@ -34,6 +34,13 @@ use crate::{
 ///   fn der_bytes(&self) -> &[u8] { &self.public_key }
 ///   fn algorithm(&self) -> &'static SignatureAlgorithm { &PKCS_ED25519 }
 /// }
+/// # #[cfg(any(
+/// #     not(feature = "crypto"),
+/// #     all(
+/// #         not(feature = "custom-provider"),
+/// #         any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+/// #     )
+/// # ))]
 /// # fn main () {
 /// // Generate a CRL issuer.
 /// let mut issuer_params = CertificateParams::new(vec!["crl.issuer.example.com".to_string()]).unwrap();
@@ -66,6 +73,14 @@ use crate::{
 ///   key_identifier_method: KeyIdMethod::PreSpecified(vec![]),
 /// }.signed_by(&issuer).unwrap();
 ///# }
+/// # #[cfg(not(any(
+/// #     not(feature = "crypto"),
+/// #     all(
+/// #         not(feature = "custom-provider"),
+/// #         any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+/// #     )
+/// # )))]
+/// # fn main() {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CertificateRevocationList {
 	der: CertificateRevocationListDer<'static>,

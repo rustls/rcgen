@@ -152,7 +152,7 @@ pub(crate) mod algo {
 	///
 	/// Note that this algorithm is not widely supported, and is not supported in TLS 1.3.
 	///
-	/// This algorithm is not supported by every [`CryptoProvider`](crate::crypto::CryptoProvider).
+	/// Only supported by the built-in `aws_lc_rs` provider, or a custom provider that implements it.
 	pub static PKCS_ECDSA_P521_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
 		// ecdsa-with-SHA256 in RFC 5758
@@ -164,7 +164,7 @@ pub(crate) mod algo {
 	///
 	/// Note that this algorithm is not widely supported, and is not supported in TLS 1.3.
 	///
-	/// This algorithm is not supported by every [`CryptoProvider`](crate::crypto::CryptoProvider).
+	/// Only supported by the built-in `aws_lc_rs` provider, or a custom provider that implements it.
 	pub static PKCS_ECDSA_P521_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
 		// ecdsa-with-SHA384 in RFC 5758
@@ -174,7 +174,7 @@ pub(crate) mod algo {
 
 	/// ECDSA signing using the P-521 curves and SHA-512 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	///
-	/// This algorithm is not supported by every [`CryptoProvider`](crate::crypto::CryptoProvider).
+	/// Only supported by the built-in `aws_lc_rs` provider, or a custom provider that implements it.
 	pub static PKCS_ECDSA_P521_SHA512: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
 		// ecdsa-with-SHA512 in RFC 5758

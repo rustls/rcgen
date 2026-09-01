@@ -13,8 +13,12 @@ a key pair to call [`CertificateParams::signed_by()`] or [`CertificateParams::se
 	doc = r##"
 ## Example
 
-```no_run
+```
 use rcgen::{generate_simple_self_signed, CertifiedKey};
+# #[cfg(all(
+#     not(feature = "custom-provider"),
+#     any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+# ))]
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
 let subject_alt_names = vec!["hello.world.example".to_string(),
@@ -24,6 +28,11 @@ let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt
 println!("{}", cert.pem());
 println!("{}", signing_key.serialize_pem());
 # }
+# #[cfg(not(all(
+#     not(feature = "custom-provider"),
+#     any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+# )))]
+# fn main() {}
 ```"##
 )]
 #![forbid(unsafe_code)]
@@ -112,8 +121,12 @@ and key pair as output.
 	doc = r##"
 ## Example
 
-```no_run
+```
 use rcgen::{generate_simple_self_signed, CertifiedKey};
+# #[cfg(all(
+#     not(feature = "custom-provider"),
+#     any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+# ))]
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
 let subject_alt_names = vec!["hello.world.example".to_string(),
@@ -125,6 +138,11 @@ let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt
 println!("{}", cert.pem());
 println!("{}", signing_key.serialize_pem());
 # }
+# #[cfg(not(all(
+#     not(feature = "custom-provider"),
+#     any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+# )))]
+# fn main() {}
 ```
 "##
 )]
