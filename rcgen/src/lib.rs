@@ -17,7 +17,7 @@ a key pair to call [`CertificateParams::signed_by()`] or [`CertificateParams::se
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 # #[cfg(all(
 #     not(feature = "custom-provider"),
-#     any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+#     any(feature = "ring", feature = "aws_lc_rs")
 # ))]
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
@@ -30,7 +30,7 @@ println!("{}", signing_key.serialize_pem());
 # }
 # #[cfg(not(all(
 #     not(feature = "custom-provider"),
-#     any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+#     any(feature = "ring", feature = "aws_lc_rs")
 # )))]
 # fn main() {}
 ```"##
@@ -40,6 +40,9 @@ println!("{}", signing_key.serialize_pem());
 #![deny(missing_docs)]
 #![cfg_attr(rcgen_docsrs, feature(doc_cfg))]
 #![warn(unreachable_pub)]
+
+#[cfg(all(feature = "fips", not(feature = "aws_lc_rs")))]
+compile_error!("the 'fips' feature currently requires the 'aws_lc_rs' feature");
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -125,7 +128,7 @@ and key pair as output.
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 # #[cfg(all(
 #     not(feature = "custom-provider"),
-#     any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+#     any(feature = "ring", feature = "aws_lc_rs")
 # ))]
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
@@ -140,7 +143,7 @@ println!("{}", signing_key.serialize_pem());
 # }
 # #[cfg(not(all(
 #     not(feature = "custom-provider"),
-#     any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+#     any(feature = "ring", feature = "aws_lc_rs")
 # )))]
 # fn main() {}
 ```
@@ -378,12 +381,7 @@ impl SanType {
 	#[cfg(all(
 		test,
 		feature = "x509-parser",
-		any(
-			not(feature = "crypto"),
-			feature = "ring",
-			feature = "aws_lc_rs",
-			feature = "fips"
-		)
+		any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
 	))]
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
 		let sans = x509

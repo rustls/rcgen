@@ -213,12 +213,7 @@ impl CertificateParams {
 	#[cfg(all(
 		test,
 		feature = "x509-parser",
-		any(
-			not(feature = "crypto"),
-			feature = "ring",
-			feature = "aws_lc_rs",
-			feature = "fips"
-		)
+		any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
 	))]
 	pub(crate) fn from_ca_cert_der(ca_cert: &CertificateDer<'_>) -> Result<Self, Error> {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
@@ -866,12 +861,7 @@ impl ExtendedKeyUsagePurpose {
 	#[cfg(all(
 		test,
 		feature = "x509-parser",
-		any(
-			not(feature = "crypto"),
-			feature = "ring",
-			feature = "aws_lc_rs",
-			feature = "fips"
-		)
+		any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
 	))]
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
 		let extended_key_usage = x509
@@ -940,12 +930,7 @@ impl NameConstraints {
 	#[cfg(all(
 		test,
 		feature = "x509-parser",
-		any(
-			not(feature = "crypto"),
-			feature = "ring",
-			feature = "aws_lc_rs",
-			feature = "fips"
-		)
+		any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
 	))]
 	fn from_x509(
 		x509: &x509_parser::certificate::X509Certificate<'_>,
@@ -1002,12 +987,7 @@ impl GeneralSubtree {
 	#[cfg(all(
 		test,
 		feature = "x509-parser",
-		any(
-			not(feature = "crypto"),
-			feature = "ring",
-			feature = "aws_lc_rs",
-			feature = "fips"
-		)
+		any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
 	))]
 	fn from_x509(
 		subtrees: &[x509_parser::extensions::GeneralSubtree<'_>],
@@ -1183,12 +1163,7 @@ impl IsCa {
 	#[cfg(all(
 		test,
 		feature = "x509-parser",
-		any(
-			not(feature = "crypto"),
-			feature = "ring",
-			feature = "aws_lc_rs",
-			feature = "fips"
-		)
+		any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
 	))]
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Self, Error> {
 		let basic_constraints = x509
@@ -1240,12 +1215,7 @@ pub enum BasicConstraints {
 
 #[cfg(all(
 	test,
-	any(
-		not(feature = "crypto"),
-		feature = "ring",
-		feature = "aws_lc_rs",
-		feature = "fips"
-	)
+	any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
 ))]
 mod tests {
 	#[cfg(feature = "x509-parser")]

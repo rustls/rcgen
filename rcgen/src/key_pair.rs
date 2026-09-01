@@ -581,11 +581,7 @@ pub(crate) fn serialize_public_key_der(key: &(impl PublicKeyData + ?Sized), writ
 	})
 }
 
-#[cfg(all(
-	test,
-	feature = "crypto",
-	any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
-))]
+#[cfg(all(test, feature = "crypto", any(feature = "ring", feature = "aws_lc_rs")))]
 mod test {
 	use super::*;
 
@@ -596,9 +592,9 @@ mod test {
 			&PKCS_ED25519,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
-			#[cfg(all(any(feature = "aws_lc_rs", feature = "fips"), not(feature = "ring")))]
+			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
 			&PKCS_ECDSA_P521_SHA512,
-			#[cfg(all(any(feature = "aws_lc_rs", feature = "fips"), not(feature = "ring")))]
+			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
 			&PKCS_RSA_SHA256,
 		] {
 			let kp = KeyPair::generate_for(alg).expect("keygen");

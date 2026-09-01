@@ -123,7 +123,7 @@ fn test_key_pair(algorithm: &'static SignatureAlgorithm, serialized_der: Vec<u8>
 #[test]
 fn explicit_provider_covers_all_rcgen_crypto() {
 	assert!(CryptoProvider::get_default().is_none());
-	#[cfg(not(any(feature = "ring", feature = "aws_lc_rs", feature = "fips")))]
+	#[cfg(not(any(feature = "ring", feature = "aws_lc_rs")))]
 	assert_eq!(
 		KeyPair::generate().unwrap_err(),
 		Error::CryptoProviderNotInstalled

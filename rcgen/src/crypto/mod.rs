@@ -164,17 +164,14 @@ impl CryptoProvider {
 	fn from_crate_features() -> Option<Self> {
 		#[cfg(all(
 			feature = "ring",
-			not(any(feature = "aws_lc_rs", feature = "fips")),
+			not(feature = "aws_lc_rs"),
 			not(feature = "custom-provider")
 		))]
 		{
 			return Some(ring::default_provider());
 		}
 
-		#[cfg(all(
-			any(feature = "aws_lc_rs", feature = "fips"),
-			not(feature = "custom-provider")
-		))]
+		#[cfg(all(feature = "aws_lc_rs", not(feature = "custom-provider")))]
 		{
 			return Some(aws_lc_rs::default_provider());
 		}
@@ -191,5 +188,5 @@ static PROCESS_DEFAULT_PROVIDER: OnceLock<Arc<CryptoProvider>> = OnceLock::new()
 pub mod ring;
 
 /// AWS-LC-based cryptography provider.
-#[cfg(any(feature = "aws_lc_rs", feature = "fips"))]
+#[cfg(feature = "aws_lc_rs")]
 pub mod aws_lc_rs;

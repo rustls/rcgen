@@ -7,7 +7,7 @@ publish = false
 [features]
 default = []
 aws_lc_rs = ["rcgen/aws_lc_rs", "rustls-webpki/aws-lc-rs", "dep:aws-lc-rs"]
-fips = ["rcgen/fips"]
+fips = ["aws_lc_rs", "rcgen/fips"]
 pem = ["dep:pem", "rcgen/pem"]
 ring = ["rcgen/ring"]
 x509-parser = ["dep:x509-parser", "rcgen/x509-parser"]

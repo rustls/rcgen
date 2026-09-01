@@ -14,7 +14,7 @@ keywords.workspace = true
 default = ["ring"]
 aws_lc_rs = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/aws-lc-sys"]
 aws_lc_rs_unstable = ["rcgen/aws_lc_rs_unstable"]
-fips = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/fips"]
+fips = ["aws_lc_rs", "rcgen/fips"]
 ring = ["dep:ring", "rcgen/ring"]
 
 [dependencies]

@@ -38,7 +38,7 @@ use crate::{
 /// #     not(feature = "crypto"),
 /// #     all(
 /// #         not(feature = "custom-provider"),
-/// #         any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+/// #         any(feature = "ring", feature = "aws_lc_rs")
 /// #     )
 /// # ))]
 /// # fn main () {
@@ -77,7 +77,7 @@ use crate::{
 /// #     not(feature = "crypto"),
 /// #     all(
 /// #         not(feature = "custom-provider"),
-/// #         any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+/// #         any(feature = "ring", feature = "aws_lc_rs")
 /// #     )
 /// # )))]
 /// # fn main() {}
@@ -486,11 +486,7 @@ impl RevokedCertParams {
 	}
 }
 
-#[cfg(all(
-	test,
-	feature = "crypto",
-	any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
-))]
+#[cfg(all(test, feature = "crypto", any(feature = "ring", feature = "aws_lc_rs")))]
 mod tests {
 	use x509_parser::num_bigint::BigUint;
 	use x509_parser::{oid_registry, parse_x509_crl};

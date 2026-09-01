@@ -274,7 +274,7 @@ impl CertificateSigningRequestParams {
 #[cfg(all(
 	test,
 	feature = "x509-parser",
-	any(feature = "ring", feature = "aws_lc_rs", feature = "fips")
+	any(feature = "ring", feature = "aws_lc_rs")
 ))]
 mod tests {
 	use x509_parser::certification_request::X509CertificationRequest;
