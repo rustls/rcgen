@@ -15,23 +15,19 @@ a key pair to call [`CertificateParams::signed_by()`] or [`CertificateParams::se
 
 ```
 use rcgen::{generate_simple_self_signed, CertifiedKey};
-# #[cfg(all(
-#     not(feature = "custom-provider"),
-#     any(feature = "ring", feature = "aws_lc_rs")
-# ))]
+# #[cfg(feature = "ring")]
 # fn main () {
+let provider = rcgen::crypto::ring::default_provider();
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names).unwrap();
+let CertifiedKey { cert, signing_key } =
+	generate_simple_self_signed(subject_alt_names, provider).unwrap();
 println!("{}", cert.pem());
 println!("{}", signing_key.serialize_pem());
 # }
-# #[cfg(not(all(
-#     not(feature = "custom-provider"),
-#     any(feature = "ring", feature = "aws_lc_rs")
-# )))]
+# #[cfg(not(feature = "ring"))]
 # fn main() {}
 ```"##
 )]
@@ -62,9 +58,7 @@ pub use crl::{
 	CrlIssuingDistributionPoint, CrlScope, RevocationReason, RevokedCertParams,
 };
 #[cfg(feature = "crypto")]
-pub use crypto::{
-	CryptoProvider, DigestProvider, HashAlgorithm, KeyPairProvider, SignatureVerificationProvider,
-};
+pub use crypto::{CryptoProvider, HashAlgorithm, HashOutput};
 pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
 pub use error::{Error, InvalidAsn1String};
 #[cfg(feature = "crypto")]
@@ -94,6 +88,14 @@ mod key_pair;
 mod oid;
 mod sign_algo;
 pub mod string;
+
+#[cfg(all(test, feature = "crypto", any(feature = "ring", feature = "aws_lc_rs")))]
+pub(crate) fn test_provider() -> &'static dyn CryptoProvider {
+	#[cfg(feature = "aws_lc_rs")]
+	return crypto::aws_lc_rs::default_provider();
+	#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
+	return crypto::ring::default_provider();
+}
 
 /// Type-alias for the old name of [`Error`].
 #[deprecated(
@@ -126,46 +128,31 @@ and key pair as output.
 
 ```
 use rcgen::{generate_simple_self_signed, CertifiedKey};
-# #[cfg(all(
-#     not(feature = "custom-provider"),
-#     any(feature = "ring", feature = "aws_lc_rs")
-# ))]
+# #[cfg(feature = "ring")]
 # fn main () {
+let provider = rcgen::crypto::ring::default_provider();
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names).unwrap();
+let CertifiedKey { cert, signing_key } =
+	generate_simple_self_signed(subject_alt_names, provider).unwrap();
 
 // The certificate is now valid for localhost and the domain "hello.world.example"
 println!("{}", cert.pem());
 println!("{}", signing_key.serialize_pem());
 # }
-# #[cfg(not(all(
-#     not(feature = "custom-provider"),
-#     any(feature = "ring", feature = "aws_lc_rs")
-# )))]
+# #[cfg(not(feature = "ring"))]
 # fn main() {}
 ```
 "##
 )]
 pub fn generate_simple_self_signed(
 	subject_alt_names: impl Into<Vec<String>>,
+	provider: &dyn CryptoProvider,
 ) -> Result<CertifiedKey<KeyPair>, Error> {
-	let signing_key = KeyPair::generate()?;
-	let cert = CertificateParams::new(subject_alt_names)?.self_signed(&signing_key)?;
-	Ok(CertifiedKey { cert, signing_key })
-}
-
-/// Generate a simple self-signed certificate using an explicit cryptography provider.
-#[cfg(feature = "crypto")]
-pub fn generate_simple_self_signed_with_provider(
-	subject_alt_names: impl Into<Vec<String>>,
-	provider: &CryptoProvider,
-) -> Result<CertifiedKey<KeyPair>, Error> {
-	let signing_key = KeyPair::generate_with_provider(provider)?;
-	let cert = CertificateParams::new(subject_alt_names)?
-		.self_signed_with_provider(&signing_key, provider)?;
+	let signing_key = KeyPair::generate(provider)?;
+	let cert = CertificateParams::new(subject_alt_names)?.self_signed(&signing_key, provider)?;
 	Ok(CertifiedKey { cert, signing_key })
 }
 
@@ -178,22 +165,17 @@ pub struct CertifiedIssuer<'a, S> {
 
 impl<'a, S: SigningKey> CertifiedIssuer<'a, S> {
 	/// Create a new issuer from the given parameters and key, with a self-signed certificate.
-	pub fn self_signed(params: CertificateParams, signing_key: S) -> Result<Self, Error> {
-		Ok(Self {
-			certificate: params.self_signed(&signing_key)?,
-			issuer: Issuer::new(params, signing_key),
-		})
-	}
-
-	/// Create a new issuer with a self-signed certificate using `provider`.
-	#[cfg(feature = "crypto")]
-	pub fn self_signed_with_provider(
+	pub fn self_signed(
 		params: CertificateParams,
 		signing_key: S,
-		provider: &CryptoProvider,
+		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
 	) -> Result<Self, Error> {
+		#[cfg(feature = "crypto")]
+		let certificate = params.self_signed(&signing_key, provider)?;
+		#[cfg(not(feature = "crypto"))]
+		let certificate = params.self_signed(&signing_key)?;
 		Ok(Self {
-			certificate: params.self_signed_with_provider(&signing_key, provider)?,
+			certificate,
 			issuer: Issuer::new(params, signing_key),
 		})
 	}
@@ -203,23 +185,14 @@ impl<'a, S: SigningKey> CertifiedIssuer<'a, S> {
 		params: CertificateParams,
 		signing_key: S,
 		issuer: &Issuer<'_, impl SigningKey>,
+		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
 	) -> Result<Self, Error> {
+		#[cfg(feature = "crypto")]
+		let certificate = params.signed_by(&signing_key, issuer, provider)?;
+		#[cfg(not(feature = "crypto"))]
+		let certificate = params.signed_by(&signing_key, issuer)?;
 		Ok(Self {
-			certificate: params.signed_by(&signing_key, issuer)?,
-			issuer: Issuer::new(params, signing_key),
-		})
-	}
-
-	/// Create a new issuer signed by `issuer` using `provider`.
-	#[cfg(feature = "crypto")]
-	pub fn signed_by_with_provider(
-		params: CertificateParams,
-		signing_key: S,
-		issuer: &Issuer<'_, impl SigningKey>,
-		provider: &CryptoProvider,
-	) -> Result<Self, Error> {
-		Ok(Self {
-			certificate: params.signed_by_with_provider(&signing_key, issuer, provider)?,
+			certificate,
 			issuer: Issuer::new(params, signing_key),
 		})
 	}
@@ -787,17 +760,17 @@ impl KeyIdMethod {
 	#[cfg(feature = "crypto")]
 	pub(crate) fn derive(
 		&self,
-		provider: &CryptoProvider,
+		provider: &dyn CryptoProvider,
 		subject_public_key_info: impl AsRef<[u8]>,
-	) -> Result<Vec<u8>, Error> {
+	) -> Vec<u8> {
 		let algorithm = match self {
 			Self::Sha256 => HashAlgorithm::Sha256,
 			Self::Sha384 => HashAlgorithm::Sha384,
 			Self::Sha512 => HashAlgorithm::Sha512,
-			Self::PreSpecified(value) => return Ok(value.clone()),
+			Self::PreSpecified(value) => return value.clone(),
 		};
-		let digest = provider.digest(algorithm, subject_public_key_info.as_ref())?;
-		Ok(digest[..20].to_vec())
+		let digest = provider.hash(algorithm, subject_public_key_info.as_ref());
+		digest.as_ref()[..20].to_vec()
 	}
 
 	#[cfg(not(feature = "crypto"))]

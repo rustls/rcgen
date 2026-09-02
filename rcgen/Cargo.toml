@@ -11,10 +11,9 @@ rust-version.workspace = true
 keywords.workspace = true
 
 [features]
-default = ["crypto", "pem", "ring"]
+default = ["crypto", "pem"]
 aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys"]
 aws_lc_rs_unstable = ["aws_lc_rs"] # For backwards compatibility only
-custom-provider = ["crypto"]
 fips = ["crypto", "aws-lc-rs?/fips"]
 crypto = []
 ring = ["crypto", "dep:ring"]
@@ -34,19 +33,19 @@ openssl = { workspace = true }
 
 [[example]]
 name = "rsa-irc-openssl"
-required-features = ["pem"]
+required-features = ["pem", "ring"]
 
 [[example]]
 name = "sign-leaf-with-ca"
-required-features = ["pem", "x509-parser"]
+required-features = ["pem", "ring", "x509-parser"]
 
 [[example]]
 name = "sign-leaf-with-pem-files"
-required-features = ["pem", "x509-parser"]
+required-features = ["pem", "ring", "x509-parser"]
 
 [[example]]
 name = "simple"
-required-features = ["crypto", "pem"]
+required-features = ["pem", "ring"]
 
 [package.metadata.docs.rs]
 features = ["aws_lc_rs",  "aws_lc_rs_unstable", "crypto", "ring", "x509-parser"]

@@ -34,13 +34,7 @@ use crate::{
 ///   fn der_bytes(&self) -> &[u8] { &self.public_key }
 ///   fn algorithm(&self) -> &'static SignatureAlgorithm { &PKCS_ED25519 }
 /// }
-/// # #[cfg(any(
-/// #     not(feature = "crypto"),
-/// #     all(
-/// #         not(feature = "custom-provider"),
-/// #         any(feature = "ring", feature = "aws_lc_rs")
-/// #     )
-/// # ))]
+/// # #[cfg(any(not(feature = "crypto"), feature = "ring"))]
 /// # fn main () {
 /// // Generate a CRL issuer.
 /// let mut issuer_params = CertificateParams::new(vec!["crl.issuer.example.com".to_string()]).unwrap();
@@ -48,7 +42,9 @@ use crate::{
 /// issuer_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 /// issuer_params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::CrlSign];
 /// #[cfg(feature = "crypto")]
-/// let key_pair = KeyPair::generate().unwrap();
+/// let provider = rcgen::crypto::ring::default_provider();
+/// #[cfg(feature = "crypto")]
+/// let key_pair = KeyPair::generate(provider).unwrap();
 /// #[cfg(not(feature = "crypto"))]
 /// let key_pair = MyKeyPair { public_key: vec![] };
 /// let issuer = Issuer::new(issuer_params, key_pair);
@@ -71,15 +67,13 @@ use crate::{
 ///   key_identifier_method: KeyIdMethod::Sha256,
 ///   #[cfg(not(feature = "crypto"))]
 ///   key_identifier_method: KeyIdMethod::PreSpecified(vec![]),
-/// }.signed_by(&issuer).unwrap();
+/// }.signed_by(
+///   &issuer,
+///   #[cfg(feature = "crypto")]
+///   provider,
+/// ).unwrap();
 ///# }
-/// # #[cfg(not(any(
-/// #     not(feature = "crypto"),
-/// #     all(
-/// #         not(feature = "custom-provider"),
-/// #         any(feature = "ring", feature = "aws_lc_rs")
-/// #     )
-/// # )))]
+/// # #[cfg(all(feature = "crypto", not(feature = "ring")))]
 /// # fn main() {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CertificateRevocationList {
@@ -204,25 +198,18 @@ impl CertificateRevocationListParams {
 	pub fn signed_by(
 		&self,
 		issuer: &Issuer<'_, impl SigningKey>,
+		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
 	) -> Result<CertificateRevocationList, Error> {
 		self.validate(issuer)?;
 
 		Ok(CertificateRevocationList {
-			der: self.serialize_der(issuer)?.into(),
-		})
-	}
-
-	/// Serialize and sign this CRL using an explicit cryptography provider.
-	#[cfg(feature = "crypto")]
-	pub fn signed_by_with_provider(
-		&self,
-		issuer: &Issuer<'_, impl SigningKey>,
-		provider: &CryptoProvider,
-	) -> Result<CertificateRevocationList, Error> {
-		self.validate(issuer)?;
-
-		Ok(CertificateRevocationList {
-			der: self.serialize_der_with_provider(issuer, provider)?.into(),
+			der: self
+				.serialize_der(
+					issuer,
+					#[cfg(feature = "crypto")]
+					provider,
+				)?
+				.into(),
 		})
 	}
 
@@ -248,34 +235,15 @@ impl CertificateRevocationListParams {
 		Ok(())
 	}
 
-	fn serialize_der(&self, issuer: &Issuer<'_, impl SigningKey>) -> Result<Vec<u8>, Error> {
-		#[cfg(feature = "crypto")]
-		{
-			let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-			self.serialize_der_with_provider(issuer, provider)
-		}
-		#[cfg(not(feature = "crypto"))]
-		self.serialize_der_inner(issuer)
-	}
-
-	#[cfg(feature = "crypto")]
-	fn serialize_der_with_provider(
+	fn serialize_der(
 		&self,
 		issuer: &Issuer<'_, impl SigningKey>,
-		provider: &CryptoProvider,
-	) -> Result<Vec<u8>, Error> {
-		self.serialize_der_inner(issuer, provider)
-	}
-
-	fn serialize_der_inner(
-		&self,
-		issuer: &Issuer<'_, impl SigningKey>,
-		#[cfg(feature = "crypto")] provider: &CryptoProvider,
+		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
 	) -> Result<Vec<u8>, Error> {
 		#[cfg(feature = "crypto")]
 		let key_identifier = self
 			.key_identifier_method
-			.derive(provider, issuer.signing_key.subject_public_key_info())?;
+			.derive(provider, issuer.signing_key.subject_public_key_info());
 		#[cfg(not(feature = "crypto"))]
 		let key_identifier = self
 			.key_identifier_method
@@ -512,7 +480,8 @@ mod tests {
 		// fullName, violating GeneralNames ::= SEQUENCE SIZE (1..MAX) OF
 		// GeneralName (RFC 5280 §4.2.1.13), so it must be rejected.
 		assert_eq!(
-			crl.signed_by(&test_issuer()).unwrap_err(),
+			crl.signed_by(&test_issuer(), crate::test_provider())
+				.unwrap_err(),
 			Error::EmptyCrlDistributionPointUris
 		);
 	}
@@ -569,7 +538,7 @@ mod tests {
 			revoked_certs: vec![revoked_cert],
 			key_identifier_method: KeyIdMethod::Sha256,
 		}
-		.signed_by(&test_issuer())
+		.signed_by(&test_issuer(), crate::test_provider())
 		.unwrap()
 	}
 
@@ -583,6 +552,9 @@ mod tests {
 			KeyUsagePurpose::DigitalSignature,
 			KeyUsagePurpose::CrlSign,
 		];
-		Issuer::new(issuer_params, KeyPair::generate().unwrap())
+		Issuer::new(
+			issuer_params,
+			KeyPair::generate(crate::test_provider()).unwrap(),
+		)
 	}
 }

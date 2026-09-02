@@ -15,6 +15,7 @@ use rcgen::{CertificateParams, DnType, ExtendedKeyUsagePurpose, Issuer, KeyPair,
 use time::{Duration, OffsetDateTime};
 
 fn main() -> Result<(), Box<dyn Error>> {
+	let provider = rcgen::crypto::ring::default_provider();
 	let mut args = std::env::args().skip(1);
 
 	let signer_keys_file = PathBuf::from(
@@ -36,7 +37,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let keys_pem = fs::read_to_string(&signer_keys_file)?;
 	let cert_pem = fs::read_to_string(&signer_cert_file)?;
 
-	let key_pair = KeyPair::from_pem(&keys_pem)?;
+	let key_pair = KeyPair::from_pem(&keys_pem, provider)?;
 	let signer = Issuer::from_ca_cert_pem(&cert_pem, key_pair)?;
 
 	// Create a new signed server certificate
@@ -66,8 +67,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 	params.not_before = yesterday;
 	params.not_after = tomorrow;
 
-	let output_keys = KeyPair::generate()?;
-	let output_cert = params.signed_by(&output_keys, &signer)?;
+	let output_keys = KeyPair::generate(provider)?;
+	let output_cert = params.signed_by(&output_keys, &signer, provider)?;
 
 	// Write new certificate
 	fs::write(&output_keys_file, output_keys.serialize_pem())?;

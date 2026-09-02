@@ -8,9 +8,7 @@ use ::ring::signature::{
 };
 use pki_types::PrivateKeyDer;
 
-use super::{
-	CryptoProvider, DigestProvider, HashAlgorithm, KeyPairProvider, SignatureVerificationProvider,
-};
+use super::{CryptoProvider, HashAlgorithm, HashOutput};
 use crate::{
 	Error, KeyPair, PublicKeyData, RsaKeySize, SignatureAlgorithm, SigningKey,
 	PKCS_ECDSA_P256_SHA256, PKCS_ECDSA_P384_SHA384, PKCS_ED25519, PKCS_RSA_SHA256, PKCS_RSA_SHA384,
@@ -18,38 +16,14 @@ use crate::{
 };
 
 /// Return rcgen's built-in `ring` provider.
-pub fn default_provider() -> CryptoProvider {
-	CryptoProvider {
-		key_pair_provider: &RingKeyPairProvider,
-		digest_provider: &RingDigestProvider,
-		signature_verification_provider: &RingSignatureVerificationProvider,
-	}
+pub fn default_provider() -> &'static dyn CryptoProvider {
+	&RingProvider
 }
 
 #[derive(Debug)]
-struct RingDigestProvider;
+struct RingProvider;
 
-impl DigestProvider for RingDigestProvider {
-	fn digest(
-		&self,
-		algorithm: HashAlgorithm,
-		input: &[u8],
-		output: &mut [u8],
-	) -> Result<(), Error> {
-		let algorithm = match algorithm {
-			HashAlgorithm::Sha256 => &digest::SHA256,
-			HashAlgorithm::Sha384 => &digest::SHA384,
-			HashAlgorithm::Sha512 => &digest::SHA512,
-		};
-		output.copy_from_slice(digest::digest(algorithm, input).as_ref());
-		Ok(())
-	}
-}
-
-#[derive(Debug)]
-struct RingKeyPairProvider;
-
-impl RingKeyPairProvider {
+impl RingProvider {
 	fn ecdsa_from_pkcs8(
 		algorithm: &'static signature::EcdsaSigningAlgorithm,
 		pkcs8: &[u8],
@@ -115,7 +89,16 @@ impl RingKeyPairProvider {
 	}
 }
 
-impl KeyPairProvider for RingKeyPairProvider {
+impl CryptoProvider for RingProvider {
+	fn hash(&self, algorithm: HashAlgorithm, input: &[u8]) -> HashOutput {
+		let algorithm = match algorithm {
+			HashAlgorithm::Sha256 => &digest::SHA256,
+			HashAlgorithm::Sha384 => &digest::SHA384,
+			HashAlgorithm::Sha512 => &digest::SHA512,
+		};
+		HashOutput::new(digest::digest(algorithm, input).as_ref())
+	}
+
 	fn generate(
 		&self,
 		algorithm: &'static SignatureAlgorithm,
@@ -181,6 +164,35 @@ impl KeyPairProvider for RingKeyPairProvider {
 			serialized_der,
 		))
 	}
+
+	fn verify(
+		&self,
+		algorithm: &'static SignatureAlgorithm,
+		public_key: &[u8],
+		message: &[u8],
+		signature_bytes: &[u8],
+	) -> Result<(), Error> {
+		let verification_algorithm: &'static dyn VerificationAlgorithm =
+			if algorithm == &PKCS_ECDSA_P256_SHA256 {
+				&signature::ECDSA_P256_SHA256_ASN1
+			} else if algorithm == &PKCS_ECDSA_P384_SHA384 {
+				&signature::ECDSA_P384_SHA384_ASN1
+			} else if algorithm == &PKCS_ED25519 {
+				&signature::ED25519
+			} else if algorithm == &PKCS_RSA_SHA256 {
+				&signature::RSA_PKCS1_2048_8192_SHA256
+			} else if algorithm == &PKCS_RSA_SHA384 {
+				&signature::RSA_PKCS1_2048_8192_SHA384
+			} else if algorithm == &PKCS_RSA_SHA512 {
+				&signature::RSA_PKCS1_2048_8192_SHA512
+			} else {
+				return Err(Error::UnsupportedSignatureAlgorithm);
+			};
+
+		signature::UnparsedPublicKey::new(verification_algorithm, public_key)
+			.verify(message, signature_bytes)
+			.map_err(|_| Error::SignatureVerificationFailed)
+	}
 }
 
 enum RingKeyKind {
@@ -226,40 +238,6 @@ impl SigningKey for RingSigningKey {
 	}
 }
 
-#[derive(Debug)]
-struct RingSignatureVerificationProvider;
-
-impl SignatureVerificationProvider for RingSignatureVerificationProvider {
-	fn verify(
-		&self,
-		algorithm: &'static SignatureAlgorithm,
-		public_key: &[u8],
-		message: &[u8],
-		signature_bytes: &[u8],
-	) -> Result<(), Error> {
-		let verification_algorithm: &'static dyn VerificationAlgorithm =
-			if algorithm == &PKCS_ECDSA_P256_SHA256 {
-				&signature::ECDSA_P256_SHA256_ASN1
-			} else if algorithm == &PKCS_ECDSA_P384_SHA384 {
-				&signature::ECDSA_P384_SHA384_ASN1
-			} else if algorithm == &PKCS_ED25519 {
-				&signature::ED25519
-			} else if algorithm == &PKCS_RSA_SHA256 {
-				&signature::RSA_PKCS1_2048_8192_SHA256
-			} else if algorithm == &PKCS_RSA_SHA384 {
-				&signature::RSA_PKCS1_2048_8192_SHA384
-			} else if algorithm == &PKCS_RSA_SHA512 {
-				&signature::RSA_PKCS1_2048_8192_SHA512
-			} else {
-				return Err(Error::UnsupportedSignatureAlgorithm);
-			};
-
-		signature::UnparsedPublicKey::new(verification_algorithm, public_key)
-			.verify(message, signature_bytes)
-			.map_err(|_| Error::SignatureVerificationFailed)
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -268,8 +246,8 @@ mod tests {
 	fn sha256_known_answer() {
 		assert_eq!(
 			default_provider()
-				.digest(HashAlgorithm::Sha256, b"abc")
-				.unwrap(),
+				.hash(HashAlgorithm::Sha256, b"abc")
+				.as_ref(),
 			[
 				0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae,
 				0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61,

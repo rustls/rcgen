@@ -5,6 +5,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	use rcgen::{date_time_ymd, CertificateParams, DistinguishedName};
 
+	let provider = rcgen::crypto::ring::default_provider();
 	let mut params: CertificateParams = Default::default();
 	params.not_before = date_time_ymd(2021, 5, 19);
 	params.not_after = date_time_ymd(4096, 1, 1);
@@ -12,9 +13,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let pkey: openssl::pkey::PKey<_> = openssl::rsa::Rsa::generate(2048)?.try_into()?;
 	let key_pair_pem = String::from_utf8(pkey.private_key_to_pem_pkcs8()?)?;
-	let key_pair = rcgen::KeyPair::from_pem(&key_pair_pem)?;
+	let key_pair = rcgen::KeyPair::from_pem(&key_pair_pem, provider)?;
 
-	let cert = params.self_signed(&key_pair)?;
+	let cert = params.self_signed(&key_pair, provider)?;
 	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;
 	let der_serialized = pem.contents();

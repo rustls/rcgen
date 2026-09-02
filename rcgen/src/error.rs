@@ -10,9 +10,6 @@ pub enum Error {
 	CouldNotParseCertificationRequest,
 	/// The given key pair couldn't be parsed
 	CouldNotParseKeyPair,
-	/// No process-wide cryptography provider has been installed and crate features do not select
-	/// a built-in provider.
-	CryptoProviderNotInstalled,
 	/// A cryptography provider failed an operation.
 	CryptoProviderError(String),
 	/// The CSR signature is invalid
@@ -73,9 +70,6 @@ impl fmt::Display for Error {
 				request"
 			)?,
 			CouldNotParseKeyPair => write!(f, "Could not parse key pair")?,
-			CryptoProviderNotInstalled => {
-				write!(f, "No process-wide cryptography provider is installed")?
-			},
 			CryptoProviderError(e) => write!(f, "Cryptography provider error: {e}")?,
 			#[cfg(feature = "x509-parser")]
 			InvalidCertificationRequestSignature => write!(f, "Invalid CSR signature")?,

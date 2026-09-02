@@ -44,12 +44,11 @@ jobs:
               uses: dtolnay/rust-toolchain@stable
               with:
                   components: clippy
-            # `custom-provider` disables automatic built-in provider selection, so avoid `--all-features`
             - run: cargo clippy --features ring,pem,x509-parser --all-targets
             # rustls-cert-gen require either aws_lc_rs or ring feature
             - run: cargo clippy -p rcgen --no-default-features --all-targets
             - run: cargo clippy -p rcgen --no-default-features --features crypto,pem,x509-parser --all-targets
-            - name: Ensure custom-provider builds have no built-in crypto dependencies
+            - name: Ensure backend-free builds have no built-in crypto dependencies
               run: |
                   if cargo tree -p rcgen --no-default-features --features crypto --edges normal,build | grep -E 'ring v|aws-lc'; then
                     exit 1
@@ -85,7 +84,7 @@ jobs:
               run: cargo doc --features ring,pem,x509-parser --document-private-items
               env:
                   RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=rcgen_docsrs' || '-Dwarnings' }}
-            - name: cargo doc (custom provider)
+            - name: cargo doc (provider API without a built-in backend)
               run: cargo doc -p rcgen --no-default-features --features crypto,pem,x509-parser
               env:
                   RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=rcgen_docsrs' || '-Dwarnings' }}
@@ -181,7 +180,7 @@ jobs:
               run: cargo test --features x509-parser
             - name: Run the tests with aws_lc_rs backend enabled
               run: cargo test --no-default-features --features aws_lc_rs,pem
-            - name: Run the tests with a custom provider and no built-in backend
+            - name: Run the tests with no built-in backend
               run: cargo test -p rcgen --no-default-features --features crypto,pem,x509-parser
               # rustls-cert-gen require either aws_lc_rs or ring feature
             - name: Run the tests with no features enabled

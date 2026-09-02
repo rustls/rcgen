@@ -41,8 +41,8 @@ impl fmt::Debug for KeyPair {
 impl KeyPair {
 	/// Construct a key pair from a provider-specific signing key and its PKCS#8 DER encoding.
 	///
-	/// This constructor is intended for implementations of
-	/// [`KeyPairProvider`](crate::crypto::KeyPairProvider). `serialized_der` must encode the same
+	/// This constructor is intended for implementations of [`CryptoProvider`]. `serialized_der`
+	/// must encode the same
 	/// private key exposed by `signing_key` and must remain exportable to callers.
 	pub fn from_signing_key(
 		signing_key: Box<dyn SigningKey + Send + Sync>,
@@ -54,14 +54,9 @@ impl KeyPair {
 		}
 	}
 
-	/// Generate a new random [`PKCS_ECDSA_P256_SHA256`] key pair
-	pub fn generate() -> Result<Self, Error> {
-		Self::generate_for(&PKCS_ECDSA_P256_SHA256)
-	}
-
-	/// Generate a new random [`PKCS_ECDSA_P256_SHA256`] key pair using `provider`
-	pub fn generate_with_provider(provider: &CryptoProvider) -> Result<Self, Error> {
-		Self::generate_for_with_provider(&PKCS_ECDSA_P256_SHA256, provider)
+	/// Generate a new random [`PKCS_ECDSA_P256_SHA256`] key pair using `provider`.
+	pub fn generate(provider: &dyn CryptoProvider) -> Result<Self, Error> {
+		Self::generate_for(&PKCS_ECDSA_P256_SHA256, provider)
 	}
 
 	/// Generate a new random key pair for the specified signature algorithm
@@ -71,17 +66,11 @@ impl KeyPair {
 	/// a generated key or an error for key generation being unavailable.
 	/// Currently, the built-in `aws-lc-rs` provider supports RSA key generation while the
 	/// built-in `ring` provider does not.
-	pub fn generate_for(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		Self::generate_for_with_provider(alg, provider)
-	}
-
-	/// Generate a new random key pair for the specified signature algorithm using `provider`
-	pub fn generate_for_with_provider(
+	pub fn generate_for(
 		alg: &'static SignatureAlgorithm,
-		provider: &CryptoProvider,
+		provider: &dyn CryptoProvider,
 	) -> Result<Self, Error> {
-		provider.key_pair_provider.generate(alg, None)
+		provider.generate(alg, None)
 	}
 
 	/// Generates a new random RSA key pair for the specified key size
@@ -93,21 +82,9 @@ impl KeyPair {
 	pub fn generate_rsa_for(
 		alg: &'static SignatureAlgorithm,
 		key_size: RsaKeySize,
+		provider: &dyn CryptoProvider,
 	) -> Result<Self, Error> {
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		Self::generate_rsa_for_with_provider(alg, key_size, provider)
-	}
-
-	/// Generates a new random RSA key pair for the specified key size using `provider`
-	///
-	/// If passed a signature algorithm that is not RSA, it will return
-	/// [`Error::KeyGenerationUnavailable`].
-	pub fn generate_rsa_for_with_provider(
-		alg: &'static SignatureAlgorithm,
-		key_size: RsaKeySize,
-		provider: &CryptoProvider,
-	) -> Result<Self, Error> {
-		provider.key_pair_provider.generate(alg, Some(key_size))
+		provider.generate(alg, Some(key_size))
 	}
 
 	/// Returns the key pair's signature algorithm
@@ -126,20 +103,11 @@ impl KeyPair {
 	/// If the built-in `ring` provider is used, then the key must be a DER-encoded plaintext
 	/// private key as specified in PKCS #8/RFC 5958; this appears as "PRIVATE KEY" in PEM files.
 	#[cfg(feature = "pem")]
-	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		Self::from_pem_with_provider(pem_str, provider)
-	}
-
-	/// Parses the key pair from the ASCII PEM format using `provider`
-	///
-	/// See [`from_pem`](Self::from_pem) for details about supported key encodings.
-	#[cfg(feature = "pem")]
-	pub fn from_pem_with_provider(pem_str: &str, provider: &CryptoProvider) -> Result<Self, Error> {
+	pub fn from_pem(pem_str: &str, provider: &dyn CryptoProvider) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)._err()?;
 		let private_key = PrivateKeyDer::try_from(private_key.into_contents())
 			.map_err(|_| Error::CouldNotParseKeyPair)?;
-		Self::from_der_with_provider(&private_key, provider)
+		Self::from_der(&private_key, provider)
 	}
 
 	/// Obtains the key pair from a PEM formatted key
@@ -153,30 +121,18 @@ impl KeyPair {
 	pub fn from_pkcs8_pem_and_sign_algo(
 		pem_str: &str,
 		alg: &'static SignatureAlgorithm,
-	) -> Result<Self, Error> {
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		Self::from_pkcs8_pem_and_sign_algo_with_provider(pem_str, alg, provider)
-	}
-
-	/// Obtains the key pair from a PKCS#8 PEM formatted key using `provider`
-	/// and the specified [`SignatureAlgorithm`]
-	#[cfg(feature = "pem")]
-	pub fn from_pkcs8_pem_and_sign_algo_with_provider(
-		pem_str: &str,
-		alg: &'static SignatureAlgorithm,
-		provider: &CryptoProvider,
+		provider: &dyn CryptoProvider,
 	) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)._err()?;
 		let private_key = PrivatePkcs8KeyDer::from(private_key.into_contents());
-		Self::from_pkcs8_der_and_sign_algo_with_provider(&private_key, alg, provider)
+		Self::from_pkcs8_der_and_sign_algo(&private_key, alg, provider)
 	}
 
 	/// Obtains the key pair from a DER formatted key using the specified [`SignatureAlgorithm`]
 	///
-	/// If you have a [`PrivatePkcs8KeyDer`], you can usually rely on the [`TryFrom`] implementation
-	/// to obtain a [`KeyPair`] -- it will determine the correct [`SignatureAlgorithm`] for you.
-	/// However, sometimes multiple signature algorithms fit for the same DER key. In those instances,
-	/// you can use this function to precisely specify the `SignatureAlgorithm`.
+	/// Use [`from_der`](Self::from_der) when the provider should determine the appropriate
+	/// [`SignatureAlgorithm`]. Use this function when multiple signature algorithms fit the same
+	/// key and you need to select one precisely.
 	///
 	/// [`rustls_pemfile::private_key()`] is often used to obtain a [`PrivateKeyDer`] from PEM
 	/// input. If the obtained [`PrivateKeyDer`] is a `Pkcs8` variant, you can use its contents
@@ -188,21 +144,9 @@ impl KeyPair {
 	pub fn from_pkcs8_der_and_sign_algo(
 		pkcs8: &PrivatePkcs8KeyDer<'_>,
 		alg: &'static SignatureAlgorithm,
+		provider: &dyn CryptoProvider,
 	) -> Result<Self, Error> {
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		Self::from_pkcs8_der_and_sign_algo_with_provider(pkcs8, alg, provider)
-	}
-
-	/// Obtains the key pair from a PKCS#8 DER formatted key using `provider`
-	/// and the specified [`SignatureAlgorithm`]
-	pub fn from_pkcs8_der_and_sign_algo_with_provider(
-		pkcs8: &PrivatePkcs8KeyDer<'_>,
-		alg: &'static SignatureAlgorithm,
-		provider: &CryptoProvider,
-	) -> Result<Self, Error> {
-		provider
-			.key_pair_provider
-			.load_private_key(PrivateKeyDer::Pkcs8(pkcs8.clone_key()), Some(alg))
+		provider.load_private_key(PrivateKeyDer::Pkcs8(pkcs8.clone_key()), Some(alg))
 	}
 
 	/// Obtains the key pair from a PEM formatted key
@@ -222,26 +166,12 @@ impl KeyPair {
 	pub fn from_pem_and_sign_algo(
 		pem_str: &str,
 		alg: &'static SignatureAlgorithm,
-	) -> Result<Self, Error> {
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		Self::from_pem_and_sign_algo_with_provider(pem_str, alg, provider)
-	}
-
-	/// Obtains the key pair from a PEM formatted key using `provider`
-	/// and the specified [`SignatureAlgorithm`]
-	///
-	/// See [`from_pem_and_sign_algo`](Self::from_pem_and_sign_algo) for details about supported
-	/// key encodings.
-	#[cfg(feature = "pem")]
-	pub fn from_pem_and_sign_algo_with_provider(
-		pem_str: &str,
-		alg: &'static SignatureAlgorithm,
-		provider: &CryptoProvider,
+		provider: &dyn CryptoProvider,
 	) -> Result<Self, Error> {
 		let private_key = pem::parse(pem_str)._err()?;
 		let private_key = PrivateKeyDer::try_from(private_key.into_contents())
 			.map_err(|_| Error::CouldNotParseKeyPair)?;
-		Self::from_der_and_sign_algo_with_provider(&private_key, alg, provider)
+		Self::from_der_and_sign_algo(&private_key, alg, provider)
 	}
 
 	/// Obtains the key pair from a DER formatted key
@@ -251,10 +181,9 @@ impl KeyPair {
 	/// `ring` provider only supports [`PrivateKeyDer::Pkcs8`], while the built-in `aws_lc_rs`
 	/// provider supports PKCS#8, PKCS#1, and SEC1 keys.
 	///
-	/// If you have a [`PrivateKeyDer`], you can usually rely on the [`TryFrom`] implementation
-	/// to obtain a [`KeyPair`] -- it will determine the correct [`SignatureAlgorithm`] for you.
-	/// However, sometimes multiple signature algorithms fit for the same DER key. In those instances,
-	/// you can use this function to precisely specify the `SignatureAlgorithm`.
+	/// Use [`from_der`](Self::from_der) when the provider should determine the appropriate
+	/// [`SignatureAlgorithm`]. Use this function when multiple signature algorithms fit the same
+	/// key and you need to select one precisely.
 	///
 	/// You can use [`rustls_pemfile::private_key`] to get the `key` input. If
 	/// you already have a byte slice, just calling `try_into()` will convert it to a [`PrivateKeyDer`].
@@ -263,36 +192,16 @@ impl KeyPair {
 	pub fn from_der_and_sign_algo(
 		key: &PrivateKeyDer<'_>,
 		alg: &'static SignatureAlgorithm,
+		provider: &dyn CryptoProvider,
 	) -> Result<Self, Error> {
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		Self::from_der_and_sign_algo_with_provider(key, alg, provider)
+		provider.load_private_key(key.clone_key(), Some(alg))
 	}
 
-	/// Obtains the key pair from a DER formatted key using `provider`
-	/// and the specified [`SignatureAlgorithm`]
-	///
-	/// See [`from_der_and_sign_algo`](Self::from_der_and_sign_algo) for details about supported
-	/// key encodings.
-	pub fn from_der_and_sign_algo_with_provider(
-		key: &PrivateKeyDer<'_>,
-		alg: &'static SignatureAlgorithm,
-		provider: &CryptoProvider,
-	) -> Result<Self, Error> {
-		provider
-			.key_pair_provider
-			.load_private_key(key.clone_key(), Some(alg))
-	}
-
-	/// Obtains the key pair from a DER formatted key using `provider`
+	/// Obtains the key pair from a DER formatted key using `provider`.
 	///
 	/// The provider determines the correct [`SignatureAlgorithm`] for the key.
-	pub fn from_der_with_provider(
-		key: &PrivateKeyDer<'_>,
-		provider: &CryptoProvider,
-	) -> Result<Self, Error> {
-		provider
-			.key_pair_provider
-			.load_private_key(key.clone_key(), None)
+	pub fn from_der(key: &PrivateKeyDer<'_>, provider: &dyn CryptoProvider) -> Result<Self, Error> {
+		provider.load_private_key(key.clone_key(), None)
 	}
 
 	/// Get the raw public key of this key pair
@@ -300,7 +209,7 @@ impl KeyPair {
 	/// The returned bytes are the contents of the X.509 SubjectPublicKeyInfo
 	/// `subjectPublicKey` BIT STRING, matching [`PublicKeyData::der_bytes`]. This is also the
 	/// public-key format passed to
-	/// [`SignatureVerificationProvider::verify`](crate::crypto::SignatureVerificationProvider::verify).
+	/// [`CryptoProvider::verify`].
 	pub fn public_key_raw(&self) -> &[u8] {
 		self.der_bytes()
 	}
@@ -360,50 +269,6 @@ impl PublicKeyData for KeyPair {
 
 	fn algorithm(&self) -> &'static SignatureAlgorithm {
 		self.signing_key.algorithm()
-	}
-}
-
-#[cfg(feature = "crypto")]
-impl TryFrom<&[u8]> for KeyPair {
-	type Error = Error;
-
-	fn try_from(key: &[u8]) -> Result<Self, Error> {
-		let key = PrivateKeyDer::try_from(key).map_err(|_| Error::CouldNotParseKeyPair)?;
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		Self::from_der_with_provider(&key, provider)
-	}
-}
-
-#[cfg(feature = "crypto")]
-impl TryFrom<Vec<u8>> for KeyPair {
-	type Error = Error;
-
-	fn try_from(key: Vec<u8>) -> Result<Self, Error> {
-		let key = PrivateKeyDer::try_from(key).map_err(|_| Error::CouldNotParseKeyPair)?;
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		Self::from_der_with_provider(&key, provider)
-	}
-}
-
-#[cfg(feature = "crypto")]
-impl TryFrom<&PrivatePkcs8KeyDer<'_>> for KeyPair {
-	type Error = Error;
-
-	fn try_from(key: &PrivatePkcs8KeyDer<'_>) -> Result<Self, Error> {
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		provider
-			.key_pair_provider
-			.load_private_key(PrivateKeyDer::Pkcs8(key.clone_key()), None)
-	}
-}
-
-#[cfg(feature = "crypto")]
-impl TryFrom<&PrivateKeyDer<'_>> for KeyPair {
-	type Error = Error;
-
-	fn try_from(key: &PrivateKeyDer<'_>) -> Result<Self, Error> {
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		Self::from_der_with_provider(key, provider)
 	}
 }
 
@@ -597,7 +462,7 @@ mod test {
 			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
 			&PKCS_RSA_SHA256,
 		] {
-			let kp = KeyPair::generate_for(alg).expect("keygen");
+			let kp = KeyPair::generate_for(alg, crate::test_provider()).expect("keygen");
 			let pem = kp.public_key_pem();
 			let der = kp.subject_public_key_info();
 
@@ -611,8 +476,10 @@ mod test {
 
 	#[test]
 	fn test_algorithm() {
-		let original = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256).unwrap();
-		let key_pair = KeyPair::try_from(original.serialize_der()).unwrap();
+		let original =
+			KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256, crate::test_provider()).unwrap();
+		let key = PrivateKeyDer::try_from(original.serialize_der()).unwrap();
+		let key_pair = KeyPair::from_der(&key, crate::test_provider()).unwrap();
 		assert_eq!(key_pair.algorithm(), &PKCS_ECDSA_P256_SHA256);
 	}
 }

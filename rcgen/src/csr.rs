@@ -86,16 +86,9 @@ impl CertificateSigningRequestParams {
 	///
 	/// See [`from_der`](Self::from_der) for more details.
 	#[cfg(all(feature = "pem", feature = "x509-parser", feature = "crypto"))]
-	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		Self::from_pem_with_provider(pem_str, provider)
-	}
-
-	/// Parse and verify a certificate signing request from PEM using `provider`.
-	#[cfg(all(feature = "pem", feature = "x509-parser", feature = "crypto"))]
-	pub fn from_pem_with_provider(pem_str: &str, provider: &CryptoProvider) -> Result<Self, Error> {
+	pub fn from_pem(pem_str: &str, provider: &dyn CryptoProvider) -> Result<Self, Error> {
 		let csr = pem::parse(pem_str).map_err(|_| Error::CouldNotParseCertificationRequest)?;
-		Self::from_der_with_provider(&csr.contents().into(), provider)
+		Self::from_der(&csr.contents().into(), provider)
 	}
 
 	/// Parse and verify a certificate signing request from DER-encoded bytes
@@ -116,16 +109,9 @@ impl CertificateSigningRequestParams {
 	///
 	/// [`PemObject`]: pki_types::pem::PemObject
 	#[cfg(all(feature = "x509-parser", feature = "crypto"))]
-	pub fn from_der(csr: &CertificateSigningRequestDer<'_>) -> Result<Self, Error> {
-		let provider = CryptoProvider::get_default_or_install_from_crate_features()?;
-		Self::from_der_with_provider(csr, provider)
-	}
-
-	/// Parse and verify a certificate signing request from DER using `provider`.
-	#[cfg(all(feature = "x509-parser", feature = "crypto"))]
-	pub fn from_der_with_provider(
+	pub fn from_der(
 		csr: &CertificateSigningRequestDer<'_>,
-		provider: &CryptoProvider,
+		provider: &dyn CryptoProvider,
 	) -> Result<Self, Error> {
 		use x509_parser::prelude::FromDer;
 		use x509_parser::x509::AlgorithmIdentifier;
@@ -155,7 +141,6 @@ impl CertificateSigningRequestParams {
 			.ok_or(Error::UnsupportedSignatureAlgorithm)?;
 
 		provider
-			.signature_verification_provider
 			.verify(
 				alg,
 				info.subject_pki.subject_public_key.data.as_ref(),
@@ -246,25 +231,16 @@ impl CertificateSigningRequestParams {
 	///
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
-	pub fn signed_by(&self, issuer: &Issuer<impl SigningKey>) -> Result<Certificate, Error> {
-		Ok(Certificate {
-			der: self
-				.params
-				.serialize_der_with_signer(&self.public_key, issuer)?,
-		})
-	}
-
-	/// Generate a certificate using an explicit cryptography provider.
-	#[cfg(feature = "crypto")]
-	pub fn signed_by_with_provider(
+	pub fn signed_by(
 		&self,
 		issuer: &Issuer<impl SigningKey>,
-		provider: &CryptoProvider,
+		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
 	) -> Result<Certificate, Error> {
 		Ok(Certificate {
-			der: self.params.serialize_der_with_signer_with_provider(
+			der: self.params.serialize_der_with_signer(
 				&self.public_key,
 				issuer,
+				#[cfg(feature = "crypto")]
 				provider,
 			)?,
 		})
@@ -289,7 +265,7 @@ mod tests {
 	fn dont_write_sans_extension_if_no_sans_are_present() {
 		let mut params = CertificateParams::default();
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		assert!(!parsed_csr
@@ -304,7 +280,7 @@ mod tests {
 		params
 			.extended_key_usages
 			.push(ExtendedKeyUsagePurpose::ClientAuth);
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		let requested_extensions = parsed_csr
@@ -325,7 +301,7 @@ mod tests {
 			is_ca: IsCa::ExplicitNoCa,
 			..Default::default()
 		};
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		let requested_extensions = parsed_csr
@@ -348,9 +324,10 @@ mod tests {
 			is_ca: IsCa::Ca(BasicConstraints::Constrained(10)),
 			..Default::default()
 		};
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
-		let csr_de = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
+		let csr_de =
+			CertificateSigningRequestParams::from_der(csr.der(), crate::test_provider()).unwrap();
 
 		assert_eq!(csr_de.params.is_ca, params.is_ca);
 	}

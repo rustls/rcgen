@@ -6,32 +6,35 @@
 
 Simple Rust library to generate X.509 certificates.
 
-```Rust
+```rust
 use rcgen::{generate_simple_self_signed, CertifiedKey};
+let provider = rcgen::crypto::ring::default_provider();
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names).unwrap();
+let CertifiedKey { cert, signing_key } =
+	generate_simple_self_signed(subject_alt_names, provider).unwrap();
 println!("{}", cert.pem());
 println!("{}", signing_key.serialize_pem());
 ```
 
 ## Cryptography providers
 
-Rcgen uses Ring by default. AWS-LC is available through the `aws_lc_rs` feature.
-AWS-LC FIPS mode requires both the `aws_lc_rs` and `fips` features.
+Rcgen does not select a cryptography provider. Ring and AWS-LC are available through the `ring`
+and `aws_lc_rs` features, respectively. AWS-LC FIPS mode requires both the `aws_lc_rs` and
+`fips` features.
 
-To use a custom cryptography provider without enabling either built-in backend:
+Enable a built-in provider explicitly:
 
 ```toml
 [dependencies]
-rcgen = { version = "0.14", default-features = false, features = ["custom-provider", "pem"] }
+rcgen = { version = "0.14", features = ["ring"] }
 ```
 
-Implement `KeyPairProvider`, `DigestProvider`, and `SignatureVerificationProvider`, assemble them
-into a `CryptoProvider`, then either call `CryptoProvider::install_default()` once near process
-startup or use the explicit `*_with_provider` APIs. The `pem` feature is optional.
+Applications pass the selected provider explicitly to APIs that perform cryptographic work. A
+custom provider can instead implement the `CryptoProvider` trait without enabling either built-in
+backend. The `pem` feature is optional.
 
 ## Trying it out with openssl
 
