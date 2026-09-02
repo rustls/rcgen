@@ -39,20 +39,13 @@ pub trait DigestProvider: Debug + Send + Sync {
 /// Key generation and private-key loading supplied by a [`CryptoProvider`].
 pub trait KeyPairProvider: Debug + Send + Sync {
 	/// Generate an exportable key pair for `algorithm`.
-	fn generate(&self, algorithm: &'static SignatureAlgorithm) -> Result<KeyPair, Error>;
-
-	/// Generate an exportable RSA key pair of `key_size` for `algorithm`.
 	///
-	/// Providers that do not support selectable RSA key sizes may retain the default
-	/// implementation.
-	fn generate_rsa(
+	/// `key_size` selects an explicit RSA key size. It must be `None` for non-RSA algorithms.
+	fn generate(
 		&self,
 		algorithm: &'static SignatureAlgorithm,
-		key_size: RsaKeySize,
-	) -> Result<KeyPair, Error> {
-		let _ = (algorithm, key_size);
-		Err(Error::KeyGenerationUnavailable)
-	}
+		key_size: Option<RsaKeySize>,
+	) -> Result<KeyPair, Error>;
 
 	/// Decode and validate an exportable private key.
 	///

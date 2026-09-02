@@ -9,10 +9,11 @@ use rcgen::crypto::{
 use rcgen::{
 	BasicConstraints, CertificateParams, CertificateRevocationListParams, Error, IsCa, Issuer,
 	KeyIdMethod, KeyPair, PublicKeyData, RsaKeySize, SerialNumber, SignatureAlgorithm, SigningKey,
-	PKCS_ED25519,
+	PKCS_ED25519, PKCS_RSA_SHA256,
 };
 
 static GENERATIONS: AtomicUsize = AtomicUsize::new(0);
+static RSA_GENERATIONS: AtomicUsize = AtomicUsize::new(0);
 static LOADS: AtomicUsize = AtomicUsize::new(0);
 static DIGESTS: AtomicUsize = AtomicUsize::new(0);
 static VERIFICATIONS: AtomicUsize = AtomicUsize::new(0);
@@ -46,17 +47,18 @@ impl DigestProvider for TestBackend {
 }
 
 impl KeyPairProvider for TestBackend {
-	fn generate(&self, algorithm: &'static SignatureAlgorithm) -> Result<KeyPair, Error> {
+	fn generate(
+		&self,
+		algorithm: &'static SignatureAlgorithm,
+		key_size: Option<RsaKeySize>,
+	) -> Result<KeyPair, Error> {
+		if let Some(key_size) = key_size {
+			assert_eq!(key_size, RsaKeySize::_3072);
+			RSA_GENERATIONS.fetch_add(1, Ordering::Relaxed);
+			return Err(Error::KeyGenerationUnavailable);
+		}
 		GENERATIONS.fetch_add(1, Ordering::Relaxed);
 		Ok(test_key_pair(algorithm, vec![0x30, 0x00]))
-	}
-
-	fn generate_rsa(
-		&self,
-		_algorithm: &'static SignatureAlgorithm,
-		_key_size: RsaKeySize,
-	) -> Result<KeyPair, Error> {
-		Err(Error::KeyGenerationUnavailable)
 	}
 
 	fn load_private_key(
@@ -131,6 +133,16 @@ fn explicit_provider_covers_all_rcgen_crypto() {
 	let custom_provider = provider();
 	let key = KeyPair::generate_for_with_provider(&PKCS_ED25519, &custom_provider).unwrap();
 	assert_eq!(GENERATIONS.load(Ordering::Relaxed), 1);
+	assert_eq!(
+		KeyPair::generate_rsa_for_with_provider(
+			&PKCS_RSA_SHA256,
+			RsaKeySize::_3072,
+			&custom_provider,
+		)
+		.unwrap_err(),
+		Error::KeyGenerationUnavailable
+	);
+	assert_eq!(RSA_GENERATIONS.load(Ordering::Relaxed), 1);
 
 	let mut params = CertificateParams::default();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);

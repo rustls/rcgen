@@ -241,7 +241,18 @@ impl AwsLcKeyPairProvider {
 }
 
 impl KeyPairProvider for AwsLcKeyPairProvider {
-	fn generate(&self, algorithm: &'static SignatureAlgorithm) -> Result<KeyPair, Error> {
+	fn generate(
+		&self,
+		algorithm: &'static SignatureAlgorithm,
+		key_size: Option<RsaKeySize>,
+	) -> Result<KeyPair, Error> {
+		let is_rsa = algorithm == &PKCS_RSA_SHA256
+			|| algorithm == &PKCS_RSA_SHA384
+			|| algorithm == &PKCS_RSA_SHA512;
+		if key_size.is_some() && !is_rsa {
+			return Err(Error::KeyGenerationUnavailable);
+		}
+
 		if algorithm == &PKCS_ECDSA_P256_SHA256 {
 			self.generate_ecdsa(algorithm, &signature::ECDSA_P256_SHA256_ASN1_SIGNING)
 		} else if algorithm == &PKCS_ECDSA_P384_SHA384 {
@@ -261,11 +272,13 @@ impl KeyPairProvider for AwsLcKeyPairProvider {
 				Box::new(signing_key),
 				serialized_der,
 			))
-		} else if algorithm == &PKCS_RSA_SHA256
-			|| algorithm == &PKCS_RSA_SHA384
-			|| algorithm == &PKCS_RSA_SHA512
-		{
-			self.generate_rsa_inner(algorithm, KeySize::Rsa2048)
+		} else if is_rsa {
+			let key_size = match key_size.unwrap_or(RsaKeySize::_2048) {
+				RsaKeySize::_2048 => KeySize::Rsa2048,
+				RsaKeySize::_3072 => KeySize::Rsa3072,
+				RsaKeySize::_4096 => KeySize::Rsa4096,
+			};
+			self.generate_rsa_inner(algorithm, key_size)
 		} else {
 			#[cfg(feature = "aws_lc_rs")]
 			{
@@ -281,19 +294,6 @@ impl KeyPairProvider for AwsLcKeyPairProvider {
 			}
 			Err(Error::UnsupportedSignatureAlgorithm)
 		}
-	}
-
-	fn generate_rsa(
-		&self,
-		algorithm: &'static SignatureAlgorithm,
-		key_size: RsaKeySize,
-	) -> Result<KeyPair, Error> {
-		let key_size = match key_size {
-			RsaKeySize::_2048 => KeySize::Rsa2048,
-			RsaKeySize::_3072 => KeySize::Rsa3072,
-			RsaKeySize::_4096 => KeySize::Rsa4096,
-		};
-		self.generate_rsa_inner(algorithm, key_size)
 	}
 
 	fn load_private_key(

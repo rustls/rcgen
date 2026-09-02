@@ -81,7 +81,7 @@ impl KeyPair {
 		alg: &'static SignatureAlgorithm,
 		provider: &CryptoProvider,
 	) -> Result<Self, Error> {
-		provider.key_pair_provider.generate(alg)
+		provider.key_pair_provider.generate(alg, None)
 	}
 
 	/// Generates a new random RSA key pair for the specified key size
@@ -107,7 +107,7 @@ impl KeyPair {
 		key_size: RsaKeySize,
 		provider: &CryptoProvider,
 	) -> Result<Self, Error> {
-		provider.key_pair_provider.generate_rsa(alg, key_size)
+		provider.key_pair_provider.generate(alg, Some(key_size))
 	}
 
 	/// Returns the key pair's signature algorithm

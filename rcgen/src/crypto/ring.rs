@@ -116,7 +116,14 @@ impl RingKeyPairProvider {
 }
 
 impl KeyPairProvider for RingKeyPairProvider {
-	fn generate(&self, algorithm: &'static SignatureAlgorithm) -> Result<KeyPair, Error> {
+	fn generate(
+		&self,
+		algorithm: &'static SignatureAlgorithm,
+		key_size: Option<RsaKeySize>,
+	) -> Result<KeyPair, Error> {
+		if key_size.is_some() {
+			return Err(Error::KeyGenerationUnavailable);
+		}
 		let rng = SystemRandom::new();
 		let (signing_key, serialized_der) = if algorithm == &PKCS_ECDSA_P256_SHA256 {
 			let document =
@@ -154,14 +161,6 @@ impl KeyPairProvider for RingKeyPairProvider {
 			Box::new(signing_key),
 			serialized_der,
 		))
-	}
-
-	fn generate_rsa(
-		&self,
-		_algorithm: &'static SignatureAlgorithm,
-		_key_size: RsaKeySize,
-	) -> Result<KeyPair, Error> {
-		Err(Error::KeyGenerationUnavailable)
 	}
 
 	fn load_private_key(
