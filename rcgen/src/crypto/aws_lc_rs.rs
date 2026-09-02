@@ -1,15 +1,15 @@
 //! The built-in AWS-LC cryptography provider.
 
-use ::aws_lc_rs::digest;
-use ::aws_lc_rs::encoding::AsDer;
-use ::aws_lc_rs::rand::SystemRandom;
-use ::aws_lc_rs::rsa::KeySize;
-use ::aws_lc_rs::signature::{
+use aws_lc_rs::digest;
+use aws_lc_rs::encoding::AsDer;
+use aws_lc_rs::rand::SystemRandom;
+use aws_lc_rs::rsa::KeySize;
+use aws_lc_rs::signature::{
 	self, EcdsaKeyPair, Ed25519KeyPair, KeyPair as _, RsaEncoding, RsaKeyPair,
 	VerificationAlgorithm,
 };
 #[cfg(feature = "aws_lc_rs")]
-use ::aws_lc_rs::signature::{
+use aws_lc_rs::signature::{
 	PqdsaKeyPair, PqdsaSigningAlgorithm, ML_DSA_44, ML_DSA_44_SIGNING, ML_DSA_65,
 	ML_DSA_65_SIGNING, ML_DSA_87, ML_DSA_87_SIGNING,
 };

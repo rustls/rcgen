@@ -23,29 +23,6 @@ use pki_types::PrivateKeyDer;
 
 use crate::{Error, KeyPair, RsaKeySize, SignatureAlgorithm};
 
-/// A hash algorithm required by rcgen.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum HashAlgorithm {
-	/// SHA-256.
-	Sha256,
-	/// SHA-384.
-	Sha384,
-	/// SHA-512.
-	Sha512,
-}
-
-impl HashAlgorithm {
-	/// Return the digest output length in bytes.
-	pub const fn output_len(self) -> usize {
-		match self {
-			Self::Sha256 => 32,
-			Self::Sha384 => 48,
-			Self::Sha512 => 64,
-		}
-	}
-}
-
 /// Hash operations supplied by a [`CryptoProvider`].
 pub trait DigestProvider: Debug + Send + Sync {
 	/// Hash `input` with `algorithm`, writing the digest to `output`.
@@ -190,3 +167,26 @@ pub mod ring;
 /// AWS-LC-based cryptography provider.
 #[cfg(feature = "aws_lc_rs")]
 pub mod aws_lc_rs;
+
+/// A hash algorithm required by rcgen.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum HashAlgorithm {
+	/// SHA-256.
+	Sha256,
+	/// SHA-384.
+	Sha384,
+	/// SHA-512.
+	Sha512,
+}
+
+impl HashAlgorithm {
+	/// Return the digest output length in bytes.
+	pub const fn output_len(self) -> usize {
+		match self {
+			Self::Sha256 => 32,
+			Self::Sha384 => 48,
+			Self::Sha512 => 64,
+		}
+	}
+}
