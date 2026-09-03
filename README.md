@@ -29,7 +29,7 @@ Enable a built-in provider explicitly:
 
 ```toml
 [dependencies]
-rcgen = { version = "0.14", features = ["ring"] }
+rcgen = { version = "0.15", features = ["ring"] }
 ```
 
 Applications pass the selected provider explicitly to APIs that perform cryptographic work. A

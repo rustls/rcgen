@@ -425,10 +425,11 @@ impl BmpString {
 			)));
 		}
 
-		// FIXME: Update this when `array_chunks` is stabilized.
 		for maybe_char in char::decode_utf16(
-			vec.chunks_exact(2)
-				.map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]])),
+			vec.as_chunks::<2>()
+				.0
+				.iter()
+				.map(|chunk| u16::from_be_bytes(*chunk)),
 		) {
 			// We check we only use the BMP subset of Unicode (the first 65 536 code points)
 			match maybe_char {
@@ -544,10 +545,11 @@ impl UniversalString {
 			));
 		}
 
-		// FIXME: Update this when `array_chunks` is stabilized.
 		for maybe_char in vec
-			.chunks_exact(4)
-			.map(|chunk| u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+			.as_chunks::<4>()
+			.0
+			.iter()
+			.map(|chunk| u32::from_be_bytes(*chunk))
 		{
 			if core::char::from_u32(maybe_char).is_none() {
 				return Err(Error::InvalidAsn1String(
