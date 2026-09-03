@@ -13,7 +13,7 @@ keywords.workspace = true
 [features]
 default = ["ring"]
 aws_lc_rs = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/aws-lc-sys"]
-aws_lc_rs_unstable = ["rcgen/aws_lc_rs_unstable"]
+aws_lc_rs_unstable = ["aws_lc_rs", "rcgen/aws_lc_rs_unstable"]
 fips = ["aws_lc_rs", "rcgen/fips"]
 ring = ["dep:ring", "rcgen/ring"]
 
