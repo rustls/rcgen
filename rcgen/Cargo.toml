@@ -11,12 +11,11 @@ rust-version.workspace = true
 keywords.workspace = true
 
 [features]
-default = ["crypto", "pem"]
-aws_lc_rs = ["crypto", "dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys"]
+default = ["pem"]
+aws_lc_rs = ["dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys"]
 aws_lc_rs_unstable = ["aws_lc_rs"] # For backwards compatibility only
-fips = ["crypto", "aws-lc-rs?/fips"]
-crypto = []
-ring = ["crypto", "dep:ring"]
+fips = ["aws-lc-rs?/fips"]
+ring = ["dep:ring"]
 
 [dependencies]
 aws-lc-rs = { workspace = true, optional = true }
@@ -48,7 +47,7 @@ name = "simple"
 required-features = ["pem", "ring"]
 
 [package.metadata.docs.rs]
-features = ["aws_lc_rs",  "aws_lc_rs_unstable", "crypto", "ring", "x509-parser"]
+features = ["aws_lc_rs",  "aws_lc_rs_unstable", "ring", "x509-parser"]
 rustdoc-args = ["--cfg", "rcgen_docsrs"]
 
 [package.metadata.cargo_check_external_types]

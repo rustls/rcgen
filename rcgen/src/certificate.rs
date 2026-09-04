@@ -9,7 +9,6 @@ use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::crl::CrlDistributionPoint;
-#[cfg(feature = "crypto")]
 use crate::crypto::{CryptoProvider, HashAlgorithm};
 use crate::csr::CertificateSigningRequest;
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
@@ -98,10 +97,7 @@ impl Default for CertificateParams {
 			crl_distribution_points: Vec::new(),
 			custom_extensions: Vec::new(),
 			use_authority_key_identifier_extension: false,
-			#[cfg(feature = "crypto")]
 			key_identifier_method: KeyIdMethod::Sha256,
-			#[cfg(not(feature = "crypto"))]
-			key_identifier_method: KeyIdMethod::PreSpecified(Vec::new()),
 		}
 	}
 }
@@ -141,15 +137,10 @@ impl CertificateParams {
 		&self,
 		public_key: &(impl PublicKeyData + ?Sized),
 		issuer: &Issuer<'_, impl SigningKey>,
-		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
+		provider: &dyn CryptoProvider,
 	) -> Result<Certificate, Error> {
 		Ok(Certificate {
-			der: self.serialize_der_with_signer(
-				public_key,
-				issuer,
-				#[cfg(feature = "crypto")]
-				provider,
-			)?,
+			der: self.serialize_der_with_signer(public_key, issuer, provider)?,
 		})
 	}
 
@@ -160,16 +151,11 @@ impl CertificateParams {
 	pub fn self_signed(
 		&self,
 		signing_key: &(impl SigningKey + ?Sized),
-		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
+		provider: &dyn CryptoProvider,
 	) -> Result<Certificate, Error> {
 		let issuer = Issuer::from_params(self, signing_key);
 		Ok(Certificate {
-			der: self.serialize_der_with_signer(
-				signing_key,
-				&issuer,
-				#[cfg(feature = "crypto")]
-				provider,
-			)?,
+			der: self.serialize_der_with_signer(signing_key, &issuer, provider)?,
 		})
 	}
 
@@ -178,21 +164,16 @@ impl CertificateParams {
 	pub fn key_identifier(
 		&self,
 		key: &(impl PublicKeyData + ?Sized),
-		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
+		provider: &dyn CryptoProvider,
 	) -> Vec<u8> {
-		#[cfg(feature = "crypto")]
-		return self
-			.key_identifier_method
-			.derive(provider, key.subject_public_key_info());
-		#[cfg(not(feature = "crypto"))]
 		self.key_identifier_method
-			.derive(key.subject_public_key_info())
+			.derive(provider, key.subject_public_key_info())
 	}
 
 	#[cfg(all(
 		test,
 		feature = "x509-parser",
-		any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
+		any(feature = "ring", feature = "aws_lc_rs")
 	))]
 	pub(crate) fn from_ca_cert_der(ca_cert: &CertificateDer<'_>) -> Result<Self, Error> {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
@@ -226,12 +207,7 @@ impl CertificateParams {
 					self.write_key_usage(writer.next());
 					self.write_subject_alt_names(writer.next());
 					self.write_extended_key_usage(writer.next());
-					self.write_ca_extensions(
-						writer,
-						None,
-						#[cfg(feature = "crypto")]
-						None,
-					);
+					self.write_ca_extensions(writer, None, None);
 					for ext in &self.custom_extensions {
 						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
 							writer.write_der(ext.content())
@@ -286,7 +262,7 @@ impl CertificateParams {
 		&self,
 		writer: &mut DERWriterSeq,
 		pub_key_spki: Option<&[u8]>,
-		#[cfg(feature = "crypto")] provider: Option<&dyn CryptoProvider>,
+		provider: Option<&dyn CryptoProvider>,
 	) {
 		let is_ca = match &self.is_ca {
 			IsCa::Ca(bc) => Some(bc),
@@ -295,13 +271,10 @@ impl CertificateParams {
 		};
 
 		if let Some(pub_key_spki) = pub_key_spki {
-			#[cfg(feature = "crypto")]
 			let subject_key_identifier = self.key_identifier_method.derive(
 				provider.expect("a provider is required with public key data"),
 				pub_key_spki,
 			);
-			#[cfg(not(feature = "crypto"))]
-			let subject_key_identifier = self.key_identifier_method.derive(pub_key_spki);
 			write_x509_extension(
 				writer.next(),
 				oid::SUBJECT_KEY_IDENTIFIER,
@@ -479,7 +452,7 @@ impl CertificateParams {
 		&self,
 		pub_key: &K,
 		issuer: &Issuer<'_, impl SigningKey>,
-		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
+		provider: &dyn CryptoProvider,
 	) -> Result<CertificateDer<'static>, Error> {
 		// An empty distribution point would be encoded as an empty fullName,
 		// violating GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
@@ -502,18 +475,11 @@ impl CertificateParams {
 			if let Some(ref serial) = self.serial_number {
 				writer.next().write_bigint_bytes(serial.as_ref(), true);
 			} else {
-				#[cfg(feature = "crypto")]
-				{
-					let hash = provider.hash(HashAlgorithm::Sha256, pub_key.der_bytes());
-					// RFC 5280 specifies at most 20 bytes for a serial number
-					let mut sl = hash.as_ref()[0..20].to_vec();
-					sl[0] &= 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
-					writer.next().write_bigint_bytes(&sl, true);
-				}
-				#[cfg(not(feature = "crypto"))]
-				if self.serial_number.is_none() {
-					return Err(Error::MissingSerialNumber);
-				}
+				let hash = provider.hash(HashAlgorithm::Sha256, pub_key.der_bytes());
+				// RFC 5280 specifies at most 20 bytes for a serial number
+				let mut sl = hash.as_ref()[0..20].to_vec();
+				sl[0] &= 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
+				writer.next().write_bigint_bytes(&sl, true);
 			};
 			// Write signature algorithm
 			issuer
@@ -549,12 +515,9 @@ impl CertificateParams {
 			}
 
 			writer.next().write_tagged(Tag::context(3), |writer| {
-				#[cfg(feature = "crypto")]
-				return writer.write_sequence(|writer| {
+				writer.write_sequence(|writer| {
 					self.write_extensions(writer, &pub_key_spki, issuer, provider)
-				});
-				#[cfg(not(feature = "crypto"))]
-				writer.write_sequence(|writer| self.write_extensions(writer, &pub_key_spki, issuer))
+				})
 			})?;
 
 			Ok(())
@@ -568,14 +531,13 @@ impl CertificateParams {
 		writer: &mut DERWriterSeq,
 		pub_key_spki: &[u8],
 		issuer: &Issuer<'_, impl SigningKey>,
-		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
+		provider: &dyn CryptoProvider,
 	) -> Result<(), Error> {
 		if self.use_authority_key_identifier_extension {
 			write_x509_authority_key_identifier(
 				writer.next(),
 				match issuer.key_identifier_method.as_ref() {
 					KeyIdMethod::PreSpecified(aki) => aki.clone(),
-					#[cfg(feature = "crypto")]
 					_ => issuer
 						.key_identifier_method
 						.derive(provider, issuer.signing_key.subject_public_key_info()),
@@ -626,12 +588,7 @@ impl CertificateParams {
 			);
 		}
 
-		self.write_ca_extensions(
-			writer,
-			Some(pub_key_spki),
-			#[cfg(feature = "crypto")]
-			Some(provider),
-		);
+		self.write_ca_extensions(writer, Some(pub_key_spki), Some(provider));
 
 		for ext in &self.custom_extensions {
 			write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
@@ -826,7 +783,7 @@ impl ExtendedKeyUsagePurpose {
 	#[cfg(all(
 		test,
 		feature = "x509-parser",
-		any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
+		any(feature = "ring", feature = "aws_lc_rs")
 	))]
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
 		let extended_key_usage = x509
@@ -895,7 +852,7 @@ impl NameConstraints {
 	#[cfg(all(
 		test,
 		feature = "x509-parser",
-		any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
+		any(feature = "ring", feature = "aws_lc_rs")
 	))]
 	fn from_x509(
 		x509: &x509_parser::certificate::X509Certificate<'_>,
@@ -952,7 +909,7 @@ impl GeneralSubtree {
 	#[cfg(all(
 		test,
 		feature = "x509-parser",
-		any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
+		any(feature = "ring", feature = "aws_lc_rs")
 	))]
 	fn from_x509(
 		subtrees: &[x509_parser::extensions::GeneralSubtree<'_>],
@@ -1128,7 +1085,7 @@ impl IsCa {
 	#[cfg(all(
 		test,
 		feature = "x509-parser",
-		any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
+		any(feature = "ring", feature = "aws_lc_rs")
 	))]
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Self, Error> {
 		let basic_constraints = x509
@@ -1178,27 +1135,21 @@ pub enum BasicConstraints {
 	Constrained(u8),
 }
 
-#[cfg(all(
-	test,
-	any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
-))]
+#[cfg(all(test, any(feature = "ring", feature = "aws_lc_rs")))]
 mod tests {
 	#[cfg(feature = "x509-parser")]
 	use std::net::Ipv4Addr;
 
 	#[cfg(feature = "x509-parser")]
 	use pki_types::pem::PemObject;
-	#[cfg(feature = "crypto")]
 	use x509_parser::oid_registry::OID_X509_EXT_BASIC_CONSTRAINTS;
 
 	#[cfg(feature = "pem")]
 	use super::*;
 	#[cfg(feature = "x509-parser")]
 	use crate::DnValue;
-	#[cfg(feature = "crypto")]
 	use crate::KeyPair;
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_key_usages() {
 		let params = CertificateParams {
@@ -1245,7 +1196,6 @@ mod tests {
 		assert!(found);
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_explicit_no_ca() {
 		let params = CertificateParams {
@@ -1281,7 +1231,6 @@ mod tests {
 		assert!(found);
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_empty_crl_distribution_point_uris_rejected() {
 		let params = CertificateParams {
@@ -1301,7 +1250,6 @@ mod tests {
 		);
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_key_usages_only() {
 		// The KeyUsage extension must be present even when it is the only
@@ -1323,7 +1271,6 @@ mod tests {
 		assert!(cert.key_usage().unwrap().is_some());
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_crl_distribution_points_only() {
 		// The CRL distribution points extension must be present even when it
@@ -1347,7 +1294,6 @@ mod tests {
 		)));
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_key_usages_decipheronly_only() {
 		let params = CertificateParams {
@@ -1387,7 +1333,6 @@ mod tests {
 		assert!(found);
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_extended_key_usages_any() {
 		let params = CertificateParams {
@@ -1410,7 +1355,6 @@ mod tests {
 		assert!(extension.value.any);
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_extended_key_usages_other() {
 		use x509_parser::der_parser::asn1_rs::Oid;

@@ -1,5 +1,3 @@
-#![cfg(feature = "crypto")]
-
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};

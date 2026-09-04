@@ -57,15 +57,10 @@ pub use crl::{
 	CertificateRevocationList, CertificateRevocationListParams, CrlDistributionPoint,
 	CrlIssuingDistributionPoint, CrlScope, RevocationReason, RevokedCertParams,
 };
-#[cfg(feature = "crypto")]
 pub use crypto::{CryptoProvider, HashAlgorithm, HashOutput};
 pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
 pub use error::{Error, InvalidAsn1String};
-#[cfg(feature = "crypto")]
-pub use key_pair::KeyPair;
-#[cfg(feature = "crypto")]
-pub use key_pair::RsaKeySize;
-pub use key_pair::{PublicKeyData, SigningKey, SubjectPublicKeyInfo};
+pub use key_pair::{KeyPair, PublicKeyData, RsaKeySize, SigningKey, SubjectPublicKeyInfo};
 #[cfg(feature = "pem")]
 use pem::Pem;
 use pki_types::CertificateDer;
@@ -80,7 +75,6 @@ use crate::string::{BmpString, Ia5String, PrintableString, TeletexString, Univer
 
 mod certificate;
 mod crl;
-#[cfg(feature = "crypto")]
 pub mod crypto;
 mod csr;
 mod error;
@@ -89,7 +83,7 @@ mod oid;
 mod sign_algo;
 pub mod string;
 
-#[cfg(all(test, feature = "crypto", any(feature = "ring", feature = "aws_lc_rs")))]
+#[cfg(all(test, any(feature = "ring", feature = "aws_lc_rs")))]
 pub(crate) fn test_provider() -> &'static dyn CryptoProvider {
 	#[cfg(feature = "aws_lc_rs")]
 	return crypto::aws_lc_rs::default_provider();
@@ -120,7 +114,6 @@ this function fills in the other generation parameters with
 reasonable defaults and generates a self signed certificate
 and key pair as output.
 */
-#[cfg(feature = "crypto")]
 #[cfg_attr(
 	feature = "pem",
 	doc = r##"
@@ -168,12 +161,9 @@ impl<'a, S: SigningKey> CertifiedIssuer<'a, S> {
 	pub fn self_signed(
 		params: CertificateParams,
 		signing_key: S,
-		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
+		provider: &dyn CryptoProvider,
 	) -> Result<Self, Error> {
-		#[cfg(feature = "crypto")]
 		let certificate = params.self_signed(&signing_key, provider)?;
-		#[cfg(not(feature = "crypto"))]
-		let certificate = params.self_signed(&signing_key)?;
 		Ok(Self {
 			certificate,
 			issuer: Issuer::new(params, signing_key),
@@ -185,12 +175,9 @@ impl<'a, S: SigningKey> CertifiedIssuer<'a, S> {
 		params: CertificateParams,
 		signing_key: S,
 		issuer: &Issuer<'_, impl SigningKey>,
-		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
+		provider: &dyn CryptoProvider,
 	) -> Result<Self, Error> {
-		#[cfg(feature = "crypto")]
 		let certificate = params.signed_by(&signing_key, issuer, provider)?;
-		#[cfg(not(feature = "crypto"))]
-		let certificate = params.signed_by(&signing_key, issuer)?;
 		Ok(Self {
 			certificate,
 			issuer: Issuer::new(params, signing_key),
@@ -354,7 +341,7 @@ impl SanType {
 	#[cfg(all(
 		test,
 		feature = "x509-parser",
-		any(not(feature = "crypto"), feature = "ring", feature = "aws_lc_rs")
+		any(feature = "ring", feature = "aws_lc_rs")
 	))]
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
 		let sans = x509
@@ -715,13 +702,10 @@ impl KeyUsagePurpose {
 #[non_exhaustive]
 pub enum KeyIdMethod {
 	/// RFC 7093 method 1 - a truncated SHA256 digest.
-	#[cfg(feature = "crypto")]
 	Sha256,
 	/// RFC 7093 method 2 - a truncated SHA384 digest.
-	#[cfg(feature = "crypto")]
 	Sha384,
 	/// RFC 7093 method 3 - a truncated SHA512 digest.
-	#[cfg(feature = "crypto")]
 	Sha512,
 	/// Pre-specified identifier. The exact given value is used as the key identifier.
 	PreSpecified(Vec<u8>),
@@ -741,12 +725,7 @@ impl KeyIdMethod {
 
 		Ok(match key_identifier_method {
 			Some(method) => method,
-			None => {
-				#[cfg(not(feature = "crypto"))]
-				return Err(Error::UnsupportedSignatureAlgorithm);
-				#[cfg(feature = "crypto")]
-				KeyIdMethod::Sha256
-			},
+			None => KeyIdMethod::Sha256,
 		})
 	}
 
@@ -757,7 +736,6 @@ impl KeyIdMethod {
 	///
 	/// This key identifier is used in the SubjectKeyIdentifier and AuthorityKeyIdentifier
 	/// X.509v3 extensions.
-	#[cfg(feature = "crypto")]
 	pub(crate) fn derive(
 		&self,
 		provider: &dyn CryptoProvider,
@@ -771,13 +749,6 @@ impl KeyIdMethod {
 		};
 		let digest = provider.hash(algorithm, subject_public_key_info.as_ref());
 		digest.as_ref()[..20].to_vec()
-	}
-
-	#[cfg(not(feature = "crypto"))]
-	pub(crate) fn derive(&self, _subject_public_key_info: impl AsRef<[u8]>) -> Vec<u8> {
-		match self {
-			Self::PreSpecified(value) => value.clone(),
-		}
 	}
 }
 

@@ -1,17 +1,13 @@
-#[cfg(feature = "crypto")]
 use std::fmt;
 
 #[cfg(feature = "pem")]
 use pem::Pem;
-#[cfg(feature = "crypto")]
 use pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
 use yasna::{DERWriter, DERWriterSeq};
 
-#[cfg(feature = "crypto")]
 use crate::crypto::CryptoProvider;
 #[cfg(feature = "pem")]
 use crate::error::ExternalError;
-#[cfg(feature = "crypto")]
 use crate::sign_algo::algo::*;
 use crate::sign_algo::SignatureAlgorithm;
 use crate::Error;
@@ -21,13 +17,11 @@ use crate::ENCODE_CONFIG;
 /// A key pair used to sign certificates and CSRs
 ///
 /// The cryptographic implementation is supplied by the selected [`CryptoProvider`].
-#[cfg(feature = "crypto")]
 pub struct KeyPair {
 	pub(crate) signing_key: Box<dyn SigningKey + Send + Sync>,
 	pub(crate) serialized_der: Vec<u8>,
 }
 
-#[cfg(feature = "crypto")]
 impl fmt::Debug for KeyPair {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("KeyPair")
@@ -37,7 +31,6 @@ impl fmt::Debug for KeyPair {
 	}
 }
 
-#[cfg(feature = "crypto")]
 impl KeyPair {
 	/// Construct a key pair from a provider-specific signing key and its PKCS#8 DER encoding.
 	///
@@ -254,14 +247,12 @@ impl KeyPair {
 	}
 }
 
-#[cfg(feature = "crypto")]
 impl SigningKey for KeyPair {
 	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
 		self.signing_key.sign(msg)
 	}
 }
 
-#[cfg(feature = "crypto")]
 impl PublicKeyData for KeyPair {
 	fn der_bytes(&self) -> &[u8] {
 		self.signing_key.der_bytes()
@@ -272,14 +263,12 @@ impl PublicKeyData for KeyPair {
 	}
 }
 
-#[cfg(feature = "crypto")]
 impl From<KeyPair> for PrivatePkcs8KeyDer<'static> {
 	fn from(val: KeyPair) -> Self {
 		val.serialize_der().into()
 	}
 }
 
-#[cfg(feature = "crypto")]
 impl From<KeyPair> for PrivateKeyDer<'static> {
 	fn from(val: KeyPair) -> Self {
 		Self::from(PrivatePkcs8KeyDer::from(val))
@@ -287,7 +276,6 @@ impl From<KeyPair> for PrivateKeyDer<'static> {
 }
 
 /// The key size used for RSA key generation
-#[cfg(feature = "crypto")]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum RsaKeySize {
@@ -446,7 +434,7 @@ pub(crate) fn serialize_public_key_der(key: &(impl PublicKeyData + ?Sized), writ
 	})
 }
 
-#[cfg(all(test, feature = "crypto", any(feature = "ring", feature = "aws_lc_rs")))]
+#[cfg(all(test, any(feature = "ring", feature = "aws_lc_rs")))]
 mod test {
 	use super::*;
 

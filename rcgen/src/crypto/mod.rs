@@ -10,6 +10,14 @@ use pki_types::PrivateKeyDer;
 
 use crate::{Error, KeyPair, RsaKeySize, SignatureAlgorithm};
 
+/// `ring`-based cryptography provider.
+#[cfg(feature = "ring")]
+pub mod ring;
+
+/// AWS-LC-based cryptography provider.
+#[cfg(feature = "aws_lc_rs")]
+pub mod aws_lc_rs;
+
 /// Cryptographic operations used by rcgen.
 pub trait CryptoProvider: std::fmt::Debug + Send + Sync {
 	/// Hash `input` with `algorithm`.
@@ -26,8 +34,9 @@ pub trait CryptoProvider: std::fmt::Debug + Send + Sync {
 
 	/// Decode and validate an exportable private key.
 	///
-	/// If `algorithm` is `Some`, the key must be loaded for exactly that signature algorithm.
-	/// If it is `None`, the provider detects a supported algorithm from the key.
+	/// The same key material can support multiple signature algorithms. If `algorithm` is `Some`,
+	/// the key must be loaded for exactly that signature algorithm. If it is `None`, the provider
+	/// detects a supported algorithm from the key.
 	fn load_private_key(
 		&self,
 		key_der: PrivateKeyDer<'static>,
@@ -47,15 +56,6 @@ pub trait CryptoProvider: std::fmt::Debug + Send + Sync {
 		signature: &[u8],
 	) -> Result<(), Error>;
 }
-
-/// `ring`-based cryptography provider.
-#[cfg(feature = "ring")]
-pub mod ring;
-
-/// AWS-LC-based cryptography provider.
-#[cfg(feature = "aws_lc_rs")]
-pub mod aws_lc_rs;
-
 /// A hash algorithm required by rcgen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]

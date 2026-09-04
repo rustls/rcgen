@@ -4,7 +4,6 @@ use std::hash::Hash;
 use pem::Pem;
 use pki_types::CertificateSigningRequestDer;
 
-#[cfg(feature = "crypto")]
 use crate::crypto::CryptoProvider;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
@@ -85,7 +84,7 @@ impl CertificateSigningRequestParams {
 	/// Parse and verify a certificate signing request from the ASCII PEM format
 	///
 	/// See [`from_der`](Self::from_der) for more details.
-	#[cfg(all(feature = "pem", feature = "x509-parser", feature = "crypto"))]
+	#[cfg(all(feature = "pem", feature = "x509-parser"))]
 	pub fn from_pem(pem_str: &str, provider: &dyn CryptoProvider) -> Result<Self, Error> {
 		let csr = pem::parse(pem_str).map_err(|_| Error::CouldNotParseCertificationRequest)?;
 		Self::from_der(&csr.contents().into(), provider)
@@ -108,7 +107,7 @@ impl CertificateSigningRequestParams {
 	/// into [`CertificateSigningRequestDer`] using the [`Into`] trait.
 	///
 	/// [`PemObject`]: pki_types::pem::PemObject
-	#[cfg(all(feature = "x509-parser", feature = "crypto"))]
+	#[cfg(feature = "x509-parser")]
 	pub fn from_der(
 		csr: &CertificateSigningRequestDer<'_>,
 		provider: &dyn CryptoProvider,
@@ -234,15 +233,12 @@ impl CertificateSigningRequestParams {
 	pub fn signed_by(
 		&self,
 		issuer: &Issuer<impl SigningKey>,
-		#[cfg(feature = "crypto")] provider: &dyn CryptoProvider,
+		provider: &dyn CryptoProvider,
 	) -> Result<Certificate, Error> {
 		Ok(Certificate {
-			der: self.params.serialize_der_with_signer(
-				&self.public_key,
-				issuer,
-				#[cfg(feature = "crypto")]
-				provider,
-			)?,
+			der: self
+				.params
+				.serialize_der_with_signer(&self.public_key, issuer, provider)?,
 		})
 	}
 }
