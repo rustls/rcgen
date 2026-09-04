@@ -6,9 +6,17 @@ use std::{fmt, io};
 use bpaf::Bpaf;
 use rcgen::DnValue::PrintableString;
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, CertifiedIssuer, DistinguishedName, DnType,
-	ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType, SignatureAlgorithm,
+	BasicConstraints, Certificate, CertificateParams, CertifiedIssuer, CryptoProvider,
+	DistinguishedName, DnType, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType,
+	SignatureAlgorithm,
 };
+
+fn provider() -> &'static dyn CryptoProvider {
+	#[cfg(feature = "aws_lc_rs")]
+	return rcgen::crypto::aws_lc_rs::default_provider();
+	#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
+	return rcgen::crypto::ring::default_provider();
+}
 
 /// Builder to configure TLS [CertificateParams] to be finalized
 /// into either a [Ca] or an [EndEntity].
@@ -88,9 +96,9 @@ impl CaBuilder {
 	}
 	/// build `Ca` Certificate.
 	pub fn build(self) -> Result<Ca, rcgen::Error> {
-		let key_pair = KeyPair::generate_for(self.alg.into())?;
+		let key_pair = KeyPair::generate_for(self.alg.into(), provider())?;
 		Ok(Ca {
-			issuer: CertifiedIssuer::self_signed(self.params, key_pair)?,
+			issuer: CertifiedIssuer::self_signed(self.params, key_pair, provider())?,
 		})
 	}
 }
@@ -181,8 +189,10 @@ impl EndEntityBuilder {
 	}
 	/// build `EndEntity` Certificate.
 	pub fn build(self, issuer: &Ca) -> Result<EndEntity, rcgen::Error> {
-		let key_pair = KeyPair::generate_for(self.alg.into())?;
-		let cert = self.params.signed_by(&key_pair, &issuer.issuer)?;
+		let key_pair = KeyPair::generate_for(self.alg.into(), provider())?;
+		let cert = self
+			.params
+			.signed_by(&key_pair, &issuer.issuer, provider())?;
 		Ok(EndEntity { cert, key_pair })
 	}
 }
@@ -475,14 +485,14 @@ mod tests {
 
 	#[test]
 	fn key_pair_algorithm_to_keypair() -> anyhow::Result<()> {
-		let keypair = KeyPair::generate_for(KeyPairAlgorithm::Ed25519.into())?;
+		let keypair = KeyPair::generate_for(KeyPairAlgorithm::Ed25519.into(), provider())?;
 		assert_eq!(format!("{:?}", keypair.algorithm()), "PKCS_ED25519");
-		let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP256.into())?;
+		let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP256.into(), provider())?;
 		assert_eq!(
 			format!("{:?}", keypair.algorithm()),
 			"PKCS_ECDSA_P256_SHA256"
 		);
-		let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP384.into())?;
+		let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP384.into(), provider())?;
 		assert_eq!(
 			format!("{:?}", keypair.algorithm()),
 			"PKCS_ECDSA_P384_SHA384"
@@ -490,7 +500,7 @@ mod tests {
 
 		#[cfg(feature = "aws_lc_rs")]
 		{
-			let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP521.into())?;
+			let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP521.into(), provider())?;
 			assert_eq!(
 				format!("{:?}", keypair.algorithm()),
 				"PKCS_ECDSA_P521_SHA512"

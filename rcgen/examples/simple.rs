@@ -3,6 +3,7 @@ use std::fs;
 use rcgen::{date_time_ymd, CertificateParams, DistinguishedName, DnType, KeyPair, SanType};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+	let provider = rcgen::crypto::ring::default_provider();
 	let mut params: CertificateParams = Default::default();
 	params.not_before = date_time_ymd(1975, 1, 1);
 	params.not_after = date_time_ymd(4096, 1, 1);
@@ -18,8 +19,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		SanType::DnsName("localhost".try_into()?),
 	];
 
-	let key_pair = KeyPair::generate()?;
-	let cert = params.self_signed(&key_pair)?;
+	let key_pair = KeyPair::generate(provider)?;
+	let cert = params.self_signed(&key_pair, provider)?;
 
 	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;

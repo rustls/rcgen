@@ -9,10 +9,9 @@ use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::crl::CrlDistributionPoint;
+use crate::crypto::{CryptoProvider, HashAlgorithm};
 use crate::csr::CertificateSigningRequest;
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
-#[cfg(feature = "crypto")]
-use crate::ring_like::digest;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
@@ -98,10 +97,7 @@ impl Default for CertificateParams {
 			crl_distribution_points: Vec::new(),
 			custom_extensions: Vec::new(),
 			use_authority_key_identifier_extension: false,
-			#[cfg(feature = "crypto")]
 			key_identifier_method: KeyIdMethod::Sha256,
-			#[cfg(not(feature = "crypto"))]
-			key_identifier_method: KeyIdMethod::PreSpecified(Vec::new()),
 		}
 	}
 }
@@ -139,11 +135,12 @@ impl CertificateParams {
 	/// [`Certificate::pem`].
 	pub fn signed_by(
 		&self,
-		public_key: &impl PublicKeyData,
+		public_key: &(impl PublicKeyData + ?Sized),
 		issuer: &Issuer<'_, impl SigningKey>,
+		provider: &dyn CryptoProvider,
 	) -> Result<Certificate, Error> {
 		Ok(Certificate {
-			der: self.serialize_der_with_signer(public_key, issuer)?,
+			der: self.serialize_der_with_signer(public_key, issuer, provider)?,
 		})
 	}
 
@@ -151,21 +148,33 @@ impl CertificateParams {
 	///
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
-	pub fn self_signed(&self, signing_key: &impl SigningKey) -> Result<Certificate, Error> {
+	pub fn self_signed(
+		&self,
+		signing_key: &(impl SigningKey + ?Sized),
+		provider: &dyn CryptoProvider,
+	) -> Result<Certificate, Error> {
 		let issuer = Issuer::from_params(self, signing_key);
 		Ok(Certificate {
-			der: self.serialize_der_with_signer(signing_key, &issuer)?,
+			der: self.serialize_der_with_signer(signing_key, &issuer, provider)?,
 		})
 	}
 
 	/// Calculates a subject key identifier for the certificate subject's public key.
 	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
-	pub fn key_identifier(&self, key: &impl PublicKeyData) -> Vec<u8> {
+	pub fn key_identifier(
+		&self,
+		key: &(impl PublicKeyData + ?Sized),
+		provider: &dyn CryptoProvider,
+	) -> Vec<u8> {
 		self.key_identifier_method
-			.derive(key.subject_public_key_info())
+			.derive(provider, key.subject_public_key_info())
 	}
 
-	#[cfg(all(test, feature = "x509-parser"))]
+	#[cfg(all(
+		test,
+		feature = "x509-parser",
+		any(feature = "ring", feature = "aws_lc_rs")
+	))]
 	pub(crate) fn from_ca_cert_der(ca_cert: &CertificateDer<'_>) -> Result<Self, Error> {
 		let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert)
 			.map_err(|_| Error::CouldNotParseCertificate)?;
@@ -198,7 +207,7 @@ impl CertificateParams {
 					self.write_key_usage(writer.next());
 					self.write_subject_alt_names(writer.next());
 					self.write_extended_key_usage(writer.next());
-					self.write_ca_extensions(writer, None);
+					self.write_ca_extensions(writer, None, None);
 					for ext in &self.custom_extensions {
 						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
 							writer.write_der(ext.content())
@@ -249,7 +258,12 @@ impl CertificateParams {
 	}
 
 	/// Write a certificate's BasicConstraints as defined in RFC 5280.
-	fn write_ca_extensions(&self, writer: &mut DERWriterSeq, pub_key_spki: Option<&[u8]>) {
+	fn write_ca_extensions(
+		&self,
+		writer: &mut DERWriterSeq,
+		pub_key_spki: Option<&[u8]>,
+		provider: Option<&dyn CryptoProvider>,
+	) {
 		let is_ca = match &self.is_ca {
 			IsCa::Ca(bc) => Some(bc),
 			IsCa::ExplicitNoCa => None,
@@ -257,13 +271,15 @@ impl CertificateParams {
 		};
 
 		if let Some(pub_key_spki) = pub_key_spki {
+			let subject_key_identifier = self.key_identifier_method.derive(
+				provider.expect("a provider is required with public key data"),
+				pub_key_spki,
+			);
 			write_x509_extension(
 				writer.next(),
 				oid::SUBJECT_KEY_IDENTIFIER,
 				false,
-				|writer| {
-					writer.write_bytes(&self.key_identifier_method.derive(pub_key_spki));
-				},
+				|writer| writer.write_bytes(&subject_key_identifier),
 			);
 		}
 
@@ -432,10 +448,11 @@ impl CertificateParams {
 		})
 	}
 
-	pub(crate) fn serialize_der_with_signer<K: PublicKeyData>(
+	pub(crate) fn serialize_der_with_signer<K: PublicKeyData + ?Sized>(
 		&self,
 		pub_key: &K,
 		issuer: &Issuer<'_, impl SigningKey>,
+		provider: &dyn CryptoProvider,
 	) -> Result<CertificateDer<'static>, Error> {
 		// An empty distribution point would be encoded as an empty fullName,
 		// violating GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
@@ -458,18 +475,11 @@ impl CertificateParams {
 			if let Some(ref serial) = self.serial_number {
 				writer.next().write_bigint_bytes(serial.as_ref(), true);
 			} else {
-				#[cfg(feature = "crypto")]
-				{
-					let hash = digest::digest(&digest::SHA256, pub_key.der_bytes());
-					// RFC 5280 specifies at most 20 bytes for a serial number
-					let mut sl = hash.as_ref()[0..20].to_vec();
-					sl[0] &= 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
-					writer.next().write_bigint_bytes(&sl, true);
-				}
-				#[cfg(not(feature = "crypto"))]
-				if self.serial_number.is_none() {
-					return Err(Error::MissingSerialNumber);
-				}
+				let hash = provider.hash(HashAlgorithm::Sha256, pub_key.der_bytes());
+				// RFC 5280 specifies at most 20 bytes for a serial number
+				let mut sl = hash.as_ref()[0..20].to_vec();
+				sl[0] &= 0x7f; // MSB must be 0 to ensure encoding bignum in 20 bytes
+				writer.next().write_bigint_bytes(&sl, true);
 			};
 			// Write signature algorithm
 			issuer
@@ -505,7 +515,9 @@ impl CertificateParams {
 			}
 
 			writer.next().write_tagged(Tag::context(3), |writer| {
-				writer.write_sequence(|writer| self.write_extensions(writer, &pub_key_spki, issuer))
+				writer.write_sequence(|writer| {
+					self.write_extensions(writer, &pub_key_spki, issuer, provider)
+				})
 			})?;
 
 			Ok(())
@@ -519,16 +531,16 @@ impl CertificateParams {
 		writer: &mut DERWriterSeq,
 		pub_key_spki: &[u8],
 		issuer: &Issuer<'_, impl SigningKey>,
+		provider: &dyn CryptoProvider,
 	) -> Result<(), Error> {
 		if self.use_authority_key_identifier_extension {
 			write_x509_authority_key_identifier(
 				writer.next(),
 				match issuer.key_identifier_method.as_ref() {
 					KeyIdMethod::PreSpecified(aki) => aki.clone(),
-					#[cfg(feature = "crypto")]
 					_ => issuer
 						.key_identifier_method
-						.derive(issuer.signing_key.subject_public_key_info()),
+						.derive(provider, issuer.signing_key.subject_public_key_info()),
 				},
 			);
 		}
@@ -576,7 +588,7 @@ impl CertificateParams {
 			);
 		}
 
-		self.write_ca_extensions(writer, Some(pub_key_spki));
+		self.write_ca_extensions(writer, Some(pub_key_spki), Some(provider));
 
 		for ext in &self.custom_extensions {
 			write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
@@ -768,7 +780,11 @@ pub enum ExtendedKeyUsagePurpose {
 }
 
 impl ExtendedKeyUsagePurpose {
-	#[cfg(all(test, feature = "x509-parser"))]
+	#[cfg(all(
+		test,
+		feature = "x509-parser",
+		any(feature = "ring", feature = "aws_lc_rs")
+	))]
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Vec<Self>, Error> {
 		let extended_key_usage = x509
 			.extended_key_usage()
@@ -833,7 +849,11 @@ pub struct NameConstraints {
 }
 
 impl NameConstraints {
-	#[cfg(all(test, feature = "x509-parser"))]
+	#[cfg(all(
+		test,
+		feature = "x509-parser",
+		any(feature = "ring", feature = "aws_lc_rs")
+	))]
 	fn from_x509(
 		x509: &x509_parser::certificate::X509Certificate<'_>,
 	) -> Result<Option<Self>, Error> {
@@ -886,7 +906,11 @@ pub enum GeneralSubtree {
 }
 
 impl GeneralSubtree {
-	#[cfg(all(test, feature = "x509-parser"))]
+	#[cfg(all(
+		test,
+		feature = "x509-parser",
+		any(feature = "ring", feature = "aws_lc_rs")
+	))]
 	fn from_x509(
 		subtrees: &[x509_parser::extensions::GeneralSubtree<'_>],
 	) -> Result<Vec<Self>, Error> {
@@ -1058,7 +1082,11 @@ pub enum IsCa {
 }
 
 impl IsCa {
-	#[cfg(all(test, feature = "x509-parser"))]
+	#[cfg(all(
+		test,
+		feature = "x509-parser",
+		any(feature = "ring", feature = "aws_lc_rs")
+	))]
 	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Self, Error> {
 		let basic_constraints = x509
 			.basic_constraints()
@@ -1107,24 +1135,21 @@ pub enum BasicConstraints {
 	Constrained(u8),
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "ring", feature = "aws_lc_rs")))]
 mod tests {
 	#[cfg(feature = "x509-parser")]
 	use std::net::Ipv4Addr;
 
 	#[cfg(feature = "x509-parser")]
 	use pki_types::pem::PemObject;
-	#[cfg(feature = "crypto")]
 	use x509_parser::oid_registry::OID_X509_EXT_BASIC_CONSTRAINTS;
 
 	#[cfg(feature = "pem")]
 	use super::*;
 	#[cfg(feature = "x509-parser")]
 	use crate::DnValue;
-	#[cfg(feature = "crypto")]
 	use crate::KeyPair;
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_key_usages() {
 		let params = CertificateParams {
@@ -1140,8 +1165,10 @@ mod tests {
 		};
 
 		// Make the cert
-		let key_pair = KeyPair::generate().unwrap();
-		let cert = params.self_signed(&key_pair).unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
+		let cert = params
+			.self_signed(&key_pair, crate::test_provider())
+			.unwrap();
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -1169,7 +1196,6 @@ mod tests {
 		assert!(found);
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_explicit_no_ca() {
 		let params = CertificateParams {
@@ -1178,8 +1204,10 @@ mod tests {
 		};
 
 		// Make the cert
-		let key_pair = KeyPair::generate().unwrap();
-		let cert = params.self_signed(&key_pair).unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
+		let cert = params
+			.self_signed(&key_pair, crate::test_provider())
+			.unwrap();
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -1203,7 +1231,6 @@ mod tests {
 		assert!(found);
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_empty_crl_distribution_point_uris_rejected() {
 		let params = CertificateParams {
@@ -1214,14 +1241,15 @@ mod tests {
 		// A distribution point with no URIs would be encoded as an empty
 		// fullName, violating GeneralNames ::= SEQUENCE SIZE (1..MAX) OF
 		// GeneralName (RFC 5280 §4.2.1.13), so it must be rejected.
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
 		assert_eq!(
-			params.self_signed(&key_pair).unwrap_err(),
+			params
+				.self_signed(&key_pair, crate::test_provider())
+				.unwrap_err(),
 			Error::EmptyCrlDistributionPointUris
 		);
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_key_usages_only() {
 		// The KeyUsage extension must be present even when it is the only
@@ -1234,14 +1262,15 @@ mod tests {
 			..CertificateParams::default()
 		};
 
-		let key_pair = KeyPair::generate().unwrap();
-		let cert = params.self_signed(&key_pair).unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
+		let cert = params
+			.self_signed(&key_pair, crate::test_provider())
+			.unwrap();
 
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
 		assert!(cert.key_usage().unwrap().is_some());
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_crl_distribution_points_only() {
 		// The CRL distribution points extension must be present even when it
@@ -1253,8 +1282,10 @@ mod tests {
 			..CertificateParams::default()
 		};
 
-		let key_pair = KeyPair::generate().unwrap();
-		let cert = params.self_signed(&key_pair).unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
+		let cert = params
+			.self_signed(&key_pair, crate::test_provider())
+			.unwrap();
 
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
 		assert!(cert.iter_extensions().any(|ext| matches!(
@@ -1263,7 +1294,6 @@ mod tests {
 		)));
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_key_usages_decipheronly_only() {
 		let params = CertificateParams {
@@ -1275,8 +1305,10 @@ mod tests {
 		};
 
 		// Make the cert
-		let key_pair = KeyPair::generate().unwrap();
-		let cert = params.self_signed(&key_pair).unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
+		let cert = params
+			.self_signed(&key_pair, crate::test_provider())
+			.unwrap();
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -1301,7 +1333,6 @@ mod tests {
 		assert!(found);
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_extended_key_usages_any() {
 		let params = CertificateParams {
@@ -1310,8 +1341,10 @@ mod tests {
 		};
 
 		// Make the cert
-		let key_pair = KeyPair::generate().unwrap();
-		let cert = params.self_signed(&key_pair).unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
+		let cert = params
+			.self_signed(&key_pair, crate::test_provider())
+			.unwrap();
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -1322,7 +1355,6 @@ mod tests {
 		assert!(extension.value.any);
 	}
 
-	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_extended_key_usages_other() {
 		use x509_parser::der_parser::asn1_rs::Oid;
@@ -1338,8 +1370,10 @@ mod tests {
 		};
 
 		// Make the cert
-		let key_pair = KeyPair::generate().unwrap();
-		let cert = params.self_signed(&key_pair).unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
+		let cert = params
+			.self_signed(&key_pair, crate::test_provider())
+			.unwrap();
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -1359,16 +1393,20 @@ mod tests {
 		#[test]
 		#[cfg(windows)]
 		fn test_windows_line_endings() {
-			let key_pair = KeyPair::generate().unwrap();
-			let cert = CertificateParams::default().self_signed(&key_pair).unwrap();
+			let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
+			let cert = CertificateParams::default()
+				.self_signed(&key_pair, crate::test_provider())
+				.unwrap();
 			assert!(cert.pem().contains("\r\n"));
 		}
 
 		#[test]
 		#[cfg(not(windows))]
 		fn test_not_windows_line_endings() {
-			let key_pair = KeyPair::generate().unwrap();
-			let cert = CertificateParams::default().self_signed(&key_pair).unwrap();
+			let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
+			let cert = CertificateParams::default()
+				.self_signed(&key_pair, crate::test_provider())
+				.unwrap();
 			assert!(!cert.pem().contains('\r'));
 		}
 	}
@@ -1380,8 +1418,10 @@ mod tests {
 		let mut params = CertificateParams::default();
 		let other_name = SanType::OtherName((vec![1, 2, 3, 4], "Foo".into()));
 		params.subject_alt_names.push(other_name.clone());
-		let key_pair = KeyPair::generate().unwrap();
-		let cert = params.self_signed(&key_pair).unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
+		let cert = params
+			.self_signed(&key_pair, crate::test_provider())
+			.unwrap();
 
 		// We should be able to parse the certificate with x509-parser.
 		assert!(x509_parser::parse_x509_certificate(cert.der()).is_ok());
@@ -1410,8 +1450,10 @@ mod tests {
 			email_address_dn_type.clone(),
 			email_address_dn_value.clone(),
 		);
-		let key_pair = KeyPair::generate().unwrap();
-		let cert = params.self_signed(&key_pair).unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
+		let cert = params
+			.self_signed(&key_pair, crate::test_provider())
+			.unwrap();
 
 		// We should be able to parse the certificate with x509-parser.
 		assert!(x509_parser::parse_x509_certificate(cert.der()).is_ok());
@@ -1435,7 +1477,7 @@ mod tests {
 		let ip_san = SanType::IpAddress(IpAddr::V4(ip));
 
 		let mut params = CertificateParams::new(vec!["crabs".to_owned()]).unwrap();
-		let ca_key = KeyPair::generate().unwrap();
+		let ca_key = KeyPair::generate(crate::test_provider()).unwrap();
 
 		// Add the SAN we want to test the parsing for
 		params.subject_alt_names.push(ip_san.clone());
@@ -1444,7 +1486,7 @@ mod tests {
 		params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 
 		// Serialize our cert that has our chosen san, so we can testing parsing/deserializing it.
-		let cert = params.self_signed(&ca_key).unwrap();
+		let cert = params.self_signed(&ca_key, crate::test_provider()).unwrap();
 
 		let actual = CertificateParams::from_ca_cert_der(cert.der()).unwrap();
 		assert!(actual.subject_alt_names.contains(&ip_san));
@@ -1540,7 +1582,7 @@ JiY98T5oN1X0C/qAXxJfSvklbru9fipwGt3dho5Tm6Ee3cYf+plnk4WZhSnqyef4
 PITGdT9dgN88nHPCle0B1+OY+OZ5
 -----END PRIVATE KEY-----"#;
 
-			let ca_kp = KeyPair::from_pem(ca_key).unwrap();
+			let ca_kp = KeyPair::from_pem(ca_key, crate::test_provider()).unwrap();
 			let ca = Issuer::from_ca_cert_pem(ca_cert, ca_kp).unwrap();
 			let ca_ski = vec![
 				0x97, 0xD4, 0x76, 0xA1, 0x9B, 0x1A, 0x71, 0x35, 0x2A, 0xC7, 0xF4, 0xA1, 0x84, 0x12,
@@ -1567,12 +1609,14 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 					.unwrap()
 			);
 
-			let ee_key = KeyPair::generate().unwrap();
+			let ee_key = KeyPair::generate(crate::test_provider()).unwrap();
 			let ee_params = CertificateParams {
 				use_authority_key_identifier_extension: true,
 				..CertificateParams::default()
 			};
-			let ee_cert = ee_params.signed_by(&ee_key, &ca).unwrap();
+			let ee_cert = ee_params
+				.signed_by(&ee_key, &ca, crate::test_provider())
+				.unwrap();
 
 			let (_, x509_ee) = x509_parser::parse_x509_certificate(ee_cert.der()).unwrap();
 			assert_eq!(

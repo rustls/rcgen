@@ -13,8 +13,8 @@ keywords.workspace = true
 [features]
 default = ["ring"]
 aws_lc_rs = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/aws-lc-sys"]
-aws_lc_rs_unstable = ["rcgen/aws_lc_rs_unstable"]
-fips = ["dep:aws-lc-rs", "rcgen/aws_lc_rs", "aws-lc-rs/fips"]
+aws_lc_rs_unstable = ["aws_lc_rs", "rcgen/aws_lc_rs_unstable"]
+fips = ["aws_lc_rs", "rcgen/fips"]
 ring = ["dep:ring", "rcgen/ring"]
 
 [dependencies]
@@ -23,7 +23,7 @@ aws-lc-rs = { workspace = true, optional = true }
 bpaf = { workspace = true }
 pem = { workspace = true }
 pki-types = { workspace = true }
-rcgen = { version = "0.14.2", path = "../rcgen", default-features = false, features = ["pem"] }
+rcgen = { version = "0.15", path = "../rcgen", default-features = false, features = ["pem"] }
 ring = { workspace = true, optional = true }
 
 [dev-dependencies]

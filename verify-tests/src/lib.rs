@@ -1,7 +1,7 @@
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, CertificateRevocationList,
 	CertificateRevocationListParams, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope,
-	DnType, IsCa, Issuer, KeyIdMethod, KeyPair, KeyUsagePurpose, RevocationReason,
+	CryptoProvider, DnType, IsCa, Issuer, KeyIdMethod, KeyPair, KeyUsagePurpose, RevocationReason,
 	RevokedCertParams, SerialNumber,
 };
 use time::{Duration, OffsetDateTime};
@@ -61,6 +61,13 @@ YPTHy8SWRA2sMII3ArhHJ8A=
 -----END PRIVATE KEY-----
 "#;
 
+pub fn provider() -> &'static dyn CryptoProvider {
+	#[cfg(feature = "aws_lc_rs")]
+	return rcgen::crypto::aws_lc_rs::default_provider();
+	#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
+	return rcgen::crypto::ring::default_provider();
+}
+
 pub fn default_params() -> (CertificateParams, KeyPair) {
 	let mut params =
 		CertificateParams::new(vec!["crabs.crabs".to_string(), "localhost".to_string()]).unwrap();
@@ -71,7 +78,7 @@ pub fn default_params() -> (CertificateParams, KeyPair) {
 		.distinguished_name
 		.push(DnType::CommonName, "Master CA");
 
-	let key_pair = KeyPair::generate().unwrap();
+	let key_pair = KeyPair::generate(provider()).unwrap();
 	(params, key_pair)
 }
 
@@ -88,7 +95,7 @@ pub fn test_crl() -> (
 		KeyUsagePurpose::DigitalSignature,
 		KeyUsagePurpose::CrlSign,
 	];
-	let issuer_cert = issuer.self_signed(&key_pair).unwrap();
+	let issuer_cert = issuer.self_signed(&key_pair, provider()).unwrap();
 	let ca = Issuer::new(issuer, key_pair);
 
 	let now = OffsetDateTime::now_utc();
@@ -114,7 +121,7 @@ pub fn test_crl() -> (
 		key_identifier_method: KeyIdMethod::Sha256,
 	};
 
-	let crl = params.signed_by(&ca).unwrap();
+	let crl = params.signed_by(&ca, provider()).unwrap();
 	(params, crl, issuer_cert)
 }
 
@@ -133,5 +140,9 @@ pub fn cert_with_crl_dps() -> Vec<u8> {
 		},
 	];
 
-	params.self_signed(&key_pair).unwrap().der().to_vec()
+	params
+		.self_signed(&key_pair, provider())
+		.unwrap()
+		.der()
+		.to_vec()
 }

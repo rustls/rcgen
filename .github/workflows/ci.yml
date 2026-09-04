@@ -44,15 +44,23 @@ jobs:
               uses: dtolnay/rust-toolchain@stable
               with:
                   components: clippy
-            # `fips` and `aws_lc_rs_unstable` cannot be used together, so avoid `--all-features`
             - run: cargo clippy --features ring,pem,x509-parser --all-targets
             # rustls-cert-gen require either aws_lc_rs or ring feature
             - run: cargo clippy -p rcgen --no-default-features --all-targets
+            - run: cargo clippy -p rcgen --no-default-features --features pem,x509-parser --all-targets
+            - name: Ensure backend-free builds have no built-in crypto dependencies
+              run: "! cargo tree -p rcgen --no-default-features --edges normal,build | grep -E 'ring v|aws-lc'"
+            - name: Ensure FIPS requires an explicit provider
+              run: |
+                  if output=$(cargo check -p rcgen --no-default-features --features fips 2>&1); then
+                    exit 1
+                  fi
+                  grep -Fq "the 'fips' feature currently requires the 'aws_lc_rs' feature" <<<"$output"
             - run: cargo clippy --no-default-features --features ring --all-targets
             - run: cargo clippy --no-default-features --features aws_lc_rs,pem,x509-parser --all-targets
             - run: cargo clippy --no-default-features --features aws_lc_rs_unstable,pem,x509-parser --all-targets
             - run: cargo clippy --no-default-features --features aws_lc_rs --all-targets
-            - run: cargo clippy --no-default-features --features fips,pem,x509-parser --all-targets
+            - run: cargo clippy --no-default-features --features aws_lc_rs,fips,pem,x509-parser --all-targets
 
     rustdoc:
         name: Documentation
@@ -73,12 +81,16 @@ jobs:
               run: cargo doc --features ring,pem,x509-parser --document-private-items
               env:
                   RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=rcgen_docsrs' || '-Dwarnings' }}
+            - name: cargo doc (provider API without a built-in backend)
+              run: cargo doc -p rcgen --no-default-features --features pem,x509-parser
+              env:
+                  RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=rcgen_docsrs' || '-Dwarnings' }}
             - name: cargo doc (aws_lc_rs_unstable)
               run: cargo doc --features aws_lc_rs_unstable,pem,x509-parser --document-private-items
               env:
                   RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=rcgen_docsrs' || '-Dwarnings' }}
             - name: cargo doc (fips)
-              run: cargo doc --no-default-features --features fips --document-private-items
+              run: cargo doc --no-default-features --features aws_lc_rs,fips --document-private-items
               env:
                   RUSTDOCFLAGS: ${{ matrix.toolchain == 'nightly' && '-Dwarnings --cfg=rcgen_docsrs' || '-Dwarnings' }}
 
@@ -127,7 +139,7 @@ jobs:
                   toolchain: 1.88.0
             - run: cargo check --locked --lib --features ring,pem,x509-parser
             - run: cargo check --locked --lib --features aws_lc_rs_unstable
-            - run: cargo check --locked --lib --features fips
+            - run: cargo check --locked --lib --features aws_lc_rs,fips
 
     build-windows:
         runs-on: windows-latest
@@ -165,6 +177,8 @@ jobs:
               run: cargo test --features x509-parser
             - name: Run the tests with aws_lc_rs backend enabled
               run: cargo test --no-default-features --features aws_lc_rs,pem
+            - name: Run the tests with no built-in backend
+              run: cargo test -p rcgen --no-default-features --features pem,x509-parser
               # rustls-cert-gen require either aws_lc_rs or ring feature
             - name: Run the tests with no features enabled
               run: cargo test -p rcgen --no-default-features

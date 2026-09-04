@@ -4,6 +4,7 @@ use pki_types::CertificateRevocationListDer;
 use time::OffsetDateTime;
 use yasna::{DERWriter, Tag};
 
+use crate::crypto::CryptoProvider;
 use crate::key_pair::sign_der;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
@@ -21,27 +22,15 @@ use crate::{
 /// extern crate rcgen;
 /// use rcgen::*;
 ///
-/// #[cfg(not(feature = "crypto"))]
-/// struct MyKeyPair { public_key: Vec<u8> }
-/// #[cfg(not(feature = "crypto"))]
-/// impl SigningKey for MyKeyPair {
-///   fn sign(&self, _: &[u8]) -> Result<Vec<u8>, rcgen::Error> { Ok(vec![]) }
-/// }
-/// #[cfg(not(feature = "crypto"))]
-/// impl PublicKeyData for MyKeyPair {
-///   fn der_bytes(&self) -> &[u8] { &self.public_key }
-///   fn algorithm(&self) -> &'static SignatureAlgorithm { &PKCS_ED25519 }
-/// }
+/// # #[cfg(feature = "ring")]
 /// # fn main () {
 /// // Generate a CRL issuer.
 /// let mut issuer_params = CertificateParams::new(vec!["crl.issuer.example.com".to_string()]).unwrap();
 /// issuer_params.serial_number = Some(SerialNumber::from(9999));
 /// issuer_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 /// issuer_params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::CrlSign];
-/// #[cfg(feature = "crypto")]
-/// let key_pair = KeyPair::generate().unwrap();
-/// #[cfg(not(feature = "crypto"))]
-/// let key_pair = MyKeyPair { public_key: vec![] };
+/// let provider = rcgen::crypto::ring::default_provider();
+/// let key_pair = KeyPair::generate(provider).unwrap();
 /// let issuer = Issuer::new(issuer_params, key_pair);
 ///
 /// // Describe a revoked certificate.
@@ -58,12 +47,14 @@ use crate::{
 ///   crl_number: SerialNumber::from(1234),
 ///   issuing_distribution_point: None,
 ///   revoked_certs: vec![revoked_cert],
-///   #[cfg(feature = "crypto")]
 ///   key_identifier_method: KeyIdMethod::Sha256,
-///   #[cfg(not(feature = "crypto"))]
-///   key_identifier_method: KeyIdMethod::PreSpecified(vec![]),
-/// }.signed_by(&issuer).unwrap();
+/// }.signed_by(
+///   &issuer,
+///   provider,
+/// ).unwrap();
 ///# }
+/// # #[cfg(not(feature = "ring"))]
+/// # fn main() {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CertificateRevocationList {
 	der: CertificateRevocationListDer<'static>,
@@ -187,7 +178,16 @@ impl CertificateRevocationListParams {
 	pub fn signed_by(
 		&self,
 		issuer: &Issuer<'_, impl SigningKey>,
+		provider: &dyn CryptoProvider,
 	) -> Result<CertificateRevocationList, Error> {
+		self.validate(issuer)?;
+
+		Ok(CertificateRevocationList {
+			der: self.serialize_der(issuer, provider)?.into(),
+		})
+	}
+
+	fn validate(&self, issuer: &Issuer<'_, impl SigningKey>) -> Result<(), Error> {
 		if self.next_update.le(&self.this_update) {
 			return Err(Error::InvalidCrlNextUpdate);
 		}
@@ -206,13 +206,18 @@ impl CertificateRevocationListParams {
 		{
 			return Err(Error::EmptyCrlDistributionPointUris);
 		}
-
-		Ok(CertificateRevocationList {
-			der: self.serialize_der(issuer)?.into(),
-		})
+		Ok(())
 	}
 
-	fn serialize_der(&self, issuer: &Issuer<'_, impl SigningKey>) -> Result<Vec<u8>, Error> {
+	fn serialize_der(
+		&self,
+		issuer: &Issuer<'_, impl SigningKey>,
+		provider: &dyn CryptoProvider,
+	) -> Result<Vec<u8>, Error> {
+		let key_identifier = self
+			.key_identifier_method
+			.derive(provider, issuer.signing_key.subject_public_key_info());
+
 		sign_der(&issuer.signing_key, |writer| {
 			// Write CRL version.
 			// RFC 5280 §5.1.2.1:
@@ -273,11 +278,7 @@ impl CertificateRevocationListParams {
 			writer.next().write_tagged(Tag::context(0), |writer| {
 				writer.write_sequence(|writer| {
 					// Write authority key identifier.
-					write_x509_authority_key_identifier(
-						writer.next(),
-						self.key_identifier_method
-							.derive(issuer.signing_key.subject_public_key_info()),
-					);
+					write_x509_authority_key_identifier(writer.next(), key_identifier.clone());
 
 					// Write CRL number.
 					write_x509_extension(writer.next(), oid::CRL_NUMBER, false, |writer| {
@@ -422,7 +423,7 @@ impl RevokedCertParams {
 	}
 }
 
-#[cfg(all(test, feature = "crypto"))]
+#[cfg(all(test, any(feature = "ring", feature = "aws_lc_rs")))]
 mod tests {
 	use x509_parser::num_bigint::BigUint;
 	use x509_parser::{oid_registry, parse_x509_crl};
@@ -448,7 +449,8 @@ mod tests {
 		// fullName, violating GeneralNames ::= SEQUENCE SIZE (1..MAX) OF
 		// GeneralName (RFC 5280 §4.2.1.13), so it must be rejected.
 		assert_eq!(
-			crl.signed_by(&test_issuer()).unwrap_err(),
+			crl.signed_by(&test_issuer(), crate::test_provider())
+				.unwrap_err(),
 			Error::EmptyCrlDistributionPointUris
 		);
 	}
@@ -505,7 +507,7 @@ mod tests {
 			revoked_certs: vec![revoked_cert],
 			key_identifier_method: KeyIdMethod::Sha256,
 		}
-		.signed_by(&test_issuer())
+		.signed_by(&test_issuer(), crate::test_provider())
 		.unwrap()
 	}
 
@@ -519,6 +521,9 @@ mod tests {
 			KeyUsagePurpose::DigitalSignature,
 			KeyUsagePurpose::CrlSign,
 		];
-		Issuer::new(issuer_params, KeyPair::generate().unwrap())
+		Issuer::new(
+			issuer_params,
+			KeyPair::generate(crate::test_provider()).unwrap(),
+		)
 	}
 }

@@ -4,6 +4,7 @@ use std::hash::Hash;
 use pem::Pem;
 use pki_types::CertificateSigningRequestDer;
 
+use crate::crypto::CryptoProvider;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
@@ -84,9 +85,9 @@ impl CertificateSigningRequestParams {
 	///
 	/// See [`from_der`](Self::from_der) for more details.
 	#[cfg(all(feature = "pem", feature = "x509-parser"))]
-	pub fn from_pem(pem_str: &str) -> Result<Self, Error> {
+	pub fn from_pem(pem_str: &str, provider: &dyn CryptoProvider) -> Result<Self, Error> {
 		let csr = pem::parse(pem_str).map_err(|_| Error::CouldNotParseCertificationRequest)?;
-		Self::from_der(&csr.contents().into())
+		Self::from_der(&csr.contents().into(), provider)
 	}
 
 	/// Parse and verify a certificate signing request from DER-encoded bytes
@@ -107,23 +108,49 @@ impl CertificateSigningRequestParams {
 	///
 	/// [`PemObject`]: pki_types::pem::PemObject
 	#[cfg(feature = "x509-parser")]
-	pub fn from_der(csr: &CertificateSigningRequestDer<'_>) -> Result<Self, Error> {
+	pub fn from_der(
+		csr: &CertificateSigningRequestDer<'_>,
+		provider: &dyn CryptoProvider,
+	) -> Result<Self, Error> {
 		use x509_parser::prelude::FromDer;
+		use x509_parser::x509::AlgorithmIdentifier;
 
 		let csr = x509_parser::certification_request::X509CertificationRequest::from_der(csr)
 			.map_err(|_| Error::CouldNotParseCertificationRequest)?
 			.1;
-		csr.verify_signature()
-			.map_err(|_| Error::InvalidCertificationRequestSignature)?;
 		let alg_oid = csr
 			.signature_algorithm
 			.algorithm
 			.iter()
 			.ok_or(Error::CouldNotParseCertificationRequest)?
 			.collect::<Vec<_>>();
-		let alg = SignatureAlgorithm::from_oid(&alg_oid)?;
 
 		let info = &csr.certification_request_info;
+		let alg = SignatureAlgorithm::iter()
+			.find(|alg| {
+				if !alg.matches_signature_oid(&alg_oid) {
+					return false;
+				}
+				let bytes = yasna::construct_der(|writer| alg.write_oids_sign_alg(writer));
+				let Ok((rest, public_key_algorithm)) = AlgorithmIdentifier::from_der(&bytes) else {
+					return false;
+				};
+				rest.is_empty() && public_key_algorithm == info.subject_pki.algorithm
+			})
+			.ok_or(Error::UnsupportedSignatureAlgorithm)?;
+
+		provider
+			.verify(
+				alg,
+				info.subject_pki.subject_public_key.data.as_ref(),
+				info.raw,
+				csr.signature_value.data.as_ref(),
+			)
+			.map_err(|error| match error {
+				Error::UnsupportedSignatureAlgorithm => error,
+				_ => Error::InvalidCertificationRequestSignature,
+			})?;
+
 		let mut params = CertificateParams {
 			distinguished_name: DistinguishedName::from_name(&info.subject)?,
 			..CertificateParams::default()
@@ -203,16 +230,24 @@ impl CertificateSigningRequestParams {
 	///
 	/// The returned [`Certificate`] may be serialized using [`Certificate::der`] and
 	/// [`Certificate::pem`].
-	pub fn signed_by(&self, issuer: &Issuer<impl SigningKey>) -> Result<Certificate, Error> {
+	pub fn signed_by(
+		&self,
+		issuer: &Issuer<impl SigningKey>,
+		provider: &dyn CryptoProvider,
+	) -> Result<Certificate, Error> {
 		Ok(Certificate {
 			der: self
 				.params
-				.serialize_der_with_signer(&self.public_key, issuer)?,
+				.serialize_der_with_signer(&self.public_key, issuer, provider)?,
 		})
 	}
 }
 
-#[cfg(all(test, feature = "x509-parser"))]
+#[cfg(all(
+	test,
+	feature = "x509-parser",
+	any(feature = "ring", feature = "aws_lc_rs")
+))]
 mod tests {
 	use x509_parser::certification_request::X509CertificationRequest;
 	use x509_parser::prelude::{FromDer, ParsedExtension};
@@ -226,7 +261,7 @@ mod tests {
 	fn dont_write_sans_extension_if_no_sans_are_present() {
 		let mut params = CertificateParams::default();
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		assert!(!parsed_csr
@@ -241,7 +276,7 @@ mod tests {
 		params
 			.extended_key_usages
 			.push(ExtendedKeyUsagePurpose::ClientAuth);
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		let requested_extensions = parsed_csr
@@ -262,7 +297,7 @@ mod tests {
 			is_ca: IsCa::ExplicitNoCa,
 			..Default::default()
 		};
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		let requested_extensions = parsed_csr
@@ -285,9 +320,10 @@ mod tests {
 			is_ca: IsCa::Ca(BasicConstraints::Constrained(10)),
 			..Default::default()
 		};
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(crate::test_provider()).unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
-		let csr_de = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
+		let csr_de =
+			CertificateSigningRequestParams::from_der(csr.der(), crate::test_provider()).unwrap();
 
 		assert_eq!(csr_de.params.is_ca, params.is_ca);
 	}

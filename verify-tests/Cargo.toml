@@ -5,9 +5,10 @@ edition = { workspace = true }
 publish = false
 
 [features]
-default = []
+default = ["ring"]
 aws_lc_rs = ["rcgen/aws_lc_rs", "rustls-webpki/aws-lc-rs", "dep:aws-lc-rs"]
-fips = ["rcgen/fips"]
+aws_lc_rs_unstable = ["aws_lc_rs", "rcgen/aws_lc_rs_unstable"]
+fips = ["aws_lc_rs", "rcgen/fips"]
 pem = ["dep:pem", "rcgen/pem"]
 ring = ["rcgen/ring"]
 x509-parser = ["dep:x509-parser", "rcgen/x509-parser"]
@@ -15,7 +16,7 @@ x509-parser = ["dep:x509-parser", "rcgen/x509-parser"]
 [dependencies]
 aws-lc-rs = { workspace = true, optional = true }
 pem = { workspace = true, optional = true }
-rcgen = { path = "../rcgen", features = ["pem", "x509-parser"] }
+rcgen = { path = "../rcgen", default-features = false, features = ["pem", "x509-parser"] }
 ring = { workspace = true }
 rustls-webpki = { workspace = true }
 time = { workspace = true }
