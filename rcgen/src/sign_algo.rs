@@ -1,26 +1,10 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-#[cfg(feature = "aws_lc_rs")]
-use aws_lc_rs::signature::{
-	PqdsaSigningAlgorithm, ML_DSA_44_SIGNING, ML_DSA_65_SIGNING, ML_DSA_87_SIGNING,
-};
 use yasna::models::ObjectIdentifier;
 use yasna::DERWriter;
 
-#[cfg(feature = "crypto")]
-use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters, RsaEncoding};
 use crate::Error;
-
-#[cfg(feature = "crypto")]
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum SignAlgo {
-	EcDsa(&'static EcdsaSigningAlgorithm),
-	EdDsa(&'static EdDSAParameters),
-	#[cfg(feature = "aws_lc_rs")]
-	PqDsa(&'static PqdsaSigningAlgorithm),
-	Rsa(&'static dyn RsaEncoding),
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum SignatureAlgorithmParams {
@@ -34,8 +18,6 @@ pub(crate) enum SignatureAlgorithmParams {
 #[derive(Clone)]
 pub struct SignatureAlgorithm {
 	oids_sign_alg: &'static [&'static [u64]],
-	#[cfg(feature = "crypto")]
-	pub(crate) sign_alg: SignAlgo,
 	oid_components: &'static [u64],
 	params: SignatureAlgorithmParams,
 }
@@ -55,20 +37,13 @@ impl fmt::Debug for SignatureAlgorithm {
 			write!(f, "PKCS_ECDSA_P384_SHA384")
 		} else if self == &PKCS_ED25519 {
 			write!(f, "PKCS_ED25519")
+		} else if self == &PKCS_ECDSA_P521_SHA256 {
+			write!(f, "PKCS_ECDSA_P521_SHA256")
+		} else if self == &PKCS_ECDSA_P521_SHA384 {
+			write!(f, "PKCS_ECDSA_P521_SHA384")
+		} else if self == &PKCS_ECDSA_P521_SHA512 {
+			write!(f, "PKCS_ECDSA_P521_SHA512")
 		} else {
-			#[cfg(feature = "aws_lc_rs")]
-			if self == &PKCS_ECDSA_P521_SHA256 {
-				return write!(f, "PKCS_ECDSA_P521_SHA256");
-			}
-			#[cfg(feature = "aws_lc_rs")]
-			if self == &PKCS_ECDSA_P521_SHA384 {
-				return write!(f, "PKCS_ECDSA_P521_SHA384");
-			}
-			#[cfg(feature = "aws_lc_rs")]
-			if self == &PKCS_ECDSA_P521_SHA512 {
-				return write!(f, "PKCS_ECDSA_P521_SHA512");
-			}
-
 			write!(f, "Unknown")
 		}
 	}
@@ -98,13 +73,16 @@ impl SignatureAlgorithm {
 			&PKCS_RSA_SHA512,
 			&PKCS_ECDSA_P256_SHA256,
 			&PKCS_ECDSA_P384_SHA384,
-			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_ECDSA_P521_SHA256,
-			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_ECDSA_P521_SHA384,
-			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_ECDSA_P521_SHA512,
 			&PKCS_ED25519,
+			#[cfg(feature = "aws_lc_rs")]
+			&PKCS_ML_DSA_44,
+			#[cfg(feature = "aws_lc_rs")]
+			&PKCS_ML_DSA_65,
+			#[cfg(feature = "aws_lc_rs")]
+			&PKCS_ML_DSA_87,
 		];
 		ALGORITHMS.iter()
 	}
@@ -118,6 +96,11 @@ impl SignatureAlgorithm {
 		}
 		Err(Error::UnsupportedSignatureAlgorithm)
 	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn matches_signature_oid(&self, oid: &[u64]) -> bool {
+		self.oid_components == oid
+	}
 }
 
 /// The list of supported signature algorithms
@@ -128,8 +111,6 @@ pub(crate) mod algo {
 	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[RSA_ENCRYPTION],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA256),
 		// sha256WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 11],
 		params: SignatureAlgorithmParams::Null,
@@ -138,8 +119,6 @@ pub(crate) mod algo {
 	/// RSA signing with PKCS#1 1.5 padding and SHA-384 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[RSA_ENCRYPTION],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA384),
 		// sha384WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 12],
 		params: SignatureAlgorithmParams::Null,
@@ -148,8 +127,6 @@ pub(crate) mod algo {
 	/// RSA signing with PKCS#1 1.5 padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static PKCS_RSA_SHA512: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[RSA_ENCRYPTION],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA512),
 		// sha512WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 13],
 		params: SignatureAlgorithmParams::Null,
@@ -158,8 +135,6 @@ pub(crate) mod algo {
 	/// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	pub static PKCS_ECDSA_P256_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_256_R1],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P256_SHA256_ASN1_SIGNING),
 		// ecdsa-with-SHA256 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 2],
 		params: SignatureAlgorithmParams::None,
@@ -168,8 +143,6 @@ pub(crate) mod algo {
 	/// ECDSA signing using the P-384 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	pub static PKCS_ECDSA_P384_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_384_R1],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P384_SHA384_ASN1_SIGNING),
 		// ecdsa-with-SHA384 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 3],
 		params: SignatureAlgorithmParams::None,
@@ -179,12 +152,9 @@ pub(crate) mod algo {
 	///
 	/// Note that this algorithm is not widely supported, and is not supported in TLS 1.3.
 	///
-	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
+	/// Only supported by the built-in `aws_lc_rs` provider, or a custom provider that implements it.
 	pub static PKCS_ECDSA_P521_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P521_SHA256_ASN1_SIGNING),
 		// ecdsa-with-SHA256 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 2],
 		params: SignatureAlgorithmParams::None,
@@ -194,12 +164,9 @@ pub(crate) mod algo {
 	///
 	/// Note that this algorithm is not widely supported, and is not supported in TLS 1.3.
 	///
-	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
+	/// Only supported by the built-in `aws_lc_rs` provider, or a custom provider that implements it.
 	pub static PKCS_ECDSA_P521_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P521_SHA384_ASN1_SIGNING),
 		// ecdsa-with-SHA384 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 3],
 		params: SignatureAlgorithmParams::None,
@@ -207,12 +174,9 @@ pub(crate) mod algo {
 
 	/// ECDSA signing using the P-521 curves and SHA-512 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	///
-	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
+	/// Only supported by the built-in `aws_lc_rs` provider, or a custom provider that implements it.
 	pub static PKCS_ECDSA_P521_SHA512: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P521_SHA512_ASN1_SIGNING),
 		// ecdsa-with-SHA512 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 4],
 		params: SignatureAlgorithmParams::None,
@@ -222,8 +186,6 @@ pub(crate) mod algo {
 	pub static PKCS_ED25519: SignatureAlgorithm = SignatureAlgorithm {
 		// id-Ed25519 in RFC 8410
 		oids_sign_alg: &[&[1, 3, 101, 112]],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::EdDsa(&signature::ED25519),
 		// id-Ed25519 in RFC 8410
 		oid_components: &[1, 3, 101, 112],
 		params: SignatureAlgorithmParams::None,
@@ -233,8 +195,6 @@ pub(crate) mod algo {
 	#[cfg(feature = "aws_lc_rs")]
 	pub static PKCS_ML_DSA_44: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[ML_DSA_44],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::PqDsa(&ML_DSA_44_SIGNING),
 		oid_components: ML_DSA_44,
 		params: SignatureAlgorithmParams::None,
 	};
@@ -243,8 +203,6 @@ pub(crate) mod algo {
 	#[cfg(feature = "aws_lc_rs")]
 	pub static PKCS_ML_DSA_65: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[ML_DSA_65],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::PqDsa(&ML_DSA_65_SIGNING),
 		oid_components: ML_DSA_65,
 		params: SignatureAlgorithmParams::None,
 	};
@@ -253,8 +211,6 @@ pub(crate) mod algo {
 	#[cfg(feature = "aws_lc_rs")]
 	pub static PKCS_ML_DSA_87: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[ML_DSA_87],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::PqDsa(&ML_DSA_87_SIGNING),
 		oid_components: ML_DSA_87,
 		params: SignatureAlgorithmParams::None,
 	};

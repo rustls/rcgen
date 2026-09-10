@@ -10,6 +10,8 @@ pub enum Error {
 	CouldNotParseCertificationRequest,
 	/// The given key pair couldn't be parsed
 	CouldNotParseKeyPair,
+	/// A cryptography provider failed an operation.
+	CryptoProviderError(String),
 	/// The CSR signature is invalid
 	#[cfg(feature = "x509-parser")]
 	InvalidCertificationRequestSignature,
@@ -28,6 +30,8 @@ pub enum Error {
 	UnsupportedExtension,
 	/// The requested signature algorithm is not supported
 	UnsupportedSignatureAlgorithm,
+	/// A signature failed cryptographic verification.
+	SignatureVerificationFailed,
 	/// Unspecified `ring` error
 	RingUnspecified,
 	/// The `ring` library rejected the key upon loading
@@ -47,9 +51,6 @@ pub enum Error {
 	IssuerNotCrlSigner,
 	/// A CRL distribution point was specified without any URIs.
 	EmptyCrlDistributionPointUris,
-	#[cfg(not(feature = "crypto"))]
-	/// Missing serial number
-	MissingSerialNumber,
 	/// X509 parsing error
 	#[cfg(feature = "x509-parser")]
 	X509(String),
@@ -66,6 +67,7 @@ impl fmt::Display for Error {
 				request"
 			)?,
 			CouldNotParseKeyPair => write!(f, "Could not parse key pair")?,
+			CryptoProviderError(e) => write!(f, "Cryptography provider error: {e}")?,
 			#[cfg(feature = "x509-parser")]
 			InvalidCertificationRequestSignature => write!(f, "Invalid CSR signature")?,
 			#[cfg(feature = "x509-parser")]
@@ -84,6 +86,7 @@ impl fmt::Display for Error {
 				"The requested signature algorithm \
 				is not supported"
 			)?,
+			SignatureVerificationFailed => write!(f, "Signature verification failed")?,
 			#[cfg(feature = "x509-parser")]
 			UnsupportedExtension => write!(f, "Unsupported extension requested in CSR")?,
 			RingUnspecified => write!(f, "Unspecified ring error")?,
@@ -102,8 +105,6 @@ impl fmt::Display for Error {
 			EmptyCrlDistributionPointUris => {
 				write!(f, "CRL distribution points must include at least one URI")?
 			},
-			#[cfg(not(feature = "crypto"))]
-			MissingSerialNumber => write!(f, "A serial number must be specified")?,
 			#[cfg(feature = "x509-parser")]
 			X509(e) => write!(f, "X.509 parsing error: {e}")?,
 		};
@@ -147,7 +148,7 @@ impl fmt::Display for InvalidAsn1String {
 ///
 /// We use this trait to avoid leaking external error types into the public API
 /// through a `From<x> for Error` implementation.
-#[cfg(any(feature = "crypto", feature = "pem"))]
+#[cfg(feature = "pem")]
 pub(crate) trait ExternalError<T>: Sized {
 	fn _err(self) -> Result<T, Error>;
 }

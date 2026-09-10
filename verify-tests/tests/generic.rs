@@ -75,7 +75,7 @@ mod test_x509_custom_ext {
 		// Ensure the custom exts. being omitted into a CSR doesn't require SAN ext being present.
 		// See https://github.com/rustls/rcgen/issues/122
 		params.subject_alt_names = Vec::default();
-		let test_cert = params.self_signed(&test_key).unwrap();
+		let test_cert = params.self_signed(&test_key, util::provider()).unwrap();
 		let (_, x509_test_cert) = X509Certificate::from_der(test_cert.der()).unwrap();
 
 		// We should be able to find the extension by OID, with expected criticality and value.
@@ -152,7 +152,7 @@ mod test_csr_custom_attributes {
 
 		// Serialize a DER-encoded CSR
 		let params = CertificateParams::default();
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(verify_tests::provider()).unwrap();
 		let csr = params
 			.serialize_request_with_attributes(&key_pair, vec![challenge_password_attribute])
 			.unwrap();
@@ -179,9 +179,11 @@ mod test_csr_basic_constraints {
 	/// This should deserialize fine to a ca constrained to 5
 	#[test]
 	fn test_csr_basic_constraints_true_pathlen() {
-		let csr_params =
-			CertificateSigningRequestParams::from_pem(CSR_TEST_BASIC_CONSTRAINTS_CA_TRUE_5_PEM)
-				.unwrap();
+		let csr_params = CertificateSigningRequestParams::from_pem(
+			CSR_TEST_BASIC_CONSTRAINTS_CA_TRUE_5_PEM,
+			verify_tests::provider(),
+		)
+		.unwrap();
 
 		assert_eq!(
 			csr_params.params.is_ca,
@@ -218,8 +220,10 @@ p5evxprnXDk0qMh66vSZ3Q==
 	/// This should be too large for a u8 and fail
 	#[test]
 	fn test_csr_basic_constraints_true_pathlen_too_large() {
-		let result =
-			CertificateSigningRequestParams::from_pem(CSR_TEST_BASIC_CONSTRAINTS_CA_TRUE_256_PEM);
+		let result = CertificateSigningRequestParams::from_pem(
+			CSR_TEST_BASIC_CONSTRAINTS_CA_TRUE_256_PEM,
+			verify_tests::provider(),
+		);
 
 		assert_eq!(result.unwrap_err(), Error::CouldNotParseCertificate);
 	}
@@ -253,8 +257,11 @@ RioOvAyCH6bFMvSJxZm7FYM=
 	/// This should deserialize fine to a ca unconstrained
 	#[test]
 	fn test_csr_basic_constraints_true() {
-		let csr_params =
-			CertificateSigningRequestParams::from_pem(CSR_TEST_BASIC_CONSTRAINTS_CA_TRUE).unwrap();
+		let csr_params = CertificateSigningRequestParams::from_pem(
+			CSR_TEST_BASIC_CONSTRAINTS_CA_TRUE,
+			verify_tests::provider(),
+		)
+		.unwrap();
 
 		assert_eq!(
 			csr_params.params.is_ca,
@@ -291,8 +298,11 @@ lZLnFMmv1pkn052qtQ==
 	/// This should deserialize fine to explicitly no ca
 	#[test]
 	fn test_csr_basic_constraints_false() {
-		let csr_params =
-			CertificateSigningRequestParams::from_pem(CSR_TEST_BASIC_CONSTRAINTS_CA_FALSE).unwrap();
+		let csr_params = CertificateSigningRequestParams::from_pem(
+			CSR_TEST_BASIC_CONSTRAINTS_CA_FALSE,
+			verify_tests::provider(),
+		)
+		.unwrap();
 
 		assert_eq!(csr_params.params.is_ca, IsCa::ExplicitNoCa);
 	}
@@ -486,7 +496,7 @@ mod test_csr_extension_request {
 	fn dont_write_sans_extension_if_no_sans_are_present() {
 		let mut params = CertificateParams::default();
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(verify_tests::provider()).unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		assert!(!parsed_csr
@@ -501,7 +511,7 @@ mod test_csr_extension_request {
 		params
 			.extended_key_usages
 			.push(ExtendedKeyUsagePurpose::ClientAuth);
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(verify_tests::provider()).unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		let requested_extensions = parsed_csr
@@ -568,11 +578,12 @@ mod test_csr {
 
 	fn generate_and_test_parsed_csr(params: &CertificateParams) {
 		// Generate a key pair for the CSR
-		let key_pair = KeyPair::generate().unwrap();
+		let key_pair = KeyPair::generate(verify_tests::provider()).unwrap();
 		// Serialize the CSR into DER from the given parameters
 		let csr = params.serialize_request(&key_pair).unwrap();
 		// Parse the CSR we just serialized
-		let csrp = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
+		let csrp =
+			CertificateSigningRequestParams::from_der(csr.der(), verify_tests::provider()).unwrap();
 
 		// Ensure algorithms match.
 		assert_eq!(key_pair.algorithm(), csrp.public_key.algorithm());
@@ -600,7 +611,9 @@ mod test_subject_alternative_name_criticality {
 			"non-empty subject required for test"
 		);
 
-		let cert = params.self_signed(&keypair).unwrap();
+		let cert = params
+			.self_signed(&keypair, verify_tests::provider())
+			.unwrap();
 		let cert = cert.der();
 		let (_, parsed) = parse_x509_certificate(cert).unwrap();
 		assert!(
@@ -614,7 +627,9 @@ mod test_subject_alternative_name_criticality {
 		let (mut params, keypair) = default_params();
 		params.distinguished_name = Default::default();
 
-		let cert = params.self_signed(&keypair).unwrap();
+		let cert = params
+			.self_signed(&keypair, verify_tests::provider())
+			.unwrap();
 		let cert = cert.der();
 		let (_, parsed) = parse_x509_certificate(cert).unwrap();
 		assert!(
