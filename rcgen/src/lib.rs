@@ -77,9 +77,7 @@ mod key_pair;
 pub use key_pair::serialize_private_key_pem;
 #[cfg(feature = "crypto")]
 pub use key_pair::KeyPair;
-#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
-pub use key_pair::RsaKeySize;
-pub use key_pair::{PublicKeyData, SigningKey, SubjectPublicKeyInfo};
+pub use key_pair::{PublicKeyData, RsaKeySize, SigningKey, SubjectPublicKeyInfo};
 
 mod sign_algo;
 pub use sign_algo::algo::*;
@@ -660,6 +658,27 @@ mod tests {
 
 		for dt in times {
 			let _gt = dt_to_generalized(dt);
+		}
+	}
+
+	#[cfg(feature = "aws_lc_rs")]
+	#[test]
+	fn rsa_key_size_algorithms_generate_expected_key_sizes() {
+		use crate::{
+			KeyPair, SigningKey, PKCS_RSA_SHA256, PKCS_RSA_SHA256_3072, PKCS_RSA_SHA256_4096,
+		};
+
+		// Key size does not affect signature-algorithm identity.
+		assert_eq!(PKCS_RSA_SHA256, PKCS_RSA_SHA256_3072);
+		assert_eq!(PKCS_RSA_SHA256, PKCS_RSA_SHA256_4096);
+
+		for (alg, sig_len) in [
+			(&PKCS_RSA_SHA256, 256usize),
+			(&PKCS_RSA_SHA256_3072, 384),
+			(&PKCS_RSA_SHA256_4096, 512),
+		] {
+			let (key, _) = KeyPair::generate_for(alg).unwrap();
+			assert_eq!(key.sign(b"message").unwrap().len(), sig_len);
 		}
 	}
 

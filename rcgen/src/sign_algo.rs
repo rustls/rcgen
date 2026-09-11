@@ -8,6 +8,7 @@ use aws_lc_rs::signature::{
 use yasna::models::ObjectIdentifier;
 use yasna::DERWriter;
 
+use crate::key_pair::RsaKeySize;
 #[cfg(feature = "crypto")]
 use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters, RsaEncoding};
 use crate::Error;
@@ -38,6 +39,9 @@ pub struct SignatureAlgorithm {
 	pub(crate) sign_alg: SignAlgo,
 	oid_components: &'static [u64],
 	params: SignatureAlgorithmParams,
+	// Only read under `aws_lc_rs`. Not part of identity.
+	#[allow(dead_code)]
+	pub(crate) rsa_key_size: Option<RsaKeySize>,
 }
 
 impl fmt::Debug for SignatureAlgorithm {
@@ -125,7 +129,7 @@ pub(crate) mod algo {
 	use super::*;
 	use crate::oid::*;
 
-	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055), generating a 2048-bit key
 	pub static PKCS_RSA_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[RSA_ENCRYPTION],
 		#[cfg(feature = "crypto")]
@@ -133,9 +137,32 @@ pub(crate) mod algo {
 		// sha256WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 11],
 		params: SignatureAlgorithmParams::Null,
+		rsa_key_size: Some(RsaKeySize::_2048),
 	};
 
-	/// RSA signing with PKCS#1 1.5 padding and SHA-384 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055), generating a 3072-bit key
+	pub static PKCS_RSA_SHA256_3072: SignatureAlgorithm = SignatureAlgorithm {
+		oids_sign_alg: &[RSA_ENCRYPTION],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA256),
+		// sha256WithRSAEncryption in RFC 4055
+		oid_components: &[1, 2, 840, 113549, 1, 1, 11],
+		params: SignatureAlgorithmParams::Null,
+		rsa_key_size: Some(RsaKeySize::_3072),
+	};
+
+	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055), generating a 4096-bit key
+	pub static PKCS_RSA_SHA256_4096: SignatureAlgorithm = SignatureAlgorithm {
+		oids_sign_alg: &[RSA_ENCRYPTION],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA256),
+		// sha256WithRSAEncryption in RFC 4055
+		oid_components: &[1, 2, 840, 113549, 1, 1, 11],
+		params: SignatureAlgorithmParams::Null,
+		rsa_key_size: Some(RsaKeySize::_4096),
+	};
+
+	/// RSA signing with PKCS#1 1.5 padding and SHA-384 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055), generating a 2048-bit key
 	pub static PKCS_RSA_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[RSA_ENCRYPTION],
 		#[cfg(feature = "crypto")]
@@ -143,9 +170,32 @@ pub(crate) mod algo {
 		// sha384WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 12],
 		params: SignatureAlgorithmParams::Null,
+		rsa_key_size: Some(RsaKeySize::_2048),
 	};
 
-	/// RSA signing with PKCS#1 1.5 padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+	/// RSA signing with PKCS#1 1.5 padding and SHA-384 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055), generating a 3072-bit key
+	pub static PKCS_RSA_SHA384_3072: SignatureAlgorithm = SignatureAlgorithm {
+		oids_sign_alg: &[RSA_ENCRYPTION],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA384),
+		// sha384WithRSAEncryption in RFC 4055
+		oid_components: &[1, 2, 840, 113549, 1, 1, 12],
+		params: SignatureAlgorithmParams::Null,
+		rsa_key_size: Some(RsaKeySize::_3072),
+	};
+
+	/// RSA signing with PKCS#1 1.5 padding and SHA-384 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055), generating a 4096-bit key
+	pub static PKCS_RSA_SHA384_4096: SignatureAlgorithm = SignatureAlgorithm {
+		oids_sign_alg: &[RSA_ENCRYPTION],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA384),
+		// sha384WithRSAEncryption in RFC 4055
+		oid_components: &[1, 2, 840, 113549, 1, 1, 12],
+		params: SignatureAlgorithmParams::Null,
+		rsa_key_size: Some(RsaKeySize::_4096),
+	};
+
+	/// RSA signing with PKCS#1 1.5 padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055), generating a 2048-bit key
 	pub static PKCS_RSA_SHA512: SignatureAlgorithm = SignatureAlgorithm {
 		oids_sign_alg: &[RSA_ENCRYPTION],
 		#[cfg(feature = "crypto")]
@@ -153,6 +203,29 @@ pub(crate) mod algo {
 		// sha512WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 13],
 		params: SignatureAlgorithmParams::Null,
+		rsa_key_size: Some(RsaKeySize::_2048),
+	};
+
+	/// RSA signing with PKCS#1 1.5 padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055), generating a 3072-bit key
+	pub static PKCS_RSA_SHA512_3072: SignatureAlgorithm = SignatureAlgorithm {
+		oids_sign_alg: &[RSA_ENCRYPTION],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA512),
+		// sha512WithRSAEncryption in RFC 4055
+		oid_components: &[1, 2, 840, 113549, 1, 1, 13],
+		params: SignatureAlgorithmParams::Null,
+		rsa_key_size: Some(RsaKeySize::_3072),
+	};
+
+	/// RSA signing with PKCS#1 1.5 padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055), generating a 4096-bit key
+	pub static PKCS_RSA_SHA512_4096: SignatureAlgorithm = SignatureAlgorithm {
+		oids_sign_alg: &[RSA_ENCRYPTION],
+		#[cfg(feature = "crypto")]
+		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA512),
+		// sha512WithRSAEncryption in RFC 4055
+		oid_components: &[1, 2, 840, 113549, 1, 1, 13],
+		params: SignatureAlgorithmParams::Null,
+		rsa_key_size: Some(RsaKeySize::_4096),
 	};
 
 	/// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
@@ -163,6 +236,7 @@ pub(crate) mod algo {
 		// ecdsa-with-SHA256 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 2],
 		params: SignatureAlgorithmParams::None,
+		rsa_key_size: None,
 	};
 
 	/// ECDSA signing using the P-384 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
@@ -173,6 +247,7 @@ pub(crate) mod algo {
 		// ecdsa-with-SHA384 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 3],
 		params: SignatureAlgorithmParams::None,
+		rsa_key_size: None,
 	};
 
 	/// ECDSA signing using the P-521 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
@@ -188,6 +263,7 @@ pub(crate) mod algo {
 		// ecdsa-with-SHA256 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 2],
 		params: SignatureAlgorithmParams::None,
+		rsa_key_size: None,
 	};
 
 	/// ECDSA signing using the P-521 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
@@ -203,6 +279,7 @@ pub(crate) mod algo {
 		// ecdsa-with-SHA384 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 3],
 		params: SignatureAlgorithmParams::None,
+		rsa_key_size: None,
 	};
 
 	/// ECDSA signing using the P-521 curves and SHA-512 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
@@ -216,6 +293,7 @@ pub(crate) mod algo {
 		// ecdsa-with-SHA512 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 4],
 		params: SignatureAlgorithmParams::None,
+		rsa_key_size: None,
 	};
 
 	/// ED25519 curve signing as per [RFC 8410](https://tools.ietf.org/html/rfc8410)
@@ -227,6 +305,7 @@ pub(crate) mod algo {
 		// id-Ed25519 in RFC 8410
 		oid_components: &[1, 3, 101, 112],
 		params: SignatureAlgorithmParams::None,
+		rsa_key_size: None,
 	};
 
 	/// ML-DSA-44 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
@@ -237,6 +316,7 @@ pub(crate) mod algo {
 		sign_alg: SignAlgo::PqDsa(&ML_DSA_44_SIGNING),
 		oid_components: ML_DSA_44,
 		params: SignatureAlgorithmParams::None,
+		rsa_key_size: None,
 	};
 
 	/// ML-DSA-65 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
@@ -247,6 +327,7 @@ pub(crate) mod algo {
 		sign_alg: SignAlgo::PqDsa(&ML_DSA_65_SIGNING),
 		oid_components: ML_DSA_65,
 		params: SignatureAlgorithmParams::None,
+		rsa_key_size: None,
 	};
 
 	/// ML-DSA-87 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
@@ -257,6 +338,7 @@ pub(crate) mod algo {
 		sign_alg: SignAlgo::PqDsa(&ML_DSA_87_SIGNING),
 		oid_components: ML_DSA_87,
 		params: SignatureAlgorithmParams::None,
+		rsa_key_size: None,
 	};
 }
 // Signature algorithm IDs as per https://tools.ietf.org/html/rfc4055

@@ -130,7 +130,15 @@ impl KeyPair {
 				))
 			},
 			#[cfg(feature = "aws_lc_rs")]
-			SignAlgo::Rsa(sign_alg) => Self::generate_rsa_inner(alg, sign_alg, KeySize::Rsa2048),
+			SignAlgo::Rsa(sign_alg) => Self::generate_rsa_inner(
+				alg,
+				sign_alg,
+				match alg.rsa_key_size {
+					Some(RsaKeySize::_3072) => KeySize::Rsa3072,
+					Some(RsaKeySize::_4096) => KeySize::Rsa4096,
+					_ => KeySize::Rsa2048,
+				},
+			),
 			// Ring doesn't have RSA key generation yet:
 			// https://github.com/briansmith/ring/issues/219
 			// https://github.com/briansmith/ring/pull/733
@@ -144,6 +152,9 @@ impl KeyPair {
 	/// If passed a signature algorithm that is not RSA, it will return
 	/// [`Error::KeyGenerationUnavailable`].
 	#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+	#[deprecated(
+		note = "pass a key-size-specific algorithm such as `PKCS_RSA_SHA256_4096` to `generate_for` instead"
+	)]
 	pub fn generate_rsa_for(
 		alg: &'static SignatureAlgorithm,
 		key_size: RsaKeySize,
@@ -573,7 +584,6 @@ impl TryFrom<&PrivateKeyDer<'_>> for KeyPair {
 }
 
 /// The key size used for RSA key generation
-#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum RsaKeySize {
