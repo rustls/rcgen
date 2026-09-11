@@ -11,7 +11,10 @@ use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 
-use rcgen::{CertificateParams, DnType, ExtendedKeyUsagePurpose, Issuer, KeyPair, KeyUsagePurpose};
+use rcgen::{
+	serialize_private_key_pem, CertificateParams, DnType, ExtendedKeyUsagePurpose, Issuer, KeyPair,
+	KeyUsagePurpose,
+};
 use time::{Duration, OffsetDateTime};
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -66,11 +69,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 	params.not_before = yesterday;
 	params.not_after = tomorrow;
 
-	let output_keys = KeyPair::generate()?;
+	let (output_keys, key_der) = KeyPair::generate()?;
 	let output_cert = params.signed_by(&output_keys, &signer)?;
 
 	// Write new certificate
-	fs::write(&output_keys_file, output_keys.serialize_pem())?;
+	fs::write(&output_keys_file, serialize_private_key_pem(&key_der)?)?;
 	fs::write(&output_cert_file, output_cert.pem())?;
 
 	println!("Wrote signed leaf certificate:");

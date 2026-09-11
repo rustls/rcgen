@@ -4,10 +4,12 @@ use std::str::FromStr;
 use std::{fmt, io};
 
 use bpaf::Bpaf;
+use pki_types::PrivateKeyDer;
 use rcgen::DnValue::PrintableString;
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, CertifiedIssuer, DistinguishedName, DnType,
-	ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose, SanType, SignatureAlgorithm,
+	serialize_private_key_pem, BasicConstraints, Certificate, CertificateParams, CertifiedIssuer,
+	DistinguishedName, DnType, Error, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose,
+	SanType, SignatureAlgorithm,
 };
 
 /// Builder to configure TLS [CertificateParams] to be finalized
@@ -88,9 +90,10 @@ impl CaBuilder {
 	}
 	/// build `Ca` Certificate.
 	pub fn build(self) -> Result<Ca, rcgen::Error> {
-		let key_pair = KeyPair::generate_for(self.alg.into())?;
+		let (key_pair, key_der) = KeyPair::generate_for(self.alg.into())?;
 		Ok(Ca {
 			issuer: CertifiedIssuer::self_signed(self.params, key_pair)?,
+			key_der,
 		})
 	}
 }
@@ -99,16 +102,18 @@ impl CaBuilder {
 #[derive(Debug)]
 pub struct Ca {
 	issuer: CertifiedIssuer<'static, KeyPair>,
+	key_der: PrivateKeyDer<'static>,
 }
 
 impl Ca {
 	/// Self-sign and serialize
-	pub fn serialize_pem(&self) -> PemCertifiedKey {
-		PemCertifiedKey {
+	pub fn serialize_pem(&self) -> Result<PemCertifiedKey, Error> {
+		Ok(PemCertifiedKey {
 			cert_pem: self.issuer.pem(),
-			private_key_pem: self.issuer.key().serialize_pem(),
-		}
+			private_key_pem: serialize_private_key_pem(&self.key_der)?,
+		})
 	}
+
 	/// Return `&Certificate`
 	#[allow(dead_code)]
 	pub fn cert(&self) -> &Certificate {
@@ -120,16 +125,16 @@ impl Ca {
 #[derive(Debug)]
 pub struct EndEntity {
 	cert: Certificate,
-	key_pair: KeyPair,
+	key_der: PrivateKeyDer<'static>,
 }
 
 impl EndEntity {
 	/// Sign with `signer` and serialize.
-	pub fn serialize_pem(&self) -> PemCertifiedKey {
-		PemCertifiedKey {
+	pub fn serialize_pem(&self) -> Result<PemCertifiedKey, Error> {
+		Ok(PemCertifiedKey {
 			cert_pem: self.cert.pem(),
-			private_key_pem: self.key_pair.serialize_pem(),
-		}
+			private_key_pem: serialize_private_key_pem(&self.key_der)?,
+		})
 	}
 }
 
@@ -181,9 +186,9 @@ impl EndEntityBuilder {
 	}
 	/// build `EndEntity` Certificate.
 	pub fn build(self, issuer: &Ca) -> Result<EndEntity, rcgen::Error> {
-		let key_pair = KeyPair::generate_for(self.alg.into())?;
+		let (key_pair, key_der) = KeyPair::generate_for(self.alg.into())?;
 		let cert = self.params.signed_by(&key_pair, &issuer.issuer)?;
-		Ok(EndEntity { cert, key_pair })
+		Ok(EndEntity { cert, key_der })
 	}
 }
 
@@ -334,12 +339,12 @@ mod tests {
 		let end_entity = CertificateBuilder::new()
 			.end_entity()
 			.build(&ca)?
-			.serialize_pem();
+			.serialize_pem()?;
 
 		let der = pem::parse(end_entity.cert_pem)?;
 		let (_, cert) = X509Certificate::from_der(der.contents())?;
 
-		let issuer_der = pem::parse(ca.serialize_pem().cert_pem)?;
+		let issuer_der = pem::parse(ca.serialize_pem()?.cert_pem)?;
 		let (_, issuer) = X509Certificate::from_der(issuer_der.contents())?;
 
 		assert!(!cert.is_ca());
@@ -354,12 +359,12 @@ mod tests {
 			.signature_algorithm(KeyPairAlgorithm::EcdsaP384)?
 			.end_entity()
 			.build(&ca)?
-			.serialize_pem();
+			.serialize_pem()?;
 
 		let der = pem::parse(end_entity.cert_pem)?;
 		let (_, cert) = X509Certificate::from_der(der.contents())?;
 
-		let issuer_der = pem::parse(ca.serialize_pem().cert_pem)?;
+		let issuer_der = pem::parse(ca.serialize_pem()?.cert_pem)?;
 		let (_, issuer) = X509Certificate::from_der(issuer_der.contents())?;
 
 		check_signature(&cert, &issuer);
@@ -374,12 +379,12 @@ mod tests {
 			.signature_algorithm(KeyPairAlgorithm::EcdsaP521)?
 			.end_entity()
 			.build(&ca)?
-			.serialize_pem();
+			.serialize_pem()?;
 
 		let der = pem::parse(end_entity.cert_pem)?;
 		let (_, cert) = X509Certificate::from_der(der.contents())?;
 
-		let issuer_der = pem::parse(ca.serialize_pem().cert_pem)?;
+		let issuer_der = pem::parse(ca.serialize_pem()?.cert_pem)?;
 		let (_, issuer) = X509Certificate::from_der(issuer_der.contents())?;
 
 		check_signature(&cert, &issuer);
@@ -393,12 +398,12 @@ mod tests {
 			.signature_algorithm(KeyPairAlgorithm::Ed25519)?
 			.end_entity()
 			.build(&ca)?
-			.serialize_pem();
+			.serialize_pem()?;
 
 		let der = pem::parse(end_entity.cert_pem)?;
 		let (_, cert) = X509Certificate::from_der(der.contents())?;
 
-		let issuer_der = pem::parse(ca.serialize_pem().cert_pem)?;
+		let issuer_der = pem::parse(ca.serialize_pem()?.cert_pem)?;
 		let (_, issuer) = X509Certificate::from_der(issuer_der.contents())?;
 
 		check_signature(&cert, &issuer);
@@ -475,14 +480,16 @@ mod tests {
 
 	#[test]
 	fn key_pair_algorithm_to_keypair() -> anyhow::Result<()> {
-		let keypair = KeyPair::generate_for(KeyPairAlgorithm::Ed25519.into())?;
+		let (keypair, _) = KeyPair::generate_for(KeyPairAlgorithm::Ed25519.into())?;
 		assert_eq!(format!("{:?}", keypair.algorithm()), "PKCS_ED25519");
-		let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP256.into())?;
+
+		let (keypair, _) = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP256.into())?;
 		assert_eq!(
 			format!("{:?}", keypair.algorithm()),
 			"PKCS_ECDSA_P256_SHA256"
 		);
-		let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP384.into())?;
+
+		let (keypair, _) = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP384.into())?;
 		assert_eq!(
 			format!("{:?}", keypair.algorithm()),
 			"PKCS_ECDSA_P384_SHA384"
@@ -490,12 +497,13 @@ mod tests {
 
 		#[cfg(feature = "aws_lc_rs")]
 		{
-			let keypair = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP521.into())?;
+			let (keypair, _) = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP521.into())?;
 			assert_eq!(
 				format!("{:?}", keypair.algorithm()),
 				"PKCS_ECDSA_P521_SHA512"
 			);
 		}
+
 		Ok(())
 	}
 }

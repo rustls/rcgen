@@ -70,7 +70,7 @@ mod test_x509_custom_ext {
 		custom_ext.set_criticality(true);
 
 		// Generate a certificate with the custom extension, parse it with x509-parser.
-		let (mut params, test_key) = util::default_params();
+		let (mut params, test_key, _) = util::default_params();
 		params.custom_extensions = vec![custom_ext];
 		// Ensure the custom exts. being omitted into a CSR doesn't require SAN ext being present.
 		// See https://github.com/rustls/rcgen/issues/122
@@ -152,7 +152,7 @@ mod test_csr_custom_attributes {
 
 		// Serialize a DER-encoded CSR
 		let params = CertificateParams::default();
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		let csr = params
 			.serialize_request_with_attributes(&key_pair, vec![challenge_password_attribute])
 			.unwrap();
@@ -486,7 +486,7 @@ mod test_csr_extension_request {
 	fn dont_write_sans_extension_if_no_sans_are_present() {
 		let mut params = CertificateParams::default();
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		assert!(!parsed_csr
@@ -501,7 +501,7 @@ mod test_csr_extension_request {
 		params
 			.extended_key_usages
 			.push(ExtendedKeyUsagePurpose::ClientAuth);
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
 		let (_, parsed_csr) = X509CertificationRequest::from_der(csr.der()).unwrap();
 		let requested_extensions = parsed_csr
@@ -568,7 +568,7 @@ mod test_csr {
 
 	fn generate_and_test_parsed_csr(params: &CertificateParams) {
 		// Generate a key pair for the CSR
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		// Serialize the CSR into DER from the given parameters
 		let csr = params.serialize_request(&key_pair).unwrap();
 		// Parse the CSR we just serialized
@@ -590,7 +590,7 @@ mod test_subject_alternative_name_criticality {
 
 	#[test]
 	fn with_subject_sans_not_critical() {
-		let (params, keypair) = default_params();
+		let (params, keypair, _) = default_params();
 		assert!(
 			!params
 				.distinguished_name
@@ -611,7 +611,7 @@ mod test_subject_alternative_name_criticality {
 
 	#[test]
 	fn without_subject_sans_critical() {
-		let (mut params, keypair) = default_params();
+		let (mut params, keypair, _) = default_params();
 		params.distinguished_name = Default::default();
 
 		let cert = params.self_signed(&keypair).unwrap();

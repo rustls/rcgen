@@ -25,12 +25,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	});
 	println!("sha-512 fingerprint: {hash_hex}");
 	println!("{pem_serialized}");
-	println!("{}", key_pair.serialize_pem());
+	println!("{}", key_pair_pem);
 	std::fs::create_dir_all("certs/")?;
 	fs::write("certs/cert.pem", pem_serialized.as_bytes())?;
 	fs::write("certs/cert.der", der_serialized)?;
-	fs::write("certs/key.pem", key_pair.serialize_pem().as_bytes())?;
-	fs::write("certs/key.der", key_pair.serialize_der())?;
+	fs::write("certs/key.pem", key_pair_pem.as_bytes())?;
 	Ok(())
 }
 

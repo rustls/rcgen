@@ -14,15 +14,15 @@ a key pair to call [`CertificateParams::signed_by()`] or [`CertificateParams::se
 ## Example
 
 ```
-use rcgen::{generate_simple_self_signed, CertifiedKey};
+use rcgen::{generate_simple_self_signed, CertifiedKey, serialize_private_key_pem};
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names).unwrap();
+let (CertifiedKey { cert, signing_key }, private_key) = generate_simple_self_signed(subject_alt_names).unwrap();
 println!("{}", cert.pem());
-println!("{}", signing_key.serialize_pem());
+println!("{}", serialize_private_key_pem(&private_key).unwrap());
 # }
 ```"##
 )]
@@ -41,6 +41,8 @@ use std::ops::Deref;
 #[cfg(feature = "pem")]
 use pem::Pem;
 use pki_types::CertificateDer;
+#[cfg(feature = "crypto")]
+use pki_types::PrivateKeyDer;
 use time::{OffsetDateTime, Time};
 use yasna::models::{GeneralizedTime, ObjectIdentifier, UTCTime};
 use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
@@ -71,6 +73,8 @@ pub use extension::{
 };
 
 mod key_pair;
+#[cfg(feature = "pem")]
+pub use key_pair::serialize_private_key_pem;
 #[cfg(feature = "crypto")]
 pub use key_pair::KeyPair;
 #[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
@@ -118,27 +122,27 @@ and key pair as output.
 ## Example
 
 ```
-use rcgen::{generate_simple_self_signed, CertifiedKey};
+use rcgen::{generate_simple_self_signed, CertifiedKey, serialize_private_key_pem};
 # fn main () {
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names).unwrap();
+let (CertifiedKey { cert, signing_key }, private_key) = generate_simple_self_signed(subject_alt_names).unwrap();
 
 // The certificate is now valid for localhost and the domain "hello.world.example"
 println!("{}", cert.pem());
-println!("{}", signing_key.serialize_pem());
+println!("{}", serialize_private_key_pem(&private_key).unwrap());
 # }
 ```
 "##
 )]
 pub fn generate_simple_self_signed(
 	subject_alt_names: impl Into<Vec<String>>,
-) -> Result<CertifiedKey<KeyPair>, Error> {
-	let signing_key = KeyPair::generate()?;
+) -> Result<(CertifiedKey<KeyPair>, PrivateKeyDer<'static>), Error> {
+	let (signing_key, private_key) = KeyPair::generate()?;
 	let cert = CertificateParams::new(subject_alt_names)?.self_signed(&signing_key)?;
-	Ok(CertifiedKey { cert, signing_key })
+	Ok((CertifiedKey { cert, signing_key }, private_key))
 }
 
 /// An [`Issuer`] wrapper that also contains the issuer's [`Certificate`].
@@ -558,13 +562,6 @@ fn write_x509_extension(
 		let bytes = yasna::construct_der(value_serializer);
 		writer.next().write_bytes(&bytes);
 	})
-}
-
-#[cfg(feature = "zeroize")]
-impl zeroize::Zeroize for KeyPair {
-	fn zeroize(&mut self) {
-		self.serialized_der.zeroize();
-	}
 }
 
 /// A certificate serial number.

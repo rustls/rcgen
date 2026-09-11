@@ -7,14 +7,14 @@
 Simple Rust library to generate X.509 certificates.
 
 ```Rust
-use rcgen::{generate_simple_self_signed, CertifiedKey};
+use rcgen::{generate_simple_self_signed, CertifiedKey, serialize_private_key_pem};
 // Generate a certificate that's valid for "localhost" and "hello.world.example"
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let CertifiedKey { cert, signing_key } = generate_simple_self_signed(subject_alt_names).unwrap();
+let (CertifiedKey { cert, signing_key }, private_key) = generate_simple_self_signed(subject_alt_names).unwrap();
 println!("{}", cert.pem());
-println!("{}", signing_key.serialize_pem());
+println!("{}", serialize_private_key_pem(&private_key).unwrap());
 ```
 
 ## Trying it out with openssl

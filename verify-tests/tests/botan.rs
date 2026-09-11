@@ -9,7 +9,7 @@ use time::{Duration, OffsetDateTime};
 use verify_tests as util;
 
 fn default_params() -> (CertificateParams, KeyPair) {
-	let (mut params, key_pair) = util::default_params();
+	let (mut params, key_pair, _) = util::default_params();
 	// Botan has a sanity check that enforces a maximum expiration date
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
 	(params, key_pair)
@@ -57,7 +57,7 @@ fn test_botan() {
 #[test]
 fn test_botan_256() {
 	let (params, _) = default_params();
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+	let (key_pair, _) = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -67,7 +67,7 @@ fn test_botan_256() {
 #[test]
 fn test_botan_384() {
 	let (params, _) = default_params();
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P384_SHA384).unwrap();
+	let (key_pair, _) = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P384_SHA384).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -78,7 +78,7 @@ fn test_botan_384() {
 #[cfg(feature = "aws_lc_rs")]
 fn test_botan_521() {
 	let (params, _) = default_params();
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P521_SHA512).unwrap();
+	let (key_pair, _) = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P521_SHA512).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -88,7 +88,7 @@ fn test_botan_521() {
 #[test]
 fn test_botan_25519() {
 	let (params, _) = default_params();
-	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ED25519).unwrap();
+	let (key_pair, _) = KeyPair::generate_for(&rcgen::PKCS_ED25519).unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
@@ -141,7 +141,7 @@ fn test_botan_separate_ca() {
 	// Botan has a sanity check that enforces a maximum expiration date
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
 
-	let key_pair = KeyPair::generate().unwrap();
+	let (key_pair, _) = KeyPair::generate().unwrap();
 	let ca = Issuer::new(ca_params, ca_key);
 	let cert = params.signed_by(&key_pair, &ca).unwrap();
 	check_cert_ca(cert.der(), &cert, ca_cert.der());
@@ -166,7 +166,7 @@ fn test_botan_imported_ca() {
 	// Botan has a sanity check that enforces a maximum expiration date
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
 
-	let key_pair = KeyPair::generate().unwrap();
+	let (key_pair, _) = KeyPair::generate().unwrap();
 	let cert = params.signed_by(&key_pair, &ca).unwrap();
 	check_cert_ca(cert.der(), &cert, ca_cert_der);
 }
@@ -192,7 +192,7 @@ fn test_botan_imported_ca_with_printable_string() {
 		.push(DnType::CommonName, "Dev domain");
 	// Botan has a sanity check that enforces a maximum expiration date
 	params.not_after = rcgen::date_time_ymd(3016, 1, 1);
-	let key_pair = KeyPair::generate().unwrap();
+	let (key_pair, _) = KeyPair::generate().unwrap();
 	let cert = params.signed_by(&key_pair, &ca).unwrap();
 
 	check_cert_ca(cert.der(), &cert, ca_cert.der());
@@ -202,23 +202,23 @@ fn test_botan_imported_ca_with_printable_string() {
 fn test_botan_crl_parse() {
 	// Create an issuer CA.
 	let alg = &rcgen::PKCS_ECDSA_P256_SHA256;
-	let (mut issuer, _) = util::default_params();
+	let (mut issuer, _, _) = util::default_params();
 	issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	issuer.key_usages = vec![
 		KeyUsagePurpose::KeyCertSign,
 		KeyUsagePurpose::DigitalSignature,
 		KeyUsagePurpose::CrlSign,
 	];
-	let issuer_key = KeyPair::generate_for(alg).unwrap();
+	let (issuer_key, _) = KeyPair::generate_for(alg).unwrap();
 	let ca = Issuer::new(issuer, issuer_key);
 
 	// Create an end entity cert issued by the issuer.
-	let (mut ee, _) = util::default_params();
+	let (mut ee, _, _) = util::default_params();
 	ee.is_ca = IsCa::NoCa;
 	ee.serial_number = Some(SerialNumber::from(99999));
 	// Botan has a sanity check that enforces a maximum expiration date
 	ee.not_after = rcgen::date_time_ymd(3016, 1, 1);
-	let ee_key = KeyPair::generate_for(alg).unwrap();
+	let (ee_key, _) = KeyPair::generate_for(alg).unwrap();
 	let ee_cert = ee.signed_by(&ee_key, &ca).unwrap();
 	let botan_ee = botan::Certificate::load(ee_cert.der()).unwrap();
 

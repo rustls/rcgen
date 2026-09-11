@@ -1,6 +1,9 @@
 use std::fs;
 
-use rcgen::{date_time_ymd, CertificateParams, DistinguishedName, DnType, KeyPair, SanType};
+use rcgen::{
+	date_time_ymd, serialize_private_key_pem, CertificateParams, DistinguishedName, DnType,
+	KeyPair, SanType,
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let mut params: CertificateParams = Default::default();
@@ -18,18 +21,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		SanType::DnsName("localhost".try_into()?),
 	];
 
-	let key_pair = KeyPair::generate()?;
+	let (key_pair, key_der) = KeyPair::generate()?;
 	let cert = params.self_signed(&key_pair)?;
 
 	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;
 	let der_serialized = pem.contents();
 	println!("{pem_serialized}");
-	println!("{}", key_pair.serialize_pem());
+	println!("{}", serialize_private_key_pem(&key_der)?);
 	fs::create_dir_all("certs/")?;
 	fs::write("certs/cert.pem", pem_serialized.as_bytes())?;
 	fs::write("certs/cert.der", der_serialized)?;
-	fs::write("certs/key.pem", key_pair.serialize_pem().as_bytes())?;
-	fs::write("certs/key.der", key_pair.serialize_der())?;
+	fs::write("certs/key.pem", serialize_private_key_pem(&key_der)?)?;
+	fs::write("certs/key.der", key_der.secret_der())?;
 	Ok(())
 }

@@ -36,7 +36,7 @@ fn new_ca() -> (Certificate, Issuer<'static, KeyPair>) {
 	params.not_before = yesterday;
 	params.not_after = tomorrow;
 
-	let key_pair = KeyPair::generate().unwrap();
+	let (key_pair, _) = KeyPair::generate().unwrap();
 	let cert = params.self_signed(&key_pair).unwrap();
 	(cert, Issuer::new(params, key_pair))
 }
@@ -54,7 +54,7 @@ fn new_end_entity(issuer: &Issuer<'static, KeyPair>) -> Certificate {
 	params.not_before = yesterday;
 	params.not_after = tomorrow;
 
-	let key_pair = KeyPair::generate().unwrap();
+	let (key_pair, _) = KeyPair::generate().unwrap();
 	params.signed_by(&key_pair, issuer).unwrap()
 }
 

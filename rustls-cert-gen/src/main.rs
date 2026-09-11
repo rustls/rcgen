@@ -34,10 +34,11 @@ fn main() -> anyhow::Result<()> {
 
 	entity
 		.build(&ca)?
-		.serialize_pem()
+		.serialize_pem()?
 		.write(&opts.output, &opts.cert_file_name)?;
 
-	ca.serialize_pem().write(&opts.output, &opts.ca_file_name)?;
+	ca.serialize_pem()?
+		.write(&opts.output, &opts.ca_file_name)?;
 
 	Ok(())
 }
