@@ -726,7 +726,7 @@ mod tests {
 		};
 
 		// Make the cert
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
 
 		// Parse it
@@ -764,7 +764,7 @@ mod tests {
 		};
 
 		// Make the cert
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
 
 		// Parse it
@@ -800,7 +800,7 @@ mod tests {
 		// A distribution point with no URIs would be encoded as an empty
 		// fullName, violating GeneralNames ::= SEQUENCE SIZE (1..MAX) OF
 		// GeneralName (RFC 5280 §4.2.1.13), so it must be rejected.
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		assert_eq!(
 			params.self_signed(&key_pair).unwrap_err(),
 			Error::EmptyCrlDistributionPointUris
@@ -820,7 +820,7 @@ mod tests {
 			..CertificateParams::default()
 		};
 
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
 
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -839,7 +839,7 @@ mod tests {
 			..CertificateParams::default()
 		};
 
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
 
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -861,7 +861,7 @@ mod tests {
 		};
 
 		// Make the cert
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
 
 		// Parse it
@@ -896,7 +896,7 @@ mod tests {
 		};
 
 		// Make the cert
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
 
 		// Parse it
@@ -924,7 +924,7 @@ mod tests {
 		};
 
 		// Make the cert
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
 
 		// Parse it
@@ -945,7 +945,7 @@ mod tests {
 		#[test]
 		#[cfg(windows)]
 		fn test_windows_line_endings() {
-			let key_pair = KeyPair::generate().unwrap();
+			let (key_pair, _) = KeyPair::generate().unwrap();
 			let cert = CertificateParams::default().self_signed(&key_pair).unwrap();
 			assert!(cert.pem().contains("\r\n"));
 		}
@@ -953,7 +953,7 @@ mod tests {
 		#[test]
 		#[cfg(not(windows))]
 		fn test_not_windows_line_endings() {
-			let key_pair = KeyPair::generate().unwrap();
+			let (key_pair, _) = KeyPair::generate().unwrap();
 			let cert = CertificateParams::default().self_signed(&key_pair).unwrap();
 			assert!(!cert.pem().contains('\r'));
 		}
@@ -966,7 +966,7 @@ mod tests {
 		let mut params = CertificateParams::default();
 		let other_name = SanType::OtherName((vec![1, 2, 3, 4], "Foo".into()));
 		params.subject_alt_names.push(other_name.clone());
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
 
 		// We should be able to parse the certificate with x509-parser.
@@ -996,7 +996,7 @@ mod tests {
 			email_address_dn_type.clone(),
 			email_address_dn_value.clone(),
 		);
-		let key_pair = KeyPair::generate().unwrap();
+		let (key_pair, _) = KeyPair::generate().unwrap();
 		let cert = params.self_signed(&key_pair).unwrap();
 
 		// We should be able to parse the certificate with x509-parser.
@@ -1021,7 +1021,7 @@ mod tests {
 		let ip_san = SanType::IpAddress(IpAddr::V4(ip));
 
 		let mut params = CertificateParams::new(vec!["crabs".to_owned()]).unwrap();
-		let ca_key = KeyPair::generate().unwrap();
+		let (ca_key, _) = KeyPair::generate().unwrap();
 
 		// Add the SAN we want to test the parsing for
 		params.subject_alt_names.push(ip_san.clone());
@@ -1153,7 +1153,7 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 					.unwrap()
 			);
 
-			let ee_key = KeyPair::generate().unwrap();
+			let (ee_key, _) = KeyPair::generate().unwrap();
 			let ee_params = CertificateParams {
 				use_authority_key_identifier_extension: true,
 				..CertificateParams::default()

@@ -41,7 +41,7 @@ use crate::{
 /// issuer_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 /// issuer_params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::CrlSign];
 /// #[cfg(feature = "crypto")]
-/// let key_pair = KeyPair::generate().unwrap();
+/// let (key_pair, _) = KeyPair::generate().unwrap();
 /// #[cfg(not(feature = "crypto"))]
 /// let key_pair = MyKeyPair { public_key: vec![] };
 /// let issuer = Issuer::new(issuer_params, key_pair);
@@ -475,6 +475,6 @@ mod tests {
 			KeyUsagePurpose::DigitalSignature,
 			KeyUsagePurpose::CrlSign,
 		];
-		Issuer::new(issuer_params, KeyPair::generate().unwrap())
+		Issuer::new(issuer_params, KeyPair::generate().unwrap().0)
 	}
 }

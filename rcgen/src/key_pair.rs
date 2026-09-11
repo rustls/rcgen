@@ -5,8 +5,10 @@ use std::fmt;
 use aws_lc_rs::signature::PqdsaKeyPair;
 #[cfg(feature = "pem")]
 use pem::Pem;
+#[cfg(any(feature = "crypto", feature = "pem"))]
+use pki_types::PrivateKeyDer;
 #[cfg(feature = "crypto")]
-use pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+use pki_types::PrivatePkcs8KeyDer;
 use yasna::{DERWriter, DERWriterSeq};
 
 #[cfg(any(feature = "crypto", feature = "pem"))]
@@ -61,28 +63,17 @@ impl fmt::Debug for KeyPairKind {
 
 /// A key pair used to sign certificates and CSRs
 #[cfg(feature = "crypto")]
+#[derive(Debug)]
 pub struct KeyPair {
 	pub(crate) kind: KeyPairKind,
 	pub(crate) alg: &'static SignatureAlgorithm,
-	pub(crate) serialized_der: Vec<u8>,
-}
-
-#[cfg(feature = "crypto")]
-impl fmt::Debug for KeyPair {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("KeyPair")
-			.field("kind", &self.kind)
-			.field("alg", &self.alg)
-			.field("serialized_der", &"[secret key elided]")
-			.finish()
-	}
 }
 
 #[cfg(feature = "crypto")]
 impl KeyPair {
 	/// Generate a new random [`PKCS_ECDSA_P256_SHA256`] key pair
 	#[cfg(feature = "crypto")]
-	pub fn generate() -> Result<Self, Error> {
+	pub fn generate() -> Result<(Self, PrivateKeyDer<'static>), Error> {
 		Self::generate_for(&PKCS_ECDSA_P256_SHA256)
 	}
 
@@ -93,42 +84,50 @@ impl KeyPair {
 	/// a generated key or an error for key generation being unavailable.
 	/// Currently, only `aws-lc-rs` supports RSA key generation.
 	#[cfg(feature = "crypto")]
-	pub fn generate_for(alg: &'static SignatureAlgorithm) -> Result<Self, Error> {
+	pub fn generate_for(
+		alg: &'static SignatureAlgorithm,
+	) -> Result<(Self, PrivateKeyDer<'static>), Error> {
 		let rng = &SystemRandom::new();
 
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
 				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)._err()?;
-				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
-
-				let key_pair = ecdsa_from_pkcs8(sign_alg, key_pair_doc.as_ref(), rng).unwrap();
-				Ok(KeyPair {
-					kind: KeyPairKind::Ec(key_pair),
-					alg,
-					serialized_der: key_pair_serialized,
-				})
+				Ok((
+					KeyPair {
+						kind: KeyPairKind::Ec(ecdsa_from_pkcs8(
+							sign_alg,
+							key_pair_doc.as_ref(),
+							rng,
+						)?),
+						alg,
+					},
+					PrivateKeyDer::Pkcs8(key_pair_doc.as_ref().to_vec().into()),
+				))
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
 				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(rng)._err()?;
-				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
-
-				let key_pair = Ed25519KeyPair::from_pkcs8(key_pair_doc.as_ref()).unwrap();
-				Ok(KeyPair {
-					kind: KeyPairKind::Ed(key_pair),
-					alg,
-					serialized_der: key_pair_serialized,
-				})
+				Ok((
+					KeyPair {
+						kind: KeyPairKind::Ed(
+							Ed25519KeyPair::from_pkcs8(key_pair_doc.as_ref())._err()?,
+						),
+						alg,
+					},
+					PrivateKeyDer::Pkcs8(key_pair_doc.as_ref().to_vec().into()),
+				))
 			},
 			#[cfg(feature = "aws_lc_rs")]
 			SignAlgo::PqDsa(sign_alg) => {
 				let key_pair = PqdsaKeyPair::generate(sign_alg)._err()?;
-				let key_pair_serialized = key_pair.to_pkcs8v1()._err()?.as_ref().to_vec();
-
-				Ok(KeyPair {
-					kind: KeyPairKind::Pq(key_pair),
-					alg,
-					serialized_der: key_pair_serialized,
-				})
+				let der =
+					PrivateKeyDer::Pkcs8(key_pair.to_pkcs8v1()._err()?.as_ref().to_vec().into());
+				Ok((
+					KeyPair {
+						kind: KeyPairKind::Pq(key_pair),
+						alg,
+					},
+					der,
+				))
 			},
 			#[cfg(feature = "aws_lc_rs")]
 			SignAlgo::Rsa(sign_alg) => Self::generate_rsa_inner(alg, sign_alg, KeySize::Rsa2048),
@@ -148,7 +147,7 @@ impl KeyPair {
 	pub fn generate_rsa_for(
 		alg: &'static SignatureAlgorithm,
 		key_size: RsaKeySize,
-	) -> Result<Self, Error> {
+	) -> Result<(Self, PrivateKeyDer<'static>), Error> {
 		match alg.sign_alg {
 			SignAlgo::Rsa(sign_alg) => {
 				let key_size = match key_size {
@@ -167,16 +166,19 @@ impl KeyPair {
 		alg: &'static SignatureAlgorithm,
 		sign_alg: &'static dyn RsaEncoding,
 		key_size: KeySize,
-	) -> Result<Self, Error> {
+	) -> Result<(Self, PrivateKeyDer<'static>), Error> {
 		use aws_lc_rs::encoding::AsDer;
-		let key_pair = RsaKeyPair::generate(key_size)._err()?;
-		let key_pair_serialized = key_pair.as_der()._err()?.as_ref().to_vec();
 
-		Ok(KeyPair {
-			kind: KeyPairKind::Rsa(key_pair, sign_alg),
-			alg,
-			serialized_der: key_pair_serialized,
-		})
+		let key_pair = RsaKeyPair::generate(key_size)._err()?;
+		let der = PrivateKeyDer::Pkcs8(key_pair.as_der()._err()?.as_ref().to_vec().into());
+
+		Ok((
+			KeyPair {
+				kind: KeyPairKind::Rsa(key_pair, sign_alg),
+				alg,
+			},
+			der,
+		))
 	}
 
 	/// Returns the key pair's signature algorithm
@@ -287,11 +289,7 @@ impl KeyPair {
 			panic!("Unknown SignatureAlgorithm specified!");
 		};
 
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der,
-		})
+		Ok(KeyPair { kind, alg })
 	}
 
 	/// Obtains the key pair from a PEM formatted key
@@ -387,11 +385,7 @@ impl KeyPair {
 				panic!("Unknown SignatureAlgorithm specified!");
 			};
 
-			Ok(KeyPair {
-				kind,
-				alg,
-				serialized_der,
-			})
+			Ok(KeyPair { kind, alg })
 		}
 	}
 
@@ -425,25 +419,6 @@ impl KeyPair {
 	pub fn public_key_pem(&self) -> String {
 		let contents = self.subject_public_key_info();
 		let p = Pem::new("PUBLIC KEY", contents);
-		pem::encode_config(&p, ENCODE_CONFIG)
-	}
-
-	/// Serializes the key pair (including the private key) in PKCS#8 format in DER
-	pub fn serialize_der(&self) -> Vec<u8> {
-		self.serialized_der.clone()
-	}
-
-	/// Returns a reference to the serialized key pair (including the private key)
-	/// in PKCS#8 format in DER
-	pub fn serialized_der(&self) -> &[u8] {
-		&self.serialized_der
-	}
-
-	/// Serializes the key pair (including the private key) in PKCS#8 format in PEM
-	#[cfg(feature = "pem")]
-	pub fn serialize_pem(&self) -> String {
-		let contents = self.serialize_der();
-		let p = Pem::new("PRIVATE KEY", contents);
 		pem::encode_config(&p, ENCODE_CONFIG)
 	}
 }
@@ -593,25 +568,7 @@ impl TryFrom<&PrivateKeyDer<'_>> for KeyPair {
 			(kind, alg)
 		};
 
-		Ok(KeyPair {
-			kind,
-			alg,
-			serialized_der: key.secret_der().into(),
-		})
-	}
-}
-
-#[cfg(feature = "crypto")]
-impl From<KeyPair> for PrivatePkcs8KeyDer<'static> {
-	fn from(val: KeyPair) -> Self {
-		val.serialize_der().into()
-	}
-}
-
-#[cfg(feature = "crypto")]
-impl From<KeyPair> for PrivateKeyDer<'static> {
-	fn from(val: KeyPair) -> Self {
-		Self::from(PrivatePkcs8KeyDer::from(val))
+		Ok(KeyPair { kind, alg })
 	}
 }
 
@@ -770,6 +727,20 @@ pub trait PublicKeyData {
 	fn algorithm(&self) -> &'static SignatureAlgorithm;
 }
 
+/// Serialize private key to PEM format
+#[cfg(feature = "pem")]
+pub fn serialize_private_key_pem(key: &PrivateKeyDer<'_>) -> Result<String, Error> {
+	let tag = match key {
+		PrivateKeyDer::Pkcs8(_) => "PRIVATE KEY",
+		PrivateKeyDer::Pkcs1(_) => "RSA PRIVATE KEY",
+		PrivateKeyDer::Sec1(_) => "EC PRIVATE KEY",
+		_ => return Err(Error::CouldNotParseKeyPair),
+	};
+
+	let p = Pem::new(tag, key.secret_der());
+	Ok(pem::encode_config(&p, ENCODE_CONFIG))
+}
+
 pub(crate) fn serialize_public_key_der(key: &(impl PublicKeyData + ?Sized), writer: DERWriter) {
 	writer.write_sequence(|writer| {
 		key.algorithm().write_oids_sign_alg(writer.next());
@@ -796,7 +767,7 @@ mod test {
 			#[cfg(feature = "aws_lc_rs")]
 			&PKCS_RSA_SHA256,
 		] {
-			let kp = KeyPair::generate_for(alg).expect("keygen");
+			let (kp, _) = KeyPair::generate_for(alg).expect("keygen");
 			let pem = kp.public_key_pem();
 			let der = kp.subject_public_key_info();
 

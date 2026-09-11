@@ -1,3 +1,4 @@
+use pki_types::PrivateKeyDer;
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, CertificateRevocationList,
 	CertificateRevocationListParams, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope,
@@ -61,7 +62,7 @@ YPTHy8SWRA2sMII3ArhHJ8A=
 -----END PRIVATE KEY-----
 "#;
 
-pub fn default_params() -> (CertificateParams, KeyPair) {
+pub fn default_params() -> (CertificateParams, KeyPair, PrivateKeyDer<'static>) {
 	let mut params =
 		CertificateParams::new(vec!["crabs.crabs".to_string(), "localhost".to_string()]).unwrap();
 	params
@@ -71,8 +72,8 @@ pub fn default_params() -> (CertificateParams, KeyPair) {
 		.distinguished_name
 		.push(DnType::CommonName, "Master CA");
 
-	let key_pair = KeyPair::generate().unwrap();
-	(params, key_pair)
+	let (key_pair, key_der) = KeyPair::generate().unwrap();
+	(params, key_pair, key_der)
 }
 
 #[allow(unused)] // Used by openssl + x509-parser features.
@@ -81,7 +82,7 @@ pub fn test_crl() -> (
 	CertificateRevocationList,
 	Certificate,
 ) {
-	let (mut issuer, key_pair) = default_params();
+	let (mut issuer, key_pair, _) = default_params();
 	issuer.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	issuer.key_usages = vec![
 		KeyUsagePurpose::KeyCertSign,
@@ -120,7 +121,7 @@ pub fn test_crl() -> (
 
 #[allow(unused)] // Used by openssl + x509-parser features.
 pub fn cert_with_crl_dps() -> Vec<u8> {
-	let (mut params, key_pair) = default_params();
+	let (mut params, key_pair, _) = default_params();
 	params.crl_distribution_points = vec![
 		CrlDistributionPoint {
 			uris: vec![
