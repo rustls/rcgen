@@ -64,8 +64,8 @@ pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, Public
 mod error;
 pub use error::{Error, InvalidAsn1String};
 
-mod ext;
-pub use ext::{
+mod extension;
+pub use extension::{
 	CidrSubnet, CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralSubtree, KeyIdMethod,
 	KeyUsagePurpose, NameConstraints, OtherNameValue, SanType,
 };
