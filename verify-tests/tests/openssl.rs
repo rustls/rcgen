@@ -14,8 +14,8 @@ use openssl::x509::{CrlStatus, X509Crl, X509Req, X509StoreContext, X509};
 use pki_types::pem::PemObject;
 use pki_types::PrivateKeyDer;
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DistinguishedName, DnType, DnValue,
-	GeneralSubtree, IsCa, Issuer, KeyPair, NameConstraints,
+	Certificate, CertificateParams, DistinguishedName, DnType, DnValue, GeneralSubtree, IsCa,
+	Issuer, KeyPair, NameConstraints, PathLenConstraint,
 };
 use verify_tests as util;
 
@@ -311,7 +311,7 @@ fn test_openssl_rsa_combinations_given() {
 #[test]
 fn test_openssl_separate_ca() {
 	let (mut ca_params, ca_key, _) = util::default_params();
-	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	ca_params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 	let ca_cert_pem = ca_cert.pem();
 	let ca = Issuer::new(ca_params, ca_key);
@@ -336,7 +336,7 @@ fn test_openssl_separate_ca_with_printable_string() {
 		DnType::CountryName,
 		DnValue::PrintableString("US".try_into().unwrap()),
 	);
-	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	ca_params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
@@ -356,7 +356,7 @@ fn test_openssl_separate_ca_with_printable_string() {
 #[test]
 fn test_openssl_separate_ca_with_other_signing_alg() {
 	let (mut ca_params, _, _) = util::default_params();
-	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	ca_params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
 	let (ca_key, _) = KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 	let ca = Issuer::new(ca_params, ca_key);
@@ -377,7 +377,7 @@ fn test_openssl_separate_ca_with_other_signing_alg() {
 #[test]
 fn test_openssl_separate_ca_name_constraints() {
 	let (mut ca_params, ca_key, _) = util::default_params();
-	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	ca_params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
 
 	println!("openssl version: {:x}", openssl::version::number());
 
@@ -407,7 +407,7 @@ fn test_openssl_separate_ca_name_constraints() {
 #[test]
 fn test_openssl_separate_ca_name_constraints_directory_name() {
 	let (mut ca_params, ca_key, _) = util::default_params();
-	ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+	ca_params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
 
 	let mut permitted = DistinguishedName::new();
 	permitted.push(DnType::OrganizationName, "Crab widgits SE");

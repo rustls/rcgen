@@ -4,16 +4,17 @@ use std::net::IpAddr;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
+use time::OffsetDateTime;
 use yasna::models::ObjectIdentifier;
-use yasna::{DERWriter, Tag};
+use yasna::{DERWriter, DERWriterSet, Tag};
 
+use crate::crl::RevokedCertParams;
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
 use crate::string::Ia5String;
-#[cfg(feature = "x509-parser")]
-use crate::Error;
 use crate::{
-	oid, write_distinguished_name, CertificateParams, DistinguishedName, Issuer, SigningKey,
+	dt_to_generalized, oid, write_distinguished_name, CertificateParams, DistinguishedName, Error,
+	Issuer, SerialNumber, SigningKey,
 };
 
 /// An X.509v3 subject alternative name extension according to [RFC 5280 §4.2.1.6].
@@ -38,6 +39,27 @@ impl<'params> SubjectAlternativeName<'params> {
 			// is an empty sequence, and SHOULD be non-critical otherwise.
 			criticality: params.distinguished_name.entries.is_empty().into(),
 			names: &params.subject_alt_names,
+		})
+	}
+
+	/// Recover [`CertificateParams`] state from a parsed SAN extension.
+	///
+	/// Returns true if the parsed extension was a SAN and `params` were updated.
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		parsed: &x509_parser::extensions::ParsedExtension<'_>,
+	) -> Result<bool, Error> {
+		Ok(match parsed {
+			x509_parser::extensions::ParsedExtension::SubjectAlternativeName(san) => {
+				for name in &san.general_names {
+					params
+						.subject_alt_names
+						.push(SanType::try_from_general(name)?);
+				}
+				true
+			},
+			_ => false,
 		})
 	}
 
@@ -96,26 +118,6 @@ pub enum SanType {
 }
 
 impl SanType {
-	#[cfg(all(test, feature = "x509-parser"))]
-	pub(crate) fn from_x509(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Vec<Self>, Error> {
-		let sans = x509
-			.subject_alternative_name()
-			.map_err(|_| Error::CouldNotParseCertificate)?
-			.map(|ext| &ext.value.general_names);
-
-		let Some(sans) = sans else {
-			return Ok(Vec::new());
-		};
-
-		let mut subject_alt_names = Vec::with_capacity(sans.len());
-		for san in sans {
-			subject_alt_names.push(Self::try_from_general(san)?);
-		}
-		Ok(subject_alt_names)
-	}
-
 	#[cfg(feature = "x509-parser")]
 	pub(crate) fn try_from_general(
 		name: &x509_parser::extensions::GeneralName<'_>,
@@ -225,8 +227,25 @@ impl<'params> KeyUsage<'params> {
 		if params.key_usages.is_empty() {
 			return None;
 		}
-
 		Some(Self(&params.key_usages))
+	}
+
+	/// Recover [`CertificateParams`] state from a parsed KeyUsage extension.
+	///
+	/// Returns true if the parsed extension was a KeyUsage and `params` were updated.
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		parsed: &x509_parser::extensions::ParsedExtension<'_>,
+	) -> Result<bool, Error> {
+		Ok(match parsed {
+			x509_parser::extensions::ParsedExtension::KeyUsage(ku) => {
+				// x509-parser stores BIT STRING flags in reversed bit order
+				params.key_usages = KeyUsagePurpose::from_u16(ku.flags.reverse_bits());
+				true
+			},
+			_ => false,
+		})
 	}
 }
 
@@ -358,6 +377,53 @@ impl<'params> ExtendedKeyUsage<'params> {
 
 		Some(Self(&params.extended_key_usages))
 	}
+
+	/// Recover [`CertificateParams`] state from a parsed EKU extension.
+	///
+	/// Returns true if the parsed extension was an EKU and `params` were updated.
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		parsed: &x509_parser::extensions::ParsedExtension<'_>,
+	) -> Result<bool, Error> {
+		use ExtendedKeyUsagePurpose::*;
+
+		Ok(match parsed {
+			x509_parser::extensions::ParsedExtension::ExtendedKeyUsage(eku) => {
+				if eku.any {
+					params.insert_extended_key_usage(Any);
+				}
+				if eku.server_auth {
+					params.insert_extended_key_usage(ServerAuth);
+				}
+				if eku.client_auth {
+					params.insert_extended_key_usage(ClientAuth);
+				}
+				if eku.code_signing {
+					params.insert_extended_key_usage(CodeSigning);
+				}
+				if eku.email_protection {
+					params.insert_extended_key_usage(EmailProtection);
+				}
+				if eku.time_stamping {
+					params.insert_extended_key_usage(TimeStamping);
+				}
+				if eku.ocsp_signing {
+					params.insert_extended_key_usage(OcspSigning);
+				}
+				for other in &eku.other {
+					params.insert_extended_key_usage(Other(
+						other
+							.iter()
+							.ok_or(Error::UnsupportedExtension)?
+							.collect::<Vec<_>>(),
+					));
+				}
+				true
+			},
+			_ => false,
+		})
+	}
 }
 
 impl StaticExtension for ExtendedKeyUsage<'_> {
@@ -405,43 +471,6 @@ pub enum ExtendedKeyUsagePurpose {
 }
 
 impl ExtendedKeyUsagePurpose {
-	#[cfg(all(test, feature = "x509-parser"))]
-	pub(crate) fn from_x509(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Vec<Self>, Error> {
-		let extended_key_usage = x509
-			.extended_key_usage()
-			.map_err(|_| Error::CouldNotParseCertificate)?
-			.map(|ext| ext.value);
-
-		let mut extended_key_usages = Vec::new();
-		if let Some(extended_key_usage) = extended_key_usage {
-			if extended_key_usage.any {
-				extended_key_usages.push(Self::Any);
-			}
-			if extended_key_usage.server_auth {
-				extended_key_usages.push(Self::ServerAuth);
-			}
-			if extended_key_usage.client_auth {
-				extended_key_usages.push(Self::ClientAuth);
-			}
-			if extended_key_usage.code_signing {
-				extended_key_usages.push(Self::CodeSigning);
-			}
-			if extended_key_usage.email_protection {
-				extended_key_usages.push(Self::EmailProtection);
-			}
-			if extended_key_usage.time_stamping {
-				extended_key_usages.push(Self::TimeStamping);
-			}
-			if extended_key_usage.ocsp_signing {
-				extended_key_usages.push(Self::OcspSigning);
-			}
-		}
-
-		Ok(extended_key_usages)
-	}
-
 	pub(crate) fn oid(&self) -> &[u64] {
 		use ExtendedKeyUsagePurpose::*;
 		match self {
@@ -457,6 +486,121 @@ impl ExtendedKeyUsagePurpose {
 			Other(oid) => oid,
 		}
 	}
+}
+
+/// An X.509v3 basic constraints extension according to [RFC 5280 §4.2.1.9].
+///
+/// [RFC 5280 §4.2.1.9]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.9>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct BasicConstraints(IsCa);
+
+impl BasicConstraints {
+	pub(crate) fn from_params(params: &CertificateParams) -> Option<Self> {
+		// For IsCa::NoCa the extension is omitted entirely: absence implies the
+		// certificate is not a CA. Use IsCa::ExplicitNoCa to emit the extension
+		// with cA absent (FALSE).
+		if params.is_ca == IsCa::NoCa {
+			return None;
+		}
+
+		Some(Self(params.is_ca))
+	}
+
+	/// Recover [`CertificateParams`] state from a parsed BasicConstraints extension.
+	///
+	/// Returns true if the parsed extension was a BasicConstraints and `params` were updated.
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		parsed: &x509_parser::extensions::ParsedExtension<'_>,
+	) -> Result<bool, Error> {
+		Ok(match parsed {
+			x509_parser::extensions::ParsedExtension::BasicConstraints(bc) => {
+				params.is_ca = IsCa::from_basic_constraints(bc)?;
+				true
+			},
+			_ => false,
+		})
+	}
+}
+
+impl StaticExtension for BasicConstraints {
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   BasicConstraints ::= SEQUENCE {
+				cA                      BOOLEAN DEFAULT FALSE,
+				pathLenConstraint       INTEGER (0..MAX) OPTIONAL }
+		*/
+		writer.write_sequence(|writer| {
+			let IsCa::Ca(constraints) = &self.0 else {
+				// The cA flag is DEFAULT FALSE, so DER (X.690 §11.5) requires it
+				// to be omitted when false: the extension value is an empty
+				// SEQUENCE.
+				return;
+			};
+
+			writer.next().write_bool(true); // cA flag
+			if let PathLenConstraint::Constrained(path_len_constraint) = constraints {
+				writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
+			}
+		});
+	}
+
+	// RFC 5280 §4.2.1.9: "Conforming CAs MUST include this extension in all CA
+	// certificates that contain public keys used to validate digital signatures
+	// on certificates and MUST mark the extension as critical in such
+	// certificates."
+	const CRITICALITY: Criticality = Criticality::Critical;
+
+	const OID: &'static [u64] = oid::BASIC_CONSTRAINTS;
+}
+
+/// Whether the certificate is allowed to sign other certificates
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum IsCa {
+	/// The certificate can only sign itself
+	NoCa,
+	/// The certificate can only sign itself, adding the extension and `CA:FALSE`
+	ExplicitNoCa,
+	/// The certificate may be used to sign other certificates
+	Ca(PathLenConstraint),
+}
+
+impl IsCa {
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_basic_constraints(
+		basic_constraints: &x509_parser::extensions::BasicConstraints,
+	) -> Result<Self, Error> {
+		use x509_parser::extensions::BasicConstraints as B;
+
+		Ok(match basic_constraints {
+			B {
+				ca: true,
+				path_len_constraint: Some(n),
+			} if *n <= u8::MAX as u32 => Self::Ca(PathLenConstraint::Constrained(*n as u8)),
+			B {
+				ca: true,
+				path_len_constraint: Some(_),
+			} => return Err(Error::CouldNotParseCertificate),
+			B {
+				ca: true,
+				path_len_constraint: None,
+			} => Self::Ca(PathLenConstraint::Unconstrained),
+			B { ca: false, .. } => Self::ExplicitNoCa,
+		})
+	}
+}
+
+/// The path length constraint (only relevant for CA certificates)
+///
+/// Sets an optional upper limit on the length of the intermediate certificate chain
+/// length allowed for this CA certificate (not including the end entity certificate).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PathLenConstraint {
+	/// No constraint
+	Unconstrained,
+	/// Constrain to the contained number of intermediate certificates
+	Constrained(u8),
 }
 
 /// An X.509v3 name constraints extension according to [RFC 5280 §4.2.1.10].
@@ -478,6 +622,34 @@ impl<'params> NameConstraintsExt<'params> {
 			}),
 			_ => None,
 		}
+	}
+
+	/// Recover [`CertificateParams`] state from a parsed NameConstraints extension.
+	///
+	/// Returns true if the parsed extension was a NameConstraints and `params` were updated.
+	#[cfg(all(test, feature = "x509-parser"))]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		parsed: &x509_parser::extensions::ParsedExtension<'_>,
+	) -> Result<bool, Error> {
+		Ok(match parsed {
+			x509_parser::extensions::ParsedExtension::NameConstraints(nc) => {
+				let permitted_subtrees = match &nc.permitted_subtrees {
+					Some(permitted) => GeneralSubtree::from_x509(permitted)?,
+					None => Vec::new(),
+				};
+				let excluded_subtrees = match &nc.excluded_subtrees {
+					Some(excluded) => GeneralSubtree::from_x509(excluded)?,
+					None => Vec::new(),
+				};
+				params.name_constraints = Some(crate::NameConstraints {
+					permitted_subtrees,
+					excluded_subtrees,
+				});
+				true
+			},
+			_ => false,
+		})
 	}
 
 	fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
@@ -553,37 +725,6 @@ pub struct NameConstraints {
 }
 
 impl NameConstraints {
-	#[cfg(all(test, feature = "x509-parser"))]
-	pub(crate) fn from_x509(
-		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Option<Self>, Error> {
-		let constraints = x509
-			.name_constraints()
-			.map_err(|_| Error::CouldNotParseCertificate)?
-			.map(|ext| ext.value);
-
-		let Some(constraints) = constraints else {
-			return Ok(None);
-		};
-
-		let permitted_subtrees = if let Some(permitted) = &constraints.permitted_subtrees {
-			GeneralSubtree::from_x509(permitted)?
-		} else {
-			Vec::new()
-		};
-
-		let excluded_subtrees = if let Some(excluded) = &constraints.excluded_subtrees {
-			GeneralSubtree::from_x509(excluded)?
-		} else {
-			Vec::new()
-		};
-
-		Ok(Some(Self {
-			permitted_subtrees,
-			excluded_subtrees,
-		}))
-	}
-
 	pub(crate) fn is_empty(&self) -> bool {
 		self.permitted_subtrees.is_empty() && self.excluded_subtrees.is_empty()
 	}
@@ -803,7 +944,7 @@ impl CrlDistributionPoint {
 	}
 }
 
-pub(crate) fn write_distribution_point_name_uris<'a>(
+fn write_distribution_point_name_uris<'a>(
 	writer: DERWriter,
 	uris: impl IntoIterator<Item = &'a String>,
 ) {
@@ -830,6 +971,171 @@ pub(crate) fn write_distribution_point_name_uris<'a>(
 	});
 }
 
+/// An X.509v3 CRL number extension according to [RFC 5280 §5.2.3].
+///
+/// [RFC 5280 §5.2.3]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.2.3>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct CrlNumber<'params>(&'params SerialNumber);
+
+impl<'params> From<&'params SerialNumber> for CrlNumber<'params> {
+	fn from(number: &'params SerialNumber) -> Self {
+		Self(number)
+	}
+}
+
+impl StaticExtension for CrlNumber<'_> {
+	fn write_value(&self, writer: DERWriter) {
+		// CRLNumber ::= INTEGER (0..MAX)
+		writer.write_bigint_bytes(self.0.as_ref(), true);
+	}
+
+	// RFC 5280 §5.2.3: "CRL issuers conforming to this profile MUST include this
+	// extension in all CRLs and MUST mark this extension as non-critical."
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	const OID: &'static [u64] = oid::CRL_NUMBER;
+}
+
+/// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
+/// [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CrlIssuingDistributionPoint {
+	/// The CRL's distribution point, containing a sequence of URIs the CRL can be retrieved from.
+	pub distribution_point: CrlDistributionPoint,
+	/// An optional description of the CRL's scope. If omitted, the CRL may contain
+	/// both user certs and CA certs.
+	pub scope: Option<CrlScope>,
+}
+
+// An X.509v3 issuing distribution point extension according to RFC 5280 §5.2.5
+// (<https://www.rfc-editor.org/rfc/rfc5280#section-5.2.5>).
+impl StaticExtension for &CrlIssuingDistributionPoint {
+	fn write_value(&self, writer: DERWriter) {
+		// IssuingDistributionPoint SEQUENCE
+		writer.write_sequence(|writer| {
+			// distributionPoint [0] DistributionPointName OPTIONAL
+			write_distribution_point_name_uris(writer.next(), &self.distribution_point.uris);
+
+			// -- at most one of onlyContainsUserCerts, onlyContainsCACerts,
+			// -- and onlyContainsAttributeCerts may be set to TRUE.
+			if let Some(scope) = self.scope {
+				let tag = match scope {
+					// onlyContainsUserCerts [1] BOOLEAN DEFAULT FALSE,
+					CrlScope::UserCertsOnly => Tag::context(1),
+					// onlyContainsCACerts [2] BOOLEAN DEFAULT FALSE,
+					CrlScope::CaCertsOnly => Tag::context(2),
+				};
+				writer.next().write_tagged_implicit(tag, |writer| {
+					writer.write_bool(true);
+				});
+			}
+		});
+	}
+
+	// RFC 5280 §5.2.5: "Although the extension is critical, conforming
+	// implementations are not required to support this extension."
+	const CRITICALITY: Criticality = Criticality::Critical;
+
+	const OID: &'static [u64] = oid::CRL_ISSUING_DISTRIBUTION_POINT;
+}
+
+/// Describes the scope of a CRL for an issuing distribution point extension.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum CrlScope {
+	/// The CRL contains only end-entity user certificates.
+	UserCertsOnly,
+	/// The CRL contains only CA certificates.
+	CaCertsOnly,
+}
+
+/// An X.509v3 CRL reason code entry extension according to [RFC 5280 §5.3.1].
+///
+/// [RFC 5280 §5.3.1]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ReasonCode(RevocationReason);
+
+impl ReasonCode {
+	pub(crate) fn from_params(params: &RevokedCertParams) -> Option<Self> {
+		// RFC 5280 §5.3.1: "The reason code CRL entry extension SHOULD be absent
+		// instead of using the unspecified (0) reasonCode value."
+		params
+			.reason_code
+			.filter(|reason| *reason != RevocationReason::Unspecified)
+			.map(Self)
+	}
+}
+
+impl StaticExtension for ReasonCode {
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   CRLReason ::= ENUMERATED {
+				unspecified             (0),
+				keyCompromise           (1),
+				cACompromise            (2),
+				affiliationChanged      (3),
+				superseded              (4),
+				cessationOfOperation    (5),
+				certificateHold         (6),
+					 -- value 7 is not used
+				removeFromCRL           (8),
+				privilegeWithdrawn      (9),
+				aACompromise           (10) }
+		*/
+		writer.write_enum(self.0 as i64);
+	}
+
+	// RFC 5280 §5.3.1: "The reasonCode is a non-critical CRL entry extension".
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	const OID: &'static [u64] = oid::CRL_REASONS;
+}
+
+/// Identifies the reason a certificate was revoked.
+/// See [RFC 5280 §5.3.1][1]
+///
+/// [1]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1>
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[allow(missing_docs)] // Not much to add above the code name.
+pub enum RevocationReason {
+	Unspecified = 0,
+	KeyCompromise = 1,
+	CaCompromise = 2,
+	AffiliationChanged = 3,
+	Superseded = 4,
+	CessationOfOperation = 5,
+	CertificateHold = 6,
+	// 7 is not defined.
+	RemoveFromCrl = 8,
+	PrivilegeWithdrawn = 9,
+	AaCompromise = 10,
+}
+
+/// An X.509v3 CRL invalidity date entry extension according to [RFC 5280 §5.3.2].
+///
+/// [RFC 5280 §5.3.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.2>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct InvalidityDate(OffsetDateTime);
+
+impl InvalidityDate {
+	pub(crate) fn from_params(params: &RevokedCertParams) -> Option<Self> {
+		params.invalidity_date.map(Self)
+	}
+}
+
+impl StaticExtension for InvalidityDate {
+	fn write_value(&self, writer: DERWriter) {
+		// RFC 5280 §5.3.2: InvalidityDate ::= GeneralizedTime. Unlike the Time
+		// CHOICE used elsewhere, dates in the UTCTime range (1950-2049) must still
+		// be encoded as GeneralizedTime.
+		writer.write_generalized_time(&dt_to_generalized(self.0));
+	}
+
+	// RFC 5280 §5.3.2: "The invalidity date is a non-critical CRL entry extension".
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	const OID: &'static [u64] = oid::CRL_INVALIDITY_DATE;
+}
+
 /// An X.509v3 subject key identifier extension according to [RFC 5280 §4.2.1.2].
 ///
 /// [RFC 5280 §4.2.1.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.2>
@@ -839,6 +1145,23 @@ pub(crate) struct SubjectKeyIdentifier(Vec<u8>);
 impl SubjectKeyIdentifier {
 	pub(crate) fn new(key_identifier_method: &KeyIdMethod, pub_key_spki: &[u8]) -> Self {
 		Self(key_identifier_method.derive(pub_key_spki))
+	}
+
+	/// Recover [`CertificateParams`] state from a parsed SKI extension.
+	///
+	/// Returns true if the parsed extension was a SKI and `params` were updated.
+	#[cfg(all(test, feature = "x509-parser"))]
+	pub(crate) fn from_parsed(
+		params: &mut CertificateParams,
+		parsed: &x509_parser::extensions::ParsedExtension<'_>,
+	) -> Result<bool, Error> {
+		Ok(match parsed {
+			x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(ski) => {
+				params.key_identifier_method = KeyIdMethod::PreSpecified(ski.0.to_vec());
+				true
+			},
+			_ => false,
+		})
 	}
 }
 
@@ -989,6 +1312,225 @@ impl KeyIdMethod {
 	}
 }
 
+/// An ACME TLS-ALPN-01 challenge response certificate extension.
+///
+/// Add it to [`CertificateParams::custom_extensions`] by converting it into a
+/// [`CustomExtension`]. See [RFC 8737 §3] for more information.
+///
+/// If you have a `Vec<u8>` or `&[u8]` digest, use `try_from` and handle the
+/// potential error if the input length is not 32 bytes.
+///
+/// [RFC 8737 §3]: <https://www.rfc-editor.org/rfc/rfc8737#section-3>
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcmeIdentifier(
+	/// The SHA-256 digest of the RFC 8555 key authorization for a TLS-ALPN-01
+	/// challenge issued by the CA.
+	pub [u8; 32],
+);
+
+impl TryFrom<&[u8]> for AcmeIdentifier {
+	type Error = Error;
+
+	fn try_from(key_auth_digest: &[u8]) -> Result<Self, Self::Error> {
+		// All TLS-ALPN-01 challenge response digests are 32 bytes long,
+		// matching the output of the SHA-256 digest algorithm.
+		Ok(Self(
+			key_auth_digest
+				.try_into()
+				.map_err(|_| Error::InvalidAcmeIdentifierLength)?,
+		))
+	}
+}
+
+impl From<AcmeIdentifier> for CustomExtension {
+	fn from(identifier: AcmeIdentifier) -> Self {
+		Self {
+			oid: oid::PE_ACME.to_owned(),
+			// RFC 8737 §3: "The acmeIdentifier extension MUST be critical so that
+			// the certificate isn't inadvertently used by non-ACME software."
+			criticality: Criticality::Critical,
+			der_value: yasna::construct_der(|writer| {
+				// Authorization ::= OCTET STRING (SIZE (32))
+				writer.write_bytes(&identifier.0)
+			}),
+		}
+	}
+}
+
+/// A custom extension of a certificate, as specified in
+/// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct CustomExtension {
+	/// OID identifying the extension.
+	///
+	/// Only one extension with a given OID may appear within a certificate.
+	pub oid: Vec<u64>,
+
+	/// Criticality of the extension.
+	///
+	/// See [`Criticality`] for more information.
+	pub criticality: Criticality,
+
+	/// The raw DER encoded value of the extension.
+	///
+	/// This should not contain the OID, criticality, OCTET STRING, or the outer
+	/// extension SEQUENCE of the extension itself: it should only be the DER encoded
+	/// bytes that will be found within the extension's OCTET STRING value.
+	pub der_value: Vec<u8>,
+}
+
+impl CustomExtension {
+	/// Create a new custom extension with the specified content
+	pub fn from_oid_content(oid: &[u64], criticality: Criticality, der_value: Vec<u8>) -> Self {
+		Self {
+			oid: oid.to_vec(),
+			criticality,
+			der_value,
+		}
+	}
+
+	/// Recover a custom extension from a parsed X.509 extension that rcgen does not
+	/// represent natively in [`CertificateParams`].
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_parsed(
+		parsed: &x509_parser::extensions::X509Extension<'_>,
+	) -> Result<Self, Error> {
+		Ok(Self {
+			oid: parsed
+				.oid
+				.iter()
+				.ok_or(Error::UnsupportedExtension)?
+				.collect::<Vec<_>>(),
+			criticality: parsed.critical.into(),
+			der_value: parsed.value.to_vec(),
+		})
+	}
+
+	/// Obtains the OID components of the extensions, as u64 pieces
+	pub fn oid_components(&self) -> impl Iterator<Item = u64> + '_ {
+		self.oid.iter().copied()
+	}
+}
+
+impl Extension for &CustomExtension {
+	fn write_value(&self, writer: DERWriter) {
+		writer.write_der(&self.der_value)
+	}
+
+	fn criticality(&self) -> Criticality {
+		self.criticality
+	}
+
+	fn oid(&self) -> &[u64] {
+		&self.oid
+	}
+}
+
+/// A collection of X.509 extensions.
+///
+/// Preserves the order that extensions were added and maintains the invariant that
+/// there are no duplicate extension OIDs. The extensions borrow from the params
+/// they were built from for the duration of one serialization.
+#[derive(Debug, Default)]
+pub(crate) struct Extensions<'params> {
+	exts: Vec<Box<dyn Extension + 'params>>,
+}
+
+impl<'params> Extensions<'params> {
+	/// Add an extension to the collection.
+	///
+	/// Returns [`Error::DuplicateExtension`] if the extension's OID is already present
+	/// in the collection.
+	pub(crate) fn add_extension(
+		&mut self,
+		extension: Box<dyn Extension + 'params>,
+	) -> Result<(), Error> {
+		let oid = extension.oid();
+		// A linear scan is plenty: no profile puts more than a handful of
+		// extensions in one certificate.
+		if self.exts.iter().any(|existing| existing.oid() == oid) {
+			return Err(Error::DuplicateExtension(
+				ObjectIdentifier::from_slice(oid).to_string(),
+			));
+		}
+
+		self.exts.push(extension);
+		Ok(())
+	}
+
+	/// Write the certificate's optional extensions field.
+	///
+	/// Nothing is written when the collection is empty: presence is decided by the
+	/// built collection, not predicted from the params, so an empty extensions
+	/// field is never emitted and requested extensions can never be silently
+	/// dropped.
+	pub(crate) fn write_exts_der(&self, writer: DERWriter) {
+		if self.exts.is_empty() {
+			return;
+		}
+
+		writer.write_tagged(Tag::context(3), |writer| self.write_der(writer));
+	}
+
+	/// Write the PKCS #9 extensionRequest attribute for a CSR into the
+	/// attributes SET, containing the collection as its single `Extensions`
+	/// value.
+	///
+	/// Nothing is written when the collection is empty: attribute values are a
+	/// SET SIZE(1..MAX), so an empty extension request can't be encoded and the
+	/// attribute is elided entirely. The attribute's slot in the SET is only
+	/// claimed when there is something to write: yasna rejects set elements
+	/// that produce no output.
+	pub(crate) fn write_csr_attribute(&self, writer: &mut DERWriterSet<'_>) {
+		if self.exts.is_empty() {
+			return;
+		}
+
+		/*
+		   Attribute { ATTRIBUTE:IOSet } ::= SEQUENCE {
+				type   ATTRIBUTE.&id({IOSet}),
+				values SET SIZE(1..MAX) OF ATTRIBUTE.&Type({IOSet}{@type})
+		   }
+		   ExtensionRequest ::= Extensions
+		*/
+		writer.next().write_sequence(|writer| {
+			writer.next().write_oid(&ObjectIdentifier::from_slice(
+				oid::PKCS_9_AT_EXTENSION_REQUEST,
+			));
+			writer.next().write_set(|writer| {
+				self.write_der(writer.next());
+			});
+		});
+	}
+
+	/// Write the `crlExtensions [0] EXPLICIT Extensions OPTIONAL` field of a CRL.
+	///
+	/// Nothing is written when the collection is empty.
+	pub(crate) fn write_crl_der(&self, writer: DERWriter) {
+		if self.exts.is_empty() {
+			return;
+		}
+
+		writer.write_tagged(Tag::context(0), |writer| self.write_der(writer));
+	}
+
+	/// Write `Extensions ::= SEQUENCE SIZE (1..MAX) OF Extension`, e.g. for the
+	/// untagged `crlEntryExtensions` field of a CRL entry.
+	///
+	/// Nothing is written when the collection is empty.
+	pub(crate) fn write_der(&self, writer: DERWriter) {
+		if self.exts.is_empty() {
+			return;
+		}
+
+		writer.write_sequence(|writer| {
+			for extension in &self.exts {
+				extension.write(writer.next());
+			}
+		})
+	}
+}
+
 impl<T: StaticExtension> Extension for T {
 	fn write_value(&self, writer: DERWriter) {
 		// Calling with fully qualified syntax to disambiguate.
@@ -1070,8 +1612,8 @@ pub(crate) trait Extension: Debug {
 /// See [RFC 5280 §4.2] for more information.
 ///
 /// [RFC 5280 §4.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2>
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Criticality {
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Criticality {
 	/// The extension MUST be recognized and parsed correctly.
 	Critical,
 
@@ -1093,12 +1635,99 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn extensions_reject_duplicate_oids() {
+		let mut exts = Extensions::default();
+		exts.add_extension(Box::new(DummyExt {
+			oid: TEST_OID,
+			criticality: Criticality::NonCritical,
+		}))
+		.unwrap();
+		assert_eq!(
+			exts.add_extension(Box::new(DummyExt {
+				oid: TEST_OID,
+				criticality: Criticality::Critical,
+			})),
+			Err(Error::DuplicateExtension(
+				ObjectIdentifier::from_slice(TEST_OID).to_string()
+			)),
+		);
+	}
+
+	#[test]
+	fn extensions_preserve_insertion_order() {
+		let mut exts = Extensions::default();
+		// Add an extension with a lexicographically larger OID first: the encoded
+		// SEQUENCE must preserve insertion order, not sort.
+		exts.add_extension(Box::new(DummyExt {
+			oid: &[1, 3, 6, 1, 4, 1, 98],
+			criticality: Criticality::NonCritical,
+		}))
+		.unwrap();
+		exts.add_extension(Box::new(DummyExt {
+			oid: &[1, 3, 6, 1, 4, 1, 97],
+			criticality: Criticality::NonCritical,
+		}))
+		.unwrap();
+
+		let der = yasna::construct_der(|writer| exts.write_exts_der(writer));
+		assert_eq!(
+			der,
+			yasna::construct_der(|writer| {
+				writer.write_tagged(Tag::context(3), |writer| {
+					writer.write_sequence(|writer| {
+						// Insertion order, not OID order: 98 first, then 97.
+						for oid in [&[1, 3, 6, 1, 4, 1, 98], &[1, 3, 6, 1, 4, 1, 97]] {
+							writer.next().write_sequence(|writer| {
+								writer.next().write_oid(&ObjectIdentifier::from_slice(oid));
+								writer.next().write_bytes(&yasna::construct_der(|writer| {
+									writer.write_null()
+								}));
+							});
+						}
+					})
+				})
+			})
+		);
+	}
+
+	#[test]
+	fn extensions_elided_when_empty() {
+		// An empty collection writes nothing at all: no extensions field, no
+		// empty SEQUENCE.
+		let exts = Extensions::default();
+		let der = yasna::construct_der(|writer| {
+			writer.write_sequence(|writer| exts.write_exts_der(writer.next()))
+		});
+		assert_eq!(
+			der,
+			yasna::construct_der(|writer| writer.write_sequence(|_writer| {}))
+		);
+	}
+
+	#[test]
+	fn csr_attribute_elided_when_empty() {
+		// An empty collection must not claim a slot in the attributes SET at
+		// all: yasna rejects set elements that produce no output.
+		let exts = Extensions::default();
+		let der = yasna::construct_der(|writer| {
+			writer.write_set_of(|writer| exts.write_csr_attribute(writer))
+		});
+		assert_eq!(
+			der,
+			yasna::construct_der(|writer| writer.write_set_of(|_writer| {}))
+		);
+	}
+
+	#[test]
 	fn critical_flag_omitted_when_false() {
 		// The critical flag is DEFAULT FALSE, so DER (X.690 §11.5) requires that a
 		// non-critical extension omit it entirely rather than encode FALSE.
 		// See https://github.com/rustls/rcgen/pull/444 for a past instance of this
 		// bug class.
-		let ext = DummyExt(Criticality::NonCritical);
+		let ext = DummyExt {
+			oid: TEST_OID,
+			criticality: Criticality::NonCritical,
+		};
 		let der = yasna::construct_der(|writer| ext.write(writer));
 		assert_eq!(
 			der,
@@ -1119,7 +1748,10 @@ mod tests {
 
 	#[test]
 	fn critical_flag_written_when_true() {
-		let ext = DummyExt(Criticality::Critical);
+		let ext = DummyExt {
+			oid: TEST_OID,
+			criticality: Criticality::Critical,
+		};
 		let der = yasna::construct_der(|writer| ext.write(writer));
 		assert_eq!(
 			der,
@@ -1162,6 +1794,70 @@ mod tests {
 				})
 			})
 		);
+	}
+
+	#[test]
+	fn acme_identifier_to_custom_extension() {
+		let identifier = AcmeIdentifier::try_from([0xAB; 32].as_slice()).unwrap();
+		let custom_ext = CustomExtension::from(identifier);
+		assert_eq!(custom_ext.oid, oid::PE_ACME);
+		// RFC 8737 §3: the acmeIdentifier extension MUST be critical.
+		assert_eq!(custom_ext.criticality, Criticality::Critical);
+		// Authorization ::= OCTET STRING (SIZE (32))
+		let mut expected = vec![0x04, 0x20];
+		expected.extend([0xAB; 32]);
+		assert_eq!(custom_ext.der_value, expected);
+	}
+
+	#[test]
+	fn acme_identifier_rejects_wrong_digest_length() {
+		assert_eq!(
+			AcmeIdentifier::try_from([0u8; 31].as_slice()).unwrap_err(),
+			Error::InvalidAcmeIdentifierLength,
+		);
+	}
+
+	#[test]
+	fn basic_constraints_absent_for_no_ca() {
+		// IsCa::NoCa means no BasicConstraints extension at all.
+		assert!(BasicConstraints::from_params(&CertificateParams::default()).is_none());
+	}
+
+	#[test]
+	fn basic_constraints_encoding() {
+		// The cA flag is DEFAULT FALSE, so DER (X.690 §11.5) requires that
+		// ExplicitNoCa encode as an empty SEQUENCE with the flag omitted.
+		// See https://github.com/rustls/rcgen/pull/444.
+		for (is_ca, expected) in [
+			(
+				// cA absent (FALSE): an empty SEQUENCE.
+				IsCa::ExplicitNoCa,
+				yasna::construct_der(|writer| writer.write_sequence(|_writer| {})),
+			),
+			(
+				IsCa::Ca(PathLenConstraint::Unconstrained),
+				yasna::construct_der(|writer| {
+					writer.write_sequence(|writer| writer.next().write_bool(true))
+				}),
+			),
+			(
+				IsCa::Ca(PathLenConstraint::Constrained(5)),
+				yasna::construct_der(|writer| {
+					writer.write_sequence(|writer| {
+						writer.next().write_bool(true);
+						writer.next().write_u8(5);
+					})
+				}),
+			),
+		] {
+			let params = CertificateParams {
+				is_ca,
+				..CertificateParams::default()
+			};
+			let bc = BasicConstraints::from_params(&params).unwrap();
+			let value = yasna::construct_der(|writer| StaticExtension::write_value(&bc, writer));
+			assert_eq!(value, expected, "unexpected encoding for {is_ca:?}");
+		}
 	}
 
 	#[test]
@@ -1258,7 +1954,10 @@ mod tests {
 	}
 
 	#[derive(Debug)]
-	struct DummyExt(Criticality);
+	struct DummyExt {
+		oid: &'static [u64],
+		criticality: Criticality,
+	}
 
 	impl Extension for DummyExt {
 		fn write_value(&self, writer: DERWriter) {
@@ -1266,11 +1965,13 @@ mod tests {
 		}
 
 		fn criticality(&self) -> Criticality {
-			self.0
+			self.criticality
 		}
 
 		fn oid(&self) -> &[u64] {
-			&[1, 3, 6, 1, 4, 1, 99]
+			self.oid
 		}
 	}
+
+	const TEST_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 99];
 }

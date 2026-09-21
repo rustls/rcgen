@@ -44,21 +44,15 @@ use pki_types::CertificateDer;
 #[cfg(feature = "crypto")]
 use pki_types::PrivateKeyDer;
 use time::{OffsetDateTime, Time};
-use yasna::models::{GeneralizedTime, ObjectIdentifier, UTCTime};
+use yasna::models::{GeneralizedTime, UTCTime};
 use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
 use yasna::DERWriter;
 
 mod certificate;
-pub use certificate::{
-	date_time_ymd, Attribute, BasicConstraints, Certificate, CertificateParams, CustomExtension,
-	DnType, IsCa,
-};
+pub use certificate::{date_time_ymd, Attribute, Certificate, CertificateParams, DnType};
 
 mod crl;
-pub use crl::{
-	CertificateRevocationList, CertificateRevocationListParams, CrlIssuingDistributionPoint,
-	CrlScope, RevocationReason, RevokedCertParams,
-};
+pub use crl::{CertificateRevocationList, CertificateRevocationListParams, RevokedCertParams};
 
 mod csr;
 pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
@@ -68,8 +62,9 @@ pub use error::{Error, InvalidAsn1String};
 
 mod extension;
 pub use extension::{
-	CidrSubnet, CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralSubtree, KeyIdMethod,
-	KeyUsagePurpose, NameConstraints, OtherNameValue, SanType,
+	AcmeIdentifier, CidrSubnet, Criticality, CrlDistributionPoint, CrlIssuingDistributionPoint,
+	CrlScope, CustomExtension, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, KeyIdMethod,
+	KeyUsagePurpose, NameConstraints, OtherNameValue, PathLenConstraint, RevocationReason, SanType,
 };
 
 mod key_pair;
@@ -534,34 +529,6 @@ fn write_distinguished_name(writer: DERWriter, dn: &DistinguishedName) {
 			});
 		}
 	});
-}
-
-/// Serializes an X.509v3 extension according to RFC 5280
-fn write_x509_extension(
-	writer: DERWriter,
-	extension_oid: &[u64],
-	is_critical: bool,
-	value_serializer: impl FnOnce(DERWriter),
-) {
-	// Extension specification:
-	//    Extension  ::=  SEQUENCE  {
-	//         extnID      OBJECT IDENTIFIER,
-	//         critical    BOOLEAN DEFAULT FALSE,
-	//         extnValue   OCTET STRING
-	//                     -- contains the DER encoding of an ASN.1 value
-	//                     -- corresponding to the extension type identified
-	//                     -- by extnID
-	//         }
-
-	writer.write_sequence(|writer| {
-		let oid = ObjectIdentifier::from_slice(extension_oid);
-		writer.next().write_oid(&oid);
-		if is_critical {
-			writer.next().write_bool(true);
-		}
-		let bytes = yasna::construct_der(value_serializer);
-		writer.next().write_bytes(&bytes);
-	})
 }
 
 /// A certificate serial number.
