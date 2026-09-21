@@ -38,47 +38,55 @@ use std::fmt;
 use std::hash::Hash;
 use std::ops::Deref;
 
-pub use certificate::{
-	date_time_ymd, Attribute, BasicConstraints, Certificate, CertificateParams, CustomExtension,
-	DnType, IsCa,
-};
-pub use crl::{
-	CertificateRevocationList, CertificateRevocationListParams, CrlIssuingDistributionPoint,
-	CrlScope, RevocationReason, RevokedCertParams,
-};
-pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
-pub use error::{Error, InvalidAsn1String};
-pub use ext::{
-	CidrSubnet, CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralSubtree, KeyIdMethod,
-	KeyUsagePurpose, NameConstraints, OtherNameValue, SanType,
-};
-#[cfg(feature = "crypto")]
-pub use key_pair::KeyPair;
-#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
-pub use key_pair::RsaKeySize;
-pub use key_pair::{PublicKeyData, SigningKey, SubjectPublicKeyInfo};
 #[cfg(feature = "pem")]
 use pem::Pem;
 use pki_types::CertificateDer;
-pub use sign_algo::algo::*;
-pub use sign_algo::SignatureAlgorithm;
 use time::{OffsetDateTime, Time};
 use yasna::models::{GeneralizedTime, ObjectIdentifier, UTCTime};
 use yasna::tags::{TAG_BMPSTRING, TAG_TELETEXSTRING, TAG_UNIVERSALSTRING};
 use yasna::DERWriter;
 
-use crate::string::{BmpString, Ia5String, PrintableString, TeletexString, UniversalString};
-
 mod certificate;
+pub use certificate::{
+	date_time_ymd, Attribute, BasicConstraints, Certificate, CertificateParams, CustomExtension,
+	DnType, IsCa,
+};
+
 mod crl;
+pub use crl::{
+	CertificateRevocationList, CertificateRevocationListParams, CrlIssuingDistributionPoint,
+	CrlScope, RevocationReason, RevokedCertParams,
+};
+
 mod csr;
+pub use csr::{CertificateSigningRequest, CertificateSigningRequestParams, PublicKey};
+
 mod error;
+pub use error::{Error, InvalidAsn1String};
+
 mod ext;
+pub use ext::{
+	CidrSubnet, CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralSubtree, KeyIdMethod,
+	KeyUsagePurpose, NameConstraints, OtherNameValue, SanType,
+};
+
 mod key_pair;
-mod oid;
-mod ring_like;
+#[cfg(feature = "crypto")]
+pub use key_pair::KeyPair;
+#[cfg(all(feature = "crypto", feature = "aws_lc_rs"))]
+pub use key_pair::RsaKeySize;
+pub use key_pair::{PublicKeyData, SigningKey, SubjectPublicKeyInfo};
+
 mod sign_algo;
+pub use sign_algo::algo::*;
+pub use sign_algo::SignatureAlgorithm;
+
+mod oid;
+
+mod ring_like;
+
 pub mod string;
+use string::{BmpString, Ia5String, PrintableString, TeletexString, UniversalString};
 
 /// Type-alias for the old name of [`Error`].
 #[deprecated(
