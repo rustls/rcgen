@@ -16,6 +16,72 @@ use crate::{
 	oid, write_distinguished_name, CertificateParams, DistinguishedName, Issuer, SigningKey,
 };
 
+/// An X.509v3 subject alternative name extension according to [RFC 5280 §4.2.1.6].
+///
+/// [RFC 5280 §4.2.1.6]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.6>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SubjectAlternativeName<'params> {
+	criticality: Criticality,
+	names: &'params [SanType],
+}
+
+impl<'params> SubjectAlternativeName<'params> {
+	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
+		// GeneralNames ::= SEQUENCE SIZE (1..MAX): an empty SAN can't be encoded,
+		// so the extension is omitted (RFC 5280 §4.2.1.6).
+		if params.subject_alt_names.is_empty() {
+			return None;
+		}
+
+		Some(Self {
+			// Per RFC 5280 §4.1.2.6, SAN must be marked critical if the subject
+			// is an empty sequence, and SHOULD be non-critical otherwise.
+			criticality: params.distinguished_name.entries.is_empty().into(),
+			names: &params.subject_alt_names,
+		})
+	}
+
+	fn write_name(writer: DERWriter, san: &SanType) {
+		writer.write_tagged_implicit(Tag::context(san.tag()), |writer| match san {
+			SanType::Rfc822Name(name) | SanType::DnsName(name) | SanType::URI(name) => {
+				writer.write_ia5_string(name.as_str())
+			},
+			SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
+			SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
+			SanType::OtherName((oid, value)) => {
+				// otherName SEQUENCE { OID, [0] explicit any defined by oid }
+				// https://datatracker.ietf.org/doc/html/rfc5280#page-38
+				writer.write_sequence(|writer| {
+					writer.next().write_oid(&ObjectIdentifier::from_slice(oid));
+					value.write_der(writer.next());
+				});
+			},
+		})
+	}
+}
+
+impl Extension for SubjectAlternativeName<'_> {
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   SubjectAltName ::= GeneralNames
+		   GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
+		*/
+		writer.write_sequence(|writer| {
+			for san in self.names.iter() {
+				Self::write_name(writer.next(), san);
+			}
+		});
+	}
+
+	fn criticality(&self) -> Criticality {
+		self.criticality
+	}
+
+	fn oid(&self) -> &[u64] {
+		oid::SUBJECT_ALT_NAME
+	}
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[allow(missing_docs)]
 #[non_exhaustive]
@@ -148,70 +214,56 @@ fn ip_addr_from_octets(octets: &[u8]) -> Result<IpAddr, Error> {
 	}
 }
 
-/// An X.509v3 subject alternative name extension according to [RFC 5280 §4.2.1.6].
+/// An X.509v3 key usage extension according to [RFC 5280 §4.2.1.3].
 ///
-/// [RFC 5280 §4.2.1.6]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.6>
+/// [RFC 5280 §4.2.1.3]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.3>
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct SubjectAlternativeName<'params> {
-	criticality: Criticality,
-	names: &'params [SanType],
-}
+pub(crate) struct KeyUsage<'params>(&'params [KeyUsagePurpose]);
 
-impl<'params> SubjectAlternativeName<'params> {
+impl<'params> KeyUsage<'params> {
 	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		// GeneralNames ::= SEQUENCE SIZE (1..MAX): an empty SAN can't be encoded,
-		// so the extension is omitted (RFC 5280 §4.2.1.6).
-		if params.subject_alt_names.is_empty() {
+		if params.key_usages.is_empty() {
 			return None;
 		}
 
-		Some(Self {
-			// Per RFC 5280 §4.1.2.6, SAN must be marked critical if the subject
-			// is an empty sequence, and SHOULD be non-critical otherwise.
-			criticality: params.distinguished_name.entries.is_empty().into(),
-			names: &params.subject_alt_names,
-		})
-	}
-
-	fn write_name(writer: DERWriter, san: &SanType) {
-		writer.write_tagged_implicit(Tag::context(san.tag()), |writer| match san {
-			SanType::Rfc822Name(name) | SanType::DnsName(name) | SanType::URI(name) => {
-				writer.write_ia5_string(name.as_str())
-			},
-			SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
-			SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
-			SanType::OtherName((oid, value)) => {
-				// otherName SEQUENCE { OID, [0] explicit any defined by oid }
-				// https://datatracker.ietf.org/doc/html/rfc5280#page-38
-				writer.write_sequence(|writer| {
-					writer.next().write_oid(&ObjectIdentifier::from_slice(oid));
-					value.write_der(writer.next());
-				});
-			},
-		})
+		Some(Self(&params.key_usages))
 	}
 }
 
-impl Extension for SubjectAlternativeName<'_> {
+impl StaticExtension for KeyUsage<'_> {
 	fn write_value(&self, writer: DERWriter) {
 		/*
-		   SubjectAltName ::= GeneralNames
-		   GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
+		   KeyUsage ::= BIT STRING {
+			  digitalSignature        (0),
+			  nonRepudiation          (1), -- recent editions of X.509 have
+										   -- renamed this bit to contentCommitment
+			  keyEncipherment         (2),
+			  dataEncipherment        (3),
+			  keyAgreement            (4),
+			  keyCertSign             (5),
+			  cRLSign                 (6),
+			  encipherOnly            (7),
+			  decipherOnly            (8) }
 		*/
-		writer.write_sequence(|writer| {
-			for san in self.names.iter() {
-				Self::write_name(writer.next(), san);
-			}
+		// u16 is large enough to encode the largest possible key usage (two-bytes)
+		let bit_string = self.0.iter().fold(0u16, |bit_string, key_usage| {
+			bit_string | key_usage.to_u16()
 		});
+
+		match u16::BITS - bit_string.trailing_zeros() {
+			bits @ 0..=8 => {
+				writer.write_bitvec_bytes(&bit_string.to_be_bytes()[..1], bits as usize)
+			},
+			bits @ 9..=16 => writer.write_bitvec_bytes(&bit_string.to_be_bytes(), bits as usize),
+			_ => unreachable!(),
+		}
 	}
 
-	fn criticality(&self) -> Criticality {
-		self.criticality
-	}
+	// RFC 5280 §4.2.1.3: "When present, conforming CAs SHOULD mark this extension
+	// as critical."
+	const CRITICALITY: Criticality = Criticality::Critical;
 
-	fn oid(&self) -> &[u64] {
-		oid::SUBJECT_ALT_NAME
-	}
+	const OID: &'static [u64] = oid::KEY_USAGE;
 }
 
 /// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension
@@ -292,56 +344,43 @@ impl KeyUsagePurpose {
 	}
 }
 
-/// An X.509v3 key usage extension according to [RFC 5280 §4.2.1.3].
+/// An X.509v3 extended key usage extension according to [RFC 5280 §4.2.1.12].
 ///
-/// [RFC 5280 §4.2.1.3]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.3>
+/// [RFC 5280 §4.2.1.12]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.12>
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct KeyUsage<'params>(&'params [KeyUsagePurpose]);
+pub(crate) struct ExtendedKeyUsage<'params>(&'params [ExtendedKeyUsagePurpose]);
 
-impl<'params> KeyUsage<'params> {
+impl<'params> ExtendedKeyUsage<'params> {
 	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		if params.key_usages.is_empty() {
+		if params.extended_key_usages.is_empty() {
 			return None;
 		}
 
-		Some(Self(&params.key_usages))
+		Some(Self(&params.extended_key_usages))
 	}
 }
 
-impl StaticExtension for KeyUsage<'_> {
+impl StaticExtension for ExtendedKeyUsage<'_> {
 	fn write_value(&self, writer: DERWriter) {
 		/*
-		   KeyUsage ::= BIT STRING {
-			  digitalSignature        (0),
-			  nonRepudiation          (1), -- recent editions of X.509 have
-										   -- renamed this bit to contentCommitment
-			  keyEncipherment         (2),
-			  dataEncipherment        (3),
-			  keyAgreement            (4),
-			  keyCertSign             (5),
-			  cRLSign                 (6),
-			  encipherOnly            (7),
-			  decipherOnly            (8) }
+		   ExtKeyUsageSyntax ::= SEQUENCE SIZE (1..MAX) OF KeyPurposeId
+		   KeyPurposeId ::= OBJECT IDENTIFIER
 		*/
-		// u16 is large enough to encode the largest possible key usage (two-bytes)
-		let bit_string = self.0.iter().fold(0u16, |bit_string, key_usage| {
-			bit_string | key_usage.to_u16()
+		writer.write_sequence(|writer| {
+			for usage in self.0.iter() {
+				writer
+					.next()
+					.write_oid(&ObjectIdentifier::from_slice(usage.oid()));
+			}
 		});
-
-		match u16::BITS - bit_string.trailing_zeros() {
-			bits @ 0..=8 => {
-				writer.write_bitvec_bytes(&bit_string.to_be_bytes()[..1], bits as usize)
-			},
-			bits @ 9..=16 => writer.write_bitvec_bytes(&bit_string.to_be_bytes(), bits as usize),
-			_ => unreachable!(),
-		}
 	}
 
-	// RFC 5280 §4.2.1.3: "When present, conforming CAs SHOULD mark this extension
-	// as critical."
-	const CRITICALITY: Criticality = Criticality::Critical;
+	// RFC 5280 §4.2.1.12: "This extension MAY, at the option of the certificate
+	// issuer, be either critical or non-critical."
+	// TODO(XXX): make this configurable?
+	const CRITICALITY: Criticality = Criticality::NonCritical;
 
-	const OID: &'static [u64] = oid::KEY_USAGE;
+	const OID: &'static [u64] = oid::EXT_KEY_USAGE;
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -420,43 +459,85 @@ impl ExtendedKeyUsagePurpose {
 	}
 }
 
-/// An X.509v3 extended key usage extension according to [RFC 5280 §4.2.1.12].
+/// An X.509v3 name constraints extension according to [RFC 5280 §4.2.1.10].
 ///
-/// [RFC 5280 §4.2.1.12]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.12>
+/// [RFC 5280 §4.2.1.10]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.10>
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ExtendedKeyUsage<'params>(&'params [ExtendedKeyUsagePurpose]);
+pub(crate) struct NameConstraintsExt<'params> {
+	permitted_subtrees: &'params [GeneralSubtree],
+	excluded_subtrees: &'params [GeneralSubtree],
+}
 
-impl<'params> ExtendedKeyUsage<'params> {
+impl<'params> NameConstraintsExt<'params> {
 	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		if params.extended_key_usages.is_empty() {
-			return None;
+		match &params.name_constraints {
+			// If both subtrees are empty, the extension must be omitted.
+			Some(nc) if !nc.is_empty() => Some(Self {
+				permitted_subtrees: &nc.permitted_subtrees,
+				excluded_subtrees: &nc.excluded_subtrees,
+			}),
+			_ => None,
 		}
+	}
 
-		Some(Self(&params.extended_key_usages))
+	fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
+		/*
+		   GeneralSubtrees ::= SEQUENCE SIZE (1..MAX) OF GeneralSubtree
+		   GeneralSubtree ::= SEQUENCE {
+				base                    GeneralName,
+				minimum         [0]     BaseDistance DEFAULT 0,
+				maximum         [1]     BaseDistance OPTIONAL }
+		   BaseDistance ::= INTEGER (0..MAX)
+		*/
+		writer.write_tagged_implicit(Tag::context(tag), |writer| {
+			writer.write_sequence(|writer| {
+				for subtree in general_subtrees.iter() {
+					writer.next().write_sequence(|writer| {
+						let writer = writer.next();
+						let tag = Tag::context(subtree.tag());
+						match subtree {
+							GeneralSubtree::Rfc822Name(name) | GeneralSubtree::DnsName(name) => {
+								writer.write_tagged_implicit(tag, |writer| {
+									writer.write_ia5_string(name)
+								})
+							},
+							// `Name` is a CHOICE, so X.680 §31.2.7 requires explicit tagging.
+							GeneralSubtree::DirectoryName(name) => writer
+								.write_tagged(tag, |writer| write_distinguished_name(writer, name)),
+							GeneralSubtree::IpAddress(subnet) => writer
+								.write_tagged_implicit(tag, |writer| {
+									writer.write_bytes(&subnet.to_bytes())
+								}),
+						}
+						// minimum must be 0 (the default) and maximum must be absent
+					});
+				}
+			});
+		});
 	}
 }
 
-impl StaticExtension for ExtendedKeyUsage<'_> {
+impl StaticExtension for NameConstraintsExt<'_> {
 	fn write_value(&self, writer: DERWriter) {
 		/*
-		   ExtKeyUsageSyntax ::= SEQUENCE SIZE (1..MAX) OF KeyPurposeId
-		   KeyPurposeId ::= OBJECT IDENTIFIER
+		   NameConstraints ::= SEQUENCE {
+				permittedSubtrees       [0]     GeneralSubtrees OPTIONAL,
+				excludedSubtrees        [1]     GeneralSubtrees OPTIONAL }
 		*/
 		writer.write_sequence(|writer| {
-			for usage in self.0.iter() {
-				writer
-					.next()
-					.write_oid(&ObjectIdentifier::from_slice(usage.oid()));
+			if !self.permitted_subtrees.is_empty() {
+				Self::write_general_subtrees(writer.next(), 0, self.permitted_subtrees);
+			}
+			if !self.excluded_subtrees.is_empty() {
+				Self::write_general_subtrees(writer.next(), 1, self.excluded_subtrees);
 			}
 		});
 	}
 
-	// RFC 5280 §4.2.1.12: "This extension MAY, at the option of the certificate
-	// issuer, be either critical or non-critical."
-	// TODO(XXX): make this configurable?
-	const CRITICALITY: Criticality = Criticality::NonCritical;
+	// RFC 5280 §4.2.1.10: "Conforming CAs MUST mark this extension as critical."
+	const CRITICALITY: Criticality = Criticality::Critical;
 
-	const OID: &'static [u64] = oid::EXT_KEY_USAGE;
+	const OID: &'static [u64] = oid::NAME_CONSTRAINTS;
 }
 
 /// The [NameConstraints extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.10)
@@ -671,85 +752,36 @@ impl FromStr for CidrSubnet {
 	}
 }
 
-/// An X.509v3 name constraints extension according to [RFC 5280 §4.2.1.10].
+/// An X.509v3 CRL distribution points extension according to [RFC 5280 §4.2.1.13].
 ///
-/// [RFC 5280 §4.2.1.10]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.10>
+/// [RFC 5280 §4.2.1.13]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13>
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct NameConstraintsExt<'params> {
-	permitted_subtrees: &'params [GeneralSubtree],
-	excluded_subtrees: &'params [GeneralSubtree],
-}
+pub(crate) struct CrlDistributionPoints<'params>(&'params [CrlDistributionPoint]);
 
-impl<'params> NameConstraintsExt<'params> {
+impl<'params> CrlDistributionPoints<'params> {
 	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		match &params.name_constraints {
-			// If both subtrees are empty, the extension must be omitted.
-			Some(nc) if !nc.is_empty() => Some(Self {
-				permitted_subtrees: &nc.permitted_subtrees,
-				excluded_subtrees: &nc.excluded_subtrees,
-			}),
-			_ => None,
+		if params.crl_distribution_points.is_empty() {
+			return None;
 		}
-	}
 
-	fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
-		/*
-		   GeneralSubtrees ::= SEQUENCE SIZE (1..MAX) OF GeneralSubtree
-		   GeneralSubtree ::= SEQUENCE {
-				base                    GeneralName,
-				minimum         [0]     BaseDistance DEFAULT 0,
-				maximum         [1]     BaseDistance OPTIONAL }
-		   BaseDistance ::= INTEGER (0..MAX)
-		*/
-		writer.write_tagged_implicit(Tag::context(tag), |writer| {
-			writer.write_sequence(|writer| {
-				for subtree in general_subtrees.iter() {
-					writer.next().write_sequence(|writer| {
-						let writer = writer.next();
-						let tag = Tag::context(subtree.tag());
-						match subtree {
-							GeneralSubtree::Rfc822Name(name) | GeneralSubtree::DnsName(name) => {
-								writer.write_tagged_implicit(tag, |writer| {
-									writer.write_ia5_string(name)
-								})
-							},
-							// `Name` is a CHOICE, so X.680 §31.2.7 requires explicit tagging.
-							GeneralSubtree::DirectoryName(name) => writer
-								.write_tagged(tag, |writer| write_distinguished_name(writer, name)),
-							GeneralSubtree::IpAddress(subnet) => writer
-								.write_tagged_implicit(tag, |writer| {
-									writer.write_bytes(&subnet.to_bytes())
-								}),
-						}
-						// minimum must be 0 (the default) and maximum must be absent
-					});
-				}
-			});
-		});
+		Some(Self(&params.crl_distribution_points))
 	}
 }
 
-impl StaticExtension for NameConstraintsExt<'_> {
+impl StaticExtension for CrlDistributionPoints<'_> {
 	fn write_value(&self, writer: DERWriter) {
-		/*
-		   NameConstraints ::= SEQUENCE {
-				permittedSubtrees       [0]     GeneralSubtrees OPTIONAL,
-				excludedSubtrees        [1]     GeneralSubtrees OPTIONAL }
-		*/
+		// CRLDistributionPoints ::= SEQUENCE SIZE (1..MAX) OF DistributionPoint
 		writer.write_sequence(|writer| {
-			if !self.permitted_subtrees.is_empty() {
-				Self::write_general_subtrees(writer.next(), 0, self.permitted_subtrees);
+			for distribution_point in self.0 {
+				distribution_point.write_der(writer.next());
 			}
-			if !self.excluded_subtrees.is_empty() {
-				Self::write_general_subtrees(writer.next(), 1, self.excluded_subtrees);
-			}
-		});
+		})
 	}
 
-	// RFC 5280 §4.2.1.10: "Conforming CAs MUST mark this extension as critical."
-	const CRITICALITY: Criticality = Criticality::Critical;
+	// RFC 5280 §4.2.1.13: "The extension SHOULD be non-critical".
+	const CRITICALITY: Criticality = Criticality::NonCritical;
 
-	const OID: &'static [u64] = oid::NAME_CONSTRAINTS;
+	const OID: &'static [u64] = oid::CRL_DISTRIBUTION_POINTS;
 }
 
 /// A certificate revocation list (CRL) distribution point, to be included in a certificate's
@@ -796,38 +828,6 @@ pub(crate) fn write_distribution_point_name_uris<'a>(
 				});
 		});
 	});
-}
-
-/// An X.509v3 CRL distribution points extension according to [RFC 5280 §4.2.1.13].
-///
-/// [RFC 5280 §4.2.1.13]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13>
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct CrlDistributionPoints<'params>(&'params [CrlDistributionPoint]);
-
-impl<'params> CrlDistributionPoints<'params> {
-	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		if params.crl_distribution_points.is_empty() {
-			return None;
-		}
-
-		Some(Self(&params.crl_distribution_points))
-	}
-}
-
-impl StaticExtension for CrlDistributionPoints<'_> {
-	fn write_value(&self, writer: DERWriter) {
-		// CRLDistributionPoints ::= SEQUENCE SIZE (1..MAX) OF DistributionPoint
-		writer.write_sequence(|writer| {
-			for distribution_point in self.0 {
-				distribution_point.write_der(writer.next());
-			}
-		})
-	}
-
-	// RFC 5280 §4.2.1.13: "The extension SHOULD be non-critical".
-	const CRITICALITY: Criticality = Criticality::NonCritical;
-
-	const OID: &'static [u64] = oid::CRL_DISTRIBUTION_POINTS;
 }
 
 /// An X.509v3 subject key identifier extension according to [RFC 5280 §4.2.1.2].
