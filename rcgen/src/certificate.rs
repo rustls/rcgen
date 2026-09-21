@@ -9,7 +9,7 @@ use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::csr::CertificateSigningRequest;
-use crate::ext::{
+use crate::extension::{
 	AuthorityKeyIdentifier, CrlDistributionPoints, ExtendedKeyUsage, Extension, KeyUsage,
 	NameConstraintsExt, SubjectAlternativeName, SubjectKeyIdentifier,
 };

@@ -4,7 +4,7 @@ use pki_types::CertificateRevocationListDer;
 use time::OffsetDateTime;
 use yasna::{DERWriter, Tag};
 
-use crate::ext::{
+use crate::extension::{
 	write_distribution_point_name_uris, AuthorityKeyIdentifier, CrlDistributionPoint, Extension,
 };
 use crate::key_pair::sign_der;
