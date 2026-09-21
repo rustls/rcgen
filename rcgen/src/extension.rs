@@ -66,105 +66,6 @@ impl StaticExtension for AuthorityKeyIdentifier {
 	const OID: &'static [u64] = oid::AUTHORITY_KEY_IDENTIFIER;
 }
 
-/// An X.509 extension.
-///
-/// All extensions have an OID, a criticality, and a DER encoded value for inclusion in
-/// an X.509 extension SEQUENCE.
-pub(crate) trait Extension: Debug {
-	/// Serialize the extension according to RFC 5280.
-	fn write(&self, writer: DERWriter) {
-		/*
-		   Extension  ::=  SEQUENCE  {
-				extnID      OBJECT IDENTIFIER,
-				critical    BOOLEAN DEFAULT FALSE,
-				extnValue   OCTET STRING
-							-- contains the DER encoding of an ASN.1 value
-							-- corresponding to the extension type identified
-							-- by extnID
-				}
-		*/
-		writer.write_sequence(|writer| {
-			writer
-				.next()
-				.write_oid(&ObjectIdentifier::from_slice(self.oid()));
-			// DER requires that DEFAULT values be omitted (X.690 §11.5): the critical
-			// flag may only be encoded when it is TRUE.
-			if self.criticality() == Criticality::Critical {
-				writer.next().write_bool(true);
-			}
-			writer
-				.next()
-				.write_bytes(&yasna::construct_der(|writer| self.write_value(writer)));
-		})
-	}
-
-	/// Write the extension's value (the content of the extnValue OCTET STRING).
-	fn write_value(&self, writer: DERWriter);
-
-	/// Return the criticality of the extension.
-	fn criticality(&self) -> Criticality;
-
-	/// Return the OID components of the extension.
-	fn oid(&self) -> &[u64];
-}
-
-impl<T: StaticExtension> Extension for T {
-	fn write_value(&self, writer: DERWriter) {
-		// Calling with fully qualified syntax to disambiguate.
-		StaticExtension::write_value(self, writer)
-	}
-
-	fn criticality(&self) -> Criticality {
-		T::CRITICALITY
-	}
-
-	fn oid(&self) -> &[u64] {
-		T::OID
-	}
-}
-
-/// An X.509 extension whose OID and criticality are fixed by the profile
-/// defining it.
-///
-/// Implementors receive [`Extension`] through a blanket impl. Extensions that
-/// decide criticality (or OID) at runtime implement [`Extension`] directly
-/// instead.
-pub(crate) trait StaticExtension: Debug {
-	/// Write the extension's value (the content of the extnValue OCTET STRING).
-	fn write_value(&self, writer: DERWriter);
-
-	/// The criticality of the extension.
-	const CRITICALITY: Criticality;
-
-	/// The OID components of the extension.
-	const OID: &'static [u64];
-}
-
-/// The criticality of an X.509 extension.
-///
-/// This controls how consumers should handle an unrecognized extension.
-///
-/// See [RFC 5280 §4.2] for more information.
-///
-/// [RFC 5280 §4.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2>
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Criticality {
-	/// The extension MUST be recognized and parsed correctly.
-	Critical,
-
-	/// The extension MAY be ignored if it is not recognized.
-	NonCritical,
-}
-
-impl From<bool> for Criticality {
-	fn from(critical: bool) -> Self {
-		match critical {
-			true => Self::Critical,
-			false => Self::NonCritical,
-		}
-	}
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[allow(missing_docs)]
 #[non_exhaustive]
@@ -1086,6 +987,105 @@ impl StaticExtension for SubjectKeyIdentifier {
 	const CRITICALITY: Criticality = Criticality::NonCritical;
 
 	const OID: &'static [u64] = oid::SUBJECT_KEY_IDENTIFIER;
+}
+
+impl<T: StaticExtension> Extension for T {
+	fn write_value(&self, writer: DERWriter) {
+		// Calling with fully qualified syntax to disambiguate.
+		StaticExtension::write_value(self, writer)
+	}
+
+	fn criticality(&self) -> Criticality {
+		T::CRITICALITY
+	}
+
+	fn oid(&self) -> &[u64] {
+		T::OID
+	}
+}
+
+/// An X.509 extension whose OID and criticality are fixed by the profile
+/// defining it.
+///
+/// Implementors receive [`Extension`] through a blanket impl. Extensions that
+/// decide criticality (or OID) at runtime implement [`Extension`] directly
+/// instead.
+pub(crate) trait StaticExtension: Debug {
+	/// Write the extension's value (the content of the extnValue OCTET STRING).
+	fn write_value(&self, writer: DERWriter);
+
+	/// The criticality of the extension.
+	const CRITICALITY: Criticality;
+
+	/// The OID components of the extension.
+	const OID: &'static [u64];
+}
+
+/// An X.509 extension.
+///
+/// All extensions have an OID, a criticality, and a DER encoded value for inclusion in
+/// an X.509 extension SEQUENCE.
+pub(crate) trait Extension: Debug {
+	/// Serialize the extension according to RFC 5280.
+	fn write(&self, writer: DERWriter) {
+		/*
+		   Extension  ::=  SEQUENCE  {
+				extnID      OBJECT IDENTIFIER,
+				critical    BOOLEAN DEFAULT FALSE,
+				extnValue   OCTET STRING
+							-- contains the DER encoding of an ASN.1 value
+							-- corresponding to the extension type identified
+							-- by extnID
+				}
+		*/
+		writer.write_sequence(|writer| {
+			writer
+				.next()
+				.write_oid(&ObjectIdentifier::from_slice(self.oid()));
+			// DER requires that DEFAULT values be omitted (X.690 §11.5): the critical
+			// flag may only be encoded when it is TRUE.
+			if self.criticality() == Criticality::Critical {
+				writer.next().write_bool(true);
+			}
+			writer
+				.next()
+				.write_bytes(&yasna::construct_der(|writer| self.write_value(writer)));
+		})
+	}
+
+	/// Write the extension's value (the content of the extnValue OCTET STRING).
+	fn write_value(&self, writer: DERWriter);
+
+	/// Return the criticality of the extension.
+	fn criticality(&self) -> Criticality;
+
+	/// Return the OID components of the extension.
+	fn oid(&self) -> &[u64];
+}
+
+/// The criticality of an X.509 extension.
+///
+/// This controls how consumers should handle an unrecognized extension.
+///
+/// See [RFC 5280 §4.2] for more information.
+///
+/// [RFC 5280 §4.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2>
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Criticality {
+	/// The extension MUST be recognized and parsed correctly.
+	Critical,
+
+	/// The extension MAY be ignored if it is not recognized.
+	NonCritical,
+}
+
+impl From<bool> for Criticality {
+	fn from(critical: bool) -> Self {
+		match critical {
+			true => Self::Critical,
+			false => Self::NonCritical,
+		}
+	}
 }
 
 #[cfg(test)]
