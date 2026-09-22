@@ -8,8 +8,8 @@ use pki_types::PrivateKeyDer;
 use rcgen::DnValue::PrintableString;
 use rcgen::{
 	serialize_private_key_pem, BasicConstraints, Certificate, CertificateParams, CertifiedIssuer,
-	DistinguishedName, DnType, Error, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose,
-	GeneralName, SignatureAlgorithm,
+	DistinguishedName, DnType, Error, ExtendedKeyUsagePurpose, GeneralName, IsCa, KeyPair,
+	KeyUsagePurpose, SignatureAlgorithm,
 };
 
 /// Builder to configure TLS [CertificateParams] to be finalized

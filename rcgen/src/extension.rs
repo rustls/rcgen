@@ -269,6 +269,7 @@ impl StaticExtension for KeyUsage<'_> {
 }
 
 /// One of the purposes contained in the [key usage](https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3) extension
+#[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum KeyUsagePurpose {
 	/// digitalSignature
@@ -387,6 +388,7 @@ impl StaticExtension for ExtendedKeyUsage<'_> {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 /// One of the purposes contained in the [extended key usage extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.12)
+#[non_exhaustive]
 pub enum ExtendedKeyUsagePurpose {
 	/// anyExtendedKeyUsage
 	Any,
@@ -544,6 +546,7 @@ impl StaticExtension for NameConstraintsExt<'_> {
 
 /// The [NameConstraints extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.10)
 /// (only relevant for CA certificates)
+#[allow(clippy::exhaustive_structs)]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct NameConstraints {
 	/// A list of subtrees that the domain has to match.
@@ -657,8 +660,6 @@ impl GeneralSubtree {
 	}
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[allow(missing_docs)]
 /// CIDR subnet, as per [RFC 4632](https://tools.ietf.org/html/rfc4632)
 ///
 /// You might know CIDR subnets better by their textual representation
@@ -667,6 +668,8 @@ impl GeneralSubtree {
 ///
 /// The first field in the enum is the address, the second is the mask.
 /// Both are specified in network byte order.
+#[allow(missing_docs, clippy::exhaustive_enums)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CidrSubnet {
 	V4([u8; 4], [u8; 4]),
 	V6([u8; 16], [u8; 16]),
@@ -789,6 +792,7 @@ impl StaticExtension for CrlDistributionPoints<'_> {
 /// A certificate revocation list (CRL) distribution point, to be included in a certificate's
 /// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13) or
 /// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5)
+#[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CrlDistributionPoint {
 	/// One or more URI distribution point names, indicating a place the current CRL can
@@ -797,6 +801,11 @@ pub struct CrlDistributionPoint {
 }
 
 impl CrlDistributionPoint {
+	/// Construct a new `CrlDistributionPoint` with the given URIs.
+	pub fn new(uris: Vec<String>) -> Self {
+		Self { uris }
+	}
+
 	fn write_der(&self, writer: DERWriter) {
 		// DistributionPoint SEQUENCE
 		writer.write_sequence(|writer| {

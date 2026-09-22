@@ -500,6 +500,7 @@ impl AsRef<CertificateParams> for CertificateParams {
 ///
 /// [RFC 5280]: <https://datatracker.ietf.org/doc/html/rfc5280#appendix-A.1>
 /// [RFC 2986]: <https://datatracker.ietf.org/doc/html/rfc2986#section-4>
+#[allow(clippy::exhaustive_structs)]
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Attribute {
 	/// `AttributeType` of the `Attribute`, defined as an `OBJECT IDENTIFIER`.
@@ -633,6 +634,7 @@ pub fn date_time_ymd(year: i32, month: u8, day: u8) -> OffsetDateTime {
 }
 
 /// Whether the certificate is allowed to sign other certificates
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum IsCa {
 	/// The certificate can only sign itself
@@ -686,6 +688,7 @@ impl IsCa {
 /// Sets an optional upper limit on the length of the intermediate certificate chain
 /// length allowed for this CA certificate (not including the end entity certificate).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum BasicConstraints {
 	/// No constraint
 	Unconstrained,
