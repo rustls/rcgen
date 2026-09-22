@@ -174,19 +174,19 @@ dependencies = [
 
 [[package]]
 name = "botan"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b547ac0388aa9d3e6f5b9b1cbccf3cdfb1563bdee0c19f6bb872740bb66a14d"
+checksum = "8d7d1401c5e2e626e4b45e80dc3820b3b76c4e439a564a7282406ec0d30d0abc"
 dependencies = [
  "botan-sys",
- "rand",
+ "rand_core",
 ]
 
 [[package]]
 name = "botan-src"
-version = "0.31200.0"
+version = "0.31300.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dce062ff9328d757ea205177cab939e6ce2aeb7a64bb559263fbe9251c5b1f5b"
+checksum = "e19afa24979ebb37fd22894895219e5f6bb6ba3d98f87c4aa147e59f4860efb7"
 dependencies = [
  "lzma-rs",
  "sha2",
@@ -195,9 +195,9 @@ dependencies = [
 
 [[package]]
 name = "botan-sys"
-version = "1.20260506.0"
+version = "1.20260811.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89808b98cd846810998232fa4ff873ac4a479c7b21c85325229626b214261b98"
+checksum = "4cad0b52cabead10d0d240d93229ea6e91240577bcff5a9af383d11e4ab2278b"
 dependencies = [
  "botan-src",
  "cc",
@@ -806,19 +806,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
 
 [[package]]
-name = "rand"
-version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9ef1d0d795eb7d84685bca4f72f3649f064e6641543d3a8c415898726a57b41"
-dependencies = [
- "rand_core",
-]
-
-[[package]]
 name = "rand_core"
-version = "0.9.5"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c"
+checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
 name = "rcgen"
