@@ -22,7 +22,7 @@ use crate::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SubjectAlternativeName<'params> {
 	criticality: Criticality,
-	names: &'params [SanType],
+	names: &'params [GeneralName],
 }
 
 impl<'params> SubjectAlternativeName<'params> {
@@ -41,14 +41,14 @@ impl<'params> SubjectAlternativeName<'params> {
 		})
 	}
 
-	fn write_name(writer: DERWriter, san: &SanType) {
+	fn write_name(writer: DERWriter, san: &GeneralName) {
 		writer.write_tagged_implicit(Tag::context(san.tag()), |writer| match san {
-			SanType::Rfc822Name(name) | SanType::DnsName(name) | SanType::URI(name) => {
+			GeneralName::Rfc822Name(name) | GeneralName::DnsName(name) | GeneralName::URI(name) => {
 				writer.write_ia5_string(name.as_str())
 			},
-			SanType::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
-			SanType::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
-			SanType::OtherName((oid, value)) => {
+			GeneralName::IpAddress(IpAddr::V4(addr)) => writer.write_bytes(&addr.octets()),
+			GeneralName::IpAddress(IpAddr::V6(addr)) => writer.write_bytes(&addr.octets()),
+			GeneralName::OtherName((oid, value)) => {
 				// otherName SEQUENCE { OID, [0] explicit any defined by oid }
 				// https://datatracker.ietf.org/doc/html/rfc5280#page-38
 				writer.write_sequence(|writer| {
@@ -86,7 +86,7 @@ impl Extension for SubjectAlternativeName<'_> {
 #[allow(missing_docs)]
 #[non_exhaustive]
 /// The type of subject alt name
-pub enum SanType {
+pub enum GeneralName {
 	/// Also known as E-Mail address
 	Rfc822Name(Ia5String),
 	DnsName(Ia5String),
@@ -95,7 +95,7 @@ pub enum SanType {
 	OtherName((Vec<u64>, OtherNameValue)),
 }
 
-impl SanType {
+impl GeneralName {
 	#[cfg(all(test, feature = "x509-parser"))]
 	pub(crate) fn from_x509(
 		x509: &x509_parser::certificate::X509Certificate<'_>,
@@ -123,14 +123,16 @@ impl SanType {
 		use x509_parser::der_parser::asn1_rs::{self, FromDer, Tag, TaggedExplicit};
 		Ok(match name {
 			x509_parser::extensions::GeneralName::RFC822Name(name) => {
-				SanType::Rfc822Name((*name).try_into()?)
+				GeneralName::Rfc822Name((*name).try_into()?)
 			},
 			x509_parser::extensions::GeneralName::DNSName(name) => {
-				SanType::DnsName((*name).try_into()?)
+				GeneralName::DnsName((*name).try_into()?)
 			},
-			x509_parser::extensions::GeneralName::URI(name) => SanType::URI((*name).try_into()?),
+			x509_parser::extensions::GeneralName::URI(name) => {
+				GeneralName::URI((*name).try_into()?)
+			},
 			x509_parser::extensions::GeneralName::IPAddress(octets) => {
-				SanType::IpAddress(ip_addr_from_octets(octets)?)
+				GeneralName::IpAddress(ip_addr_from_octets(octets)?)
 			},
 			x509_parser::extensions::GeneralName::OtherName(oid, value) => {
 				let oid = oid.iter().ok_or(Error::CouldNotParseCertificate)?;
@@ -147,7 +149,7 @@ impl SanType {
 					),
 					_ => return Err(Error::CouldNotParseCertificate),
 				};
-				SanType::OtherName((oid.collect(), other_name_value))
+				GeneralName::OtherName((oid.collect(), other_name_value))
 			},
 			_ => return Err(Error::InvalidNameType),
 		})
@@ -163,10 +165,10 @@ impl SanType {
 		const TAG_IP_ADDRESS: u64 = 7;
 
 		match self {
-			SanType::Rfc822Name(_name) => TAG_RFC822_NAME,
-			SanType::DnsName(_name) => TAG_DNS_NAME,
-			SanType::URI(_name) => TAG_URI,
-			SanType::IpAddress(_addr) => TAG_IP_ADDRESS,
+			GeneralName::Rfc822Name(_name) => TAG_RFC822_NAME,
+			GeneralName::DnsName(_name) => TAG_DNS_NAME,
+			GeneralName::URI(_name) => TAG_URI,
+			GeneralName::IpAddress(_addr) => TAG_IP_ADDRESS,
 			Self::OtherName(_oid) => TAG_OTHER_NAME,
 		}
 	}
@@ -594,9 +596,9 @@ impl NameConstraints {
 #[non_exhaustive]
 /// General Subtree type.
 ///
-/// This type has similarities to the [`SanType`] enum but is not equal.
+/// This type has similarities to the [`GeneralName`] enum but is not equal.
 /// For example, `GeneralSubtree` has CIDR subnets for ip addresses
-/// while [`SanType`] has IP addresses.
+/// while [`GeneralName`] has IP addresses.
 pub enum GeneralSubtree {
 	/// Also known as E-Mail address
 	Rfc822Name(String),
@@ -1187,7 +1189,7 @@ mod tests {
 	fn san_critical_when_subject_empty() {
 		// RFC 5280 §4.1.2.6: SAN must be critical if the subject is an empty sequence.
 		let mut params = CertificateParams {
-			subject_alt_names: vec![SanType::DnsName("example.com".try_into().unwrap())],
+			subject_alt_names: vec![GeneralName::DnsName("example.com".try_into().unwrap())],
 			..CertificateParams::default()
 		};
 		assert_eq!(
@@ -1248,13 +1250,13 @@ mod tests {
 	#[cfg(feature = "x509-parser")]
 	#[test]
 	fn san_type_from_general_name_with_ipv4() {
-		use x509_parser::extensions::GeneralName;
+		use x509_parser::extensions::GeneralName as X509GeneralName;
 
 		let octets = [1, 2, 3, 4];
-		let value = GeneralName::IPAddress(&octets);
-		let actual = SanType::try_from_general(&value).unwrap();
+		let value = X509GeneralName::IPAddress(&octets);
+		let actual = GeneralName::try_from_general(&value).unwrap();
 
-		assert_eq!(SanType::IpAddress(IpAddr::from(octets)), actual);
+		assert_eq!(GeneralName::IpAddress(IpAddr::from(octets)), actual);
 	}
 
 	#[derive(Debug)]
