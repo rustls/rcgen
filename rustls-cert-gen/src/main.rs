@@ -114,8 +114,14 @@ mod tests {
 		.map(Into::into)
 		.collect();
 		let sans: Vec<GeneralName> = parse_sans(hosts).unwrap();
-		assert_eq!(GeneralName::DnsName("my.host.com".try_into().unwrap()), sans[0]);
-		assert_eq!(GeneralName::DnsName("localhost".try_into().unwrap()), sans[1]);
+		assert_eq!(
+			GeneralName::DnsName("my.host.com".try_into().unwrap()),
+			sans[0]
+		);
+		assert_eq!(
+			GeneralName::DnsName("localhost".try_into().unwrap()),
+			sans[1]
+		);
 		assert_eq!(
 			GeneralName::IpAddress("185.199.108.153".parse().unwrap()),
 			sans[2]

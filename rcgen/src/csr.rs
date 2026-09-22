@@ -10,7 +10,7 @@ use crate::{
 	Certificate, CertificateParams, Error, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey,
 };
 #[cfg(feature = "x509-parser")]
-use crate::{DistinguishedName, ExtendedKeyUsagePurpose, IsCa, KeyUsagePurpose, GeneralName};
+use crate::{DistinguishedName, ExtendedKeyUsagePurpose, GeneralName, IsCa, KeyUsagePurpose};
 
 /// A public key, extracted from a CSR
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -71,6 +71,7 @@ impl From<CertificateSigningRequest> for CertificateSigningRequestDer<'static> {
 }
 
 /// Parameters for a certificate signing request
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CertificateSigningRequestParams {
 	/// Parameters for the certificate to be signed.

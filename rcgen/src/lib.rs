@@ -30,7 +30,7 @@ println!("{}", serialize_private_key_pem(&private_key).unwrap());
 #![forbid(non_ascii_idents)]
 #![deny(missing_docs)]
 #![cfg_attr(rcgen_docsrs, feature(doc_cfg))]
-#![warn(unreachable_pub)]
+#![warn(unreachable_pub, clippy::exhaustive_enums, clippy::exhaustive_structs)]
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -68,8 +68,8 @@ pub use error::{Error, InvalidAsn1String};
 
 mod extension;
 pub use extension::{
-	CidrSubnet, CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralSubtree, KeyIdMethod,
-	KeyUsagePurpose, NameConstraints, OtherNameValue, GeneralName,
+	CidrSubnet, CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralName, GeneralSubtree,
+	KeyIdMethod, KeyUsagePurpose, NameConstraints, OtherNameValue,
 };
 
 mod key_pair;
@@ -99,6 +99,7 @@ use string::{BmpString, Ia5String, PrintableString, TeletexString, UniversalStri
 pub type RcgenError = Error;
 
 /// An issued certificate, together with the subject keypair.
+#[allow(clippy::exhaustive_structs)]
 #[derive(PartialEq, Eq)]
 pub struct CertifiedKey<S: SigningKey> {
 	/// An issued certificate.
