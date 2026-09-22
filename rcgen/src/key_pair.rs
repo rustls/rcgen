@@ -26,9 +26,9 @@ use crate::ring_like::{
 	},
 	{ecdsa_from_pkcs8, rsa_key_pair_public_modulus_len},
 };
-use crate::sign_algo::SignatureAlgorithm;
 #[cfg(feature = "crypto")]
 use crate::sign_algo::{algo::*, SignAlgo};
+use crate::sign_algo::{PublicKeyAlgorithm, SignatureAlgorithm};
 use crate::Error;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
@@ -179,11 +179,6 @@ impl KeyPair {
 			},
 			der,
 		))
-	}
-
-	/// Returns the key pair's signature algorithm
-	pub fn algorithm(&self) -> &'static SignatureAlgorithm {
-		self.alg
 	}
 
 	/// Parses the key pair from the ASCII PEM format
@@ -448,6 +443,10 @@ impl SigningKey for KeyPair {
 			},
 		})
 	}
+
+	fn signature_algorithm(&self) -> &'static SignatureAlgorithm {
+		self.alg
+	}
 }
 
 #[cfg(feature = "crypto")]
@@ -462,8 +461,8 @@ impl PublicKeyData for KeyPair {
 		}
 	}
 
-	fn algorithm(&self) -> &'static SignatureAlgorithm {
-		self.alg
+	fn algorithm(&self) -> &'static PublicKeyAlgorithm {
+		self.alg.public_key_algorithm()
 	}
 }
 
@@ -595,7 +594,7 @@ pub(crate) fn sign_der(
 			writer.next().write_der(&data);
 
 			// Write signatureAlgorithm
-			key.algorithm().write_alg_ident(writer.next());
+			key.signature_algorithm().write_alg_ident(writer.next());
 
 			// Write signature
 			let sig = key.sign(&data)?;
@@ -611,12 +610,19 @@ impl<S: SigningKey + ?Sized> SigningKey for &S {
 	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
 		(*self).sign(msg)
 	}
+
+	fn signature_algorithm(&self) -> &'static SignatureAlgorithm {
+		(*self).signature_algorithm()
+	}
 }
 
 /// A key that can be used to sign messages
 pub trait SigningKey: PublicKeyData {
 	/// Signs `msg` using the selected algorithm
 	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
+
+	/// The algorithm of the signatures this key produces
+	fn signature_algorithm(&self) -> &'static SignatureAlgorithm;
 }
 
 #[cfg(feature = "crypto")]
@@ -643,7 +649,7 @@ impl<T> ExternalError<T> for Result<T, pem::PemError> {
 /// A public key
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubjectPublicKeyInfo {
-	pub(crate) alg: &'static SignatureAlgorithm,
+	pub(crate) alg: &'static PublicKeyAlgorithm,
 	pub(crate) subject_public_key: Vec<u8>,
 }
 
@@ -658,7 +664,7 @@ impl SubjectPublicKeyInfo {
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(spki_der: &[u8]) -> Result<Self, Error> {
 		use x509_parser::prelude::FromDer;
-		use x509_parser::x509::{AlgorithmIdentifier, SubjectPublicKeyInfo};
+		use x509_parser::x509::SubjectPublicKeyInfo;
 
 		let (rem, spki) =
 			SubjectPublicKeyInfo::from_der(spki_der).map_err(|e| Error::X509(e.to_string()))?;
@@ -668,23 +674,8 @@ impl SubjectPublicKeyInfo {
 			));
 		}
 
-		let alg = SignatureAlgorithm::iter()
-			.find(|alg| {
-				let bytes = yasna::construct_der(|writer| {
-					alg.write_oids_sign_alg(writer);
-				});
-				let Ok((rest, aid)) = AlgorithmIdentifier::from_der(&bytes) else {
-					return false;
-				};
-				if !rest.is_empty() {
-					return false;
-				}
-				aid == spki.algorithm
-			})
-			.ok_or(Error::UnsupportedSignatureAlgorithm)?;
-
 		Ok(Self {
-			alg,
+			alg: PublicKeyAlgorithm::from_alg_id(&spki.algorithm)?,
 			subject_public_key: Vec::from(spki.subject_public_key.as_ref()),
 		})
 	}
@@ -695,7 +686,7 @@ impl PublicKeyData for SubjectPublicKeyInfo {
 		&self.subject_public_key
 	}
 
-	fn algorithm(&self) -> &'static SignatureAlgorithm {
+	fn algorithm(&self) -> &'static PublicKeyAlgorithm {
 		self.alg
 	}
 }
@@ -705,7 +696,7 @@ impl<K: PublicKeyData + ?Sized> PublicKeyData for &K {
 		(*self).der_bytes()
 	}
 
-	fn algorithm(&self) -> &'static SignatureAlgorithm {
+	fn algorithm(&self) -> &'static PublicKeyAlgorithm {
 		(*self).algorithm()
 	}
 }
@@ -723,8 +714,8 @@ pub trait PublicKeyData {
 	/// The public key in DER format
 	fn der_bytes(&self) -> &[u8];
 
-	/// The algorithm used by the key pair
-	fn algorithm(&self) -> &'static SignatureAlgorithm;
+	/// The algorithm of the public key
+	fn algorithm(&self) -> &'static PublicKeyAlgorithm;
 }
 
 /// Serialize private key to PEM format
@@ -743,7 +734,7 @@ pub fn serialize_private_key_pem(key: &PrivateKeyDer<'_>) -> Result<String, Erro
 
 pub(crate) fn serialize_public_key_der(key: &(impl PublicKeyData + ?Sized), writer: DERWriter) {
 	writer.write_sequence(|writer| {
-		key.algorithm().write_oids_sign_alg(writer.next());
+		key.algorithm().write_alg_id(writer.next());
 		let pk = key.der_bytes();
 		writer.next().write_bitvec_bytes(pk, pk.len() * 8);
 	})
@@ -776,6 +767,11 @@ mod test {
 
 			let pkd_der = SubjectPublicKeyInfo::from_der(&der).expect("from der");
 			assert_eq!(kp.der_bytes(), pkd_der.der_bytes());
+
+			// Several signature algorithms can share an SPKI encoding, so this recovery is
+			// only unambiguous because it resolves to a key algorithm.
+			assert_eq!(pkd_der.algorithm(), alg.public_key_algorithm());
+			assert_eq!(pkd_der.subject_public_key_info(), der);
 		}
 	}
 
@@ -786,6 +782,7 @@ mod test {
 		let der = pkcs8.as_ref().to_vec();
 
 		let key_pair = KeyPair::try_from(der).unwrap();
-		assert_eq!(key_pair.algorithm(), &ECDSA_P256_SHA256);
+		assert_eq!(key_pair.signature_algorithm(), &ECDSA_P256_SHA256);
+		assert_eq!(key_pair.algorithm(), &crate::key_alg::ECDSA_P256);
 	}
 }

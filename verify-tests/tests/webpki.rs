@@ -393,6 +393,10 @@ fn from_remote() {
 				.map(|s| s.as_ref().to_owned())
 				.map_err(|_| Error::RingUnspecified)
 		}
+
+		fn signature_algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
+			&rcgen::ECDSA_P256_SHA256
+		}
 	}
 
 	impl PublicKeyData for Remote {
@@ -400,8 +404,8 @@ fn from_remote() {
 			self.0.public_key().as_ref()
 		}
 
-		fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
-			&rcgen::ECDSA_P256_SHA256
+		fn algorithm(&self) -> &'static rcgen::PublicKeyAlgorithm {
+			&rcgen::key_alg::ECDSA_P256
 		}
 	}
 

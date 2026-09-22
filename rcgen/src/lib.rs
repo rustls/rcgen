@@ -83,7 +83,7 @@ pub use key_pair::{PublicKeyData, SigningKey, SubjectPublicKeyInfo};
 
 mod sign_algo;
 pub use sign_algo::algo::*;
-pub use sign_algo::SignatureAlgorithm;
+pub use sign_algo::{key_alg, PublicKeyAlgorithm, SignatureAlgorithm};
 
 mod oid;
 
@@ -676,6 +676,29 @@ mod tests {
 					i == j,
 					"Algorithm relationship mismatch for algorithm index pair {i} and {j}"
 				);
+			}
+		}
+	}
+
+	#[test]
+	fn algo_hash_agrees_with_eq() {
+		use std::collections::hash_map::DefaultHasher;
+		use std::hash::{Hash, Hasher};
+
+		fn hash(value: &impl Hash) -> u64 {
+			let mut hasher = DefaultHasher::new();
+			value.hash(&mut hasher);
+			hasher.finish()
+		}
+
+		for alg_i in SignatureAlgorithm::iter() {
+			for alg_j in SignatureAlgorithm::iter() {
+				assert!(alg_i != alg_j || hash(alg_i) == hash(alg_j));
+			}
+		}
+		for alg_i in PublicKeyAlgorithm::iter() {
+			for alg_j in PublicKeyAlgorithm::iter() {
+				assert!(alg_i != alg_j || hash(alg_i) == hash(alg_j));
 			}
 		}
 	}

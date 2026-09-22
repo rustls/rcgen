@@ -480,19 +480,30 @@ mod tests {
 
 	#[test]
 	fn key_pair_algorithm_to_keypair() -> anyhow::Result<()> {
+		use rcgen::SigningKey;
+
 		let (keypair, _) = KeyPair::generate_for(KeyPairAlgorithm::Ed25519.into())?;
-		assert_eq!(format!("{:?}", keypair.algorithm()), "ED25519");
+		assert_eq!(format!("{:?}", keypair.signature_algorithm()), "ED25519");
 
 		let (keypair, _) = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP256.into())?;
-		assert_eq!(format!("{:?}", keypair.algorithm()), "ECDSA_P256_SHA256");
+		assert_eq!(
+			format!("{:?}", keypair.signature_algorithm()),
+			"ECDSA_P256_SHA256"
+		);
 
 		let (keypair, _) = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP384.into())?;
-		assert_eq!(format!("{:?}", keypair.algorithm()), "ECDSA_P384_SHA384");
+		assert_eq!(
+			format!("{:?}", keypair.signature_algorithm()),
+			"ECDSA_P384_SHA384"
+		);
 
 		#[cfg(feature = "aws_lc_rs")]
 		{
 			let (keypair, _) = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP521.into())?;
-			assert_eq!(format!("{:?}", keypair.algorithm()), "ECDSA_P521_SHA512");
+			assert_eq!(
+				format!("{:?}", keypair.signature_algorithm()),
+				"ECDSA_P521_SHA512"
+			);
 		}
 
 		Ok(())

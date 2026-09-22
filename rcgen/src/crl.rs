@@ -28,11 +28,12 @@ use crate::{
 /// #[cfg(not(feature = "crypto"))]
 /// impl SigningKey for MyKeyPair {
 ///   fn sign(&self, _: &[u8]) -> Result<Vec<u8>, rcgen::Error> { Ok(vec![]) }
+///   fn signature_algorithm(&self) -> &'static SignatureAlgorithm { &ED25519 }
 /// }
 /// #[cfg(not(feature = "crypto"))]
 /// impl PublicKeyData for MyKeyPair {
 ///   fn der_bytes(&self) -> &[u8] { &self.public_key }
-///   fn algorithm(&self) -> &'static SignatureAlgorithm { &ED25519 }
+///   fn algorithm(&self) -> &'static PublicKeyAlgorithm { &key_alg::ED25519 }
 /// }
 /// # fn main () {
 /// // Generate a CRL issuer.
@@ -203,7 +204,7 @@ impl CertificateRevocationListParams {
 			//   signatureAlgorithm field in the sequence CertificateList
 			issuer
 				.signing_key
-				.algorithm()
+				.signature_algorithm()
 				.write_alg_ident(writer.next());
 
 			// Write issuer.

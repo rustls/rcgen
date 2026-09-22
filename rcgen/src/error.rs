@@ -28,6 +28,8 @@ pub enum Error {
 	UnsupportedExtension,
 	/// The requested signature algorithm is not supported
 	UnsupportedSignatureAlgorithm,
+	/// The public key algorithm is not supported
+	UnsupportedPublicKeyAlgorithm,
 	/// Unspecified `ring` error
 	RingUnspecified,
 	/// The `ring` library rejected the key upon loading
@@ -82,6 +84,11 @@ impl fmt::Display for Error {
 			UnsupportedSignatureAlgorithm => write!(
 				f,
 				"The requested signature algorithm \
+				is not supported"
+			)?,
+			UnsupportedPublicKeyAlgorithm => write!(
+				f,
+				"The public key algorithm \
 				is not supported"
 			)?,
 			#[cfg(feature = "x509-parser")]
