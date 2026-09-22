@@ -44,6 +44,7 @@ jobs:
               uses: dtolnay/rust-toolchain@stable
               with:
                   components: clippy
+            - uses: Swatinem/rust-cache@v2
             # `fips` and `aws_lc_rs_unstable` cannot be used together, so avoid `--all-features`
             - run: cargo clippy --features ring,pem,x509-parser --all-targets
             # rustls-cert-gen require either aws_lc_rs or ring feature
@@ -140,21 +141,12 @@ jobs:
             - uses: actions/checkout@v7
               with:
                   persist-credentials: false
-            - uses: actions/cache@v6
-              with:
-                  path: |
-                      ~/.cargo/bin/
-                      ~/.cargo/registry/index/
-                      ~/.cargo/registry/cache/
-                      ~/.cargo/git/db/
-                      target/
-                      $VCPKG_DEFAULT_BINARY_CACHE
-                  key: ${{ runner.os }}-cargo-stable-${{ hashFiles('Cargo.lock') }}
             - uses: egor-tensin/vs-shell@v2
               with:
                   arch: amd64
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
+            - uses: Swatinem/rust-cache@v2
             - name: Install NASM for aws-lc-rs on Windows
               uses: ilammy/setup-nasm@v1
             - name: Run cargo check
@@ -186,19 +178,11 @@ jobs:
             - uses: actions/checkout@v7
               with:
                   persist-credentials: false
-            - uses: actions/cache@v6
-              with:
-                  path: |
-                      ~/.cargo/bin/
-                      ~/.cargo/registry/index/
-                      ~/.cargo/registry/cache/
-                      ~/.cargo/git/db/
-                      target/
-                  key: ${{ runner.os }}-cargo-${{matrix.toolchain}}-${{ hashFiles('Cargo.lock') }}
             - name: Install Rust
               uses: dtolnay/rust-toolchain@master
               with:
                   toolchain: ${{ matrix.toolchain }}
+            - uses: Swatinem/rust-cache@v2
             - name: Run cargo check
               run: cargo check --all-targets
             - name: Run the tests
@@ -231,21 +215,13 @@ jobs:
               uses: actions/checkout@v7
               with:
                   persist-credentials: false
-            - uses: actions/cache@v6
-              with:
-                  path: |
-                      ~/.cargo/bin/
-                      ~/.cargo/registry/index/
-                      ~/.cargo/registry/cache/
-                      ~/.cargo/git/db/
-                      target/
-                  key: ${{ runner.os }}-cargo-stable-${{ hashFiles('Cargo.lock') }}
-            - name: Install cargo-llvm-cov
-              uses: taiki-e/install-action@cargo-llvm-cov
             - name: Install rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
                   components: llvm-tools
+            - uses: Swatinem/rust-cache@v2
+            - name: Install cargo-llvm-cov
+              uses: taiki-e/install-action@cargo-llvm-cov
             - name: Measure coverage
               run: cargo llvm-cov --features ring,pem,x509-parser --lcov --output-path ./lcov.info
             - name: Report to codecov.io
