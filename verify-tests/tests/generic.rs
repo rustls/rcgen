@@ -519,7 +519,7 @@ mod test_csr_extension_request {
 mod test_csr {
 	use rcgen::{
 		CertificateParams, CertificateSigningRequestParams, ExtendedKeyUsagePurpose, KeyPair,
-		KeyUsagePurpose,
+		KeyUsagePurpose, PublicKeyData,
 	};
 
 	#[test]

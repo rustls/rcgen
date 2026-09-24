@@ -395,7 +395,7 @@ impl CertificateParams {
 			// Write signature algorithm
 			issuer
 				.signing_key
-				.algorithm()
+				.signature_algorithm()
 				.write_alg_ident(writer.next());
 			// Write issuer name
 			write_distinguished_name(writer.next(), issuer.distinguished_name.as_ref());
