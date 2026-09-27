@@ -658,7 +658,7 @@ impl SubjectPublicKeyInfo {
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(spki_der: &[u8]) -> Result<Self, Error> {
 		use x509_parser::prelude::FromDer;
-		use x509_parser::x509::{AlgorithmIdentifier, SubjectPublicKeyInfo};
+		use x509_parser::x509::SubjectPublicKeyInfo;
 
 		let (rem, spki) =
 			SubjectPublicKeyInfo::from_der(spki_der).map_err(|e| Error::X509(e.to_string()))?;
@@ -668,23 +668,8 @@ impl SubjectPublicKeyInfo {
 			));
 		}
 
-		let alg = SignatureAlgorithm::iter()
-			.find(|alg| {
-				let bytes = yasna::construct_der(|writer| {
-					alg.write_oids_sign_alg(writer);
-				});
-				let Ok((rest, aid)) = AlgorithmIdentifier::from_der(&bytes) else {
-					return false;
-				};
-				if !rest.is_empty() {
-					return false;
-				}
-				aid == spki.algorithm
-			})
-			.ok_or(Error::UnsupportedSignatureAlgorithm)?;
-
 		Ok(Self {
-			alg,
+			alg: SignatureAlgorithm::from_alg_id(&spki.algorithm)?,
 			subject_public_key: Vec::from(spki.subject_public_key.as_ref()),
 		})
 	}
