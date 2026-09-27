@@ -26,11 +26,12 @@ use crate::{
 /// #[cfg(not(feature = "crypto"))]
 /// impl SigningKey for MyKeyPair {
 ///   fn sign(&self, _: &[u8]) -> Result<Vec<u8>, rcgen::Error> { Ok(vec![]) }
+///   fn algorithm(&self) -> &'static SignatureAlgorithm { &ED25519 }
 /// }
 /// #[cfg(not(feature = "crypto"))]
 /// impl PublicKeyData for MyKeyPair {
 ///   fn der_bytes(&self) -> &[u8] { &self.public_key }
-///   fn algorithm(&self) -> &'static SignatureAlgorithm { &ED25519 }
+///   fn key_algorithm(&self) -> &'static PublicKeyAlgorithm { &key_alg::ED25519 }
 /// }
 /// # fn main () {
 /// // Generate a CRL issuer.

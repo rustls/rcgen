@@ -26,9 +26,9 @@ use crate::ring_like::{
 	},
 	{ecdsa_from_pkcs8, rsa_key_pair_public_modulus_len},
 };
-use crate::sign_algo::SignatureAlgorithm;
 #[cfg(feature = "crypto")]
 use crate::sign_algo::{algo::*, SignAlgo};
+use crate::sign_algo::{PublicKeyAlgorithm, SignatureAlgorithm};
 use crate::Error;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
@@ -179,11 +179,6 @@ impl KeyPair {
 			},
 			der,
 		))
-	}
-
-	/// Returns the key pair's signature algorithm
-	pub fn algorithm(&self) -> &'static SignatureAlgorithm {
-		self.alg
 	}
 
 	/// Parses the key pair from the ASCII PEM format
@@ -448,6 +443,10 @@ impl SigningKey for KeyPair {
 			},
 		})
 	}
+
+	fn algorithm(&self) -> &'static SignatureAlgorithm {
+		self.alg
+	}
 }
 
 #[cfg(feature = "crypto")]
@@ -462,8 +461,8 @@ impl PublicKeyData for KeyPair {
 		}
 	}
 
-	fn algorithm(&self) -> &'static SignatureAlgorithm {
-		self.alg
+	fn key_algorithm(&self) -> &'static PublicKeyAlgorithm {
+		self.alg.public_key_algorithm()
 	}
 }
 
@@ -611,12 +610,19 @@ impl<S: SigningKey + ?Sized> SigningKey for &S {
 	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
 		(*self).sign(msg)
 	}
+
+	fn algorithm(&self) -> &'static SignatureAlgorithm {
+		(*self).algorithm()
+	}
 }
 
 /// A key that can be used to sign messages
 pub trait SigningKey: PublicKeyData {
 	/// Signs `msg` using the selected algorithm
 	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
+
+	/// The algorithm of the signatures this key produces
+	fn algorithm(&self) -> &'static SignatureAlgorithm;
 }
 
 #[cfg(feature = "crypto")]
@@ -643,7 +649,7 @@ impl<T> ExternalError<T> for Result<T, pem::PemError> {
 /// A public key
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubjectPublicKeyInfo {
-	pub(crate) alg: &'static SignatureAlgorithm,
+	pub(crate) alg: &'static PublicKeyAlgorithm,
 	pub(crate) subject_public_key: Vec<u8>,
 }
 
@@ -669,7 +675,7 @@ impl SubjectPublicKeyInfo {
 		}
 
 		Ok(Self {
-			alg: SignatureAlgorithm::from_alg_id(&spki.algorithm)?,
+			alg: PublicKeyAlgorithm::from_alg_id(&spki.algorithm)?,
 			subject_public_key: Vec::from(spki.subject_public_key.as_ref()),
 		})
 	}
@@ -680,7 +686,7 @@ impl PublicKeyData for SubjectPublicKeyInfo {
 		&self.subject_public_key
 	}
 
-	fn algorithm(&self) -> &'static SignatureAlgorithm {
+	fn key_algorithm(&self) -> &'static PublicKeyAlgorithm {
 		self.alg
 	}
 }
@@ -690,8 +696,8 @@ impl<K: PublicKeyData + ?Sized> PublicKeyData for &K {
 		(*self).der_bytes()
 	}
 
-	fn algorithm(&self) -> &'static SignatureAlgorithm {
-		(*self).algorithm()
+	fn key_algorithm(&self) -> &'static PublicKeyAlgorithm {
+		(*self).key_algorithm()
 	}
 }
 
@@ -708,8 +714,8 @@ pub trait PublicKeyData {
 	/// The public key in DER format
 	fn der_bytes(&self) -> &[u8];
 
-	/// The algorithm used by the key pair
-	fn algorithm(&self) -> &'static SignatureAlgorithm;
+	/// The algorithm of the public key
+	fn key_algorithm(&self) -> &'static PublicKeyAlgorithm;
 }
 
 /// Serialize private key to PEM format
@@ -728,7 +734,7 @@ pub fn serialize_private_key_pem(key: &PrivateKeyDer<'_>) -> Result<String, Erro
 
 pub(crate) fn serialize_public_key_der(key: &(impl PublicKeyData + ?Sized), writer: DERWriter) {
 	writer.write_sequence(|writer| {
-		key.algorithm().write_oids_sign_alg(writer.next());
+		key.key_algorithm().write_alg_id(writer.next());
 		let pk = key.der_bytes();
 		writer.next().write_bitvec_bytes(pk, pk.len() * 8);
 	})
@@ -761,6 +767,11 @@ mod test {
 
 			let pkd_der = SubjectPublicKeyInfo::from_der(&der).expect("from der");
 			assert_eq!(kp.der_bytes(), pkd_der.der_bytes());
+
+			// Several signature algorithms can share an SPKI encoding, so this recovery is
+			// only unambiguous because it resolves to a key algorithm.
+			assert_eq!(pkd_der.key_algorithm(), alg.public_key_algorithm());
+			assert_eq!(pkd_der.subject_public_key_info(), der);
 		}
 	}
 
@@ -772,5 +783,6 @@ mod test {
 
 		let key_pair = KeyPair::try_from(der).unwrap();
 		assert_eq!(key_pair.algorithm(), &ECDSA_P256_SHA256);
+		assert_eq!(key_pair.key_algorithm(), &crate::key_alg::ECDSA_P256);
 	}
 }

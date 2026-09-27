@@ -296,6 +296,7 @@ impl PemCertifiedKey {
 
 #[cfg(test)]
 mod tests {
+	use rcgen::SigningKey;
 	use x509_parser::prelude::{FromDer, X509Certificate};
 
 	use super::*;
