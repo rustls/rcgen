@@ -10,6 +10,7 @@ use yasna::DERWriter;
 
 #[cfg(feature = "crypto")]
 use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters, RsaEncoding};
+#[cfg(feature = "x509-parser")]
 use crate::Error;
 
 #[cfg(feature = "crypto")]
@@ -232,6 +233,7 @@ impl Hash for SignatureAlgorithm {
 	}
 }
 impl SignatureAlgorithm {
+	#[cfg(test)]
 	pub(crate) fn iter() -> std::slice::Iter<'static, &'static SignatureAlgorithm> {
 		use algo::*;
 		static ALGORITHMS: &[&SignatureAlgorithm] = &[
@@ -255,16 +257,6 @@ impl SignatureAlgorithm {
 			&ML_DSA_87,
 		];
 		ALGORITHMS.iter()
-	}
-
-	/// Retrieve the SignatureAlgorithm for the provided OID
-	pub fn from_oid(oid: &[u64]) -> Result<&'static SignatureAlgorithm, Error> {
-		for algo in Self::iter() {
-			if algo.oid_components == oid {
-				return Ok(algo);
-			}
-		}
-		Err(Error::UnsupportedSignatureAlgorithm)
 	}
 
 	/// The algorithm of a public key generated for this signature algorithm

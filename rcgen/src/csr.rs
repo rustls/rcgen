@@ -11,20 +11,19 @@ use crate::{
 	BasicConstraints, DistinguishedName, ExtendedKeyUsagePurpose, GeneralName, KeyUsagePurpose,
 };
 use crate::{
-	Certificate, CertificateParams, Error, Issuer, PublicKeyAlgorithm, PublicKeyData,
-	SignatureAlgorithm, SigningKey,
+	Certificate, CertificateParams, Error, Issuer, PublicKeyAlgorithm, PublicKeyData, SigningKey,
 };
 
 /// A public key, extracted from a CSR
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PublicKey {
 	raw: Vec<u8>,
-	alg: &'static SignatureAlgorithm,
+	alg: &'static PublicKeyAlgorithm,
 }
 
 impl PublicKey {
-	/// The algorithm used to generate the public key and sign the CSR.
-	pub fn algorithm(&self) -> &SignatureAlgorithm {
+	/// The algorithm of the public key
+	pub fn algorithm(&self) -> &'static PublicKeyAlgorithm {
 		self.alg
 	}
 }
@@ -35,7 +34,7 @@ impl PublicKeyData for PublicKey {
 	}
 
 	fn key_algorithm(&self) -> &'static PublicKeyAlgorithm {
-		self.alg.public_key_algorithm()
+		self.alg
 	}
 }
 
@@ -119,20 +118,18 @@ impl CertificateSigningRequestParams {
 			.1;
 		csr.verify_signature()
 			.map_err(|_| Error::InvalidCertificationRequestSignature)?;
-		let alg_oid = csr
-			.signature_algorithm
-			.algorithm
-			.iter()
-			.ok_or(Error::CouldNotParseCertificationRequest)?
-			.collect::<Vec<_>>();
-		let alg = SignatureAlgorithm::from_oid(&alg_oid)?;
 
 		let info = &csr.certification_request_info;
+
+		let public_key = PublicKey {
+			raw: info.subject_pki.subject_public_key.data.to_vec(),
+			alg: PublicKeyAlgorithm::from_alg_id(&info.subject_pki.algorithm)?,
+		};
+
 		let mut params = CertificateParams {
 			distinguished_name: DistinguishedName::from_name(&info.subject)?,
 			..CertificateParams::default()
 		};
-		let raw = info.subject_pki.subject_public_key.data.to_vec();
 
 		if let Some(extensions) = csr.requested_extensions() {
 			for ext in extensions {
@@ -190,10 +187,7 @@ impl CertificateSigningRequestParams {
 		// * name_constraints
 		// and any other extensions.
 
-		Ok(Self {
-			params,
-			public_key: PublicKey { alg, raw },
-		})
+		Ok(Self { params, public_key })
 	}
 
 	/// Generate a new certificate based on the requested parameters, signed by the provided
