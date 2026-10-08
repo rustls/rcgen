@@ -36,7 +36,7 @@ use crate::{
 /// // Generate a CRL issuer.
 /// let mut issuer_params = CertificateParams::new(vec!["crl.issuer.example.com".to_string()]).unwrap();
 /// issuer_params.serial_number = Some(SerialNumber::from(9999));
-/// issuer_params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+/// issuer_params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 /// issuer_params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::CrlSign];
 /// #[cfg(feature = "crypto")]
 /// let (key_pair, _) = KeyPair::generate().unwrap();
@@ -408,7 +408,7 @@ mod tests {
 	use x509_parser::{oid_registry, parse_x509_crl};
 
 	use super::*;
-	use crate::{date_time_ymd, CertificateParams, IsCa, KeyPair, PathLenConstraint};
+	use crate::{date_time_ymd, BasicConstraints, CertificateParams, KeyPair, PathLenConstraint};
 
 	#[test]
 	fn test_unspecified_reason_code_not_written() {
@@ -470,7 +470,8 @@ mod tests {
 		let mut issuer_params =
 			CertificateParams::new(vec!["crl.issuer.example.com".to_string()]).unwrap();
 		issuer_params.serial_number = Some(SerialNumber::from(9999u64));
-		issuer_params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+		issuer_params.basic_constraints =
+			Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 		issuer_params.key_usages = vec![
 			KeyUsagePurpose::KeyCertSign,
 			KeyUsagePurpose::DigitalSignature,

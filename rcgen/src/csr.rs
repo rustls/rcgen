@@ -6,11 +6,13 @@ use pki_types::CertificateSigningRequestDer;
 
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
+#[cfg(feature = "x509-parser")]
+use crate::{
+	BasicConstraints, DistinguishedName, ExtendedKeyUsagePurpose, GeneralName, KeyUsagePurpose,
+};
 use crate::{
 	Certificate, CertificateParams, Error, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey,
 };
-#[cfg(feature = "x509-parser")]
-use crate::{DistinguishedName, ExtendedKeyUsagePurpose, GeneralName, IsCa, KeyUsagePurpose};
 
 /// A public key, extracted from a CSR
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -175,7 +177,8 @@ impl CertificateSigningRequestParams {
 						}
 					},
 					x509_parser::extensions::ParsedExtension::BasicConstraints(bc) => {
-						params.is_ca = IsCa::from_basic_constraints(bc)?;
+						params.basic_constraints =
+							Some(BasicConstraints::from_basic_constraints(bc)?);
 					},
 					_ => return Err(Error::UnsupportedExtension),
 				}
@@ -219,8 +222,8 @@ mod tests {
 	use x509_parser::prelude::{FromDer, ParsedExtension};
 
 	use crate::{
-		CertificateParams, CertificateSigningRequestParams, ExtendedKeyUsagePurpose, IsCa, KeyPair,
-		KeyUsagePurpose, PathLenConstraint,
+		BasicConstraints, CertificateParams, CertificateSigningRequestParams,
+		ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose, PathLenConstraint,
 	};
 
 	#[test]
@@ -260,7 +263,7 @@ mod tests {
 		use x509_parser::extensions::BasicConstraints as B;
 
 		let params = CertificateParams {
-			is_ca: IsCa::ExplicitNoCa,
+			basic_constraints: Some(BasicConstraints::EndEntity),
 			..Default::default()
 		};
 		let (key_pair, _) = KeyPair::generate().unwrap();
@@ -283,13 +286,13 @@ mod tests {
 	#[test]
 	fn serialize_and_deserialize_eq_basic_constraints() {
 		let params = CertificateParams {
-			is_ca: IsCa::Ca(PathLenConstraint::Constrained(10)),
+			basic_constraints: Some(BasicConstraints::Ca(PathLenConstraint::Constrained(10))),
 			..Default::default()
 		};
 		let (key_pair, _) = KeyPair::generate().unwrap();
 		let csr = params.serialize_request(&key_pair).unwrap();
 		let csr_de = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
 
-		assert_eq!(csr_de.params.is_ca, params.is_ca);
+		assert_eq!(csr_de.params.basic_constraints, params.basic_constraints);
 	}
 }

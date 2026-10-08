@@ -1,8 +1,9 @@
 #![cfg(feature = "x509-parser")]
 
 use rcgen::{
-	Certificate, CertificateParams, CertificateRevocationListParams, DnType, DnValue, IsCa, Issuer,
-	KeyPair, KeyUsagePurpose, PathLenConstraint, RevocationReason, RevokedCertParams, SerialNumber,
+	BasicConstraints, Certificate, CertificateParams, CertificateRevocationListParams, DnType,
+	DnValue, Issuer, KeyPair, KeyUsagePurpose, PathLenConstraint, RevocationReason,
+	RevokedCertParams, SerialNumber,
 };
 use time::{Duration, OffsetDateTime};
 use verify_tests as util;
@@ -127,7 +128,7 @@ fn test_botan_rsa_given() {
 #[test]
 fn test_botan_separate_ca() {
 	let (mut ca_params, ca_key) = default_params();
-	ca_params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	ca_params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
@@ -150,7 +151,7 @@ fn test_botan_separate_ca() {
 #[test]
 fn test_botan_imported_ca() {
 	let (mut params, ca_key) = default_params();
-	params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	let ca_cert = params.self_signed(&ca_key).unwrap();
 	let ca_cert_der = ca_cert.der();
 	let ca = Issuer::from_ca_cert_der(ca_cert.der(), ca_key).unwrap();
@@ -178,7 +179,7 @@ fn test_botan_imported_ca_with_printable_string() {
 		DnType::CountryName,
 		DnValue::PrintableString("US".try_into().unwrap()),
 	);
-	params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	let ca_cert = params.self_signed(&imported_ca_key).unwrap();
 	let ca = Issuer::from_ca_cert_der(ca_cert.der(), imported_ca_key).unwrap();
 
@@ -202,7 +203,7 @@ fn test_botan_crl_parse() {
 	// Create an issuer CA.
 	let alg = &rcgen::ECDSA_P256_SHA256;
 	let (mut issuer, _, _) = util::default_params();
-	issuer.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	issuer.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	issuer.key_usages = vec![
 		KeyUsagePurpose::KeyCertSign,
 		KeyUsagePurpose::DigitalSignature,
@@ -213,7 +214,7 @@ fn test_botan_crl_parse() {
 
 	// Create an end entity cert issued by the issuer.
 	let (mut ee, _, _) = util::default_params();
-	ee.is_ca = IsCa::NoCa;
+	ee.basic_constraints = None;
 	ee.serial_number = Some(SerialNumber::from(99999));
 	// Botan has a sanity check that enforces a maximum expiration date
 	ee.not_after = rcgen::date_time_ymd(3016, 1, 1);

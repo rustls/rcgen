@@ -427,31 +427,31 @@ impl ExtendedKeyUsagePurpose {
 	}
 }
 
-/// Whether the certificate is allowed to sign other certificates
+/// Whether a certificate with a basic constraints extension may sign certificates.
+///
+/// Use `None` in [`CertificateParams::basic_constraints`] to omit this extension.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum IsCa {
-	/// The certificate can only sign itself
-	NoCa,
-	/// The certificate can only sign itself, adding the extension and `CA:FALSE`
-	ExplicitNoCa,
-	/// The certificate may be used to sign other certificates
+pub enum BasicConstraints {
+	/// The certificate is not a CA; encode the default `cA:FALSE` value.
+	EndEntity,
+	/// The certificate is a CA, with the given path length constraint.
 	Ca(PathLenConstraint),
 }
 
-impl IsCa {
+impl BasicConstraints {
 	#[cfg(all(test, feature = "x509-parser"))]
 	pub(crate) fn from_x509(
 		x509: &x509_parser::certificate::X509Certificate<'_>,
-	) -> Result<Self, Error> {
+	) -> Result<Option<Self>, Error> {
 		let basic_constraints = x509
 			.basic_constraints()
 			.map_err(|_| Error::CouldNotParseCertificate)?
 			.map(|ext| ext.value);
 
 		match basic_constraints {
-			Some(bc) => Self::from_basic_constraints(bc),
-			None => Ok(Self::NoCa),
+			Some(bc) => Self::from_basic_constraints(bc).map(Some),
+			None => Ok(None),
 		}
 	}
 
@@ -474,7 +474,7 @@ impl IsCa {
 				ca: true,
 				path_len_constraint: None,
 			} => Self::Ca(PathLenConstraint::Unconstrained),
-			B { ca: false, .. } => Self::ExplicitNoCa,
+			B { ca: false, .. } => Self::EndEntity,
 		})
 	}
 }

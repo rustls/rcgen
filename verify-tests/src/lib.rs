@@ -1,8 +1,9 @@
 use pki_types::PrivateKeyDer;
 use rcgen::{
-	Certificate, CertificateParams, CertificateRevocationList, CertificateRevocationListParams,
-	CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope, DnType, IsCa, Issuer, KeyIdMethod,
-	KeyPair, KeyUsagePurpose, PathLenConstraint, RevocationReason, RevokedCertParams, SerialNumber,
+	BasicConstraints, Certificate, CertificateParams, CertificateRevocationList,
+	CertificateRevocationListParams, CrlDistributionPoint, CrlIssuingDistributionPoint, CrlScope,
+	DnType, Issuer, KeyIdMethod, KeyPair, KeyUsagePurpose, PathLenConstraint, RevocationReason,
+	RevokedCertParams, SerialNumber,
 };
 use time::{Duration, OffsetDateTime};
 
@@ -82,7 +83,7 @@ pub fn test_crl() -> (
 	Certificate,
 ) {
 	let (mut issuer, key_pair, _) = default_params();
-	issuer.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	issuer.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	issuer.key_usages = vec![
 		KeyUsagePurpose::KeyCertSign,
 		KeyUsagePurpose::DigitalSignature,
