@@ -427,24 +427,12 @@ impl ExtendedKeyUsagePurpose {
 	}
 }
 
-/// An X.509v3 name constraints extension according to [RFC 5280 §4.2.1.10].
-///
-/// [RFC 5280 §4.2.1.10]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.10>
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct NameConstraintsExt<'params> {
-	permitted_subtrees: &'params [GeneralSubtree],
-	excluded_subtrees: &'params [GeneralSubtree],
-}
-
-impl<'params> NameConstraintsExt<'params> {
-	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		params.name_constraints.as_ref().map(|nc| Self {
-			permitted_subtrees: &nc.permitted_subtrees,
-			excluded_subtrees: &nc.excluded_subtrees,
-		})
-	}
-
-	fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
+impl NameConstraints {
+	fn write_general_subtrees(
+		writer: DERWriter,
+		tag: u64,
+		general_subtrees: &NonEmptySlice<'_, GeneralSubtree>,
+	) {
 		/*
 		   GeneralSubtrees ::= SEQUENCE SIZE (1..MAX) OF GeneralSubtree
 		   GeneralSubtree ::= SEQUENCE {
@@ -481,19 +469,20 @@ impl<'params> NameConstraintsExt<'params> {
 	}
 }
 
-impl StaticExtension for NameConstraintsExt<'_> {
+impl StaticExtension for NameConstraints {
 	fn write_value(&self, writer: DERWriter) {
 		/*
 		   NameConstraints ::= SEQUENCE {
 				permittedSubtrees       [0]     GeneralSubtrees OPTIONAL,
 				excludedSubtrees        [1]     GeneralSubtrees OPTIONAL }
 		*/
+
 		writer.write_sequence(|writer| {
-			if !self.permitted_subtrees.is_empty() {
-				Self::write_general_subtrees(writer.next(), 0, self.permitted_subtrees);
+			if let Some(permitted) = NonEmptySlice::new(&self.permitted_subtrees) {
+				NameConstraints::write_general_subtrees(writer.next(), 0, &permitted);
 			}
-			if !self.excluded_subtrees.is_empty() {
-				Self::write_general_subtrees(writer.next(), 1, self.excluded_subtrees);
+			if let Some(excluded) = NonEmptySlice::new(&self.excluded_subtrees) {
+				NameConstraints::write_general_subtrees(writer.next(), 1, &excluded);
 			}
 		});
 	}
