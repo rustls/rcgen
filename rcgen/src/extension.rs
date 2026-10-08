@@ -23,22 +23,18 @@ use crate::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SubjectAlternativeName<'params> {
 	criticality: Criticality,
-	names: &'params [GeneralName],
+	names: NonEmptySlice<'params, GeneralName>,
 }
 
 impl<'params> SubjectAlternativeName<'params> {
 	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		// GeneralNames ::= SEQUENCE SIZE (1..MAX): an empty SAN can't be encoded,
-		// so the extension is omitted (RFC 5280 §4.2.1.6).
-		if params.subject_alt_names.is_empty() {
-			return None;
-		}
-
+		// GeneralNames ::= SEQUENCE SIZE (1..MAX): omit an empty SAN rather than
+		// encode an invalid empty extension (RFC 5280 §4.2.1.6).
 		Some(Self {
 			// Per RFC 5280 §4.1.2.6, SAN must be marked critical if the subject
 			// is an empty sequence, and SHOULD be non-critical otherwise.
 			criticality: params.distinguished_name.entries.is_empty().into(),
-			names: &params.subject_alt_names,
+			names: NonEmptySlice::new(&params.subject_alt_names)?,
 		})
 	}
 
