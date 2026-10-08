@@ -4,13 +4,14 @@ use pki_types::CertificateRevocationListDer;
 use time::OffsetDateTime;
 use yasna::{DERWriter, Tag};
 
-use crate::extension::{AuthorityKeyIdentifier, CrlDistributionPoint, Extension};
+use crate::extension::{AuthorityKeyIdentifier, Criticality, Extension, StaticExtension};
 use crate::key_pair::sign_der;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
 	dt_to_generalized, oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_extension, Error, Issuer, KeyIdMethod, KeyUsagePurpose, SerialNumber, SigningKey,
+	write_x509_extension, CrlDistributionPoint, Error, Issuer, KeyIdMethod, KeyUsagePurpose,
+	SerialNumber, SigningKey,
 };
 
 /// A certificate revocation list (CRL)
@@ -239,20 +240,11 @@ impl CertificateRevocationListParams {
 					.write(writer.next());
 
 					// Write CRL number.
-					write_x509_extension(writer.next(), oid::CRL_NUMBER, false, |writer| {
-						writer.write_bigint_bytes(self.crl_number.as_ref(), true);
-					});
+					CrlNumber::from(&self.crl_number).write(writer.next());
 
 					// Write issuing distribution point (if present).
-					if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
-						write_x509_extension(
-							writer.next(),
-							oid::CRL_ISSUING_DISTRIBUTION_POINT,
-							true,
-							|writer| {
-								issuing_distribution_point.write_der(writer);
-							},
-						);
+					if let Some(idp) = &self.issuing_distribution_point {
+						idp.write(writer.next());
 					}
 				});
 			});
@@ -260,6 +252,31 @@ impl CertificateRevocationListParams {
 			Ok(())
 		})
 	}
+}
+
+/// An X.509v3 CRL number extension according to [RFC 5280 §5.2.3].
+///
+/// [RFC 5280 §5.2.3]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.2.3>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct CrlNumber<'params>(&'params SerialNumber);
+
+impl<'params> From<&'params SerialNumber> for CrlNumber<'params> {
+	fn from(number: &'params SerialNumber) -> Self {
+		Self(number)
+	}
+}
+
+impl StaticExtension for CrlNumber<'_> {
+	fn write_value(&self, writer: DERWriter) {
+		// CRLNumber ::= INTEGER (0..MAX)
+		writer.write_bigint_bytes(self.0.as_ref(), true);
+	}
+
+	// RFC 5280 §5.2.3: "CRL issuers conforming to this profile MUST include this
+	// extension in all CRLs and MUST mark this extension as non-critical."
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	const OID: &'static [u64] = oid::CRL_NUMBER;
 }
 
 /// A certificate revocation list (CRL) issuing distribution point, to be included in a CRL's
@@ -282,8 +299,12 @@ impl CrlIssuingDistributionPoint {
 			scope: None,
 		}
 	}
+}
 
-	fn write_der(&self, writer: DERWriter) {
+// An X.509v3 issuing distribution point extension according to RFC 5280 §5.2.5
+// (<https://www.rfc-editor.org/rfc/rfc5280#section-5.2.5>).
+impl StaticExtension for CrlIssuingDistributionPoint {
+	fn write_value(&self, writer: DERWriter) {
 		// IssuingDistributionPoint SEQUENCE
 		writer.write_sequence(|writer| {
 			// distributionPoint [0] DistributionPointName OPTIONAL
@@ -304,6 +325,12 @@ impl CrlIssuingDistributionPoint {
 			}
 		});
 	}
+
+	// RFC 5280 §5.2.5: "Although the extension is critical, conforming
+	// implementations are not required to support this extension."
+	const CRITICALITY: Criticality = Criticality::Critical;
+
+	const OID: &'static [u64] = oid::CRL_ISSUING_DISTRIBUTION_POINT;
 }
 
 /// Describes the scope of a CRL for an issuing distribution point extension.
