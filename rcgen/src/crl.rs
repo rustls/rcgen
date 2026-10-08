@@ -10,8 +10,7 @@ use crate::key_pair::sign_der;
 use crate::ENCODE_CONFIG;
 use crate::{
 	dt_to_generalized, oid, write_distinguished_name, write_dt_utc_or_generalized,
-	write_x509_extension, CrlDistributionPoint, Error, Issuer, KeyIdMethod, KeyUsagePurpose,
-	SerialNumber, SigningKey,
+	CrlDistributionPoint, Error, Issuer, KeyIdMethod, KeyUsagePurpose, SerialNumber, SigningKey,
 };
 
 /// A certificate revocation list (CRL)
@@ -109,6 +108,31 @@ pub enum RevocationReason {
 	RemoveFromCrl = 8,
 	PrivilegeWithdrawn = 9,
 	AaCompromise = 10,
+}
+
+impl StaticExtension for RevocationReason {
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   CRLReason ::= ENUMERATED {
+				unspecified             (0),
+				keyCompromise           (1),
+				cACompromise            (2),
+				affiliationChanged      (3),
+				superseded              (4),
+				cessationOfOperation    (5),
+				certificateHold         (6),
+					 -- value 7 is not used
+				removeFromCRL           (8),
+				privilegeWithdrawn      (9),
+				aACompromise           (10) }
+		*/
+		writer.write_enum(*self as i64);
+	}
+
+	// RFC 5280 §5.3.1: "The reasonCode is a non-critical CRL entry extension".
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	const OID: &'static [u64] = oid::CRL_REASONS;
 }
 
 /// Parameters used for certificate revocation list (CRL) generation
@@ -343,6 +367,26 @@ pub enum CrlScope {
 	CaCertsOnly,
 }
 
+/// An X.509v3 CRL invalidity date entry extension according to [RFC 5280 §5.3.2].
+///
+/// [RFC 5280 §5.3.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-5.3.2>
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct InvalidityDate(OffsetDateTime);
+
+impl StaticExtension for InvalidityDate {
+	fn write_value(&self, writer: DERWriter) {
+		// RFC 5280 §5.3.2: InvalidityDate ::= GeneralizedTime. Unlike the Time
+		// CHOICE used elsewhere, dates in the UTCTime range (1950-2049) must still
+		// be encoded as GeneralizedTime.
+		writer.write_generalized_time(&dt_to_generalized(self.0));
+	}
+
+	// RFC 5280 §5.3.2: "The invalidity date is a non-critical CRL entry extension".
+	const CRITICALITY: Criticality = Criticality::NonCritical;
+
+	const OID: &'static [u64] = oid::CRL_INVALIDITY_DATE;
+}
+
 /// Parameters used for describing a revoked certificate included in a [`CertificateRevocationList`].
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -393,35 +437,20 @@ impl RevokedCertParams {
 			//   optional for conforming CRL issuers and applications.  However, CRL
 			//   issuers SHOULD include reason codes (Section 5.3.1) and invalidity
 			//   dates (Section 5.3.2) whenever this information is available.
-			// RFC 5280 §5.3.1: "The reason code CRL entry extension SHOULD be
-			// absent instead of using the unspecified (0) reasonCode value."
 			let reason_code = self
 				.reason_code
 				.filter(|reason| *reason != RevocationReason::Unspecified);
-			let has_invalidity_date = self.invalidity_date.is_some();
-			if reason_code.is_some() || has_invalidity_date {
+			let invalidity_date = self.invalidity_date.map(InvalidityDate);
+			if reason_code.is_some() || invalidity_date.is_some() {
 				writer.next().write_sequence(|writer| {
 					// Write reason code if present.
-					if let Some(reason_code) = reason_code {
-						write_x509_extension(writer.next(), oid::CRL_REASONS, false, |writer| {
-							writer.write_enum(reason_code as i64);
-						});
+					if let Some(reason_code) = &reason_code {
+						reason_code.write(writer.next());
 					}
 
 					// Write invalidity date if present.
-					// RFC 5280 §5.3.2: InvalidityDate ::= GeneralizedTime.
-					// Unlike the Time CHOICE used elsewhere, dates in the
-					// UTCTime range (1950-2049) must still be encoded as
-					// GeneralizedTime.
-					if let Some(invalidity_date) = self.invalidity_date {
-						write_x509_extension(
-							writer.next(),
-							oid::CRL_INVALIDITY_DATE,
-							false,
-							|writer| {
-								writer.write_generalized_time(&dt_to_generalized(invalidity_date));
-							},
-						)
+					if let Some(invalidity_date) = &invalidity_date {
+						invalidity_date.write(writer.next());
 					}
 				});
 			}
