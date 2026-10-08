@@ -19,9 +19,9 @@ use crate::ring_like::digest;
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized, write_x509_extension,
-	CrlDistributionPoint, DistinguishedName, Error, ExtendedKeyUsagePurpose, GeneralName, IsCa,
-	Issuer, KeyIdMethod, KeyUsagePurpose, NameConstraints, PathLenConstraint, SerialNumber,
-	SigningKey,
+	BasicConstraints, CrlDistributionPoint, DistinguishedName, Error, ExtendedKeyUsagePurpose,
+	GeneralName, Issuer, KeyIdMethod, KeyUsagePurpose, NameConstraints, PathLenConstraint,
+	SerialNumber, SigningKey,
 };
 
 /// An issued certificate
@@ -62,7 +62,13 @@ pub struct CertificateParams {
 	pub serial_number: Option<SerialNumber>,
 	pub subject_alt_names: Vec<GeneralName>,
 	pub distinguished_name: DistinguishedName,
-	pub is_ca: IsCa,
+	/// Basic constraints controlling whether this certificate can act as a certificate authority (CA).
+	///
+	/// Use `Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained))` to allow
+	/// this certificate to sign other certificates without a path length limit.
+	/// `Some(BasicConstraints::EndEntity)` explicitly marks it as a non-CA certificate.
+	/// The default, `None`, omits the extension.
+	pub basic_constraints: Option<BasicConstraints>,
 	pub key_usages: Vec<KeyUsagePurpose>,
 	pub extended_key_usages: Vec<ExtendedKeyUsagePurpose>,
 	pub name_constraints: Option<NameConstraints>,
@@ -94,7 +100,7 @@ impl Default for CertificateParams {
 			serial_number: None,
 			subject_alt_names: Vec::new(),
 			distinguished_name,
-			is_ca: IsCa::NoCa,
+			basic_constraints: None,
 			key_usages: Vec::new(),
 			extended_key_usages: Vec::new(),
 			name_constraints: None,
@@ -174,7 +180,7 @@ impl CertificateParams {
 			.map_err(|_| Error::CouldNotParseCertificate)?;
 
 		Ok(CertificateParams {
-			is_ca: IsCa::from_x509(&x509)?,
+			basic_constraints: BasicConstraints::from_x509(&x509)?,
 			subject_alt_names: GeneralName::from_x509(&x509)?,
 			key_usages: KeyUsagePurpose::from_x509(&x509)?,
 			extended_key_usages: ExtendedKeyUsagePurpose::from_x509(&x509)?,
@@ -220,16 +226,16 @@ impl CertificateParams {
 
 	/// Write a certificate's BasicConstraints as defined in RFC 5280.
 	fn write_ca_extensions(&self, writer: &mut DERWriterSeq) {
-		let is_ca = match &self.is_ca {
-			IsCa::Ca(bc) => Some(bc),
-			IsCa::ExplicitNoCa => None,
-			IsCa::NoCa => return,
+		let basic_constraints = match &self.basic_constraints {
+			Some(BasicConstraints::Ca(bc)) => Some(bc),
+			Some(BasicConstraints::EndEntity) => None,
+			None => return,
 		};
 
 		// Write basic_constraints
 		write_x509_extension(writer.next(), oid::BASIC_CONSTRAINTS, true, |writer| {
 			writer.write_sequence(|writer| {
-				let Some(constraints) = is_ca else {
+				let Some(constraints) = basic_constraints else {
 					return;
 				};
 
@@ -283,7 +289,7 @@ impl CertificateParams {
 			serial_number,
 			subject_alt_names,
 			distinguished_name,
-			is_ca,
+			basic_constraints,
 			key_usages,
 			extended_key_usages,
 			name_constraints,
@@ -318,7 +324,7 @@ impl CertificateParams {
 			|| !subject_alt_names.is_empty()
 			|| !extended_key_usages.is_empty()
 			|| !custom_extensions.is_empty()
-			|| matches!(is_ca, IsCa::ExplicitNoCa | IsCa::Ca(_));
+			|| basic_constraints.is_some();
 
 		let der = sign_der(subject_key, |writer| {
 			// Write version
@@ -407,8 +413,7 @@ impl CertificateParams {
 				|| !self.extended_key_usages.is_empty()
 				|| self.name_constraints.is_some()
 				|| !self.crl_distribution_points.is_empty()
-				|| matches!(self.is_ca, IsCa::ExplicitNoCa)
-				|| matches!(self.is_ca, IsCa::Ca(_))
+				|| self.basic_constraints.is_some()
 				|| !self.custom_extensions.is_empty();
 			if !should_write_exts {
 				return Ok(());
@@ -452,9 +457,9 @@ impl CertificateParams {
 			crl_dps_ext.write(writer.next());
 		}
 
-		// SKI is currently only written for CA certificates (IsCa::Ca or
-		// IsCa::ExplicitNoCa).
-		if self.is_ca != IsCa::NoCa {
+		// SKI is currently written when basic constraints are present, including
+		// an explicit end-entity extension.
+		if self.basic_constraints.is_some() {
 			SubjectKeyIdentifier::new(&self.key_identifier_method, pub_key_spki)
 				.write(writer.next());
 		}
@@ -663,7 +668,7 @@ mod tests {
 					None
 				};
 				let params = CertificateParams {
-					is_ca: IsCa::Ca(PathLenConstraint::Unconstrained),
+					basic_constraints: Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained)),
 					name_constraints: constraints,
 					..CertificateParams::default()
 				};
@@ -698,7 +703,7 @@ mod tests {
 				KeyUsagePurpose::ContentCommitment,
 			],
 			// This can sign things!
-			is_ca: IsCa::Ca(PathLenConstraint::Constrained(0)),
+			basic_constraints: Some(BasicConstraints::Ca(PathLenConstraint::Constrained(0))),
 			..CertificateParams::default()
 		};
 
@@ -736,7 +741,7 @@ mod tests {
 	#[test]
 	fn test_explicit_no_ca() {
 		let params = CertificateParams {
-			is_ca: IsCa::ExplicitNoCa,
+			basic_constraints: Some(BasicConstraints::EndEntity),
 			..CertificateParams::default()
 		};
 
@@ -816,7 +821,7 @@ mod tests {
 			// Set key usages
 			key_usages: vec![KeyUsagePurpose::DecipherOnly],
 			// This can sign things!
-			is_ca: IsCa::Ca(PathLenConstraint::Constrained(0)),
+			basic_constraints: Some(BasicConstraints::Ca(PathLenConstraint::Constrained(0))),
 			..CertificateParams::default()
 		};
 
@@ -987,7 +992,7 @@ mod tests {
 		params.subject_alt_names.push(ip_san.clone());
 
 		// Because we're using a function for CA certificates
-		params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+		params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 
 		// Serialize our cert that has our chosen san, so we can testing parsing/deserializing it.
 		let cert = params.self_signed(&ca_key).unwrap();

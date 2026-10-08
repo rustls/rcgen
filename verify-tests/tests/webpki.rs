@@ -10,8 +10,8 @@ use pki_types::{
 	CertificateDer, PrivateKeyDer, ServerName, SignatureVerificationAlgorithm, UnixTime,
 };
 use rcgen::{
-	Certificate, CertificateParams, CertificateRevocationListParams, DnType, Error,
-	ExtendedKeyUsagePurpose, IsCa, Issuer, KeyIdMethod, KeyPair, KeyUsagePurpose,
+	BasicConstraints, Certificate, CertificateParams, CertificateRevocationListParams, DnType,
+	Error, ExtendedKeyUsagePurpose, Issuer, KeyIdMethod, KeyPair, KeyUsagePurpose,
 	PathLenConstraint, PublicKeyData, RevocationReason, RevokedCertParams, SerialNumber,
 	SigningKey,
 };
@@ -329,7 +329,7 @@ fn test_webpki_rsa_combinations_given() {
 #[test]
 fn test_webpki_separate_ca() {
 	let (mut ca_params, ca_key, _) = util::default_params();
-	ca_params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	ca_params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
@@ -357,7 +357,7 @@ fn test_webpki_separate_ca() {
 #[test]
 fn test_webpki_separate_ca_with_other_signing_alg() {
 	let (mut ca_params, _, _) = util::default_params();
-	ca_params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	ca_params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	let (ca_key, _) = KeyPair::generate_for(&rcgen::ECDSA_P256_SHA256).unwrap();
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 
@@ -446,7 +446,7 @@ fn from_remote() {
 #[test]
 fn test_webpki_separate_ca_name_constraints() {
 	let mut params = util::default_params();
-	params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	// TODO also test permitted subtrees without a DirectoryName once webpki supports it.
 	params.name_constraints = Some(
 		NameConstraints::new(
@@ -483,7 +483,7 @@ fn test_webpki_separate_ca_name_constraints() {
 #[test]
 fn test_webpki_imported_ca() {
 	let (mut params, ca_key, _) = util::default_params();
-	params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	params.key_usages.push(KeyUsagePurpose::KeyCertSign);
 	let ca_cert = params.self_signed(&ca_key).unwrap();
 
@@ -519,7 +519,7 @@ fn test_webpki_imported_ca_with_printable_string() {
 		DnType::CountryName,
 		DnValue::PrintableString("US".try_into().unwrap()),
 	);
-	params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	let ca_cert = params.self_signed(&ca_key).unwrap();
 	let ca = Issuer::from_ca_cert_der(ca_cert.der(), ca_key).unwrap();
 
@@ -578,7 +578,7 @@ fn test_certificate_from_csr() {
 	}
 
 	let (mut ca_params, ca_key, _) = util::default_params();
-	ca_params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	ca_params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	for eku in &eku_test {
 		ca_params.insert_extended_key_usage(eku.clone());
 	}
@@ -673,7 +673,7 @@ fn test_webpki_crl_revoke() {
 	// Create an issuer CA.
 	let alg = &rcgen::ECDSA_P256_SHA256;
 	let (mut issuer, _, _) = util::default_params();
-	issuer.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	issuer.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	issuer.key_usages = vec![
 		KeyUsagePurpose::KeyCertSign,
 		KeyUsagePurpose::DigitalSignature,
@@ -684,7 +684,7 @@ fn test_webpki_crl_revoke() {
 
 	// Create an end entity cert issued by the issuer.
 	let (mut ee, _, _) = util::default_params();
-	ee.is_ca = IsCa::NoCa;
+	ee.basic_constraints = None;
 	ee.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
 	ee.serial_number = Some(SerialNumber::from(99999));
 	let (ee_key, _) = KeyPair::generate_for(alg).unwrap();

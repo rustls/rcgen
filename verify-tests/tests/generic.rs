@@ -172,7 +172,7 @@ mod test_csr_custom_attributes {
 
 #[cfg(feature = "x509-parser")]
 mod test_csr_basic_constraints {
-	use rcgen::{CertificateSigningRequestParams, Error, IsCa, PathLenConstraint};
+	use rcgen::{BasicConstraints, CertificateSigningRequestParams, Error, PathLenConstraint};
 
 	/// Tests deserializing a csr with a basic constraint of CA:TRUE,pathlen:5
 	///
@@ -184,8 +184,8 @@ mod test_csr_basic_constraints {
 				.unwrap();
 
 		assert_eq!(
-			csr_params.params.is_ca,
-			IsCa::Ca(PathLenConstraint::Constrained(5))
+			csr_params.params.basic_constraints,
+			Some(BasicConstraints::Ca(PathLenConstraint::Constrained(5)))
 		);
 	}
 
@@ -257,8 +257,8 @@ RioOvAyCH6bFMvSJxZm7FYM=
 			CertificateSigningRequestParams::from_pem(CSR_TEST_BASIC_CONSTRAINTS_CA_TRUE).unwrap();
 
 		assert_eq!(
-			csr_params.params.is_ca,
-			IsCa::Ca(PathLenConstraint::Unconstrained)
+			csr_params.params.basic_constraints,
+			Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained))
 		);
 	}
 
@@ -294,7 +294,10 @@ lZLnFMmv1pkn052qtQ==
 		let csr_params =
 			CertificateSigningRequestParams::from_pem(CSR_TEST_BASIC_CONSTRAINTS_CA_FALSE).unwrap();
 
-		assert_eq!(csr_params.params.is_ca, IsCa::ExplicitNoCa);
+		assert_eq!(
+			csr_params.params.basic_constraints,
+			Some(BasicConstraints::EndEntity)
+		);
 	}
 
 	/*

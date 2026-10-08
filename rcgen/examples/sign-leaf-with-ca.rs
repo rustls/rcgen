@@ -1,7 +1,7 @@
 use rcgen::DnValue::PrintableString;
 use rcgen::{
-	Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair,
-	KeyUsagePurpose, PathLenConstraint,
+	BasicConstraints, Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose, Issuer,
+	KeyPair, KeyUsagePurpose, PathLenConstraint,
 };
 use time::{Duration, OffsetDateTime};
 
@@ -21,7 +21,7 @@ fn new_ca() -> (Certificate, Issuer<'static, KeyPair>) {
 	let mut params =
 		CertificateParams::new(Vec::default()).expect("empty subject alt name can't produce error");
 	let (yesterday, tomorrow) = validity_period();
-	params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+	params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 	params.distinguished_name.push(
 		DnType::CountryName,
 		PrintableString("BR".try_into().unwrap()),

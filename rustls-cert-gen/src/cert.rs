@@ -7,9 +7,9 @@ use bpaf::Bpaf;
 use pki_types::PrivateKeyDer;
 use rcgen::DnValue::PrintableString;
 use rcgen::{
-	serialize_private_key_pem, Certificate, CertificateParams, CertifiedIssuer, DistinguishedName,
-	DnType, Error, ExtendedKeyUsagePurpose, GeneralName, IsCa, KeyPair, KeyUsagePurpose,
-	PathLenConstraint, SignatureAlgorithm,
+	serialize_private_key_pem, BasicConstraints, Certificate, CertificateParams, CertifiedIssuer,
+	DistinguishedName, DnType, Error, ExtendedKeyUsagePurpose, GeneralName, KeyPair,
+	KeyUsagePurpose, PathLenConstraint, SignatureAlgorithm,
 };
 
 /// Builder to configure TLS [CertificateParams] to be finalized
@@ -66,7 +66,7 @@ pub struct CaBuilder {
 impl CaBuilder {
 	/// Initialize `CaBuilder`
 	pub fn new(mut params: CertificateParams, alg: KeyPairAlgorithm) -> Self {
-		params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
+		params.basic_constraints = Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained));
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
 		params.key_usages.push(KeyUsagePurpose::KeyCertSign);
 		params.key_usages.push(KeyUsagePurpose::CrlSign);
@@ -148,7 +148,7 @@ pub struct EndEntityBuilder {
 impl EndEntityBuilder {
 	/// Initialize `EndEntityBuilder`
 	pub fn new(mut params: CertificateParams, alg: KeyPairAlgorithm) -> Self {
-		params.is_ca = IsCa::NoCa;
+		params.basic_constraints = None;
 		params.use_authority_key_identifier_extension = true;
 		params.key_usages.push(KeyUsagePurpose::DigitalSignature);
 		Self { params, alg }
@@ -325,8 +325,8 @@ mod tests {
 	fn init_ca() {
 		let cert = CertificateBuilder::new().certificate_authority();
 		assert_eq!(
-			cert.params.is_ca,
-			IsCa::Ca(PathLenConstraint::Unconstrained)
+			cert.params.basic_constraints,
+			Some(BasicConstraints::Ca(PathLenConstraint::Unconstrained))
 		)
 	}
 	#[test]
@@ -422,7 +422,7 @@ mod tests {
 	fn init_end_endity() {
 		let params = CertificateParams::default();
 		let cert = EndEntityBuilder::new(params, KeyPairAlgorithm::default());
-		assert_eq!(cert.params.is_ca, IsCa::NoCa)
+		assert_eq!(cert.params.basic_constraints, None)
 	}
 	#[test]
 	fn client_auth_end_entity() {
@@ -432,7 +432,7 @@ mod tests {
 			.unwrap();
 		let params = CertificateParams::default();
 		let mut cert = EndEntityBuilder::new(params, KeyPairAlgorithm::default());
-		assert_eq!(cert.params.is_ca, IsCa::NoCa);
+		assert_eq!(cert.params.basic_constraints, None);
 		assert_eq!(
 			cert.client_auth().params.extended_key_usages,
 			vec![ExtendedKeyUsagePurpose::ClientAuth]
@@ -446,7 +446,7 @@ mod tests {
 			.unwrap();
 		let params = CertificateParams::default();
 		let mut cert = EndEntityBuilder::new(params, KeyPairAlgorithm::default());
-		assert_eq!(cert.params.is_ca, IsCa::NoCa);
+		assert_eq!(cert.params.basic_constraints, None);
 		assert_eq!(
 			cert.server_auth().params.extended_key_usages,
 			vec![ExtendedKeyUsagePurpose::ServerAuth]
