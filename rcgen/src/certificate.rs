@@ -10,7 +10,7 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::csr::CertificateSigningRequest;
 use crate::extension::{
-	AuthorityKeyIdentifier, CrlDistributionPoints, Extension, NameConstraintsExt, NonEmptySlice,
+	AuthorityKeyIdentifier, CrlDistributionPoints, Extension, NonEmptySlice,
 	SubjectAlternativeName, SubjectKeyIdentifier,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
@@ -455,7 +455,7 @@ impl CertificateParams {
 			eku_ext.write(writer.next());
 		}
 
-		if let Some(nc) = NameConstraintsExt::from_params(self) {
+		if let Some(nc) = self.name_constraints.as_ref() {
 			nc.write(writer.next());
 		}
 
