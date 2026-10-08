@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::iter;
 use std::net::IpAddr;
 #[cfg(feature = "x509-parser")]
 use std::net::{Ipv4Addr, Ipv6Addr};
@@ -216,23 +217,7 @@ fn ip_addr_from_octets(octets: &[u8]) -> Result<IpAddr, Error> {
 	}
 }
 
-/// An X.509v3 key usage extension according to [RFC 5280 §4.2.1.3].
-///
-/// [RFC 5280 §4.2.1.3]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.3>
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct KeyUsage<'params>(&'params [KeyUsagePurpose]);
-
-impl<'params> KeyUsage<'params> {
-	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		if params.key_usages.is_empty() {
-			return None;
-		}
-
-		Some(Self(&params.key_usages))
-	}
-}
-
-impl StaticExtension for KeyUsage<'_> {
+impl StaticExtension for NonEmptySlice<'_, KeyUsagePurpose> {
 	fn write_value(&self, writer: DERWriter) {
 		/*
 		   KeyUsage ::= BIT STRING {
@@ -248,7 +233,7 @@ impl StaticExtension for KeyUsage<'_> {
 			  decipherOnly            (8) }
 		*/
 		// u16 is large enough to encode the largest possible key usage (two-bytes)
-		let bit_string = self.0.iter().fold(0u16, |bit_string, key_usage| {
+		let bit_string = self.iter().fold(0u16, |bit_string, key_usage| {
 			bit_string | key_usage.to_u16()
 		});
 
@@ -1032,6 +1017,16 @@ pub(crate) trait StaticExtension: Debug {
 	const OID: &'static [u64];
 }
 
+// Reuse the same encoder for borrowed prepared extensions.
+impl<T: StaticExtension + ?Sized> StaticExtension for &T {
+	fn write_value(&self, writer: DERWriter) {
+		T::write_value(self, writer);
+	}
+
+	const CRITICALITY: Criticality = T::CRITICALITY;
+	const OID: &'static [u64] = T::OID;
+}
+
 /// An X.509 extension.
 ///
 /// All extensions have an OID, a criticality, and a DER encoded value for inclusion in
@@ -1096,6 +1091,28 @@ impl From<bool> for Criticality {
 			true => Self::Critical,
 			false => Self::NonCritical,
 		}
+	}
+}
+
+/// A borrowed sequence containing at least one item.
+///
+/// Some X.509 extensions require nonempty sequences. This type enforces that
+/// requirement before their values can be encoded.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NonEmptySlice<'a, T> {
+	first: &'a T,
+	rest: &'a [T],
+}
+
+impl<'a, T> NonEmptySlice<'a, T> {
+	pub(crate) fn new(items: &'a [T]) -> Option<Self> {
+		items
+			.split_first()
+			.map(|(first, rest)| Self { first, rest })
+	}
+
+	pub(crate) fn iter(&self) -> impl Iterator<Item = &'a T> {
+		iter::once(self.first).chain(self.rest.iter())
 	}
 }
 
