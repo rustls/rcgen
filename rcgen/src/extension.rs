@@ -1072,10 +1072,10 @@ impl KeyIdMethod {
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct CustomExtension {
 	pub(crate) oid: Vec<u64>,
-	pub(crate) critical: bool,
+	pub(crate) criticality: Criticality,
 
 	/// The content must be DER-encoded
-	content: Vec<u8>,
+	pub(crate) content: Vec<u8>,
 }
 
 impl CustomExtension {
@@ -1090,7 +1090,7 @@ impl CustomExtension {
 		});
 		Self {
 			oid: oid::PE_ACME.to_owned(),
-			critical: true,
+			criticality: Criticality::Critical,
 			content,
 		}
 	}
@@ -1098,17 +1098,17 @@ impl CustomExtension {
 	pub fn from_oid_content(oid: &[u64], content: Vec<u8>) -> Self {
 		Self {
 			oid: oid.to_owned(),
-			critical: false,
+			criticality: Criticality::NonCritical,
 			content,
 		}
 	}
 	/// Sets the criticality flag of the extension.
 	pub fn set_criticality(&mut self, criticality: bool) {
-		self.critical = criticality;
+		self.criticality = criticality.into();
 	}
 	/// Obtains the criticality flag of the extension.
 	pub fn criticality(&self) -> bool {
-		self.critical
+		self.criticality == Criticality::Critical
 	}
 	/// Obtains the content of the extension.
 	pub fn content(&self) -> &[u8] {
@@ -1117,6 +1117,20 @@ impl CustomExtension {
 	/// Obtains the OID components of the extensions, as u64 pieces
 	pub fn oid_components(&self) -> impl Iterator<Item = u64> + '_ {
 		self.oid.iter().copied()
+	}
+}
+
+impl Extension for &CustomExtension {
+	fn write_value(&self, writer: DERWriter) {
+		writer.write_der(&self.content)
+	}
+
+	fn criticality(&self) -> Criticality {
+		self.criticality
+	}
+
+	fn oid(&self) -> &[u64] {
+		&self.oid
 	}
 }
 
@@ -1211,7 +1225,7 @@ pub(crate) trait Extension: Debug {
 /// See [RFC 5280 §4.2] for more information.
 ///
 /// [RFC 5280 §4.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2>
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Criticality {
 	/// The extension MUST be recognized and parsed correctly.
 	Critical,
