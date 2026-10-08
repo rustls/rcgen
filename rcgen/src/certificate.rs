@@ -19,8 +19,9 @@ use crate::ring_like::digest;
 use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized, write_x509_extension,
-	CrlDistributionPoint, DistinguishedName, Error, ExtendedKeyUsagePurpose, GeneralName, Issuer,
-	KeyIdMethod, KeyUsagePurpose, NameConstraints, SerialNumber, SigningKey,
+	CrlDistributionPoint, DistinguishedName, Error, ExtendedKeyUsagePurpose, GeneralName, IsCa,
+	Issuer, KeyIdMethod, KeyUsagePurpose, NameConstraints, PathLenConstraint, SerialNumber,
+	SigningKey,
 };
 
 /// An issued certificate
@@ -619,69 +620,6 @@ pub fn date_time_ymd(year: i32, month: u8, day: u8) -> OffsetDateTime {
 		Time::MIDNIGHT,
 	);
 	primitive_dt.assume_utc()
-}
-
-/// Whether the certificate is allowed to sign other certificates
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum IsCa {
-	/// The certificate can only sign itself
-	NoCa,
-	/// The certificate can only sign itself, adding the extension and `CA:FALSE`
-	ExplicitNoCa,
-	/// The certificate may be used to sign other certificates
-	Ca(PathLenConstraint),
-}
-
-impl IsCa {
-	#[cfg(all(test, feature = "x509-parser"))]
-	fn from_x509(x509: &x509_parser::certificate::X509Certificate<'_>) -> Result<Self, Error> {
-		let basic_constraints = x509
-			.basic_constraints()
-			.map_err(|_| Error::CouldNotParseCertificate)?
-			.map(|ext| ext.value);
-
-		match basic_constraints {
-			Some(bc) => Self::from_basic_constraints(bc),
-			None => Ok(Self::NoCa),
-		}
-	}
-
-	#[cfg(feature = "x509-parser")]
-	pub(crate) fn from_basic_constraints(
-		basic_constraints: &x509_parser::extensions::BasicConstraints,
-	) -> Result<Self, Error> {
-		use x509_parser::extensions::BasicConstraints as B;
-
-		Ok(match basic_constraints {
-			B {
-				ca: true,
-				path_len_constraint: Some(n),
-			} if *n <= u8::MAX as u32 => Self::Ca(PathLenConstraint::Constrained(*n as u8)),
-			B {
-				ca: true,
-				path_len_constraint: Some(_),
-			} => return Err(Error::CouldNotParseCertificate),
-			B {
-				ca: true,
-				path_len_constraint: None,
-			} => Self::Ca(PathLenConstraint::Unconstrained),
-			B { ca: false, .. } => Self::ExplicitNoCa,
-		})
-	}
-}
-
-/// The path length constraint (only relevant for CA certificates)
-///
-/// Sets an optional upper limit on the length of the intermediate certificate chain
-/// length allowed for this CA certificate (not including the end entity certificate).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum PathLenConstraint {
-	/// No constraint
-	Unconstrained,
-	/// Constrain to the contained number of intermediate certificates
-	Constrained(u8),
 }
 
 #[cfg(test)]
