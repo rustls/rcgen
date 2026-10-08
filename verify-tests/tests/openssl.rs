@@ -381,13 +381,13 @@ fn test_openssl_separate_ca_name_constraints() {
 
 	println!("openssl version: {:x}", openssl::version::number());
 
-	ca_params.name_constraints = Some(NameConstraints {
-		permitted_subtrees: vec![GeneralSubtree::DnsName("crabs.crabs".to_string())],
-		//permitted_subtrees : vec![GeneralSubtree::DnsName("".to_string())],
-		//permitted_subtrees : Vec::new(),
-		//excluded_subtrees : vec![GeneralSubtree::DnsName(".v".to_string())],
-		excluded_subtrees: Vec::new(),
-	});
+	ca_params.name_constraints = Some(
+		NameConstraints::new(
+			vec![GeneralSubtree::DnsName("crabs.crabs".to_string())],
+			Vec::new(),
+		)
+		.unwrap(),
+	);
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 	let ca = Issuer::new(ca_params, ca_key);
 
@@ -412,13 +412,16 @@ fn test_openssl_separate_ca_name_constraints_directory_name() {
 	let mut permitted = DistinguishedName::new();
 	permitted.push(DnType::OrganizationName, "Crab widgits SE");
 
-	ca_params.name_constraints = Some(NameConstraints {
-		permitted_subtrees: vec![
-			GeneralSubtree::DnsName("crabs.crabs".to_string()),
-			GeneralSubtree::DirectoryName(permitted),
-		],
-		excluded_subtrees: Vec::new(),
-	});
+	ca_params.name_constraints = Some(
+		NameConstraints::new(
+			vec![
+				GeneralSubtree::DnsName("crabs.crabs".to_string()),
+				GeneralSubtree::DirectoryName(permitted),
+			],
+			Vec::new(),
+		)
+		.unwrap(),
+	);
 	let ca_cert = ca_params.self_signed(&ca_key).unwrap();
 	let ca = Issuer::new(ca_params, ca_key);
 

@@ -11,10 +11,9 @@ use yasna::{DERWriter, Tag};
 #[cfg(feature = "crypto")]
 use crate::ring_like::digest;
 use crate::string::Ia5String;
-#[cfg(feature = "x509-parser")]
-use crate::Error;
 use crate::{
-	oid, write_distinguished_name, CertificateParams, DistinguishedName, Issuer, SigningKey,
+	oid, write_distinguished_name, CertificateParams, DistinguishedName, Error, InvalidAsn1String,
+	Issuer, SigningKey,
 };
 
 /// An X.509v3 subject alternative name extension according to [RFC 5280 §4.2.1.6].
@@ -439,14 +438,10 @@ pub(crate) struct NameConstraintsExt<'params> {
 
 impl<'params> NameConstraintsExt<'params> {
 	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		match &params.name_constraints {
-			// If both subtrees are empty, the extension must be omitted.
-			Some(nc) if !nc.is_empty() => Some(Self {
-				permitted_subtrees: &nc.permitted_subtrees,
-				excluded_subtrees: &nc.excluded_subtrees,
-			}),
-			_ => None,
-		}
+		params.name_constraints.as_ref().map(|nc| Self {
+			permitted_subtrees: &nc.permitted_subtrees,
+			excluded_subtrees: &nc.excluded_subtrees,
+		})
 	}
 
 	fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
@@ -510,16 +505,18 @@ impl StaticExtension for NameConstraintsExt<'_> {
 }
 
 /// The [NameConstraints extension](https://tools.ietf.org/html/rfc5280#section-4.2.1.10)
-/// (only relevant for CA certificates)
-#[allow(clippy::exhaustive_structs)]
+/// (only relevant for CA certificates).
+///
+/// At least one permitted or excluded subtree is required. Use
+/// [`CertificateParams::name_constraints`] set to `None` to omit the extension.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct NameConstraints {
 	/// A list of subtrees that the domain has to match.
-	pub permitted_subtrees: Vec<GeneralSubtree>,
+	permitted_subtrees: Vec<GeneralSubtree>,
 	/// A list of subtrees that the domain must not match.
 	///
 	/// Any name matching an excluded subtree is invalid even if it also matches a permitted subtree.
-	pub excluded_subtrees: Vec<GeneralSubtree>,
+	excluded_subtrees: Vec<GeneralSubtree>,
 }
 
 impl NameConstraints {
@@ -548,14 +545,39 @@ impl NameConstraints {
 			Vec::new()
 		};
 
-		Ok(Some(Self {
-			permitted_subtrees,
-			excluded_subtrees,
-		}))
+		Self::new(permitted_subtrees, excluded_subtrees).map(Some)
 	}
 
-	pub(crate) fn is_empty(&self) -> bool {
-		self.permitted_subtrees.is_empty() && self.excluded_subtrees.is_empty()
+	/// Construct name constraints with permitted and excluded subtrees.
+	///
+	/// Returns an error if both lists are empty or a DNS or email name is not ASCII.
+	pub fn new(
+		permitted_subtrees: Vec<GeneralSubtree>,
+		excluded_subtrees: Vec<GeneralSubtree>,
+	) -> Result<Self, Error> {
+		if permitted_subtrees.is_empty() && excluded_subtrees.is_empty() {
+			return Err(Error::EmptyNameConstraints);
+		}
+		for subtree in permitted_subtrees.iter().chain(&excluded_subtrees) {
+			Self::validate_subtree(subtree)?;
+		}
+		Ok(Self {
+			permitted_subtrees,
+			excluded_subtrees,
+		})
+	}
+
+	fn validate_subtree(subtree: &GeneralSubtree) -> Result<(), Error> {
+		match subtree {
+			GeneralSubtree::DnsName(name) | GeneralSubtree::Rfc822Name(name)
+				if !name.is_ascii() =>
+			{
+				Err(Error::InvalidAsn1String(InvalidAsn1String::Ia5String(
+					name.clone(),
+				)))
+			},
+			_ => Ok(()),
+		}
 	}
 }
 
@@ -1101,6 +1123,27 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn name_constraints_reject_empty_and_non_ascii_names() {
+		assert_eq!(
+			NameConstraints::new(Vec::new(), Vec::new()).unwrap_err(),
+			Error::EmptyNameConstraints
+		);
+		for subtree in [
+			GeneralSubtree::DnsName("é.example.com".into()),
+			GeneralSubtree::Rfc822Name("é@example.com".into()),
+		] {
+			assert!(matches!(
+				NameConstraints::new(vec![subtree.clone()], Vec::new()),
+				Err(Error::InvalidAsn1String(_))
+			));
+			assert!(matches!(
+				NameConstraints::new(Vec::new(), vec![subtree]),
+				Err(Error::InvalidAsn1String(_))
+			));
+		}
+	}
+
+	#[test]
 	fn critical_flag_omitted_when_false() {
 		// The critical flag is DEFAULT FALSE, so DER (X.690 §11.5) requires that a
 		// non-critical extension omit it entirely rather than encode FALSE.
@@ -1170,20 +1213,6 @@ mod tests {
 				})
 			})
 		);
-	}
-
-	#[test]
-	fn name_constraints_absent_when_subtrees_empty() {
-		// A name constraints extension with no permitted or excluded subtrees
-		// would violate SEQUENCE SIZE (1..MAX) and must be omitted.
-		let params = CertificateParams {
-			name_constraints: Some(crate::NameConstraints {
-				permitted_subtrees: Vec::new(),
-				excluded_subtrees: Vec::new(),
-			}),
-			..CertificateParams::default()
-		};
-		assert!(NameConstraintsExt::from_params(&params).is_none());
 	}
 
 	#[test]
