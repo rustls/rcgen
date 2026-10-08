@@ -50,8 +50,7 @@ use yasna::DERWriter;
 
 mod certificate;
 pub use certificate::{
-	date_time_ymd, Attribute, Certificate, CertificateParams, CustomExtension, DnType, IsCa,
-	PathLenConstraint,
+	date_time_ymd, Attribute, Certificate, CertificateParams, CustomExtension, DnType,
 };
 
 mod crl;
@@ -68,8 +67,8 @@ pub use error::{Error, InvalidAsn1String};
 
 mod extension;
 pub use extension::{
-	CidrSubnet, CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralName, GeneralSubtree,
-	KeyIdMethod, KeyUsagePurpose, NameConstraints, OtherNameValue,
+	CidrSubnet, CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralName, GeneralSubtree, IsCa,
+	KeyIdMethod, KeyUsagePurpose, NameConstraints, OtherNameValue, PathLenConstraint,
 };
 
 mod key_pair;
