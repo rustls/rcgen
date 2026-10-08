@@ -1070,50 +1070,56 @@ impl KeyIdMethod {
 /// A custom extension of a certificate, as specified in
 /// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[non_exhaustive]
 pub struct CustomExtension {
-	pub(crate) oid: Vec<u64>,
-	pub(crate) criticality: Criticality,
+	/// OID identifying the extension.
+	///
+	/// Only one extension with a given OID may appear within a certificate.
+	pub oid: Vec<u64>,
 
-	/// The content must be DER-encoded
-	pub(crate) content: Vec<u8>,
+	/// Criticality of the extension.
+	///
+	/// See [`Criticality`] for more information.
+	pub criticality: Criticality,
+
+	/// The raw DER encoded value of the extension.
+	///
+	/// This should not contain the OID, criticality, OCTET STRING, or the outer
+	/// extension SEQUENCE of the extension itself: it should only be the DER encoded
+	/// bytes that will be found within the extension's OCTET STRING value.
+	pub der_value: Vec<u8>,
 }
 
 impl CustomExtension {
+	/// Create a custom extension with the given OID, criticality, and DER encoded value.
+	///
+	/// `der_value` contains only the extension's value, as found inside its
+	/// extnValue OCTET STRING. It must not include the OID, criticality, OCTET
+	/// STRING wrapper, or outer extension SEQUENCE.
+	pub fn new(oid: &[u64], criticality: Criticality, der_value: Vec<u8>) -> Self {
+		Self {
+			oid: oid.to_vec(),
+			criticality,
+			der_value,
+		}
+	}
+
 	/// Creates a new acmeIdentifier extension for ACME TLS-ALPN-01
 	/// as specified in [RFC 8737](https://tools.ietf.org/html/rfc8737#section-3)
 	///
 	/// Panics if the passed `sha_digest` parameter doesn't hold 32 bytes (256 bits).
 	pub fn new_acme_identifier(sha_digest: &[u8]) -> Self {
 		assert_eq!(sha_digest.len(), 32, "wrong size of sha_digest");
-		let content = yasna::construct_der(|writer| {
+		let der_value = yasna::construct_der(|writer| {
 			writer.write_bytes(sha_digest);
 		});
 		Self {
 			oid: oid::PE_ACME.to_owned(),
 			criticality: Criticality::Critical,
-			content,
+			der_value,
 		}
 	}
-	/// Create a new custom extension with the specified content
-	pub fn from_oid_content(oid: &[u64], content: Vec<u8>) -> Self {
-		Self {
-			oid: oid.to_owned(),
-			criticality: Criticality::NonCritical,
-			content,
-		}
-	}
-	/// Sets the criticality flag of the extension.
-	pub fn set_criticality(&mut self, criticality: bool) {
-		self.criticality = criticality.into();
-	}
-	/// Obtains the criticality flag of the extension.
-	pub fn criticality(&self) -> bool {
-		self.criticality == Criticality::Critical
-	}
-	/// Obtains the content of the extension.
-	pub fn content(&self) -> &[u8] {
-		&self.content
-	}
+
 	/// Obtains the OID components of the extensions, as u64 pieces
 	pub fn oid_components(&self) -> impl Iterator<Item = u64> + '_ {
 		self.oid.iter().copied()
@@ -1122,7 +1128,7 @@ impl CustomExtension {
 
 impl Extension for &CustomExtension {
 	fn write_value(&self, writer: DERWriter) {
-		writer.write_der(&self.content)
+		writer.write_der(&self.der_value)
 	}
 
 	fn criticality(&self) -> Criticality {
@@ -1336,7 +1342,8 @@ pub(crate) trait Extension: Debug {
 ///
 /// [RFC 5280 §4.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2>
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) enum Criticality {
+#[expect(clippy::exhaustive_enums, reason = "X.509 criticality is a boolean")]
+pub enum Criticality {
 	/// The extension MUST be recognized and parsed correctly.
 	Critical,
 
