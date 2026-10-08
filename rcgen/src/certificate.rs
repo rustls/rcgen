@@ -20,8 +20,7 @@ use crate::ENCODE_CONFIG;
 use crate::{
 	oid, write_distinguished_name, write_dt_utc_or_generalized, write_x509_extension,
 	BasicConstraints, CrlDistributionPoint, DistinguishedName, Error, ExtendedKeyUsagePurpose,
-	GeneralName, Issuer, KeyIdMethod, KeyUsagePurpose, NameConstraints, PathLenConstraint,
-	SerialNumber, SigningKey,
+	GeneralName, Issuer, KeyIdMethod, KeyUsagePurpose, NameConstraints, SerialNumber, SigningKey,
 };
 
 /// An issued certificate
@@ -213,39 +212,15 @@ impl CertificateParams {
 					if let Some(eku_ext) = NonEmptySlice::new(&self.extended_key_usages) {
 						eku_ext.write(writer.next());
 					}
-					self.write_ca_extensions(writer);
+					if let Some(basic_constraints) = self.basic_constraints {
+						basic_constraints.write(writer.next());
+					}
 					for ext in &self.custom_extensions {
 						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
 							writer.write_der(ext.content())
 						});
 					}
 				});
-			});
-		});
-	}
-
-	/// Write a certificate's BasicConstraints as defined in RFC 5280.
-	fn write_ca_extensions(&self, writer: &mut DERWriterSeq) {
-		let basic_constraints = match &self.basic_constraints {
-			Some(BasicConstraints::Ca(bc)) => Some(bc),
-			Some(BasicConstraints::EndEntity) => None,
-			None => return,
-		};
-
-		// Write basic_constraints
-		write_x509_extension(writer.next(), oid::BASIC_CONSTRAINTS, true, |writer| {
-			writer.write_sequence(|writer| {
-				let Some(constraints) = basic_constraints else {
-					return;
-				};
-
-				writer.next().write_bool(true); // cA flag
-				match constraints {
-					PathLenConstraint::Unconstrained => {},
-					PathLenConstraint::Constrained(path_len_constraint) => {
-						writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
-					},
-				}
 			});
 		});
 	}
@@ -464,7 +439,9 @@ impl CertificateParams {
 				.write(writer.next());
 		}
 
-		self.write_ca_extensions(writer);
+		if let Some(basic_constraints) = self.basic_constraints {
+			basic_constraints.write(writer.next());
+		}
 
 		for ext in &self.custom_extensions {
 			write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
@@ -644,7 +621,7 @@ mod tests {
 	#[cfg(all(feature = "crypto", feature = "x509-parser"))]
 	use crate::GeneralSubtree;
 	#[cfg(feature = "crypto")]
-	use crate::KeyPair;
+	use crate::{KeyPair, PathLenConstraint};
 
 	#[cfg(all(feature = "crypto", feature = "x509-parser"))]
 	#[test]
@@ -690,6 +667,29 @@ mod tests {
 				);
 			}
 		}
+	}
+
+	#[cfg(all(feature = "crypto", feature = "x509-parser"))]
+	#[test]
+	fn basic_constraints_absent_for_no_ca() {
+		let params = CertificateParams::default();
+		let (key, _) = KeyPair::generate().unwrap();
+		let cert = params.self_signed(&key).unwrap();
+		let (_, parsed) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
+		assert!(parsed.basic_constraints().unwrap().is_none());
+		let csr = params.serialize_request(&key).unwrap();
+		use x509_parser::prelude::FromDer;
+		let (_, parsed) =
+			x509_parser::certification_request::X509CertificationRequest::from_der(csr.der())
+				.unwrap();
+		assert!(parsed
+			.requested_extensions()
+			.into_iter()
+			.flatten()
+			.all(|ext| !matches!(
+				ext,
+				x509_parser::extensions::ParsedExtension::BasicConstraints(_)
+			)));
 	}
 
 	#[cfg(feature = "crypto")]

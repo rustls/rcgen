@@ -479,6 +479,37 @@ impl BasicConstraints {
 	}
 }
 
+impl StaticExtension for BasicConstraints {
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   BasicConstraints ::= SEQUENCE {
+				cA                      BOOLEAN DEFAULT FALSE,
+				pathLenConstraint       INTEGER (0..MAX) OPTIONAL }
+		*/
+		writer.write_sequence(|writer| {
+			let Self::Ca(constraints) = self else {
+				// The cA flag is DEFAULT FALSE, so DER (X.690 §11.5) requires it
+				// to be omitted when false: the extension value is an empty
+				// SEQUENCE.
+				return;
+			};
+
+			writer.next().write_bool(true); // cA flag
+			if let PathLenConstraint::Constrained(path_len_constraint) = constraints {
+				writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
+			}
+		});
+	}
+
+	// RFC 5280 §4.2.1.9: "Conforming CAs MUST include this extension in all CA
+	// certificates that contain public keys used to validate digital signatures
+	// on certificates and MUST mark the extension as critical in such
+	// certificates."
+	const CRITICALITY: Criticality = Criticality::Critical;
+
+	const OID: &'static [u64] = oid::BASIC_CONSTRAINTS;
+}
+
 /// The path length constraint (only relevant for CA certificates)
 ///
 /// Sets an optional upper limit on the length of the intermediate certificate chain
@@ -1277,6 +1308,43 @@ mod tests {
 				})
 			})
 		);
+	}
+
+	#[test]
+	fn basic_constraints_encoding() {
+		// The cA flag is DEFAULT FALSE, so DER (X.690 §11.5) requires that
+		// ExplicitNoCa encode as an empty SEQUENCE with the flag omitted.
+		// See https://github.com/rustls/rcgen/pull/444.
+		for (basic_constraints, expected) in [
+			(
+				// cA absent (FALSE): an empty SEQUENCE.
+				BasicConstraints::EndEntity,
+				yasna::construct_der(|writer| writer.write_sequence(|_writer| {})),
+			),
+			(
+				BasicConstraints::Ca(PathLenConstraint::Unconstrained),
+				yasna::construct_der(|writer| {
+					writer.write_sequence(|writer| writer.next().write_bool(true))
+				}),
+			),
+			(
+				BasicConstraints::Ca(PathLenConstraint::Constrained(5)),
+				yasna::construct_der(|writer| {
+					writer.write_sequence(|writer| {
+						writer.next().write_bool(true);
+						writer.next().write_u8(5);
+					})
+				}),
+			),
+		] {
+			let value = yasna::construct_der(|writer| {
+				StaticExtension::write_value(&basic_constraints, writer)
+			});
+			assert_eq!(
+				value, expected,
+				"unexpected encoding for {basic_constraints:?}"
+			);
+		}
 	}
 
 	#[test]
