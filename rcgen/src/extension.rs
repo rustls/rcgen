@@ -1067,6 +1067,59 @@ impl KeyIdMethod {
 	}
 }
 
+/// A custom extension of a certificate, as specified in
+/// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct CustomExtension {
+	pub(crate) oid: Vec<u64>,
+	pub(crate) critical: bool,
+
+	/// The content must be DER-encoded
+	content: Vec<u8>,
+}
+
+impl CustomExtension {
+	/// Creates a new acmeIdentifier extension for ACME TLS-ALPN-01
+	/// as specified in [RFC 8737](https://tools.ietf.org/html/rfc8737#section-3)
+	///
+	/// Panics if the passed `sha_digest` parameter doesn't hold 32 bytes (256 bits).
+	pub fn new_acme_identifier(sha_digest: &[u8]) -> Self {
+		assert_eq!(sha_digest.len(), 32, "wrong size of sha_digest");
+		let content = yasna::construct_der(|writer| {
+			writer.write_bytes(sha_digest);
+		});
+		Self {
+			oid: oid::PE_ACME.to_owned(),
+			critical: true,
+			content,
+		}
+	}
+	/// Create a new custom extension with the specified content
+	pub fn from_oid_content(oid: &[u64], content: Vec<u8>) -> Self {
+		Self {
+			oid: oid.to_owned(),
+			critical: false,
+			content,
+		}
+	}
+	/// Sets the criticality flag of the extension.
+	pub fn set_criticality(&mut self, criticality: bool) {
+		self.critical = criticality;
+	}
+	/// Obtains the criticality flag of the extension.
+	pub fn criticality(&self) -> bool {
+		self.critical
+	}
+	/// Obtains the content of the extension.
+	pub fn content(&self) -> &[u8] {
+		&self.content
+	}
+	/// Obtains the OID components of the extensions, as u64 pieces
+	pub fn oid_components(&self) -> impl Iterator<Item = u64> + '_ {
+		self.oid.iter().copied()
+	}
+}
+
 impl<T: StaticExtension> Extension for T {
 	fn write_value(&self, writer: DERWriter) {
 		// Calling with fully qualified syntax to disambiguate.
