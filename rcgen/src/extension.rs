@@ -733,30 +733,14 @@ impl FromStr for CidrSubnet {
 	}
 }
 
-/// An X.509v3 CRL distribution points extension according to [RFC 5280 §4.2.1.13].
-///
-/// [RFC 5280 §4.2.1.13]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13>
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct CrlDistributionPoints<'params>(&'params [CrlDistributionPoint]);
-
-impl<'params> CrlDistributionPoints<'params> {
-	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		if params.crl_distribution_points.is_empty() {
-			return None;
-		}
-
-		Some(Self(&params.crl_distribution_points))
-	}
-}
-
-impl StaticExtension for CrlDistributionPoints<'_> {
+impl StaticExtension for NonEmptySlice<'_, CrlDistributionPoint> {
 	fn write_value(&self, writer: DERWriter) {
 		// CRLDistributionPoints ::= SEQUENCE SIZE (1..MAX) OF DistributionPoint
 		writer.write_sequence(|writer| {
-			for distribution_point in self.0 {
+			for point in self.iter() {
 				writer
 					.next()
-					.write_sequence(|writer| distribution_point.write_name(writer.next()));
+					.write_sequence(|writer| point.write_name(writer.next()));
 			}
 		})
 	}
