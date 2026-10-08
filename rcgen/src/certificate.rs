@@ -416,7 +416,7 @@ impl CertificateParams {
 				|| !self.subject_alt_names.is_empty()
 				|| !self.key_usages.is_empty()
 				|| !self.extended_key_usages.is_empty()
-				|| self.name_constraints.iter().any(|c| !c.is_empty())
+				|| self.name_constraints.is_some()
 				|| !self.crl_distribution_points.is_empty()
 				|| matches!(self.is_ca, IsCa::ExplicitNoCa)
 				|| matches!(self.is_ca, IsCa::Ca(_))
@@ -710,8 +710,56 @@ mod tests {
 	use super::*;
 	#[cfg(feature = "x509-parser")]
 	use crate::DnValue;
+	#[cfg(all(feature = "crypto", feature = "x509-parser"))]
+	use crate::GeneralSubtree;
 	#[cfg(feature = "crypto")]
 	use crate::KeyPair;
+
+	#[cfg(all(feature = "crypto", feature = "x509-parser"))]
+	#[test]
+	fn name_constraints_preserve_each_nonempty_subtree_list() {
+		let (key, _) = KeyPair::generate().unwrap();
+		for include_permitted in [false, true] {
+			for include_excluded in [false, true] {
+				let permitted = if include_permitted {
+					vec![GeneralSubtree::DnsName("example.com".into())]
+				} else {
+					Vec::new()
+				};
+				let excluded = if include_excluded {
+					vec![GeneralSubtree::DnsName("blocked.example.com".into())]
+				} else {
+					Vec::new()
+				};
+				let constraints = if include_permitted || include_excluded {
+					Some(NameConstraints::new(permitted, excluded).unwrap())
+				} else {
+					None
+				};
+				let params = CertificateParams {
+					is_ca: IsCa::Ca(PathLenConstraint::Unconstrained),
+					name_constraints: constraints,
+					..CertificateParams::default()
+				};
+				let cert = params.self_signed(&key).unwrap();
+				let (_, parsed) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
+				let constraints = parsed.name_constraints().unwrap();
+				if !include_permitted && !include_excluded {
+					assert!(constraints.is_none());
+					continue;
+				}
+				let constraints = constraints.unwrap().value;
+				assert_eq!(
+					constraints.permitted_subtrees.as_ref().map(Vec::len),
+					include_permitted.then_some(1)
+				);
+				assert_eq!(
+					constraints.excluded_subtrees.as_ref().map(Vec::len),
+					include_excluded.then_some(1)
+				);
+			}
+		}
+	}
 
 	#[cfg(feature = "crypto")]
 	#[test]

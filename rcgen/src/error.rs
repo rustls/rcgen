@@ -45,6 +45,8 @@ pub enum Error {
 	InvalidCrlNextUpdate,
 	/// CRL issuer specifies Key Usages that don't include cRLSign.
 	IssuerNotCrlSigner,
+	/// Name constraints must contain at least one permitted or excluded subtree.
+	EmptyNameConstraints,
 	/// A CRL distribution point was specified without any URIs.
 	EmptyCrlDistributionPointUris,
 	#[cfg(not(feature = "crypto"))]
@@ -99,6 +101,9 @@ impl fmt::Display for Error {
 				f,
 				"CRL issuer must specify no key usage, or key usage including cRLSign"
 			)?,
+			EmptyNameConstraints => {
+				write!(f, "Name constraints must include at least one subtree")?
+			},
 			EmptyCrlDistributionPointUris => {
 				write!(f, "CRL distribution points must include at least one URI")?
 			},

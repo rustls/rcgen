@@ -447,16 +447,17 @@ fn from_remote() {
 fn test_webpki_separate_ca_name_constraints() {
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(PathLenConstraint::Unconstrained);
-	params.name_constraints = Some(NameConstraints {
-		// TODO also add a test with non-empty permitted_subtrees that
-		// doesn't contain a DirectoryName entry. This isn't possible
-		// currently due to a limitation of webpki.
-		permitted_subtrees : vec![GeneralSubtree::DnsName("dev".to_string()), GeneralSubtree::DirectoryName(rcgen::DistinguishedName::new())],
-		//permitted_subtrees : vec![GeneralSubtree::DnsName("dev".to_string())],
-		//permitted_subtrees : Vec::new(),
-		//excluded_subtrees : vec![GeneralSubtree::DnsName("v".to_string())],
-		excluded_subtrees : Vec::new(),
-	});
+	// TODO also test permitted subtrees without a DirectoryName once webpki supports it.
+	params.name_constraints = Some(
+		NameConstraints::new(
+			vec![
+				GeneralSubtree::DnsName("dev".to_string()),
+				GeneralSubtree::DirectoryName(rcgen::DistinguishedName::new()),
+			],
+			Vec::new(),
+		)
+		.unwrap(),
+	);
 
 	let ca_cert = Certificate::from_params(params).unwrap();
 	println!("{}", ca_cert.serialize_pem().unwrap());
