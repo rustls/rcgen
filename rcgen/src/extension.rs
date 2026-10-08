@@ -754,7 +754,9 @@ impl StaticExtension for CrlDistributionPoints<'_> {
 		// CRLDistributionPoints ::= SEQUENCE SIZE (1..MAX) OF DistributionPoint
 		writer.write_sequence(|writer| {
 			for distribution_point in self.0 {
-				distribution_point.write_der(writer.next());
+				writer
+					.next()
+					.write_sequence(|writer| distribution_point.write_name(writer.next()));
 			}
 		})
 	}
@@ -767,33 +769,46 @@ impl StaticExtension for CrlDistributionPoints<'_> {
 
 /// A certificate revocation list (CRL) distribution point, to be included in a certificate's
 /// [distribution points extension](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13) or
-/// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5)
+/// a CRL's [issuing distribution point extension](https://datatracker.ietf.org/doc/html/rfc5280#section-5.2.5).
+///
+/// A distribution point always contains at least one ASCII URI name.
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CrlDistributionPoint {
 	/// One or more URI distribution point names, indicating a place the current CRL can
 	/// be retrieved. When present, SHOULD include at least one LDAP or HTTP URI.
-	pub uris: Vec<String>,
+	uris: Vec<String>,
 }
 
 impl CrlDistributionPoint {
-	/// Construct a new `CrlDistributionPoint` with the given URIs.
-	pub fn new(uris: Vec<String>) -> Self {
-		Self { uris }
+	/// Construct a distribution point containing one or more URI names.
+	///
+	/// Returns an error if the list is empty or a name is not ASCII.
+	pub fn new(uris: Vec<String>) -> Result<Self, Error> {
+		if uris.is_empty() {
+			return Err(Error::EmptyCrlDistributionPointUris);
+		}
+		for uri in &uris {
+			Self::validate_uri(uri)?;
+		}
+		Ok(Self { uris })
 	}
 
-	fn write_der(&self, writer: DERWriter) {
-		// DistributionPoint SEQUENCE
-		writer.write_sequence(|writer| {
-			write_distribution_point_name_uris(writer.next(), &self.uris);
-		});
+	pub(crate) fn write_name(&self, writer: DERWriter) {
+		write_distribution_point_name_uris(writer, &self.uris);
+	}
+
+	fn validate_uri(uri: &str) -> Result<(), Error> {
+		if uri.is_ascii() {
+			return Ok(());
+		}
+		Err(Error::InvalidAsn1String(InvalidAsn1String::Ia5String(
+			uri.into(),
+		)))
 	}
 }
 
-pub(crate) fn write_distribution_point_name_uris<'a>(
-	writer: DERWriter,
-	uris: impl IntoIterator<Item = &'a String>,
-) {
+fn write_distribution_point_name_uris(writer: DERWriter, uris: &[String]) {
 	// distributionPoint DistributionPointName
 	writer.write_tagged_implicit(Tag::context(0), |writer| {
 		writer.write_sequence(|writer| {
@@ -803,7 +818,7 @@ pub(crate) fn write_distribution_point_name_uris<'a>(
 				.write_tagged_implicit(Tag::context(0), |writer| {
 					// GeneralNames
 					writer.write_sequence(|writer| {
-						for uri in uris.into_iter() {
+						for uri in uris {
 							// uniformResourceIdentifier [6] IA5String,
 							writer
 								.next()
@@ -1130,6 +1145,21 @@ mod tests {
 				Err(Error::InvalidAsn1String(_))
 			));
 		}
+	}
+
+	#[test]
+	fn distribution_points_reject_invalid_names_before_encoding() {
+		assert_eq!(
+			CrlDistributionPoint::new(Vec::new()).unwrap_err(),
+			Error::EmptyCrlDistributionPointUris
+		);
+		assert!(matches!(
+			CrlDistributionPoint::new(vec![
+				"http://example.com/crl".into(),
+				"http://é.example.com/crl".into()
+			]),
+			Err(Error::InvalidAsn1String(_))
+		));
 	}
 
 	#[test]
