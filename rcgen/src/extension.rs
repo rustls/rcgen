@@ -1215,6 +1215,17 @@ impl<'params> Extensions<'params> {
 		});
 	}
 
+	/// Write the `crlExtensions [0] EXPLICIT Extensions OPTIONAL` field of a CRL.
+	///
+	/// Nothing is written when the collection is empty.
+	pub(crate) fn write_crl_der(&self, writer: DERWriter) {
+		if self.exts.is_empty() {
+			return;
+		}
+
+		writer.write_tagged(Tag::context(0), |writer| self.write_der(writer));
+	}
+
 	/// Write `Extensions ::= SEQUENCE SIZE (1..MAX) OF Extension`.
 	///
 	/// For example, the untagged `crlEntryExtensions` field of a CRL entry.
