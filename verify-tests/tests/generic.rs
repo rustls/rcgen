@@ -172,7 +172,7 @@ mod test_csr_custom_attributes {
 
 #[cfg(feature = "x509-parser")]
 mod test_csr_basic_constraints {
-	use rcgen::{BasicConstraints, CertificateSigningRequestParams, Error, IsCa};
+	use rcgen::{CertificateSigningRequestParams, Error, IsCa, PathLenConstraint};
 
 	/// Tests deserializing a csr with a basic constraint of CA:TRUE,pathlen:5
 	///
@@ -185,7 +185,7 @@ mod test_csr_basic_constraints {
 
 		assert_eq!(
 			csr_params.params.is_ca,
-			IsCa::Ca(BasicConstraints::Constrained(5))
+			IsCa::Ca(PathLenConstraint::Constrained(5))
 		);
 	}
 
@@ -258,7 +258,7 @@ RioOvAyCH6bFMvSJxZm7FYM=
 
 		assert_eq!(
 			csr_params.params.is_ca,
-			IsCa::Ca(BasicConstraints::Unconstrained)
+			IsCa::Ca(PathLenConstraint::Unconstrained)
 		);
 	}
 

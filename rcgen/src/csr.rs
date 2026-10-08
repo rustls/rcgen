@@ -96,7 +96,7 @@ impl CertificateSigningRequestParams {
 	/// - `Subject Alternative Name` (see [`GeneralName`])
 	/// - `Key Usage` (see [`KeyUsagePurpose`])
 	/// - `Extended Key Usage` (see [`ExtendedKeyUsagePurpose`])
-	/// - `Basic Constraints` (see [`crate::BasicConstraints`])
+	/// - `Basic Constraints` (see [`crate::PathLenConstraint`])
 	///
 	/// On encountering other extensions, this function will return [`Error::UnsupportedExtension`].
 	/// If the request's signature is invalid, it will return
@@ -219,8 +219,8 @@ mod tests {
 	use x509_parser::prelude::{FromDer, ParsedExtension};
 
 	use crate::{
-		BasicConstraints, CertificateParams, CertificateSigningRequestParams,
-		ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose,
+		CertificateParams, CertificateSigningRequestParams, ExtendedKeyUsagePurpose, IsCa, KeyPair,
+		KeyUsagePurpose, PathLenConstraint,
 	};
 
 	#[test]
@@ -283,7 +283,7 @@ mod tests {
 	#[test]
 	fn serialize_and_deserialize_eq_basic_constraints() {
 		let params = CertificateParams {
-			is_ca: IsCa::Ca(BasicConstraints::Constrained(10)),
+			is_ca: IsCa::Ca(PathLenConstraint::Constrained(10)),
 			..Default::default()
 		};
 		let (key_pair, _) = KeyPair::generate().unwrap();
