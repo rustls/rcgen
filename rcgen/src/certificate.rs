@@ -10,8 +10,7 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::csr::CertificateSigningRequest;
 use crate::extension::{
-	AuthorityKeyIdentifier, CrlDistributionPoints, Extension, NonEmptySlice,
-	SubjectAlternativeName, SubjectKeyIdentifier,
+	AuthorityKeyIdentifier, Extension, NonEmptySlice, SubjectAlternativeName, SubjectKeyIdentifier,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -448,8 +447,8 @@ impl CertificateParams {
 			nc.write(writer.next());
 		}
 
-		if let Some(crl_dps) = CrlDistributionPoints::from_params(self) {
-			crl_dps.write(writer.next());
+		if let Some(crl_dps_ext) = NonEmptySlice::new(&self.crl_distribution_points) {
+			crl_dps_ext.write(writer.next());
 		}
 
 		// SKI is currently only written for CA certificates (IsCa::Ca or
