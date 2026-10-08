@@ -97,9 +97,9 @@ pub fn test_crl() -> (
 		RevokedCertParams::new(SerialNumber::from_slice(&[0x00, 0xC0, 0xFF, 0xEE]), now);
 	revoked_cert.reason_code = Some(RevocationReason::KeyCompromise);
 
-	let mut dp = CrlIssuingDistributionPoint::new(CrlDistributionPoint::new(vec![
-		"http://example.com/crl".to_string(),
-	]));
+	let mut dp = CrlIssuingDistributionPoint::new(
+		CrlDistributionPoint::new(vec!["http://example.com/crl".to_string()]).unwrap(),
+	);
 	dp.scope = Some(CrlScope::UserCertsOnly);
 
 	let mut params = CertificateRevocationListParams::new(
@@ -122,8 +122,9 @@ pub fn cert_with_crl_dps() -> Vec<u8> {
 		CrlDistributionPoint::new(vec![
 			"http://example.com/crl.der".to_string(),
 			"http://crls.example.com/1234".to_string(),
-		]),
-		CrlDistributionPoint::new(vec!["ldap://example.com/crl.der".to_string()]),
+		])
+		.unwrap(),
+		CrlDistributionPoint::new(vec!["ldap://example.com/crl.der".to_string()]).unwrap(),
 	];
 
 	params.self_signed(&key_pair).unwrap().der().to_vec()
