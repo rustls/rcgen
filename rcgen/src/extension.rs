@@ -332,30 +332,14 @@ impl KeyUsagePurpose {
 	}
 }
 
-/// An X.509v3 extended key usage extension according to [RFC 5280 §4.2.1.12].
-///
-/// [RFC 5280 §4.2.1.12]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.12>
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ExtendedKeyUsage<'params>(&'params [ExtendedKeyUsagePurpose]);
-
-impl<'params> ExtendedKeyUsage<'params> {
-	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		if params.extended_key_usages.is_empty() {
-			return None;
-		}
-
-		Some(Self(&params.extended_key_usages))
-	}
-}
-
-impl StaticExtension for ExtendedKeyUsage<'_> {
+impl StaticExtension for NonEmptySlice<'_, ExtendedKeyUsagePurpose> {
 	fn write_value(&self, writer: DERWriter) {
 		/*
 		   ExtKeyUsageSyntax ::= SEQUENCE SIZE (1..MAX) OF KeyPurposeId
 		   KeyPurposeId ::= OBJECT IDENTIFIER
 		*/
 		writer.write_sequence(|writer| {
-			for usage in self.0.iter() {
+			for usage in self.iter() {
 				writer
 					.next()
 					.write_oid(&ObjectIdentifier::from_slice(usage.oid()));

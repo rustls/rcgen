@@ -10,8 +10,8 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::csr::CertificateSigningRequest;
 use crate::extension::{
-	AuthorityKeyIdentifier, CrlDistributionPoints, ExtendedKeyUsage, Extension, NameConstraintsExt,
-	NonEmptySlice, SubjectAlternativeName, SubjectKeyIdentifier,
+	AuthorityKeyIdentifier, CrlDistributionPoints, Extension, NameConstraintsExt, NonEmptySlice,
+	SubjectAlternativeName, SubjectKeyIdentifier,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -204,8 +204,8 @@ impl CertificateParams {
 					if let Some(san) = SubjectAlternativeName::from_params(self) {
 						san.write(writer.next());
 					}
-					if let Some(eku) = ExtendedKeyUsage::from_params(self) {
-						eku.write(writer.next());
+					if let Some(eku_ext) = NonEmptySlice::new(&self.extended_key_usages) {
+						eku_ext.write(writer.next());
 					}
 					self.write_ca_extensions(writer);
 					for ext in &self.custom_extensions {
@@ -451,8 +451,8 @@ impl CertificateParams {
 		if let Some(ku_ext) = NonEmptySlice::new(&self.key_usages) {
 			ku_ext.write(writer.next());
 		}
-		if let Some(eku) = ExtendedKeyUsage::from_params(self) {
-			eku.write(writer.next());
+		if let Some(eku_ext) = NonEmptySlice::new(&self.extended_key_usages) {
+			eku_ext.write(writer.next());
 		}
 
 		if let Some(nc) = NameConstraintsExt::from_params(self) {
