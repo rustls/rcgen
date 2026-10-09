@@ -795,7 +795,27 @@ impl CrlDistributionPoint {
 	}
 
 	pub(crate) fn write_name(&self, writer: DERWriter) {
-		write_distribution_point_name_uris(writer, &self.uris);
+		// distributionPoint DistributionPointName
+		writer.write_tagged_implicit(Tag::context(0), |writer| {
+			writer.write_sequence(|writer| {
+				// fullName GeneralNames
+				writer
+					.next()
+					.write_tagged_implicit(Tag::context(0), |writer| {
+						// GeneralNames
+						writer.write_sequence(|writer| {
+							for uri in &self.uris {
+								// uniformResourceIdentifier [6] IA5String,
+								writer
+									.next()
+									.write_tagged_implicit(Tag::context(6), |writer| {
+										writer.write_ia5_string(uri)
+									});
+							}
+						})
+					});
+			});
+		});
 	}
 
 	fn validate_uri(uri: &str) -> Result<(), Error> {
@@ -806,30 +826,6 @@ impl CrlDistributionPoint {
 			uri.into(),
 		)))
 	}
-}
-
-fn write_distribution_point_name_uris(writer: DERWriter, uris: &[String]) {
-	// distributionPoint DistributionPointName
-	writer.write_tagged_implicit(Tag::context(0), |writer| {
-		writer.write_sequence(|writer| {
-			// fullName GeneralNames
-			writer
-				.next()
-				.write_tagged_implicit(Tag::context(0), |writer| {
-					// GeneralNames
-					writer.write_sequence(|writer| {
-						for uri in uris {
-							// uniformResourceIdentifier [6] IA5String,
-							writer
-								.next()
-								.write_tagged_implicit(Tag::context(6), |writer| {
-									writer.write_ia5_string(uri)
-								});
-						}
-					})
-				});
-		});
-	});
 }
 
 /// An X.509v3 subject key identifier extension according to [RFC 5280 §4.2.1.2].
