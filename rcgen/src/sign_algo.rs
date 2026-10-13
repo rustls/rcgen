@@ -10,6 +10,7 @@ use yasna::DERWriter;
 
 #[cfg(feature = "crypto")]
 use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters, RsaEncoding};
+#[cfg(feature = "x509-parser")]
 use crate::Error;
 
 #[cfg(feature = "crypto")]
@@ -30,11 +31,178 @@ pub(crate) enum SignatureAlgorithmParams {
 	Null,
 }
 
+/// The parameters of a public key's `AlgorithmIdentifier`
+#[derive(Clone, Copy, PartialEq, Hash)]
+enum PublicKeyParameters {
+	/// Omit the parameters
+	Absent,
+	/// Write null parameters
+	Null,
+	/// Write a named curve OID
+	NamedCurve(&'static [u64]),
+}
+
+/// The algorithm of a public key, as identified in a `SubjectPublicKeyInfo`
+#[derive(Clone)]
+pub struct PublicKeyAlgorithm {
+	name: &'static str,
+	oid_components: &'static [u64],
+	params: PublicKeyParameters,
+}
+
+impl PublicKeyAlgorithm {
+	/// Retrieve the `PublicKeyAlgorithm` matching a parsed `AlgorithmIdentifier`
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_alg_id(
+		alg_id: &x509_parser::x509::AlgorithmIdentifier<'_>,
+	) -> Result<&'static Self, Error> {
+		use x509_parser::prelude::FromDer;
+
+		Self::iter()
+			.find(|alg| {
+				let der = yasna::construct_der(|writer| alg.write_alg_id(writer));
+				let Ok((rest, parsed)) = x509_parser::x509::AlgorithmIdentifier::from_der(&der)
+				else {
+					return false;
+				};
+				rest.is_empty() && &parsed == alg_id
+			})
+			.copied()
+			.ok_or(Error::UnsupportedPublicKeyAlgorithm)
+	}
+
+	#[cfg(any(feature = "x509-parser", test))]
+	pub(crate) fn iter() -> std::slice::Iter<'static, &'static PublicKeyAlgorithm> {
+		use key_alg::*;
+		static ALGORITHMS: &[&PublicKeyAlgorithm] = &[
+			&RSA,
+			&ECDSA_P256,
+			&ECDSA_P384,
+			&ECDSA_P521,
+			&ED25519,
+			&ML_DSA_44,
+			&ML_DSA_65,
+			&ML_DSA_87,
+		];
+		ALGORITHMS.iter()
+	}
+
+	/// Writes the algorithm identifier as it appears inside a `SubjectPublicKeyInfo`
+	pub(crate) fn write_alg_id(&self, writer: DERWriter) {
+		writer.write_sequence(|writer| {
+			writer
+				.next()
+				.write_oid(&ObjectIdentifier::from_slice(self.oid_components));
+			match self.params {
+				PublicKeyParameters::Absent => {},
+				PublicKeyParameters::Null => writer.next().write_null(),
+				PublicKeyParameters::NamedCurve(curve) => writer
+					.next()
+					.write_oid(&ObjectIdentifier::from_slice(curve)),
+			}
+		});
+	}
+}
+
+impl fmt::Debug for PublicKeyAlgorithm {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		f.debug_struct("PublicKeyAlgorithm")
+			.field("name", &self.name)
+			.finish_non_exhaustive()
+	}
+}
+
+impl PartialEq for PublicKeyAlgorithm {
+	fn eq(&self, other: &Self) -> bool {
+		(self.oid_components, self.params) == (other.oid_components, other.params)
+	}
+}
+
+impl Eq for PublicKeyAlgorithm {}
+
+/// The `Hash` trait is not derived, but implemented according to impl of the `PartialEq` trait
+impl Hash for PublicKeyAlgorithm {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		(self.oid_components, self.params).hash(state);
+	}
+}
+
+/// The list of supported public key algorithms
+pub mod key_alg {
+	use super::{PublicKeyAlgorithm, PublicKeyParameters};
+	use crate::oid::*;
+
+	/// RSA public keys, as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+	pub static RSA: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "RSA",
+		oid_components: RSA_ENCRYPTION,
+		params: PublicKeyParameters::Null,
+	};
+
+	/// ECDSA public keys on the P-256 curve, as per [RFC 5480](https://tools.ietf.org/html/rfc5480)
+	pub static ECDSA_P256: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ECDSA_P256",
+		oid_components: EC_PUBLIC_KEY,
+		params: PublicKeyParameters::NamedCurve(EC_SECP_256_R1),
+	};
+
+	/// ECDSA public keys on the P-384 curve, as per [RFC 5480](https://tools.ietf.org/html/rfc5480)
+	pub static ECDSA_P384: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ECDSA_P384",
+		oid_components: EC_PUBLIC_KEY,
+		params: PublicKeyParameters::NamedCurve(EC_SECP_384_R1),
+	};
+
+	/// ECDSA public keys on the P-521 curve, as per [RFC 5480](https://tools.ietf.org/html/rfc5480)
+	///
+	/// Signing with such a key is only supported with the `aws_lc_rs` backend.
+	pub static ECDSA_P521: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ECDSA_P521",
+		oid_components: EC_PUBLIC_KEY,
+		params: PublicKeyParameters::NamedCurve(EC_SECP_521_R1),
+	};
+
+	/// Ed25519 public keys, as per [RFC 8410](https://tools.ietf.org/html/rfc8410)
+	pub static ED25519: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ED25519",
+		// id-Ed25519 in RFC 8410
+		oid_components: &[1, 3, 101, 112],
+		params: PublicKeyParameters::Absent,
+	};
+
+	/// ML-DSA-44 public keys, as per [RFC 9881](https://www.rfc-editor.org/rfc/rfc9881)
+	///
+	/// Signing with such a key is only supported with the `aws_lc_rs` backend.
+	pub static ML_DSA_44: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ML_DSA_44",
+		oid_components: crate::oid::ML_DSA_44,
+		params: PublicKeyParameters::Absent,
+	};
+
+	/// ML-DSA-65 public keys, as per [RFC 9881](https://www.rfc-editor.org/rfc/rfc9881)
+	///
+	/// Signing with such a key is only supported with the `aws_lc_rs` backend.
+	pub static ML_DSA_65: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ML_DSA_65",
+		oid_components: crate::oid::ML_DSA_65,
+		params: PublicKeyParameters::Absent,
+	};
+
+	/// ML-DSA-87 public keys, as per [RFC 9881](https://www.rfc-editor.org/rfc/rfc9881)
+	///
+	/// Signing with such a key is only supported with the `aws_lc_rs` backend.
+	pub static ML_DSA_87: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ML_DSA_87",
+		oid_components: crate::oid::ML_DSA_87,
+		params: PublicKeyParameters::Absent,
+	};
+}
+
 /// Signature algorithm type
 #[derive(Clone)]
 pub struct SignatureAlgorithm {
 	name: &'static str,
-	oids_sign_alg: &'static [&'static [u64]],
+	key_alg: &'static PublicKeyAlgorithm,
 	#[cfg(feature = "crypto")]
 	pub(crate) sign_alg: SignAlgo,
 	oid_components: &'static [u64],
@@ -49,7 +217,7 @@ impl fmt::Debug for SignatureAlgorithm {
 
 impl PartialEq for SignatureAlgorithm {
 	fn eq(&self, other: &Self) -> bool {
-		(self.oids_sign_alg, self.oid_components) == (other.oids_sign_alg, other.oid_components)
+		(self.key_alg, self.oid_components) == (other.key_alg, other.oid_components)
 	}
 }
 
@@ -58,11 +226,12 @@ impl Eq for SignatureAlgorithm {}
 /// The `Hash` trait is not derived, but implemented according to impl of the `PartialEq` trait
 impl Hash for SignatureAlgorithm {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		// see SignatureAlgorithm::eq(), just this field is compared
-		self.oids_sign_alg.hash(state);
+		// see SignatureAlgorithm::eq(), just these fields are compared
+		(self.key_alg, self.oid_components).hash(state);
 	}
 }
 impl SignatureAlgorithm {
+	#[cfg(any(feature = "x509-parser", test))]
 	pub(crate) fn iter() -> std::slice::Iter<'static, &'static SignatureAlgorithm> {
 		use algo::*;
 		static ALGORITHMS: &[&SignatureAlgorithm] = &[
@@ -88,26 +257,29 @@ impl SignatureAlgorithm {
 		ALGORITHMS.iter()
 	}
 
-	/// Retrieve the SignatureAlgorithm for the provided OID
-	pub fn from_oid(oid: &[u64]) -> Result<&'static SignatureAlgorithm, Error> {
-		for algo in Self::iter() {
-			if algo.oid_components == oid {
-				return Ok(algo);
-			}
-		}
-		Err(Error::UnsupportedSignatureAlgorithm)
+	/// Whether any supported signature algorithm is identified by `oid`
+	///
+	/// Several algorithms can share an OID, so this only answers whether the OID is
+	/// supported, not which algorithm produced it.
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn supports_oid(oid: &[u64]) -> bool {
+		Self::iter().any(|alg| alg.oid_components == oid)
+	}
+
+	/// The algorithm of a public key generated for this signature algorithm
+	pub fn public_key_algorithm(&self) -> &'static PublicKeyAlgorithm {
+		self.key_alg
 	}
 }
 
 /// The list of supported signature algorithms
 pub(crate) mod algo {
 	use super::*;
-	use crate::oid::*;
 
 	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static RSA_PKCS1_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		name: "RSA_PKCS1_SHA256",
-		oids_sign_alg: &[RSA_ENCRYPTION],
+		key_alg: &key_alg::RSA,
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA256),
 		// sha256WithRSAEncryption in RFC 4055
@@ -118,7 +290,7 @@ pub(crate) mod algo {
 	/// RSA signing with PKCS#1 1.5 padding and SHA-384 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static RSA_PKCS1_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		name: "RSA_PKCS1_SHA384",
-		oids_sign_alg: &[RSA_ENCRYPTION],
+		key_alg: &key_alg::RSA,
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA384),
 		// sha384WithRSAEncryption in RFC 4055
@@ -129,7 +301,7 @@ pub(crate) mod algo {
 	/// RSA signing with PKCS#1 1.5 padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static RSA_PKCS1_SHA512: SignatureAlgorithm = SignatureAlgorithm {
 		name: "RSA_PKCS1_SHA512",
-		oids_sign_alg: &[RSA_ENCRYPTION],
+		key_alg: &key_alg::RSA,
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA512),
 		// sha512WithRSAEncryption in RFC 4055
@@ -140,7 +312,7 @@ pub(crate) mod algo {
 	/// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	pub static ECDSA_P256_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ECDSA_P256_SHA256",
-		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_256_R1],
+		key_alg: &key_alg::ECDSA_P256,
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P256_SHA256_ASN1_SIGNING),
 		// ecdsa-with-SHA256 in RFC 5758
@@ -151,7 +323,7 @@ pub(crate) mod algo {
 	/// ECDSA signing using the P-384 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	pub static ECDSA_P384_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ECDSA_P384_SHA384",
-		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_384_R1],
+		key_alg: &key_alg::ECDSA_P384,
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P384_SHA384_ASN1_SIGNING),
 		// ecdsa-with-SHA384 in RFC 5758
@@ -167,7 +339,7 @@ pub(crate) mod algo {
 	#[cfg(feature = "aws_lc_rs")]
 	pub static ECDSA_P521_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ECDSA_P521_SHA256",
-		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
+		key_alg: &key_alg::ECDSA_P521,
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P521_SHA256_ASN1_SIGNING),
 		// ecdsa-with-SHA256 in RFC 5758
@@ -183,7 +355,7 @@ pub(crate) mod algo {
 	#[cfg(feature = "aws_lc_rs")]
 	pub static ECDSA_P521_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ECDSA_P521_SHA384",
-		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
+		key_alg: &key_alg::ECDSA_P521,
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P521_SHA384_ASN1_SIGNING),
 		// ecdsa-with-SHA384 in RFC 5758
@@ -197,7 +369,7 @@ pub(crate) mod algo {
 	#[cfg(feature = "aws_lc_rs")]
 	pub static ECDSA_P521_SHA512: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ECDSA_P521_SHA512",
-		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
+		key_alg: &key_alg::ECDSA_P521,
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P521_SHA512_ASN1_SIGNING),
 		// ecdsa-with-SHA512 in RFC 5758
@@ -208,8 +380,7 @@ pub(crate) mod algo {
 	/// ED25519 curve signing as per [RFC 8410](https://tools.ietf.org/html/rfc8410)
 	pub static ED25519: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ED25519",
-		// id-Ed25519 in RFC 8410
-		oids_sign_alg: &[&[1, 3, 101, 112]],
+		key_alg: &key_alg::ED25519,
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::EdDsa(&signature::ED25519),
 		// id-Ed25519 in RFC 8410
@@ -221,7 +392,7 @@ pub(crate) mod algo {
 	#[cfg(feature = "aws_lc_rs")]
 	pub static ML_DSA_44: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ML_DSA_44",
-		oids_sign_alg: &[crate::oid::ML_DSA_44],
+		key_alg: &key_alg::ML_DSA_44,
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::PqDsa(&ML_DSA_44_SIGNING),
 		oid_components: crate::oid::ML_DSA_44,
@@ -232,7 +403,7 @@ pub(crate) mod algo {
 	#[cfg(feature = "aws_lc_rs")]
 	pub static ML_DSA_65: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ML_DSA_65",
-		oids_sign_alg: &[crate::oid::ML_DSA_65],
+		key_alg: &key_alg::ML_DSA_65,
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::PqDsa(&ML_DSA_65_SIGNING),
 		oid_components: crate::oid::ML_DSA_65,
@@ -243,7 +414,7 @@ pub(crate) mod algo {
 	#[cfg(feature = "aws_lc_rs")]
 	pub static ML_DSA_87: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ML_DSA_87",
-		oids_sign_alg: &[crate::oid::ML_DSA_87],
+		key_alg: &key_alg::ML_DSA_87,
 		#[cfg(feature = "crypto")]
 		sign_alg: SignAlgo::PqDsa(&ML_DSA_87_SIGNING),
 		oid_components: crate::oid::ML_DSA_87,
@@ -267,16 +438,6 @@ impl SignatureAlgorithm {
 	pub(crate) fn write_alg_ident(&self, writer: DERWriter) {
 		writer.write_sequence(|writer| {
 			writer.next().write_oid(&self.alg_ident_oid());
-			self.write_params(writer);
-		});
-	}
-	/// Writes the algorithm identifier as it appears inside subjectPublicKeyInfo
-	pub(crate) fn write_oids_sign_alg(&self, writer: DERWriter) {
-		writer.write_sequence(|writer| {
-			for oid in self.oids_sign_alg {
-				let oid = ObjectIdentifier::from_slice(oid);
-				writer.next().write_oid(&oid);
-			}
 			self.write_params(writer);
 		});
 	}

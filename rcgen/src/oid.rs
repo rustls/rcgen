@@ -21,15 +21,10 @@ pub(crate) const EC_SECP_256_R1: &[u64] = &[1, 2, 840, 10045, 3, 1, 7];
 /// secp384r1 in [RFC 5480](https://datatracker.ietf.org/doc/html/rfc5480#appendix-A)
 pub(crate) const EC_SECP_384_R1: &[u64] = &[1, 3, 132, 0, 34];
 /// secp521r1 in [RFC 5480](https://datatracker.ietf.org/doc/html/rfc5480#appendix-A)
-/// Currently this is only supported with the `aws_lc_rs` feature
-#[cfg(feature = "aws_lc_rs")]
 pub(crate) const EC_SECP_521_R1: &[u64] = &[1, 3, 132, 0, 35];
 
-#[cfg(feature = "aws_lc_rs")]
 pub(crate) const ML_DSA_44: &[u64] = &[2, 16, 840, 1, 101, 3, 4, 3, 17];
-#[cfg(feature = "aws_lc_rs")]
 pub(crate) const ML_DSA_65: &[u64] = &[2, 16, 840, 1, 101, 3, 4, 3, 18];
-#[cfg(feature = "aws_lc_rs")]
 pub(crate) const ML_DSA_87: &[u64] = &[2, 16, 840, 1, 101, 3, 4, 3, 19];
 
 /// rsaEncryption in [RFC 4055](https://www.rfc-editor.org/rfc/rfc4055#section-6)
