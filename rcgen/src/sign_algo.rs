@@ -78,14 +78,10 @@ impl PublicKeyAlgorithm {
 			&RSA,
 			&ECDSA_P256,
 			&ECDSA_P384,
-			#[cfg(feature = "aws_lc_rs")]
 			&ECDSA_P521,
 			&ED25519,
-			#[cfg(feature = "aws_lc_rs")]
 			&ML_DSA_44,
-			#[cfg(feature = "aws_lc_rs")]
 			&ML_DSA_65,
-			#[cfg(feature = "aws_lc_rs")]
 			&ML_DSA_87,
 		];
 		ALGORITHMS.iter()
@@ -159,8 +155,7 @@ pub mod key_alg {
 
 	/// ECDSA public keys on the P-521 curve, as per [RFC 5480](https://tools.ietf.org/html/rfc5480)
 	///
-	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
+	/// Signing with such a key is only supported with the `aws_lc_rs` backend.
 	pub static ECDSA_P521: PublicKeyAlgorithm = PublicKeyAlgorithm {
 		name: "ECDSA_P521",
 		oid_components: EC_PUBLIC_KEY,
@@ -176,7 +171,8 @@ pub mod key_alg {
 	};
 
 	/// ML-DSA-44 public keys, as per [RFC 9881](https://www.rfc-editor.org/rfc/rfc9881)
-	#[cfg(feature = "aws_lc_rs")]
+	///
+	/// Signing with such a key is only supported with the `aws_lc_rs` backend.
 	pub static ML_DSA_44: PublicKeyAlgorithm = PublicKeyAlgorithm {
 		name: "ML_DSA_44",
 		oid_components: crate::oid::ML_DSA_44,
@@ -184,7 +180,8 @@ pub mod key_alg {
 	};
 
 	/// ML-DSA-65 public keys, as per [RFC 9881](https://www.rfc-editor.org/rfc/rfc9881)
-	#[cfg(feature = "aws_lc_rs")]
+	///
+	/// Signing with such a key is only supported with the `aws_lc_rs` backend.
 	pub static ML_DSA_65: PublicKeyAlgorithm = PublicKeyAlgorithm {
 		name: "ML_DSA_65",
 		oid_components: crate::oid::ML_DSA_65,
@@ -192,7 +189,8 @@ pub mod key_alg {
 	};
 
 	/// ML-DSA-87 public keys, as per [RFC 9881](https://www.rfc-editor.org/rfc/rfc9881)
-	#[cfg(feature = "aws_lc_rs")]
+	///
+	/// Signing with such a key is only supported with the `aws_lc_rs` backend.
 	pub static ML_DSA_87: PublicKeyAlgorithm = PublicKeyAlgorithm {
 		name: "ML_DSA_87",
 		oid_components: crate::oid::ML_DSA_87,
