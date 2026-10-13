@@ -9,6 +9,7 @@ use crate::ENCODE_CONFIG;
 #[cfg(feature = "x509-parser")]
 use crate::{
 	BasicConstraints, DistinguishedName, ExtendedKeyUsagePurpose, GeneralName, KeyUsagePurpose,
+	SignatureAlgorithm,
 };
 use crate::{
 	Certificate, CertificateParams, Error, Issuer, PublicKeyAlgorithm, PublicKeyData, SigningKey,
@@ -116,6 +117,16 @@ impl CertificateSigningRequestParams {
 		let csr = x509_parser::certification_request::X509CertificationRequest::from_der(csr)
 			.map_err(|_| Error::CouldNotParseCertificationRequest)?
 			.1;
+		let sig_alg_oid = csr
+			.signature_algorithm
+			.algorithm
+			.iter()
+			.ok_or(Error::CouldNotParseCertificationRequest)?
+			.collect::<Vec<_>>();
+		if !SignatureAlgorithm::supports_oid(&sig_alg_oid) {
+			return Err(Error::UnsupportedSignatureAlgorithm);
+		}
+
 		csr.verify_signature()
 			.map_err(|_| Error::InvalidCertificationRequestSignature)?;
 

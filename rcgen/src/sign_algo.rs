@@ -231,7 +231,7 @@ impl Hash for SignatureAlgorithm {
 	}
 }
 impl SignatureAlgorithm {
-	#[cfg(test)]
+	#[cfg(any(feature = "x509-parser", test))]
 	pub(crate) fn iter() -> std::slice::Iter<'static, &'static SignatureAlgorithm> {
 		use algo::*;
 		static ALGORITHMS: &[&SignatureAlgorithm] = &[
@@ -255,6 +255,15 @@ impl SignatureAlgorithm {
 			&ML_DSA_87,
 		];
 		ALGORITHMS.iter()
+	}
+
+	/// Whether any supported signature algorithm is identified by `oid`
+	///
+	/// Several algorithms can share an OID, so this only answers whether the OID is
+	/// supported, not which algorithm produced it.
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn supports_oid(oid: &[u64]) -> bool {
+		Self::iter().any(|alg| alg.oid_components == oid)
 	}
 
 	/// The algorithm of a public key generated for this signature algorithm
