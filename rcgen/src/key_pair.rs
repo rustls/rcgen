@@ -2,7 +2,7 @@
 use std::fmt;
 
 #[cfg(feature = "aws_lc_rs")]
-use aws_lc_rs::signature::PqdsaKeyPair;
+use aws_lc_rs::signature::{PqdsaKeyPair, ML_DSA_44_SIGNING, ML_DSA_65_SIGNING, ML_DSA_87_SIGNING};
 #[cfg(feature = "pem")]
 use pem::Pem;
 #[cfg(any(feature = "crypto", feature = "pem"))]
@@ -61,6 +61,60 @@ impl fmt::Debug for KeyPairKind {
 	}
 }
 
+/// The backend primitive implementing `alg`, or an error if the backend doesn't support it
+#[cfg(feature = "crypto")]
+fn signing_alg(alg: &SignatureAlgorithm) -> Result<SignAlgo, Error> {
+	static SUPPORTED: &[(&SignatureAlgorithm, SignAlgo)] = &[
+		(
+			&RSA_PKCS1_SHA256,
+			SignAlgo::Rsa(&signature::RSA_PKCS1_SHA256),
+		),
+		(
+			&RSA_PKCS1_SHA384,
+			SignAlgo::Rsa(&signature::RSA_PKCS1_SHA384),
+		),
+		(
+			&RSA_PKCS1_SHA512,
+			SignAlgo::Rsa(&signature::RSA_PKCS1_SHA512),
+		),
+		(
+			&ECDSA_P256_SHA256,
+			SignAlgo::EcDsa(&signature::ECDSA_P256_SHA256_ASN1_SIGNING),
+		),
+		(
+			&ECDSA_P384_SHA384,
+			SignAlgo::EcDsa(&signature::ECDSA_P384_SHA384_ASN1_SIGNING),
+		),
+		#[cfg(feature = "aws_lc_rs")]
+		(
+			&ECDSA_P521_SHA256,
+			SignAlgo::EcDsa(&signature::ECDSA_P521_SHA256_ASN1_SIGNING),
+		),
+		#[cfg(feature = "aws_lc_rs")]
+		(
+			&ECDSA_P521_SHA384,
+			SignAlgo::EcDsa(&signature::ECDSA_P521_SHA384_ASN1_SIGNING),
+		),
+		#[cfg(feature = "aws_lc_rs")]
+		(
+			&ECDSA_P521_SHA512,
+			SignAlgo::EcDsa(&signature::ECDSA_P521_SHA512_ASN1_SIGNING),
+		),
+		(&ED25519, SignAlgo::EdDsa(&signature::ED25519)),
+		#[cfg(feature = "aws_lc_rs")]
+		(&ML_DSA_44, SignAlgo::PqDsa(&ML_DSA_44_SIGNING)),
+		#[cfg(feature = "aws_lc_rs")]
+		(&ML_DSA_65, SignAlgo::PqDsa(&ML_DSA_65_SIGNING)),
+		#[cfg(feature = "aws_lc_rs")]
+		(&ML_DSA_87, SignAlgo::PqDsa(&ML_DSA_87_SIGNING)),
+	];
+
+	SUPPORTED
+		.iter()
+		.find_map(|(supported, sign_alg)| (*supported == alg).then_some(*sign_alg))
+		.ok_or(Error::KeyPairAlgorithmUnavailable)
+}
+
 /// A key pair used to sign certificates and CSRs
 #[cfg(feature = "crypto")]
 #[derive(Debug)]
@@ -89,7 +143,7 @@ impl KeyPair {
 	) -> Result<(Self, PrivateKeyDer<'static>), Error> {
 		let rng = &SystemRandom::new();
 
-		match alg.sign_alg {
+		match signing_alg(alg)? {
 			SignAlgo::EcDsa(sign_alg) => {
 				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)._err()?;
 				Ok((
@@ -148,7 +202,7 @@ impl KeyPair {
 		alg: &'static SignatureAlgorithm,
 		key_size: RsaKeySize,
 	) -> Result<(Self, PrivateKeyDer<'static>), Error> {
-		match alg.sign_alg {
+		match signing_alg(alg)? {
 			SignAlgo::Rsa(sign_alg) => {
 				let key_size = match key_size {
 					RsaKeySize::_2048 => KeySize::Rsa2048,
@@ -238,55 +292,18 @@ impl KeyPair {
 		let rng = &SystemRandom::new();
 		let serialized_der = pkcs8.secret_pkcs8_der().to_vec();
 
-		let kind = if alg == &ED25519 {
-			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(&serialized_der)._err()?)
-		} else if alg == &ECDSA_P256_SHA256 {
-			KeyPairKind::Ec(ecdsa_from_pkcs8(
-				&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-				&serialized_der,
-				rng,
-			)?)
-		} else if alg == &ECDSA_P384_SHA384 {
-			KeyPairKind::Ec(ecdsa_from_pkcs8(
-				&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
-				&serialized_der,
-				rng,
-			)?)
-		} else if alg == &RSA_PKCS1_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
-			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
-		} else if alg == &RSA_PKCS1_SHA384 {
-			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
-			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
-		} else if alg == &RSA_PKCS1_SHA512 {
-			let rsakp = RsaKeyPair::from_pkcs8(&serialized_der)._err()?;
-			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
-		} else {
+		let kind = match signing_alg(alg)? {
+			SignAlgo::EdDsa(_) => {
+				KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(&serialized_der)._err()?)
+			},
+			SignAlgo::EcDsa(sign_alg) => {
+				KeyPairKind::Ec(ecdsa_from_pkcs8(sign_alg, &serialized_der, rng)?)
+			},
+			SignAlgo::Rsa(sign_alg) => {
+				KeyPairKind::Rsa(RsaKeyPair::from_pkcs8(&serialized_der)._err()?, sign_alg)
+			},
 			#[cfg(feature = "aws_lc_rs")]
-			if alg == &ECDSA_P521_SHA256 {
-				KeyPairKind::Ec(ecdsa_from_pkcs8(
-					&signature::ECDSA_P521_SHA256_ASN1_SIGNING,
-					&serialized_der,
-					rng,
-				)?)
-			} else if alg == &ECDSA_P521_SHA384 {
-				KeyPairKind::Ec(ecdsa_from_pkcs8(
-					&signature::ECDSA_P521_SHA384_ASN1_SIGNING,
-					&serialized_der,
-					rng,
-				)?)
-			} else if alg == &ECDSA_P521_SHA512 {
-				KeyPairKind::Ec(ecdsa_from_pkcs8(
-					&signature::ECDSA_P521_SHA512_ASN1_SIGNING,
-					&serialized_der,
-					rng,
-				)?)
-			} else {
-				panic!("Unknown SignatureAlgorithm specified!");
-			}
-
-			#[cfg(all(feature = "ring", not(feature = "aws_lc_rs")))]
-			panic!("Unknown SignatureAlgorithm specified!");
+			SignAlgo::PqDsa(_) => return Err(Error::KeyPairAlgorithmUnavailable),
 		};
 
 		Ok(KeyPair { kind, alg })
@@ -355,34 +372,17 @@ impl KeyPair {
 
 			let serialized_der = key.secret_der().to_vec();
 
-			let kind = if alg == &ED25519 {
-				KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(&serialized_der)._err()?)
-			} else if alg == &ECDSA_P256_SHA256 {
-				KeyPairKind::Ec(ecdsa_from_private_key_der(
-					&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-					&serialized_der,
-				)?)
-			} else if alg == &ECDSA_P384_SHA384 {
-				KeyPairKind::Ec(ecdsa_from_private_key_der(
-					&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
-					&serialized_der,
-				)?)
-			} else if alg == &ECDSA_P521_SHA512 {
-				KeyPairKind::Ec(ecdsa_from_private_key_der(
-					&signature::ECDSA_P521_SHA512_ASN1_SIGNING,
-					&serialized_der,
-				)?)
-			} else if alg == &RSA_PKCS1_SHA256 {
-				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
-				KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
-			} else if alg == &RSA_PKCS1_SHA384 {
-				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
-				KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
-			} else if alg == &RSA_PKCS1_SHA512 {
-				let rsakp = rsa_key_pair_from(&serialized_der)._err()?;
-				KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
-			} else {
-				panic!("Unknown SignatureAlgorithm specified!");
+			let kind = match signing_alg(alg)? {
+				SignAlgo::EdDsa(_) => KeyPairKind::Ed(
+					Ed25519KeyPair::from_pkcs8_maybe_unchecked(&serialized_der)._err()?,
+				),
+				SignAlgo::EcDsa(sign_alg) => {
+					KeyPairKind::Ec(ecdsa_from_private_key_der(sign_alg, &serialized_der)?)
+				},
+				SignAlgo::Rsa(sign_alg) => {
+					KeyPairKind::Rsa(rsa_key_pair_from(&serialized_der)._err()?, sign_alg)
+				},
+				SignAlgo::PqDsa(_) => return Err(Error::KeyPairAlgorithmUnavailable),
 			};
 
 			Ok(KeyPair { kind, alg })
@@ -787,5 +787,36 @@ mod test {
 
 		let key_pair = KeyPair::try_from(der).unwrap();
 		assert_eq!(key_pair.algorithm(), &ECDSA_P256_SHA256);
+	}
+
+	#[test]
+	fn test_load_with_algorithm() {
+		for alg in [
+			&ED25519,
+			&ECDSA_P256_SHA256,
+			&ECDSA_P384_SHA384,
+			#[cfg(feature = "aws_lc_rs")]
+			&ECDSA_P521_SHA512,
+			#[cfg(feature = "aws_lc_rs")]
+			&RSA_PKCS1_SHA256,
+		] {
+			let (key_pair, der) = KeyPair::generate_for(alg).unwrap();
+			let PrivateKeyDer::Pkcs8(pkcs8) = &der else {
+				panic!("expected a PKCS#8 key");
+			};
+
+			let check = |kp: KeyPair| {
+				assert_eq!(kp.der_bytes(), key_pair.der_bytes());
+				assert!(kp.compatible_algs().eq([alg]));
+			};
+			check(KeyPair::from_pkcs8_der_and_sign_algo(pkcs8, alg).unwrap());
+			check(KeyPair::from_der_and_sign_algo(&der, alg).unwrap());
+			#[cfg(feature = "pem")]
+			{
+				let pem = serialize_private_key_pem(&der).unwrap();
+				check(KeyPair::from_pkcs8_pem_and_sign_algo(&pem, alg).unwrap());
+				check(KeyPair::from_pem_and_sign_algo(&pem, alg).unwrap());
+			}
+		}
 	}
 }

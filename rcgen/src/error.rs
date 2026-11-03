@@ -28,6 +28,8 @@ pub enum Error {
 	UnsupportedExtension,
 	/// The requested signature algorithm is not supported
 	UnsupportedSignatureAlgorithm,
+	/// The enabled cryptographic backend can't generate or load keys for the key pair algorithm
+	KeyPairAlgorithmUnavailable,
 	/// Unspecified `ring` error
 	RingUnspecified,
 	/// The `ring` library rejected the key upon loading
@@ -87,6 +89,11 @@ impl fmt::Display for Error {
 				f,
 				"The requested signature algorithm \
 				is not supported"
+			)?,
+			KeyPairAlgorithmUnavailable => write!(
+				f,
+				"The key pair algorithm is not \
+				available with the enabled cryptographic backend"
 			)?,
 			#[cfg(feature = "x509-parser")]
 			UnsupportedExtension => write!(f, "Unsupported extension requested in CSR")?,
