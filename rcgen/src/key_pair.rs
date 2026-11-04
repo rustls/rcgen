@@ -816,4 +816,13 @@ mod test {
 			}
 		}
 	}
+
+	#[cfg(not(feature = "aws_lc_rs"))]
+	#[test]
+	fn test_unsupported_algorithm() {
+		assert!(matches!(
+			KeyPair::generate_for(&ECDSA_P521_SHA512),
+			Err(Error::KeyPairAlgorithmUnavailable)
+		));
+	}
 }

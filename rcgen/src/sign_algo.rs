@@ -370,18 +370,12 @@ impl KeyPairAlgorithm {
 			&RSA_PKCS1_SHA512,
 			&ECDSA_P256_SHA256,
 			&ECDSA_P384_SHA384,
-			#[cfg(feature = "aws_lc_rs")]
 			&ECDSA_P521_SHA256,
-			#[cfg(feature = "aws_lc_rs")]
 			&ECDSA_P521_SHA384,
-			#[cfg(feature = "aws_lc_rs")]
 			&ECDSA_P521_SHA512,
 			&ED25519,
-			#[cfg(feature = "aws_lc_rs")]
 			&ML_DSA_44,
-			#[cfg(feature = "aws_lc_rs")]
 			&ML_DSA_65,
-			#[cfg(feature = "aws_lc_rs")]
 			&ML_DSA_87,
 		];
 		ALGORITHMS.iter()
@@ -463,7 +457,6 @@ pub(crate) mod algo {
 	/// Note that this algorithm is not widely supported, and is not supported in TLS 1.3.
 	///
 	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
 	pub static ECDSA_P521_SHA256: KeyPairAlgorithm = KeyPairAlgorithm {
 		name: "ECDSA_P521_SHA256",
 		key: &key_alg::ECDSA_P521,
@@ -475,7 +468,6 @@ pub(crate) mod algo {
 	/// Note that this algorithm is not widely supported, and is not supported in TLS 1.3.
 	///
 	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
 	pub static ECDSA_P521_SHA384: KeyPairAlgorithm = KeyPairAlgorithm {
 		name: "ECDSA_P521_SHA384",
 		key: &key_alg::ECDSA_P521,
@@ -485,7 +477,6 @@ pub(crate) mod algo {
 	/// ECDSA signing using the P-521 curves and SHA-512 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
 	///
 	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
 	pub static ECDSA_P521_SHA512: KeyPairAlgorithm = KeyPairAlgorithm {
 		name: "ECDSA_P521_SHA512",
 		key: &key_alg::ECDSA_P521,
@@ -500,7 +491,8 @@ pub(crate) mod algo {
 	};
 
 	/// ML-DSA-44 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
-	#[cfg(feature = "aws_lc_rs")]
+	///
+	/// Only supported with the `aws_lc_rs` backend.
 	pub static ML_DSA_44: KeyPairAlgorithm = KeyPairAlgorithm {
 		name: "ML_DSA_44",
 		key: &key_alg::ML_DSA_44,
@@ -508,7 +500,8 @@ pub(crate) mod algo {
 	};
 
 	/// ML-DSA-65 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
-	#[cfg(feature = "aws_lc_rs")]
+	///
+	/// Only supported with the `aws_lc_rs` backend.
 	pub static ML_DSA_65: KeyPairAlgorithm = KeyPairAlgorithm {
 		name: "ML_DSA_65",
 		key: &key_alg::ML_DSA_65,
@@ -516,7 +509,8 @@ pub(crate) mod algo {
 	};
 
 	/// ML-DSA-87 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
-	#[cfg(feature = "aws_lc_rs")]
+	///
+	/// Only supported with the `aws_lc_rs` backend.
 	pub static ML_DSA_87: KeyPairAlgorithm = KeyPairAlgorithm {
 		name: "ML_DSA_87",
 		key: &key_alg::ML_DSA_87,
