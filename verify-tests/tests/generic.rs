@@ -588,7 +588,7 @@ mod test_csr_extension_request {
 mod test_csr {
 	use rcgen::{
 		CertificateParams, CertificateSigningRequestParams, ExtendedKeyUsagePurpose, KeyPair,
-		KeyUsagePurpose,
+		KeyUsagePurpose, PublicKeyData,
 	};
 
 	#[test]
@@ -644,7 +644,7 @@ mod test_csr {
 		let csrp = CertificateSigningRequestParams::from_der(csr.der()).unwrap();
 
 		// Ensure algorithms match.
-		assert_eq!(key_pair.algorithm(), csrp.public_key.algorithm());
+		assert_eq!(key_pair.key_algorithm(), csrp.public_key.key_algorithm());
 		// Assert that our parsed parameters match our initial parameters
 		assert_eq!(*params, csrp.params);
 	}

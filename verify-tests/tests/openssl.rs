@@ -608,3 +608,70 @@ J/j8QiTSHTuy42BCMWui/G3rTLv5vhMNH4ICIQC6zMMT2hw4RqAw9Re9rlS2qyVl
 u3t5ErXRu09rSxEQrA==
 -----END CERTIFICATE REQUEST-----
 "#;
+
+/// A P-256 key may sign with `ecdsa-with-SHA384`, which names no curve.
+#[test]
+fn test_openssl_p256_key_signing_with_sha384() {
+	use openssl::bn::BigNumContext;
+	use openssl::ec::{EcGroup, EcKey, PointConversionForm};
+	use openssl::hash::MessageDigest;
+	use openssl::nid::Nid;
+	use openssl::pkey::Private;
+	use openssl::sign::Signer;
+	use rcgen::{
+		key_alg, sig_alg, PublicKeyAlgorithm, PublicKeyData, SignatureAlgorithm, SigningKey,
+	};
+
+	struct P256WithSha384 {
+		key: PKey<Private>,
+		public_key: Vec<u8>,
+	}
+
+	impl PublicKeyData for P256WithSha384 {
+		fn der_bytes(&self) -> &[u8] {
+			&self.public_key
+		}
+
+		fn key_algorithm(&self) -> &'static PublicKeyAlgorithm {
+			&key_alg::ECDSA_P256
+		}
+	}
+
+	impl SigningKey for P256WithSha384 {
+		fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, rcgen::Error> {
+			let mut signer = Signer::new(MessageDigest::sha384(), &self.key).unwrap();
+			signer.update(msg).unwrap();
+			Ok(signer.sign_to_vec().unwrap())
+		}
+
+		fn algorithm(&self) -> &'static SignatureAlgorithm {
+			&sig_alg::ECDSA_SHA384
+		}
+	}
+
+	let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
+	let ec_key = EcKey::generate(&group).unwrap();
+	let mut ctx = BigNumContext::new().unwrap();
+	let public_key = ec_key
+		.public_key()
+		.to_bytes(&group, PointConversionForm::UNCOMPRESSED, &mut ctx)
+		.unwrap();
+	let key = P256WithSha384 {
+		key: PKey::from_ec_key(ec_key).unwrap(),
+		public_key,
+	};
+
+	let cert = CertificateParams::default().self_signed(&key).unwrap();
+
+	let cert = X509::from_der(cert.der()).unwrap();
+	let public_key = cert.public_key().unwrap();
+	assert_eq!(
+		public_key.ec_key().unwrap().group().curve_name(),
+		Some(Nid::X9_62_PRIME256V1)
+	);
+	assert_eq!(
+		cert.signature_algorithm().object().nid(),
+		Nid::ECDSA_WITH_SHA384
+	);
+	assert!(cert.verify(&public_key).unwrap());
+}

@@ -28,6 +28,8 @@ pub enum Error {
 	UnsupportedExtension,
 	/// The requested signature algorithm is not supported
 	UnsupportedSignatureAlgorithm,
+	/// The public key algorithm is not supported
+	UnsupportedPublicKeyAlgorithm,
 	/// The enabled cryptographic backend can't generate or load keys for the key pair algorithm
 	KeyPairAlgorithmUnavailable,
 	/// Unspecified `ring` error
@@ -88,6 +90,11 @@ impl fmt::Display for Error {
 			UnsupportedSignatureAlgorithm => write!(
 				f,
 				"The requested signature algorithm \
+				is not supported"
+			)?,
+			UnsupportedPublicKeyAlgorithm => write!(
+				f,
+				"The public key algorithm \
 				is not supported"
 			)?,
 			KeyPairAlgorithmUnavailable => write!(

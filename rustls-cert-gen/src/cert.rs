@@ -9,7 +9,7 @@ use rcgen::DnValue::PrintableString;
 use rcgen::{
 	serialize_private_key_pem, BasicConstraints, Certificate, CertificateParams, CertifiedIssuer,
 	DistinguishedName, DnType, Error, ExtendedKeyUsagePurpose, GeneralName, KeyPair,
-	KeyUsagePurpose, PathLenConstraint, SignatureAlgorithm,
+	KeyUsagePurpose, PathLenConstraint,
 };
 
 /// Builder to configure TLS [CertificateParams] to be finalized
@@ -210,7 +210,7 @@ pub enum KeyPairAlgorithm {
 	MlDsa87,
 }
 
-impl From<KeyPairAlgorithm> for &'static SignatureAlgorithm {
+impl From<KeyPairAlgorithm> for &'static rcgen::KeyPairAlgorithm {
 	fn from(alg: KeyPairAlgorithm) -> Self {
 		match alg {
 			KeyPairAlgorithm::Rsa => &rcgen::RSA_PKCS1_SHA256,
@@ -484,18 +484,18 @@ mod tests {
 	#[test]
 	fn key_pair_algorithm_to_keypair() -> anyhow::Result<()> {
 		let (keypair, _) = KeyPair::generate_for(KeyPairAlgorithm::Ed25519.into())?;
-		assert_eq!(format!("{:?}", keypair.algorithm()), "ED25519");
+		assert!(keypair.is_compatible(&rcgen::ED25519));
 
 		let (keypair, _) = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP256.into())?;
-		assert_eq!(format!("{:?}", keypair.algorithm()), "ECDSA_P256_SHA256");
+		assert!(keypair.is_compatible(&rcgen::ECDSA_P256_SHA256));
 
 		let (keypair, _) = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP384.into())?;
-		assert_eq!(format!("{:?}", keypair.algorithm()), "ECDSA_P384_SHA384");
+		assert!(keypair.is_compatible(&rcgen::ECDSA_P384_SHA384));
 
 		#[cfg(feature = "aws_lc_rs")]
 		{
 			let (keypair, _) = KeyPair::generate_for(KeyPairAlgorithm::EcdsaP521.into())?;
-			assert_eq!(format!("{:?}", keypair.algorithm()), "ECDSA_P521_SHA512");
+			assert!(keypair.is_compatible(&rcgen::ECDSA_P521_SHA512));
 		}
 
 		Ok(())
