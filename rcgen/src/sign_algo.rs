@@ -8,6 +8,7 @@ use yasna::DERWriter;
 
 #[cfg(feature = "crypto")]
 use crate::ring_like::signature::{EcdsaSigningAlgorithm, EdDSAParameters, RsaEncoding};
+#[cfg(feature = "x509-parser")]
 use crate::Error;
 
 #[cfg(feature = "crypto")]
@@ -79,6 +80,7 @@ impl SignatureAlgorithm {
 			.ok_or(Error::UnsupportedSignatureAlgorithm)
 	}
 
+	#[cfg(any(feature = "x509-parser", test))]
 	pub(crate) fn iter() -> std::slice::Iter<'static, &'static SignatureAlgorithm> {
 		use algo::*;
 		static ALGORITHMS: &[&SignatureAlgorithm] = &[
@@ -104,14 +106,10 @@ impl SignatureAlgorithm {
 		ALGORITHMS.iter()
 	}
 
-	/// Retrieve the SignatureAlgorithm for the provided OID
-	pub fn from_oid(oid: &[u64]) -> Result<&'static SignatureAlgorithm, Error> {
-		for algo in Self::iter() {
-			if algo.oid_components == oid {
-				return Ok(algo);
-			}
-		}
-		Err(Error::UnsupportedSignatureAlgorithm)
+	/// Whether any supported signature algorithm is identified by `oid`
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn supports_oid(oid: &[u64]) -> bool {
+		Self::iter().any(|alg| alg.oid_components == oid)
 	}
 }
 
