@@ -1047,7 +1047,6 @@ impl KeyIdMethod {
 	/// X.509v3 extensions.
 	#[allow(unused_variables)]
 	pub(crate) fn derive(&self, subject_public_key_info: impl AsRef<[u8]>) -> Vec<u8> {
-		#[cfg_attr(not(feature = "crypto"), expect(clippy::let_unit_value))]
 		let digest_method = match &self {
 			#[cfg(feature = "crypto")]
 			Self::Sha256 => &digest::SHA256,
