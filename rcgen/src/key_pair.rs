@@ -588,6 +588,10 @@ pub(crate) fn sign_der(
 	key: &impl SigningKey,
 	f: impl FnOnce(&mut DERWriterSeq<'_>) -> Result<(), Error>,
 ) -> Result<Vec<u8>, Error> {
+	if !key.algorithm().suits_key(key.key_algorithm()) {
+		return Err(Error::SignatureAlgorithmMismatch);
+	}
+
 	yasna::try_construct_der(|writer| {
 		writer.write_sequence(|writer| {
 			let data = yasna::try_construct_der(|writer| writer.write_sequence(f))?;
@@ -622,6 +626,10 @@ pub trait SigningKey: PublicKeyData {
 	fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
 
 	/// The algorithm of the signatures this key produces
+	///
+	/// It must be usable with [`PublicKeyData::key_algorithm()`], e.g. an ECDSA signature
+	/// algorithm for an ECDSA key. Otherwise, signing fails with
+	/// [`Error::SignatureAlgorithmMismatch`].
 	fn algorithm(&self) -> &'static SignatureAlgorithm;
 }
 
@@ -815,6 +823,35 @@ mod test {
 				check(KeyPair::from_pem_and_sign_algo(&pem, alg).unwrap());
 			}
 		}
+	}
+
+	#[test]
+	fn test_mismatched_signature_algorithm() {
+		struct Mismatched(KeyPair);
+
+		impl PublicKeyData for Mismatched {
+			fn der_bytes(&self) -> &[u8] {
+				self.0.der_bytes()
+			}
+
+			fn key_algorithm(&self) -> &'static PublicKeyAlgorithm {
+				self.0.key_algorithm()
+			}
+		}
+
+		impl SigningKey for Mismatched {
+			fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
+				self.0.sign(msg)
+			}
+
+			fn algorithm(&self) -> &'static SignatureAlgorithm {
+				&crate::sig_alg::RSA_PKCS1_SHA256
+			}
+		}
+
+		let (key_pair, _) = KeyPair::generate_for(&ECDSA_P256_SHA256).unwrap();
+		let result = crate::CertificateParams::default().self_signed(&Mismatched(key_pair));
+		assert_eq!(result.unwrap_err(), Error::SignatureAlgorithmMismatch);
 	}
 
 	#[cfg(not(feature = "aws_lc_rs"))]
