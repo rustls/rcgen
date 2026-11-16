@@ -2,14 +2,13 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 
 #[cfg(feature = "aws_lc_rs")]
-use aws_lc_rs::signature::{
-	PqdsaSigningAlgorithm, ML_DSA_44_SIGNING, ML_DSA_65_SIGNING, ML_DSA_87_SIGNING,
-};
+use aws_lc_rs::signature::PqdsaSigningAlgorithm;
 use yasna::models::ObjectIdentifier;
 use yasna::DERWriter;
 
 #[cfg(feature = "crypto")]
-use crate::ring_like::signature::{self, EcdsaSigningAlgorithm, EdDSAParameters, RsaEncoding};
+use crate::ring_like::signature::{EcdsaSigningAlgorithm, EdDSAParameters, RsaEncoding};
+#[cfg(feature = "x509-parser")]
 use crate::Error;
 
 #[cfg(feature = "crypto")]
@@ -22,6 +21,18 @@ pub(crate) enum SignAlgo {
 	Rsa(&'static dyn RsaEncoding),
 }
 
+/// The kind of key an algorithm applies to
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum KeyFamily {
+	Rsa,
+	Ecdsa,
+	Ed25519,
+	// Each ML-DSA parameter set has its own key and signature algorithm
+	MlDsa44,
+	MlDsa65,
+	MlDsa87,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum SignatureAlgorithmParams {
 	/// Omit the parameters
@@ -30,13 +41,187 @@ pub(crate) enum SignatureAlgorithmParams {
 	Null,
 }
 
+/// The parameters of a public key's `AlgorithmIdentifier`
+#[derive(Clone, Copy, PartialEq, Hash)]
+enum PublicKeyParameters {
+	/// Omit the parameters
+	Absent,
+	/// Write null parameters
+	Null,
+	/// Write a named curve OID
+	NamedCurve(&'static [u64]),
+}
+
+/// The algorithm of a public key, as identified in a `SubjectPublicKeyInfo`
+#[derive(Clone)]
+pub struct PublicKeyAlgorithm {
+	name: &'static str,
+	family: KeyFamily,
+	oid_components: &'static [u64],
+	params: PublicKeyParameters,
+}
+
+impl PublicKeyAlgorithm {
+	/// Retrieve the `PublicKeyAlgorithm` matching a parsed `AlgorithmIdentifier`
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_alg_id(
+		alg_id: &x509_parser::x509::AlgorithmIdentifier<'_>,
+	) -> Result<&'static Self, Error> {
+		use x509_parser::prelude::FromDer;
+
+		Self::iter()
+			.find(|alg| {
+				let der = yasna::construct_der(|writer| alg.write_alg_id(writer));
+				let Ok((rest, parsed)) = x509_parser::x509::AlgorithmIdentifier::from_der(&der)
+				else {
+					return false;
+				};
+				rest.is_empty() && &parsed == alg_id
+			})
+			.copied()
+			.ok_or(Error::UnsupportedPublicKeyAlgorithm)
+	}
+
+	#[cfg(any(feature = "x509-parser", test))]
+	pub(crate) fn iter() -> std::slice::Iter<'static, &'static PublicKeyAlgorithm> {
+		use key_alg::*;
+		static ALGORITHMS: &[&PublicKeyAlgorithm] = &[
+			&RSA,
+			&ECDSA_P256,
+			&ECDSA_P384,
+			&ECDSA_P521,
+			&ED25519,
+			&ML_DSA_44,
+			&ML_DSA_65,
+			&ML_DSA_87,
+		];
+		ALGORITHMS.iter()
+	}
+
+	/// Writes the algorithm identifier as it appears inside a `SubjectPublicKeyInfo`
+	pub(crate) fn write_alg_id(&self, writer: DERWriter) {
+		writer.write_sequence(|writer| {
+			writer
+				.next()
+				.write_oid(&ObjectIdentifier::from_slice(self.oid_components));
+			match self.params {
+				PublicKeyParameters::Absent => {},
+				PublicKeyParameters::Null => writer.next().write_null(),
+				PublicKeyParameters::NamedCurve(curve) => writer
+					.next()
+					.write_oid(&ObjectIdentifier::from_slice(curve)),
+			}
+		});
+	}
+}
+
+impl fmt::Debug for PublicKeyAlgorithm {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		f.debug_struct("PublicKeyAlgorithm")
+			.field("name", &self.name)
+			.finish_non_exhaustive()
+	}
+}
+
+impl PartialEq for PublicKeyAlgorithm {
+	fn eq(&self, other: &Self) -> bool {
+		(self.oid_components, self.params) == (other.oid_components, other.params)
+	}
+}
+
+impl Eq for PublicKeyAlgorithm {}
+
+/// The `Hash` trait is not derived, but implemented according to impl of the `PartialEq` trait
+impl Hash for PublicKeyAlgorithm {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		(self.oid_components, self.params).hash(state);
+	}
+}
+
+/// The list of supported public key algorithms
+pub mod key_alg {
+	use super::{KeyFamily, PublicKeyAlgorithm, PublicKeyParameters};
+	use crate::oid::*;
+
+	/// RSA public keys, as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+	pub static RSA: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "RSA",
+		family: KeyFamily::Rsa,
+		oid_components: RSA_ENCRYPTION,
+		params: PublicKeyParameters::Null,
+	};
+
+	/// ECDSA public keys on the P-256 curve, as per [RFC 5480](https://tools.ietf.org/html/rfc5480)
+	pub static ECDSA_P256: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ECDSA_P256",
+		family: KeyFamily::Ecdsa,
+		oid_components: EC_PUBLIC_KEY,
+		params: PublicKeyParameters::NamedCurve(EC_SECP_256_R1),
+	};
+
+	/// ECDSA public keys on the P-384 curve, as per [RFC 5480](https://tools.ietf.org/html/rfc5480)
+	pub static ECDSA_P384: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ECDSA_P384",
+		family: KeyFamily::Ecdsa,
+		oid_components: EC_PUBLIC_KEY,
+		params: PublicKeyParameters::NamedCurve(EC_SECP_384_R1),
+	};
+
+	/// ECDSA public keys on the P-521 curve, as per [RFC 5480](https://tools.ietf.org/html/rfc5480)
+	///
+	/// Signing with such a key is only supported with the `aws_lc_rs` backend.
+	pub static ECDSA_P521: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ECDSA_P521",
+		family: KeyFamily::Ecdsa,
+		oid_components: EC_PUBLIC_KEY,
+		params: PublicKeyParameters::NamedCurve(EC_SECP_521_R1),
+	};
+
+	/// Ed25519 public keys, as per [RFC 8410](https://tools.ietf.org/html/rfc8410)
+	pub static ED25519: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ED25519",
+		family: KeyFamily::Ed25519,
+		// id-Ed25519 in RFC 8410
+		oid_components: &[1, 3, 101, 112],
+		params: PublicKeyParameters::Absent,
+	};
+
+	/// ML-DSA-44 public keys, as per [RFC 9881](https://www.rfc-editor.org/rfc/rfc9881)
+	///
+	/// Signing with such a key is only supported with the `aws_lc_rs` backend.
+	pub static ML_DSA_44: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ML_DSA_44",
+		family: KeyFamily::MlDsa44,
+		oid_components: crate::oid::ML_DSA_44,
+		params: PublicKeyParameters::Absent,
+	};
+
+	/// ML-DSA-65 public keys, as per [RFC 9881](https://www.rfc-editor.org/rfc/rfc9881)
+	///
+	/// Signing with such a key is only supported with the `aws_lc_rs` backend.
+	pub static ML_DSA_65: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ML_DSA_65",
+		family: KeyFamily::MlDsa65,
+		oid_components: crate::oid::ML_DSA_65,
+		params: PublicKeyParameters::Absent,
+	};
+
+	/// ML-DSA-87 public keys, as per [RFC 9881](https://www.rfc-editor.org/rfc/rfc9881)
+	///
+	/// Signing with such a key is only supported with the `aws_lc_rs` backend.
+	pub static ML_DSA_87: PublicKeyAlgorithm = PublicKeyAlgorithm {
+		name: "ML_DSA_87",
+		family: KeyFamily::MlDsa87,
+		oid_components: crate::oid::ML_DSA_87,
+		params: PublicKeyParameters::Absent,
+	};
+}
+
 /// Signature algorithm type
 #[derive(Clone)]
 pub struct SignatureAlgorithm {
 	name: &'static str,
-	oids_sign_alg: &'static [&'static [u64]],
-	#[cfg(feature = "crypto")]
-	pub(crate) sign_alg: SignAlgo,
+	family: KeyFamily,
 	oid_components: &'static [u64],
 	params: SignatureAlgorithmParams,
 }
@@ -49,7 +234,7 @@ impl fmt::Debug for SignatureAlgorithm {
 
 impl PartialEq for SignatureAlgorithm {
 	fn eq(&self, other: &Self) -> bool {
-		(self.oids_sign_alg, self.oid_components) == (other.oids_sign_alg, other.oid_components)
+		(self.oid_components, self.params) == (other.oid_components, other.params)
 	}
 }
 
@@ -58,58 +243,49 @@ impl Eq for SignatureAlgorithm {}
 /// The `Hash` trait is not derived, but implemented according to impl of the `PartialEq` trait
 impl Hash for SignatureAlgorithm {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		// see SignatureAlgorithm::eq(), just this field is compared
-		self.oids_sign_alg.hash(state);
+		// see SignatureAlgorithm::eq(), just these fields are compared
+		(self.oid_components, self.params).hash(state);
 	}
 }
 impl SignatureAlgorithm {
+	#[cfg(any(feature = "x509-parser", test))]
 	pub(crate) fn iter() -> std::slice::Iter<'static, &'static SignatureAlgorithm> {
-		use algo::*;
+		use sig_alg::*;
 		static ALGORITHMS: &[&SignatureAlgorithm] = &[
 			&RSA_PKCS1_SHA256,
 			&RSA_PKCS1_SHA384,
 			&RSA_PKCS1_SHA512,
-			&ECDSA_P256_SHA256,
-			&ECDSA_P384_SHA384,
-			#[cfg(feature = "aws_lc_rs")]
-			&ECDSA_P521_SHA256,
-			#[cfg(feature = "aws_lc_rs")]
-			&ECDSA_P521_SHA384,
-			#[cfg(feature = "aws_lc_rs")]
-			&ECDSA_P521_SHA512,
+			&ECDSA_SHA256,
+			&ECDSA_SHA384,
+			&ECDSA_SHA512,
 			&ED25519,
-			#[cfg(feature = "aws_lc_rs")]
 			&ML_DSA_44,
-			#[cfg(feature = "aws_lc_rs")]
 			&ML_DSA_65,
-			#[cfg(feature = "aws_lc_rs")]
 			&ML_DSA_87,
 		];
 		ALGORITHMS.iter()
 	}
 
-	/// Retrieve the SignatureAlgorithm for the provided OID
-	pub fn from_oid(oid: &[u64]) -> Result<&'static SignatureAlgorithm, Error> {
-		for algo in Self::iter() {
-			if algo.oid_components == oid {
-				return Ok(algo);
-			}
-		}
-		Err(Error::UnsupportedSignatureAlgorithm)
+	/// Whether any supported signature algorithm is identified by `oid`
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn supports_oid(oid: &[u64]) -> bool {
+		Self::iter().any(|alg| alg.oid_components == oid)
+	}
+
+	/// Whether a key with algorithm `key` can produce signatures with this algorithm
+	pub(crate) fn suits_key(&self, key: &PublicKeyAlgorithm) -> bool {
+		self.family == key.family
 	}
 }
 
 /// The list of supported signature algorithms
-pub(crate) mod algo {
-	use super::*;
-	use crate::oid::*;
+pub mod sig_alg {
+	use super::{KeyFamily, SignatureAlgorithm, SignatureAlgorithmParams};
 
 	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static RSA_PKCS1_SHA256: SignatureAlgorithm = SignatureAlgorithm {
 		name: "RSA_PKCS1_SHA256",
-		oids_sign_alg: &[RSA_ENCRYPTION],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA256),
+		family: KeyFamily::Rsa,
 		// sha256WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 11],
 		params: SignatureAlgorithmParams::Null,
@@ -118,9 +294,7 @@ pub(crate) mod algo {
 	/// RSA signing with PKCS#1 1.5 padding and SHA-384 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static RSA_PKCS1_SHA384: SignatureAlgorithm = SignatureAlgorithm {
 		name: "RSA_PKCS1_SHA384",
-		oids_sign_alg: &[RSA_ENCRYPTION],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA384),
+		family: KeyFamily::Rsa,
 		// sha384WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 12],
 		params: SignatureAlgorithmParams::Null,
@@ -129,77 +303,34 @@ pub(crate) mod algo {
 	/// RSA signing with PKCS#1 1.5 padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
 	pub static RSA_PKCS1_SHA512: SignatureAlgorithm = SignatureAlgorithm {
 		name: "RSA_PKCS1_SHA512",
-		oids_sign_alg: &[RSA_ENCRYPTION],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::Rsa(&signature::RSA_PKCS1_SHA512),
+		family: KeyFamily::Rsa,
 		// sha512WithRSAEncryption in RFC 4055
 		oid_components: &[1, 2, 840, 113549, 1, 1, 13],
 		params: SignatureAlgorithmParams::Null,
 	};
 
-	/// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
-	pub static ECDSA_P256_SHA256: SignatureAlgorithm = SignatureAlgorithm {
-		name: "ECDSA_P256_SHA256",
-		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_256_R1],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P256_SHA256_ASN1_SIGNING),
+	/// ECDSA signing with SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+	pub static ECDSA_SHA256: SignatureAlgorithm = SignatureAlgorithm {
+		name: "ECDSA_SHA256",
+		family: KeyFamily::Ecdsa,
 		// ecdsa-with-SHA256 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 2],
 		params: SignatureAlgorithmParams::None,
 	};
 
-	/// ECDSA signing using the P-384 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
-	pub static ECDSA_P384_SHA384: SignatureAlgorithm = SignatureAlgorithm {
-		name: "ECDSA_P384_SHA384",
-		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_384_R1],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P384_SHA384_ASN1_SIGNING),
+	/// ECDSA signing with SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+	pub static ECDSA_SHA384: SignatureAlgorithm = SignatureAlgorithm {
+		name: "ECDSA_SHA384",
+		family: KeyFamily::Ecdsa,
 		// ecdsa-with-SHA384 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 3],
 		params: SignatureAlgorithmParams::None,
 	};
 
-	/// ECDSA signing using the P-521 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
-	///
-	/// Note that this algorithm is not widely supported, and is not supported in TLS 1.3.
-	///
-	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
-	pub static ECDSA_P521_SHA256: SignatureAlgorithm = SignatureAlgorithm {
-		name: "ECDSA_P521_SHA256",
-		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P521_SHA256_ASN1_SIGNING),
-		// ecdsa-with-SHA256 in RFC 5758
-		oid_components: &[1, 2, 840, 10045, 4, 3, 2],
-		params: SignatureAlgorithmParams::None,
-	};
-
-	/// ECDSA signing using the P-521 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
-	///
-	/// Note that this algorithm is not widely supported, and is not supported in TLS 1.3.
-	///
-	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
-	pub static ECDSA_P521_SHA384: SignatureAlgorithm = SignatureAlgorithm {
-		name: "ECDSA_P521_SHA384",
-		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P521_SHA384_ASN1_SIGNING),
-		// ecdsa-with-SHA384 in RFC 5758
-		oid_components: &[1, 2, 840, 10045, 4, 3, 3],
-		params: SignatureAlgorithmParams::None,
-	};
-
-	/// ECDSA signing using the P-521 curves and SHA-512 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
-	///
-	/// Only supported with the `aws_lc_rs` backend.
-	#[cfg(feature = "aws_lc_rs")]
-	pub static ECDSA_P521_SHA512: SignatureAlgorithm = SignatureAlgorithm {
-		name: "ECDSA_P521_SHA512",
-		oids_sign_alg: &[EC_PUBLIC_KEY, EC_SECP_521_R1],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::EcDsa(&signature::ECDSA_P521_SHA512_ASN1_SIGNING),
+	/// ECDSA signing with SHA-512 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+	pub static ECDSA_SHA512: SignatureAlgorithm = SignatureAlgorithm {
+		name: "ECDSA_SHA512",
+		family: KeyFamily::Ecdsa,
 		// ecdsa-with-SHA512 in RFC 5758
 		oid_components: &[1, 2, 840, 10045, 4, 3, 4],
 		params: SignatureAlgorithmParams::None,
@@ -208,46 +339,219 @@ pub(crate) mod algo {
 	/// ED25519 curve signing as per [RFC 8410](https://tools.ietf.org/html/rfc8410)
 	pub static ED25519: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ED25519",
-		// id-Ed25519 in RFC 8410
-		oids_sign_alg: &[&[1, 3, 101, 112]],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::EdDsa(&signature::ED25519),
+		family: KeyFamily::Ed25519,
 		// id-Ed25519 in RFC 8410
 		oid_components: &[1, 3, 101, 112],
 		params: SignatureAlgorithmParams::None,
 	};
 
 	/// ML-DSA-44 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
-	#[cfg(feature = "aws_lc_rs")]
 	pub static ML_DSA_44: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ML_DSA_44",
-		oids_sign_alg: &[crate::oid::ML_DSA_44],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::PqDsa(&ML_DSA_44_SIGNING),
+		family: KeyFamily::MlDsa44,
 		oid_components: crate::oid::ML_DSA_44,
 		params: SignatureAlgorithmParams::None,
 	};
 
 	/// ML-DSA-65 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
-	#[cfg(feature = "aws_lc_rs")]
 	pub static ML_DSA_65: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ML_DSA_65",
-		oids_sign_alg: &[crate::oid::ML_DSA_65],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::PqDsa(&ML_DSA_65_SIGNING),
+		family: KeyFamily::MlDsa65,
 		oid_components: crate::oid::ML_DSA_65,
 		params: SignatureAlgorithmParams::None,
 	};
 
 	/// ML-DSA-87 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
-	#[cfg(feature = "aws_lc_rs")]
 	pub static ML_DSA_87: SignatureAlgorithm = SignatureAlgorithm {
 		name: "ML_DSA_87",
-		oids_sign_alg: &[crate::oid::ML_DSA_87],
-		#[cfg(feature = "crypto")]
-		sign_alg: SignAlgo::PqDsa(&ML_DSA_87_SIGNING),
+		family: KeyFamily::MlDsa87,
 		oid_components: crate::oid::ML_DSA_87,
 		params: SignatureAlgorithmParams::None,
+	};
+}
+
+/// A public-key and signature-algorithm configuration for [`KeyPair`].
+///
+/// A `KeyPairAlgorithm` pairs the [`PublicKeyAlgorithm`] used to encode a
+/// key's `SubjectPublicKeyInfo` with the [`SignatureAlgorithm`] used by that
+/// key to produce signatures. It is used when generating or loading rcgen's
+/// built-in [`KeyPair`] implementation and selects the corresponding primitive
+/// from the configured cryptographic backend.
+///
+/// This type describes configurations known to [`KeyPair`], not every
+/// combination usable through the [`SigningKey`] interface. A custom
+/// [`SigningKey`] reports its public-key and signature algorithms separately
+/// and may support compatible combinations for which rcgen defines no
+/// `KeyPairAlgorithm` constant.
+///
+/// Availability depends on the enabled cryptographic backend and operation.
+/// The existence of a `KeyPairAlgorithm` value does not guarantee that the
+/// configured backend can generate or load such a key.
+///
+/// [`KeyPair`]: crate::KeyPair
+/// [`SigningKey`]: crate::SigningKey
+#[derive(Clone)]
+pub struct KeyPairAlgorithm {
+	name: &'static str,
+	key: &'static PublicKeyAlgorithm,
+	signature: &'static SignatureAlgorithm,
+}
+
+impl KeyPairAlgorithm {
+	#[cfg(test)]
+	pub(crate) fn iter() -> std::slice::Iter<'static, &'static KeyPairAlgorithm> {
+		use algo::*;
+		static ALGORITHMS: &[&KeyPairAlgorithm] = &[
+			&RSA_PKCS1_SHA256,
+			&RSA_PKCS1_SHA384,
+			&RSA_PKCS1_SHA512,
+			&ECDSA_P256_SHA256,
+			&ECDSA_P384_SHA384,
+			&ECDSA_P521_SHA256,
+			&ECDSA_P521_SHA384,
+			&ECDSA_P521_SHA512,
+			&ED25519,
+			&ML_DSA_44,
+			&ML_DSA_65,
+			&ML_DSA_87,
+		];
+		ALGORITHMS.iter()
+	}
+
+	/// The algorithm of the key
+	pub fn key_algorithm(&self) -> &'static PublicKeyAlgorithm {
+		self.key
+	}
+
+	/// The algorithm of the signatures the key produces
+	pub fn signature_algorithm(&self) -> &'static SignatureAlgorithm {
+		self.signature
+	}
+}
+
+impl fmt::Debug for KeyPairAlgorithm {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{}", self.name)
+	}
+}
+
+impl PartialEq for KeyPairAlgorithm {
+	fn eq(&self, other: &Self) -> bool {
+		(self.key, self.signature) == (other.key, other.signature)
+	}
+}
+
+impl Eq for KeyPairAlgorithm {}
+
+/// The `Hash` trait is not derived, but implemented according to impl of the `PartialEq` trait
+impl Hash for KeyPairAlgorithm {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		(self.key, self.signature).hash(state);
+	}
+}
+
+/// The list of supported key pair algorithms
+pub(crate) mod algo {
+	use super::*;
+
+	/// RSA signing with PKCS#1 1.5 padding and SHA-256 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+	pub static RSA_PKCS1_SHA256: KeyPairAlgorithm = KeyPairAlgorithm {
+		name: "RSA_PKCS1_SHA256",
+		key: &key_alg::RSA,
+		signature: &sig_alg::RSA_PKCS1_SHA256,
+	};
+
+	/// RSA signing with PKCS#1 1.5 padding and SHA-384 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+	pub static RSA_PKCS1_SHA384: KeyPairAlgorithm = KeyPairAlgorithm {
+		name: "RSA_PKCS1_SHA384",
+		key: &key_alg::RSA,
+		signature: &sig_alg::RSA_PKCS1_SHA384,
+	};
+
+	/// RSA signing with PKCS#1 1.5 padding and SHA-512 hashing as per [RFC 4055](https://tools.ietf.org/html/rfc4055)
+	pub static RSA_PKCS1_SHA512: KeyPairAlgorithm = KeyPairAlgorithm {
+		name: "RSA_PKCS1_SHA512",
+		key: &key_alg::RSA,
+		signature: &sig_alg::RSA_PKCS1_SHA512,
+	};
+
+	/// ECDSA signing using the P-256 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+	pub static ECDSA_P256_SHA256: KeyPairAlgorithm = KeyPairAlgorithm {
+		name: "ECDSA_P256_SHA256",
+		key: &key_alg::ECDSA_P256,
+		signature: &sig_alg::ECDSA_SHA256,
+	};
+
+	/// ECDSA signing using the P-384 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+	pub static ECDSA_P384_SHA384: KeyPairAlgorithm = KeyPairAlgorithm {
+		name: "ECDSA_P384_SHA384",
+		key: &key_alg::ECDSA_P384,
+		signature: &sig_alg::ECDSA_SHA384,
+	};
+
+	/// ECDSA signing using the P-521 curves and SHA-256 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+	///
+	/// Note that this algorithm is not widely supported, and is not supported in TLS 1.3.
+	///
+	/// Only supported with the `aws_lc_rs` backend.
+	pub static ECDSA_P521_SHA256: KeyPairAlgorithm = KeyPairAlgorithm {
+		name: "ECDSA_P521_SHA256",
+		key: &key_alg::ECDSA_P521,
+		signature: &sig_alg::ECDSA_SHA256,
+	};
+
+	/// ECDSA signing using the P-521 curves and SHA-384 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+	///
+	/// Note that this algorithm is not widely supported, and is not supported in TLS 1.3.
+	///
+	/// Only supported with the `aws_lc_rs` backend.
+	pub static ECDSA_P521_SHA384: KeyPairAlgorithm = KeyPairAlgorithm {
+		name: "ECDSA_P521_SHA384",
+		key: &key_alg::ECDSA_P521,
+		signature: &sig_alg::ECDSA_SHA384,
+	};
+
+	/// ECDSA signing using the P-521 curves and SHA-512 hashing as per [RFC 5758](https://tools.ietf.org/html/rfc5758#section-3.2)
+	///
+	/// Only supported with the `aws_lc_rs` backend.
+	pub static ECDSA_P521_SHA512: KeyPairAlgorithm = KeyPairAlgorithm {
+		name: "ECDSA_P521_SHA512",
+		key: &key_alg::ECDSA_P521,
+		signature: &sig_alg::ECDSA_SHA512,
+	};
+
+	/// ED25519 curve signing as per [RFC 8410](https://tools.ietf.org/html/rfc8410)
+	pub static ED25519: KeyPairAlgorithm = KeyPairAlgorithm {
+		name: "ED25519",
+		key: &key_alg::ED25519,
+		signature: &sig_alg::ED25519,
+	};
+
+	/// ML-DSA-44 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
+	///
+	/// Only supported with the `aws_lc_rs` backend.
+	pub static ML_DSA_44: KeyPairAlgorithm = KeyPairAlgorithm {
+		name: "ML_DSA_44",
+		key: &key_alg::ML_DSA_44,
+		signature: &sig_alg::ML_DSA_44,
+	};
+
+	/// ML-DSA-65 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
+	///
+	/// Only supported with the `aws_lc_rs` backend.
+	pub static ML_DSA_65: KeyPairAlgorithm = KeyPairAlgorithm {
+		name: "ML_DSA_65",
+		key: &key_alg::ML_DSA_65,
+		signature: &sig_alg::ML_DSA_65,
+	};
+
+	/// ML-DSA-87 signing as per <https://www.ietf.org/archive/id/draft-ietf-lamps-dilithium-certificates-12.html#name-identifiers>.
+	///
+	/// Only supported with the `aws_lc_rs` backend.
+	pub static ML_DSA_87: KeyPairAlgorithm = KeyPairAlgorithm {
+		name: "ML_DSA_87",
+		key: &key_alg::ML_DSA_87,
+		signature: &sig_alg::ML_DSA_87,
 	};
 }
 // Signature algorithm IDs as per https://tools.ietf.org/html/rfc4055
@@ -267,16 +571,6 @@ impl SignatureAlgorithm {
 	pub(crate) fn write_alg_ident(&self, writer: DERWriter) {
 		writer.write_sequence(|writer| {
 			writer.next().write_oid(&self.alg_ident_oid());
-			self.write_params(writer);
-		});
-	}
-	/// Writes the algorithm identifier as it appears inside subjectPublicKeyInfo
-	pub(crate) fn write_oids_sign_alg(&self, writer: DERWriter) {
-		writer.write_sequence(|writer| {
-			for oid in self.oids_sign_alg {
-				let oid = ObjectIdentifier::from_slice(oid);
-				writer.next().write_oid(&oid);
-			}
 			self.write_params(writer);
 		});
 	}
