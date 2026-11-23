@@ -1,5 +1,3 @@
-use std::hash::Hash;
-
 #[cfg(feature = "pem")]
 use pem::Pem;
 use pki_types::CertificateSigningRequestDer;
@@ -9,34 +7,9 @@ use crate::ENCODE_CONFIG;
 #[cfg(feature = "x509-parser")]
 use crate::{
 	BasicConstraints, DistinguishedName, ExtendedKeyUsagePurpose, GeneralName, KeyUsagePurpose,
+	PublicKeyAlgorithm, SignatureAlgorithm,
 };
-use crate::{
-	Certificate, CertificateParams, Error, Issuer, PublicKeyData, SignatureAlgorithm, SigningKey,
-};
-
-/// A public key, extracted from a CSR
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct PublicKey {
-	raw: Vec<u8>,
-	alg: &'static SignatureAlgorithm,
-}
-
-impl PublicKey {
-	/// The algorithm used to generate the public key and sign the CSR.
-	pub fn algorithm(&self) -> &SignatureAlgorithm {
-		self.alg
-	}
-}
-
-impl PublicKeyData for PublicKey {
-	fn der_bytes(&self) -> &[u8] {
-		&self.raw
-	}
-
-	fn algorithm(&self) -> &'static SignatureAlgorithm {
-		self.alg
-	}
-}
+use crate::{Certificate, CertificateParams, Error, Issuer, SigningKey, SubjectPublicKeyInfo};
 
 /// A certificate signing request (CSR) that can be encoded to PEM or DER.
 ///
@@ -79,7 +52,7 @@ pub struct CertificateSigningRequestParams {
 	/// Parameters for the certificate to be signed.
 	pub params: CertificateParams,
 	/// Public key to include in the certificate signing request.
-	pub public_key: PublicKey,
+	pub public_key: SubjectPublicKeyInfo,
 }
 
 impl CertificateSigningRequestParams {
@@ -116,22 +89,30 @@ impl CertificateSigningRequestParams {
 		let csr = x509_parser::certification_request::X509CertificationRequest::from_der(csr)
 			.map_err(|_| Error::CouldNotParseCertificationRequest)?
 			.1;
-		csr.verify_signature()
-			.map_err(|_| Error::InvalidCertificationRequestSignature)?;
-		let alg_oid = csr
+		let sig_alg_oid = csr
 			.signature_algorithm
 			.algorithm
 			.iter()
 			.ok_or(Error::CouldNotParseCertificationRequest)?
 			.collect::<Vec<_>>();
-		let alg = SignatureAlgorithm::from_oid(&alg_oid)?;
+		if !SignatureAlgorithm::supports_oid(&sig_alg_oid) {
+			return Err(Error::UnsupportedSignatureAlgorithm);
+		}
+
+		csr.verify_signature()
+			.map_err(|_| Error::InvalidCertificationRequestSignature)?;
 
 		let info = &csr.certification_request_info;
+
+		let public_key = SubjectPublicKeyInfo {
+			alg: PublicKeyAlgorithm::from_alg_id(&info.subject_pki.algorithm)?,
+			subject_public_key: info.subject_pki.subject_public_key.data.to_vec(),
+		};
+
 		let mut params = CertificateParams {
 			distinguished_name: DistinguishedName::from_name(&info.subject)?,
 			..CertificateParams::default()
 		};
-		let raw = info.subject_pki.subject_public_key.data.to_vec();
 
 		if let Some(extensions) = csr.requested_extensions() {
 			for ext in extensions {
@@ -189,10 +170,7 @@ impl CertificateSigningRequestParams {
 		// * name_constraints
 		// and any other extensions.
 
-		Ok(Self {
-			params,
-			public_key: PublicKey { alg, raw },
-		})
+		Ok(Self { params, public_key })
 	}
 
 	/// Generate a new certificate based on the requested parameters, signed by the provided
